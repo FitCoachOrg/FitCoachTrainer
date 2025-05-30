@@ -52,7 +52,7 @@ const StatCard: React.FC<StatCardProps> = ({
     <Card className="shadow-sm">
       <CardContent className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</h3>
+          <h3 className="text-2xl  font-semibold text-gray-500 dark:text-gray-400">{title}</h3>
           <div className={cn("w-8 h-8 flex items-center justify-center rounded-full", variantStyles.bg)}>
             {icon}
           </div>

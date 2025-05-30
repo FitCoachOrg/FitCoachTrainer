@@ -1,14 +1,17 @@
-import { Link, useRoute } from "wouter";
-import { cn } from "@/lib/utils";
-import * as Icons from "@/lib/icons";
-import React from "react";
+"use client"
+
+import { Link, useRoute } from "wouter"
+import { cn } from "@/lib/utils"
+import * as Icons from "@/lib/icons"
+import React from "react"
+import { useSidebar } from "@/context/sidebar-context"
 
 interface NavItem {
-  name: string;
-  href: string;
-  icon: React.ReactNode;
-  alert?: boolean;
-  children?: NavItem[];
+  name: string
+  href: string
+  icon: React.ReactNode
+  alert?: boolean
+  children?: NavItem[]
 }
 
 const navigationItems: NavItem[] = [
@@ -55,7 +58,7 @@ const navigationItems: NavItem[] = [
     href: "/payments",
     icon: <Icons.CreditCardIcon className="h-5 w-5" />,
   },
-];
+]
 
 const secondaryNavItems: NavItem[] = [
   {
@@ -63,26 +66,46 @@ const secondaryNavItems: NavItem[] = [
     href: "/logout",
     icon: <Icons.LogOutIcon className="h-5 w-5" />,
   },
-];
+]
 
 const Sidebar: React.FC = () => {
+  const { isExpanded, setIsExpanded } = useSidebar()
+
+  const handleMouseEnter = () => {
+    setIsExpanded(true)
+  }
+
+  const handleMouseLeave = () => {
+    setIsExpanded(false)
+  }
+
   return (
-    <div className="fixed inset-y-0 left-0 w-16 md:w-64 bg-white dark:bg-slate-800 shadow-lg z-30 transition-all duration-300 ease-in-out">
+    <div
+      className={cn(
+        "fixed inset-y-0 left-0 bg-white dark:bg-black shadow-lg z-30 transition-all duration-300 ease-in-out",
+        isExpanded ? "w-64" : "w-16",
+      )}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="flex flex-col h-full">
         {/* Logo Section */}
         <div className="flex items-center px-4 py-5 border-b border-gray-200 dark:border-slate-700">
-          <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
             <img
               src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=120&h=120"
               alt="Trainer profile"
               className="object-cover w-full h-full"
             />
           </div>
-          <div className="hidden md:block">
-            <h1 className="font-semibold text-lg">FitProDash</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              info@fitprodash.com
-            </p>
+          <div
+            className={cn(
+              "ml-3 transition-all duration-300 overflow-hidden",
+              isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0",
+            )}
+          >
+            <h1 className="font-semibold text-lg whitespace-nowrap">FitProDash</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">info@fitprodash.com</p>
           </div>
         </div>
 
@@ -96,12 +119,13 @@ const Sidebar: React.FC = () => {
                 icon={item.icon}
                 name={item.name}
                 children={item.children}
+                isExpanded={isExpanded}
               />
             ))}
           </ul>
 
           {/* Divider */}
-          <div className="border-t my-6 border-gray-200 dark:border-gray-700"></div>
+          <div className="border-t my-6 border-gray-200 dark:border-gray-700 mx-2"></div>
 
           {/* Secondary Navigation */}
           <ul className="space-y-1 px-2">
@@ -112,65 +136,90 @@ const Sidebar: React.FC = () => {
                 icon={item.icon}
                 name={item.name}
                 alert={item.alert}
+                isExpanded={isExpanded}
               />
             ))}
           </ul>
         </nav>
       </div>
     </div>
-  );
-};
-
-interface NavItemProps {
-  href: string;
-  icon: React.ReactNode;
-  name: string;
-  alert?: boolean;
-  children?: NavItem[];
+  )
 }
 
-const NavItem: React.FC<NavItemProps> = ({ href, icon, name, alert, children }) => {
-  const [isActive] = useRoute(href === "/" ? href : `${href}/*`);
-  const [open, setOpen] = React.useState(false);
+interface NavItemProps {
+  href: string
+  icon: React.ReactNode
+  name: string
+  alert?: boolean
+  children?: NavItem[]
+  isExpanded?: boolean
+}
 
-  const hasChildren = children && children.length > 0;
+const NavItem: React.FC<NavItemProps> = ({ href, icon, name, alert, children, isExpanded }) => {
+  const [isActive] = useRoute(href === "/" ? href : `${href}/*`)
+  const [open, setOpen] = React.useState(false)
+
+  const hasChildren = children && children.length > 0
 
   return (
-    <li
-      className={hasChildren ? "relative group" : undefined}
-      onMouseEnter={() => hasChildren && setOpen(true)}
-      onMouseLeave={() => hasChildren && setOpen(false)}
-    >
+    <li className="relative group">
       <Link href={href}>
         <div
           className={cn(
-            "flex items-center px-3 py-3 rounded-lg transition cursor-pointer",
+            "flex items-center px-3 py-3 rounded-lg transition-all duration-200 cursor-pointer relative",
             isActive
               ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium"
-              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700",
           )}
+          onMouseEnter={() => hasChildren && setOpen(true)}
+          onMouseLeave={() => hasChildren && setOpen(false)}
         >
-          <span className="flex items-center justify-center w-8 h-8 relative">
+          <span className="flex items-center justify-center w-8 h-8 relative flex-shrink-0">
             {icon}
             {alert && (
-              <span className="absolute top-0 right-0 w-3 h-3 bg-rose-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
             )}
           </span>
-          <span className="hidden md:inline ml-3 flex-1">{name}</span>
-          {hasChildren && (
-            <span className="ml-2 hidden md:inline">
-              <svg className={cn("w-4 h-4 transition-transform", open ? "rotate-90" : "")} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </span>
+
+          {/* Text content with smooth transition */}
+          <div
+            className={cn(
+              "ml-3 flex items-center justify-between flex-1 transition-all duration-300 overflow-hidden",
+              isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0",
+            )}
+          >
+            <span className="whitespace-nowrap">{name}</span>
+            {hasChildren && (
+              <svg
+                className={cn("w-4 h-4 transition-transform", open ? "rotate-90" : "")}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            )}
+          </div>
+
+          {/* Tooltip for collapsed state */}
+          {!isExpanded && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+              {name}
+              <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 dark:bg-gray-100 rotate-45"></div>
+            </div>
           )}
         </div>
       </Link>
+
       {/* Dropdown sub-menu */}
-      {hasChildren && (
-        <ul className={cn(
-          "w-full bg-white dark:bg-slate-800 shadow-lg rounded-lg py-2 space-y-1 z-40 transition-all duration-200 origin-top",
-          "md:ml-8 md:mt-1",
-          open ? "opacity-100 max-h-[200px]" : "opacity-0 max-h-0 overflow-hidden"
-        )}>
+      {hasChildren && isExpanded && (
+        <ul
+          className={cn(
+            "ml-8 mt-1 space-y-1 transition-all duration-200 overflow-hidden",
+            open ? "opacity-100 max-h-[200px]" : "opacity-0 max-h-0",
+          )}
+        >
           {children.map((child) => (
             <NavItem
               key={child.name}
@@ -178,12 +227,13 @@ const NavItem: React.FC<NavItemProps> = ({ href, icon, name, alert, children }) 
               icon={child.icon}
               name={child.name}
               alert={child.alert}
+              isExpanded={isExpanded}
             />
           ))}
         </ul>
       )}
     </li>
-  );
-};
+  )
+}
 
-export default Sidebar;
+export default Sidebar

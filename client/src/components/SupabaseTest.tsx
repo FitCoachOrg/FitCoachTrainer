@@ -28,7 +28,7 @@ export function SupabaseTest() {
   }, [])
 
   return (
-    <div className="p-4 rounded-lg border">
+    <div className="p-4 rounded-lg border border-black dark:border-neutral-600  dark:bg-black">
       <h2 className="text-lg font-semibold mb-2">Supabase Connection Status</h2>
       
       {/* Environment Variables Status */}

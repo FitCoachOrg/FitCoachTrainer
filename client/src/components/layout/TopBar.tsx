@@ -1,44 +1,50 @@
-import { useLocation } from "wouter";
-import { useTheme } from "@/context/ThemeContext";
-import * as Icons from "@/lib/icons";
-import { Button } from "@/components/ui/button";
+import type React from "react"
+
+import { useLocation } from "wouter"
+import { useTheme } from "@/context/ThemeContext"
+import { useSidebar } from "@/context/sidebar-context"
+import * as Icons from "@/lib/icons"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 const TopBar: React.FC = () => {
-  const [location, navigate] = useLocation();
-  const { toggleTheme, theme } = useTheme();
+  const [location, navigate] = useLocation()
+  const { toggleTheme, theme } = useTheme()
+  const { isExpanded } = useSidebar()
 
   // Format the page title based on the current location
   const getPageTitle = () => {
-    const path = location.split("/")[1];
-    
-    if (path === "") return "Dashboard / Home";
-    
-    const formattedPath = path.charAt(0).toUpperCase() + path.slice(1);
-    return `Dashboard / ${formattedPath}`;
-  };
+    const path = location.split("/")[1]
+
+    if (path === "") return "Dashboard / Home"
+
+    const formattedPath = path.charAt(0).toUpperCase() + path.slice(1)
+    return `Dashboard / ${formattedPath}`
+  }
 
   return (
-    <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700 sticky top-0 z-20">
+    <header
+      className={cn(
+        "bg-white dark:bg-black shadow-sm border-b border-gray-200 dark:border-slate-700 sticky top-0 z-20 transition-all duration-300 ease-in-out",
+        isExpanded ? "ml-64" : "ml-16",
+      )}
+    >
       <div className="flex items-center justify-between px-6 py-4">
         <h2 className="text-xl font-semibold">{getPageTitle()}</h2>
-        
+
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="icon"
             onClick={toggleTheme}
-            className="rounded-full bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
+            className="rounded-full bg-gray-100 dark:bg-black text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
           >
-            {theme === "dark" ? (
-              <Icons.SunIcon className="h-5 w-5" />
-            ) : (
-              <Icons.MoonIcon className="h-5 w-5" />
-            )}
+            {theme === "dark" ? <Icons.SunIcon className="h-5 w-5" /> : <Icons.MoonIcon className="h-5 w-5" />}
           </Button>
           <Button
             variant="outline"
             size="icon"
-            className="rounded-full bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 relative"
+            className="rounded-full bg-gray-100 dark:bg-black text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 relative"
           >
             <Icons.BellIcon className="h-5 w-5" />
             <span className="absolute top-0 right-0 w-2 h-2 bg-primary-600 rounded-full"></span>
@@ -56,7 +62,7 @@ const TopBar: React.FC = () => {
         </div>
       </div>
     </header>
-  );
-};
+  )
+}
 
-export default TopBar;
+export default TopBar

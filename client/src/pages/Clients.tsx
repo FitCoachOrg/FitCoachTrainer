@@ -172,7 +172,7 @@ const Clients: React.FC = () => {
                   ) : filteredClients && filteredClients.length > 0 ? (
                     filteredClients.map((client) => (
                       <tr
-                        key={client.id}
+                        key={client.client_id}
                         className="hover:bg-blue-50 transition cursor-pointer"
                         onClick={() => navigate(`/client/${client.client_id}`)}
                       >

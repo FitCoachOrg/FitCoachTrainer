@@ -30,10 +30,10 @@ const AverageClientScoreCard = () => {
   ];
 
   return (
-    <Card className="bg-white dark:bg-slate-800 shadow-sm">
+    <Card className="bg-white dark:bg-black shadow-sm">
       <CardHeader>
         <CardTitle>Average Client Score</CardTitle>
-        <div className="text-3xl font-bold text-blue-600 dark:text-blue-300">
+        <div className="text-3xl font-bold text-blue-800 dark:text-blue-600">
           {averageScore.toFixed(1)}
         </div>
       </CardHeader>
@@ -48,7 +48,7 @@ const AverageClientScoreCard = () => {
             {belowAverage.map((client) => (
               <li key={client.name} className="group relative">
                 <div className="flex flex-col">
-                  <span className="font-medium">{client.name}</span>
+                  <span className="font-medium text-">{client.name}</span>
                   <span className="text-xs text-gray-400 mb-1">Score: {client.score}</span>
                   <Progress value={client.progress} className="h-2" />
                   <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Weekly Progress: {client.progress}%</span>

@@ -1,80 +1,212 @@
-import { Switch, Route, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { ThemeProvider } from "./context/ThemeContext";
-import NotFound from "@/pages/not-found";
-import Dashboard from "@/pages/Dashboard";
-import Clients from "@/pages/Clients";
-import Plans from "@/pages/Plans";
-import NutritionPlans from "@/pages/NutritionPlans";
-import FitnessPlans from "@/pages/FitnessPlans";
-import Notes from "@/pages/Notes";
-import Payments from "@/pages/Payments";
-import Branding from "@/pages/Branding";
-import Alerts from "@/pages/Alerts";
-import Login from "@/pages/login";
-import Sidebar from "@/components/layout/Sidebar";
-import TopBar from "@/components/layout/TopBar";
-import ClientProfilePage from "./pages/ClientProfilePage";
+import type React from "react"
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { queryClient } from "./lib/queryClient"
 
-// Protected route wrapper
-const ProtectedRoute = ({ component: Component, ...rest }: any) => {
-  const [location] = useLocation();
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { ThemeProvider } from "./context/ThemeContext"
+import { SidebarProvider } from "./context/sidebar-context"
+import { useSidebar } from "./context/sidebar-context"
 
-  if (!isAuthenticated && location !== "/login") {
-    return <Login />;
+import NotFound from "@/pages/not-found"
+import Dashboard from "@/pages/Dashboard"
+import Clients from "@/pages/Clients"
+import Plans from "@/pages/Plans"
+import NutritionPlans from "@/pages/NutritionPlans"
+import FitnessPlans from "@/pages/FitnessPlans"
+import Notes from "@/pages/Notes"
+import Payments from "@/pages/Payments"
+import Branding from "@/pages/Branding"
+import Alerts from "@/pages/Alerts"
+import Login from "@/pages/login"
+import Sidebar from "@/components/layout/Sidebar"
+import TopBar from "@/components/layout/TopBar"
+import ClientProfilePage from "./pages/ClientProfilePage"
+import HomePage from "./pages/HomePage"
+import Navbar from "./components/layout/Navbar"
+import { cn } from "@/lib/utils"
+
+// ProtectedRoute wrapper - now properly protects routes
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const location = useLocation()
+  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
+
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
   }
 
-  return <Component {...rest} />;
-};
+  // If authenticated, show the protected content
+  return <>{children}</>
+}
 
-function Router() {
-  const [location] = useLocation();
-  const isLoginPage = location === "/login";
-
-  if (isLoginPage) {
-    return <Login />;
-  }
+// Layout for protected routes (with sidebar and topbar)
+const ProtectedLayout = ({ children }: { children: React.ReactNode }) => {
+  const { isExpanded } = useSidebar()
 
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-slate-900 text-gray-800 dark:text-gray-200">
+    <div className="flex min-h-screen bg-gray-100 dark:bg-black text-gray-800 dark:text-gray-200">
       <Sidebar />
-      <div className="flex-1 ml-16 md:ml-64">
+      <div className="flex-1">
         <TopBar />
-        <main className="p-6">
-          <Switch>
-            <Route path="/" component={(props: any) => <ProtectedRoute component={Dashboard} {...props} />} />
-            <Route path="/clients" component={(props: any) => <ProtectedRoute component={Clients} {...props} />} />
-            <Route path="/client/:id" component={(props: any) => <ProtectedRoute component={ClientProfilePage} {...props} />} />
-            <Route path="/plans" component={(props: any) => <ProtectedRoute component={Plans} {...props} />} />
-            <Route path="/nutrition-plans" component={(props: any) => <ProtectedRoute component={NutritionPlans} {...props} />} />
-            <Route path="/fitness-plans" component={(props: any) => <ProtectedRoute component={FitnessPlans} {...props} />} />
-            <Route path="/notes" component={(props: any) => <ProtectedRoute component={Notes} {...props} />} />
-            <Route path="/payments" component={(props: any) => <ProtectedRoute component={Payments} {...props} />} />
-            <Route path="/branding" component={(props: any) => <ProtectedRoute component={Branding} {...props} />} />
-            <Route path="/alerts" component={(props: any) => <ProtectedRoute component={Alerts} {...props} />} />
-            <Route component={NotFound} />
-          </Switch>
+        <main className={cn("p-6 transition-all duration-300 ease-in-out", isExpanded ? "ml-64" : "ml-16")}>
+          {children}
         </main>
       </div>
     </div>
-  );
+  )
+}
+
+// Layout for public routes (no sidebar/topbar)
+const PublicLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <div className="min-h-screen">
+      <Navbar />
+      {children}
+    </div>
+  )
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <TooltipProvider>
-          <Router />
-          <Toaster />
-        </TooltipProvider>
+        <SidebarProvider>
+          <TooltipProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* Public routes - no authentication required */}
+                <Route
+                  path="/"
+                  element={
+                    <PublicLayout>
+                      <HomePage />
+                    </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <PublicLayout>
+                      <Login />
+                    </PublicLayout>
+                  }
+                />
+
+                {/* Protected routes - authentication required */}
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Dashboard />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/clients"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Clients />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/client/:id"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <ClientProfilePage />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/plans"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Plans />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/nutrition-plans"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <NutritionPlans />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/fitness-plans"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <FitnessPlans />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/notes"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Notes />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/payments"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Payments />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/branding"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Branding />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/alerts"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Alerts />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Catch all route */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              <Toaster />
+            </BrowserRouter>
+          </TooltipProvider>
+        </SidebarProvider>
       </ThemeProvider>
     </QueryClientProvider>
-  );
+  )
 }
 
-export default App;
+export default App

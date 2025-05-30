@@ -43,8 +43,8 @@ const NutritionOverviewCard: React.FC<NutritionOverviewCardProps> = ({
   macros = defaultMacros,
 }) => {
   // For the circular progress
-  const radius = 38;
-  const stroke = 8;
+  const radius = 100;
+  const stroke = 5;
   const normalizedRadius = radius - stroke / 2;
   const circumference = normalizedRadius * 2 * Math.PI;
   const percent = Math.min((calories.consumed / calories.goal) * 100, 100);
@@ -90,7 +90,7 @@ const NutritionOverviewCard: React.FC<NutritionOverviewCardProps> = ({
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-semibold text-gray-700">
+              <span className="text-sm font-semibold text-white">
                 {calories.consumed}
                 <span className="text-gray-400 text-base"> / {calories.goal}</span>
               </span>
@@ -105,7 +105,7 @@ const NutritionOverviewCard: React.FC<NutritionOverviewCardProps> = ({
             const over = macro.consumed > macro.goal;
             return (
               <div key={macro.label} className="flex flex-col items-center min-w-[160px]">
-                <span className="text-lg font-semibold text-gray-700">
+                <span className="text-lg font-semibold text-white">
                   {macro.consumed} <span className="text-gray-400">/ {macro.goal} g</span>
                 </span>
                 <div className="w-40 h-2 rounded-full bg-gray-200 mt-2 mb-1 relative overflow-hidden">
