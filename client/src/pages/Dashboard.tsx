@@ -11,7 +11,6 @@ import SlidingPanel from "@/components/layout/SlidingPanel";
 import * as Icons from "@/lib/icons";
 import { useLocation } from "wouter";
 import AverageClientScoreCard from "@/components/dashboard/AverageClientScoreCard";
-import { SupabaseTest } from "@/components/SupabaseTest";
 
 // Sample client data
 const sampleClient = {
@@ -99,11 +98,6 @@ const Dashboard: React.FC = () => {
     <div>
       <WelcomeCard />
       
-      {/* Supabase Connection Test */}
-      <div className="mb-6">
-        <SupabaseTest />
-      </div>
-      
       {/* Recommended Actions */}
       <div className="mb-6">
         <RecommendedActionsCard actions={recommendedActions} />
@@ -112,24 +106,10 @@ const Dashboard: React.FC = () => {
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard 
-          title="Daily steps" 
-          value="12,345" 
-          icon={<Icons.FootprintsIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />}
-          variant="info"
-        />
-        
-        <StatCard 
           title="Daily Check-ins" 
           value="15" 
           icon={<Icons.CheckIcon className="h-5 w-5 text-green-500 dark:text-green-400" />}
           variant="success"
-        />
-        
-        <StatCard 
-          title="Calories burned" 
-          value="789 kcal" 
-          icon={<Icons.FlameIcon className="h-5 w-5 text-orange-500 dark:text-orange-400" />}
-          variant="warning"
         />
       </div>
       
