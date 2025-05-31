@@ -12,6 +12,7 @@ import * as Icons from "@/lib/icons";
 import { useLocation } from "wouter";
 import AverageClientScoreCard from "@/components/dashboard/AverageClientScoreCard";
 import { SupabaseTest } from "@/components/SupabaseTest";
+import Demo from "@/components/dashboard/demo";
 
 // Sample client data
 const sampleClient = {
@@ -100,13 +101,13 @@ const Dashboard: React.FC = () => {
       <WelcomeCard />
       
       {/* Supabase Connection Test */}
-      <div className="mb-6">
+      {/* <div className="mb-6">
         <SupabaseTest />
-      </div>
+      </div> */}
       
       {/* Recommended Actions */}
       <div className="mb-6">
-        <RecommendedActionsCard actions={recommendedActions} />
+        <Demo />
       </div>
       
       {/* Stats Overview */}
