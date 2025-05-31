@@ -13,6 +13,7 @@ import { useLocation } from "wouter";
 import AverageClientScoreCard from "@/components/dashboard/AverageClientScoreCard";
 import { SupabaseTest } from "@/components/SupabaseTest";
 import Demo from "@/components/dashboard/demo";
+import EnhancedCalendar from "@/components/dashboard/PeriodTrackingCard";
 
 // Sample client data
 const sampleClient = {
@@ -61,8 +62,7 @@ const Dashboard: React.FC = () => {
   const [_, navigate] = useLocation();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<typeof sampleClient | null>(null);
-  
-  // Sample actions for the recommended actions card
+
   const recommendedActions = [
     {
       id: 1,
@@ -97,20 +97,15 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div>
-      <WelcomeCard />
-      
-      {/* Supabase Connection Test */}
-      {/* <div className="mb-6">
-        <SupabaseTest />
-      </div> */}
-      
-      {/* Recommended Actions */}
+    <div className="px-4 md:px-6 max-w-7xl mx-auto">
+      <div className="py-4">
+        <WelcomeCard />
+      </div>
+
       <div className="mb-6">
         <Demo />
       </div>
-      
-      {/* Stats Overview */}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard 
           title="Daily steps" 
@@ -118,14 +113,12 @@ const Dashboard: React.FC = () => {
           icon={<Icons.FootprintsIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />}
           variant="info"
         />
-        
         <StatCard 
           title="Daily Check-ins" 
           value="15" 
           icon={<Icons.CheckIcon className="h-5 w-5 text-green-500 dark:text-green-400" />}
           variant="success"
         />
-        
         <StatCard 
           title="Calories burned" 
           value="789 kcal" 
@@ -133,21 +126,15 @@ const Dashboard: React.FC = () => {
           variant="warning"
         />
       </div>
-      
-      {/* Health Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="lg:col-span-2">
-          <UpcomingWeekAppointments />
-        </div>
-        <AverageClientScoreCard />
-      </div>
-      
-      {/* Nutrition Overview */}
+
       <div className="mb-6">
-        <NutritionOverviewCard />
+        <EnhancedCalendar />
       </div>
-      
-      {/* Sliding Panel for Client Details */}
+
+      {/* <div className="mb-6">
+        <NutritionOverviewCard />
+      </div> */}
+
       <SlidingPanel 
         isOpen={isPanelOpen}
         onClose={() => setIsPanelOpen(false)}
@@ -159,5 +146,6 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
+
 
 export default Dashboard;

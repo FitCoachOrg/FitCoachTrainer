@@ -7,7 +7,7 @@ interface WelcomeCardProps {
 
 const WelcomeCard: React.FC<WelcomeCardProps> = ({ name = "Coach" }) => {
   return (
-    <Card className="bg-white dark:bg-neutral-900 rounded-2xl shadow-md p-8 mb-8 border border-neutral-200 dark:border-neutral-700 transition-all duration-300">
+    <Card className="bg-white dark:bg-neutral-900 rounded-2xl shadow-md p-8  mb-8 border border-neutral-200 dark:border-neutral-700 transition-all duration-300">
       <div className="flex items-start space-x-4">
         <div className="text-4xl">
           <Icons.WaveIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
