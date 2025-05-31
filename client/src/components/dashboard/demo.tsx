@@ -69,7 +69,7 @@ export default function Demo() {
   ]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className=" max-w-7xl mx-auto">
       <RecommendedActionsCard actions={recommendedActions} />
     </div>
   )
