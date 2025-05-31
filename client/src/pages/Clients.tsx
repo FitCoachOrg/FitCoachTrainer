@@ -11,7 +11,7 @@ import ClientForm from "@/components/clients/ClientForm"
 import * as Icons from "@/lib/icons"
 import { useToast } from "@/hooks/use-toast"
 import { SidebarProvider, SidebarContent } from "@/components/ui/sidebar"
-import { useLocation } from "wouter"
+import { useNavigate } from "react-router-dom"
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
@@ -31,7 +31,7 @@ const Clients: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
   const { toast } = useToast()
-  const [, navigate] = useLocation()
+  const navigate = useNavigate()
 
   const filteredClients = clients?.filter((client) => {
     const matchesSearch =

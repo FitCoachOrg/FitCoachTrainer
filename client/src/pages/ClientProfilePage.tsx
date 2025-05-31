@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useParams, useLocation } from 'wouter';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import * as Icons from '@/lib/icons';
 import { ClientDashboard } from '@/components/clients/ClientDashboard';
+import { useClients } from '@/hooks/use-clients';
+import { Input } from '@/components/ui/input';
 
 // Match the field mapping from use-clients
 function mapClientFromDb(dbClient: any) {
@@ -30,9 +32,15 @@ export default function ClientProfilePage() {
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { id: clientId } = useParams();
-  const [, navigate] = useLocation();
-  console.log("ClientProfilePage loaded with clientId:", clientId);
+  const navigate = useNavigate();
+  const { clients } = useClients(1);
+
+  const filteredClients = clients?.filter(client => 
+    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    client.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     if (!clientId || isNaN(Number(clientId))) {
@@ -79,8 +87,52 @@ export default function ClientProfilePage() {
   return (
     <div className="min-h-screen w-full flex flex-col justify-start bg-[#faf9f8]">
       <div className="w-full max-w-6xl flex flex-col md:flex-row gap-2 mt-8 px-2 md:px-0">
-        {/* Sidebar placeholder for alignment (can add real sidebar if needed) */}
-        <div className="w-full md:w-72 flex flex-col gap-6 shrink-0"></div>
+        {/* Client List Sidebar */}
+        <div className="w-full md:w-72 flex flex-col gap-6 shrink-0">
+          <Card className="p-4">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">All Clients</h3>
+              <div className="relative">
+                <Icons.SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search clients..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
+              {filteredClients?.map((c) => (
+                <button
+                  key={c.client_id}
+                  onClick={() => navigate(`/client/${c.client_id}`)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                    c.client_id === Number(clientId)
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    {c.avatarUrl ? (
+                      <img src={c.avatarUrl} alt={c.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="font-bold text-gray-600 dark:text-gray-400 text-sm">
+                        {c.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="font-medium truncate">{c.name}</div>
+                    {c.email && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{c.email}</div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
         {/* Main Content */}
         <div className="flex-1 flex flex-col gap-6">
           {/* Profile Header */}
