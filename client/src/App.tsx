@@ -26,6 +26,8 @@ import ClientProfilePage from "./pages/ClientProfilePage"
 import HomePage from "./pages/HomePage"
 import Navbar from "./components/layout/Navbar"
 import { cn } from "@/lib/utils"
+import ExerciseLibrary from "./pages/ExcerciseLibrary"
+import FitnessCalendar from "./pages/Calendar-excercise"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -135,13 +137,33 @@ function App() {
                       </ProtectedLayout>
                     </ProtectedRoute>
                   }
-                />
+                /> 
                 <Route
                   path="/nutrition-plans"
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>
                         <NutritionPlans />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                 <Route
+                  path="/excerise-lib"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <ExerciseLibrary />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/calendar"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <FitnessCalendar />
                       </ProtectedLayout>
                     </ProtectedRoute>
                   }
