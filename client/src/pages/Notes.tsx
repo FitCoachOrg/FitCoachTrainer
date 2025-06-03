@@ -245,7 +245,7 @@ const Notes = () => {
                     {!searchQuery && (
                       <Button onClick={handleAddNew}>
                         <Icons.PlusIcon className="h-4 w-4 mr-2" />
-                        Create Note
+                        Create Notes
                       </Button>
                     )}
                   </div>
