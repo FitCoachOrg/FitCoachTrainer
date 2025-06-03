@@ -31,6 +31,7 @@ import {
   Footprints,
   Pencil,
   Plus,
+  Filter,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -43,6 +44,7 @@ import {
   BarChart,
   Bar,
 } from "recharts"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface EditableSectionProps {
   title: string
@@ -532,6 +534,7 @@ const WorkoutPlanSection = () => {
   equipment: "",
   difficulty: "Beginner",
 })
+  const [showProfileCard, setShowProfileCard] = useState(false)
 
   // Load data from localStorage on component mount
   useEffect(() => {
@@ -966,6 +969,18 @@ const NutritionPlanSection = () => {
   )
 }
 
+// Calculate age from DOB
+const getAge = (dob: string) => {
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
 export default function ClientDashboard() {
   const [client, setClient] = useState(sampleClient)
   const [loading, setLoading] = useState(false)
@@ -973,6 +988,9 @@ export default function ClientDashboard() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedClientId, setSelectedClientId] = useState("1")
   const [activeTab, setActiveTab] = useState("metrics")
+  const [showProfileCard, setShowProfileCard] = useState(false)
+  const [showClientFilter, setShowClientFilter] = useState(false)
+  const [activeClientFilter, setActiveClientFilter] = useState<string | null>(null)
 
   const filteredClients = sampleClients.filter(
     (client) =>
@@ -1015,119 +1033,130 @@ export default function ClientDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Enhanced Client List Sidebar */}
-          <div className="w-full lg:w-80 space-y-6">
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
-                    All Clients
-                  </CardTitle>
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                    {filteredClients.length}
-                  </Badge>
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search clients..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-white/80 backdrop-blur-sm border-gray-200/60 focus:border-blue-300 focus:ring-blue-200/50 dark:bg-neutral-700"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
-                  {filteredClients.map((c) => (
-                    <button
-                      key={c.client_id}
-                      onClick={() => handleClientSelect(c.client_id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
-                        c.client_id === selectedClientId
-                          ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500 shadow-md dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-300"
-                          : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                      }`}
-                    >
-                      <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
-                        <AvatarImage src={c.avatarUrl || "/placeholder.svg"} alt={c.name} />
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                          {c.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="font-semibold truncate">{c.name}</div>
-                        {c.email && <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{c.email}</div>}
-                      </div>
-                      <div
-                        className={`w-2 h-2 rounded-full ${c.status === "active" ? "bg-green-500" : "bg-yellow-500"}`}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Enhanced Main Content */}
-          <div className="flex-1 space-y-6">
-            {/* Enhanced Profile Header */}
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl overflow-hidden dark:bg-black">
-              <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-32 relative">
-                <div className="absolute inset-0 bg-black/20" />
-                <div className="absolute top-4 right-4">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30"
+    <div className="min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      {/* Sidebar */}
+      <aside className="w-80 min-h-screen bg-slate-800 text-white flex flex-col p-6 rounded-l-3xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold tracking-widest">ALL CLIENTS</h2>
+          <Popover open={showClientFilter} onOpenChange={setShowClientFilter}>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs font-semibold" title="Filter/Sort Clients">
+                <Filter className="h-4 w-4" />
+                Filter
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="p-2 w-48 bg-white text-slate-900 rounded shadow">
+              <div className="font-semibold mb-2 text-xs text-slate-700">Filter Clients</div>
+              <button onClick={() => { setActiveClientFilter('low-engagement'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-engagement' ? 'bg-blue-100 font-bold' : ''}`}>Low Engagement scores</button>
+              <button onClick={() => { setActiveClientFilter('low-outcome'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-outcome' ? 'bg-blue-100 font-bold' : ''}`}>Low Outcome scores</button>
+              <button onClick={() => { setActiveClientFilter(null); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${!activeClientFilter ? 'bg-blue-100 font-bold' : ''}`}>Clear Filter</button>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="relative mt-2 mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Search clients..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <Card className="bg-slate-700 border-0 shadow-none">
+            <CardContent className="pt-0">
+              <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {filteredClients
+                  .filter(c => {
+                    if (activeClientFilter === 'low-engagement') {
+                      // Placeholder: implement real filter logic here
+                      return c.name.toLowerCase().includes('low engagement')
+                    }
+                    if (activeClientFilter === 'low-outcome') {
+                      // Placeholder: implement real filter logic here
+                      return c.name.toLowerCase().includes('low outcome')
+                    }
+                    return true;
+                  })
+                  .map((c) => (
+                  <button
+                    key={c.client_id}
+                    onClick={() => handleClientSelect(c.client_id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                      c.client_id === selectedClientId
+                        ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500 shadow-md dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-300"
+                        : "hover:bg-slate-600"
+                    }`}
                   >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Profile
-                  </Button>
-                </div>
+                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
+                      <AvatarImage src={c.avatarUrl || "/placeholder.svg"} alt={c.name} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
+                        {c.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="font-semibold truncate">{c.name}</div>
+                      {c.email && <div className="text-xs text-slate-300 truncate">{c.email}</div>}
+                    </div>
+                    <div
+                      className={`w-2 h-2 rounded-full ${c.status === "active" ? "bg-green-500" : "bg-yellow-500"}`}
+                    />
+                  </button>
+                ))}
               </div>
-              <CardContent className="relative pt-0 pb-6">
-                <div className="flex flex-col md:flex-row items-start gap-6 -mt-16">
-                  <Avatar className="h-32 w-32 ring-4 ring-white shadow-2xl">
+            </CardContent>
+          </Card>
+        </div>
+      </aside>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col p-8">
+        {/* Gradient Top Bar with profile icon dropdown */}
+        <div className="w-full flex items-center gap-6 px-8 h-24 rounded-xl mb-6 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-lg">
+          <span className="text-2xl font-bold text-white flex-1">{client.name}</span>
+          <div className="flex items-center gap-6">
+            <span className="flex items-center gap-1 text-white/80 text-base">
+              <MapPin className="h-4 w-4" />
+              {client.location}
+            </span>
+            <span className="flex items-center gap-1 text-white/80 text-base">
+              <Calendar className="h-4 w-4" />
+              Age: {getAge(client.dob)}
+            </span>
+            <span className="flex items-center gap-1 text-white/80 text-base">
+              <Weight className="h-4 w-4" />
+              {client.weight} kg
+            </span>
+            <Popover open={showProfileCard} onOpenChange={setShowProfileCard}>
+              <PopoverTrigger asChild>
+                <button className="ml-4 focus:outline-none">
+                  <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
                     <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-3xl font-bold">
-                      {client.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xl">
+                      {client.name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
-
-                  <div className="flex-1 pt-16 md:pt-4">
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                      <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 mt-2">{client.name}</h1>
-                        {client.username && <p className="text-gray-500 dark:text-gray-400 mb-3">@{client.username}</p>}
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-                            {client.membershipType}
-                          </Badge>
-                          <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
-                            Active Member
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <Button variant="outline" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="p-0 border-0 bg-transparent shadow-none">
+                <Card className="w-[350px] bg-white/90 backdrop-blur-sm border-0 shadow-xl overflow-hidden dark:bg-black">
+                  <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-24 relative flex items-center px-6">
+                    <Avatar className="h-16 w-16 ring-2 ring-white shadow-md">
+                      <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-2xl">
+                        {client.name.split(" ").map((n) => n[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="ml-4">
+                      <h1 className="text-2xl font-bold text-white mb-1">{client.name}</h1>
+                      {client.username && <p className="text-white/80 mb-1">@{client.username}</p>}
+                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">{client.membershipType}</Badge>
                     </div>
-
-                    <Separator className="my-4" />
-
-                    {/* Contact Information */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                  </div>
+                  <CardContent className="pt-4 pb-6">
+                    <div className="grid grid-cols-1 gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-gray-400" />
                         <span className="text-gray-600 dark:text-gray-400">{client.email}</span>
@@ -1138,9 +1167,7 @@ export default function ClientDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Born {new Date(client.dob).toLocaleDateString()}
-                        </span>
+                        <span className="text-gray-600 dark:text-gray-400">Born {new Date(client.dob).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Ruler className="h-4 w-4 text-gray-400" />
@@ -1155,15 +1182,18 @@ export default function ClientDashboard() {
                         <span className="text-gray-600 dark:text-gray-400">{client.location}</span>
                       </div>
                     </div>
-
                     <div className="mt-4 text-xs text-gray-400">
                       Member since {new Date(client.createdAt).toLocaleDateString()}
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+                  </CardContent>
+                </Card>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Enhanced Main Content */}
+          <div className="flex-1 space-y-6">
             {/* Client Stats */}
             <ClientStats />
 
@@ -1215,7 +1245,7 @@ export default function ClientDashboard() {
             </Card>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

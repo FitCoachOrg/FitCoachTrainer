@@ -40,7 +40,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
   };
 
   const clientInfo = {
-    name: "Ben Andrew",
+    name: "Ben yoyoajfoiasnsdikosandas Andrew",
     email: "ben@demo",
     location: "AmericaLos,Angeles",
     timezone: "5:16 AM",
@@ -64,32 +64,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex items-center justify-between p-6 border-b">
-        <div className="flex items-center gap-4">
-          <img
-            src={`/avatars/${clientId}.jpg`}
-            alt={clientInfo.name}
-            className="w-12 h-12 rounded-full"
-          />
-          <div>
-            <h1 className="text-2xl font-bold">{clientInfo.name}</h1>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Icons.PhoneIcon className="w-4 h-4" />
-              <span>{clientInfo.timezone} - {clientInfo.location}</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">
-            29 days left until trial ends
-          </span>
-          <Button variant="default">Upgrade</Button>
-        </div>
+    <div className="min-h-screen bg-background w-full">
+      <div className="w-full flex items-center gap-3 px-4 h-14 border-b bg-white dark:bg-slate-900">
+        <span className="text-lg font-semibold">{clientInfo.name}</span>
+        <span className="text-sm text-muted-foreground ml-2">{clientInfo.location}</span>
       </div>
 
-      <Tabs defaultValue="overview" className="p-6">
-        <TabsList className="mb-6">
+      <Tabs defaultValue="overview" className="p-6 w-full">
+        <TabsList className="mb-6 w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="training">Training</TabsTrigger>
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -103,12 +85,17 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2">
-              <div className="mb-6">
+          <div className="flex w-full gap-6">
+            {/* Left: All Clients (sidebar) */}
+            <div className="min-w-[250px] max-w-xs w-full">
+              {/* TODO: Insert All Clients list component here if you have one */}
+            </div>
+            {/* Right: Client Details (main panel) */}
+            <div className="flex-1 w-full">
+              <div className="mb-6 w-full">
                 <h2 className="text-lg font-semibold mb-4">Training</h2>
-                <div className="grid grid-cols-3 gap-4">
-                  <Card>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                  <Card className="w-full">
                     <CardHeader>
                       <CardTitle className="text-sm font-medium">
                         LAST 7 DAYS
@@ -121,7 +108,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                       <p className="text-sm text-muted-foreground">Tracked</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="w-full">
                     <CardHeader>
                       <CardTitle className="text-sm font-medium">
                         LAST 30 DAYS
@@ -134,7 +121,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                       <p className="text-sm text-muted-foreground">Tracked</p>
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="w-full">
                     <CardHeader>
                       <CardTitle className="text-sm font-medium">
                         NEXT WEEK
@@ -150,13 +137,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                 </div>
               </div>
 
-              <Card className="mb-6">
+              <Card className="mb-6 w-full">
                 <CardHeader>
                   <CardTitle>Body Metrics Overview</CardTitle>
                   <div className="text-sm text-muted-foreground">Last 4 weeks</div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
                     <div>
                       <div className="mb-2">
                         <span className="text-2xl font-bold">{metrics.weight.current}</span>
@@ -165,7 +152,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                           {metrics.weight.change}%
                         </span>
                       </div>
-                      <div className="h-[100px]">
+                      <div className="h-[100px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={metrics.weight.history}>
                             <Line type="monotone" dataKey="value" stroke="#8884d8" />
@@ -178,7 +165,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                       <div className="mb-2">
                         <span className="text-2xl font-bold">{metrics.sleep.current.hours}h {metrics.sleep.current.minutes}min</span>
                       </div>
-                      <div className="h-[100px]">
+                      <div className="h-[100px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={metrics.sleep.history}>
                             <Line type="monotone" dataKey="value" stroke="#82ca9d" />
@@ -192,8 +179,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
               </Card>
             </div>
 
-            <div className="space-y-6">
-              <Card>
+            <div className="space-y-6 w-full">
+              <Card className="w-full">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">Goal & Countdown</CardTitle>
@@ -218,7 +205,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="w-full">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">Notes</CardTitle>
@@ -239,7 +226,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="w-full">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">Limitations/Injuries</CardTitle>
@@ -260,7 +247,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="w-full">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-sm font-medium">Progress Photo</CardTitle>
@@ -271,7 +258,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4 w-full">
                     {clientInfo.progressPhotos.map((photo, i) => (
                       <div key={i}>
                         <img src={photo.url} alt={`Progress ${photo.date}`} className="w-full h-32 object-cover rounded-lg" />
@@ -286,7 +273,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ clientId }) => {
         </TabsContent>
 
         <TabsContent value="training">
-          <div className="space-y-6">
+          <div className="space-y-6 w-full">
             <TrainingCalendar clientId={clientId} />
           </div>
         </TabsContent>
