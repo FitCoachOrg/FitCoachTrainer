@@ -186,18 +186,7 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Last Activity
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Last 7d Training
-                    </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Last 30d Training
-                    </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Last 7d Tasks
-                    </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Category
-                    </th>
+                    
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Status
                     </th>
@@ -261,50 +250,14 @@ const Clients: React.FC = () => {
                             <span className="text-gray-700 dark:text-gray-300 font-medium">5d</span>
                           </div>
                         </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-20 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                              <div
-                                className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-500"
-                                style={{ width: "100%" }}
-                              ></div>
-                            </div>
-                            <span className="text-green-600 dark:text-green-400 font-semibold text-sm">100%</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-20 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                              <div
-                                className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-500"
-                                style={{ width: "100%" }}
-                              ></div>
-                            </div>
-                            <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">100%</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-20 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                              <div
-                                className="h-full bg-gradient-to-r from-purple-400 to-purple-500 rounded-full transition-all duration-500"
-                                style={{ width: "100%" }}
-                              ></div>
-                            </div>
-                            <span className="text-purple-600 dark:text-purple-400 font-semibold text-sm">100%</span>
-                          </div>
-                        </td>
+                        
+                        
                         <td className="px-6 py-5">
                           <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
                             Online
                           </span>
                         </td>
-                        <td className="px-6 py-5">
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800 shadow-sm">
-                            <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-                            Connected
-                          </span>
-                        </td>
+                        
                         <td className="px-6 py-5">
                           <p className="text-center">80</p>
                         </td>

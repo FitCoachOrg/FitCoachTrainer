@@ -129,7 +129,8 @@ export default function FitnessCalendar() {
   const [liveSyncEnabled, setLiveSyncEnabled] = useState(false)
   const [currentWeek, setCurrentWeek] = useState(1)
   const [viewMode, setViewMode] = useState("1 Week")
-  const [startDate, setStartDate] = useState(new Date())
+  const [startDate, setStartDate] = useState(new Date()) 
+ 
 
   // Helper function to format date as dd-mm-yyyy
   const formatDate = (date: Date): string => {
@@ -167,31 +168,33 @@ export default function FitnessCalendar() {
     setSelectedWorkout(workout)
   }
 
-  const handleExerciseUpdate = (exerciseId: string, field: string, value: any) => {
-    if (!selectedWorkout) return
+  const handleWorkoutUpdate = (field: keyof Workout, value: any) => {
+  if (!selectedWorkout) return;
+  const updatedWorkout = { ...selectedWorkout, [field]: value };
+  setSelectedWorkout(updatedWorkout);
+  setWorkouts((prev) => ({
+    ...prev,
+    [selectedWorkout.id]: updatedWorkout,
+  }));
+};
 
-    const updatedWorkout = {
-      ...selectedWorkout,
-      exercises: selectedWorkout.exercises.map((ex) => (ex.id === exerciseId ? { ...ex, [field]: value } : ex)),
-    }
+const handleExerciseUpdate = (
+  exerciseId: string,
+  field: keyof Exercise,
+  value: any
+) => {
+  if (!selectedWorkout) return;
+  const updatedExercises = selectedWorkout.exercises.map((ex) =>
+    ex.id === exerciseId ? { ...ex, [field]: value } : ex
+  );
+  const updatedWorkout = { ...selectedWorkout, exercises: updatedExercises };
+  setSelectedWorkout(updatedWorkout);
+  setWorkouts((prev) => ({
+    ...prev,
+    [selectedWorkout.id]: updatedWorkout,
+  }));
+};
 
-    setSelectedWorkout(updatedWorkout)
-    setWorkouts((prev) => ({
-      ...prev,
-      [selectedWorkout.id]: updatedWorkout,
-    }))
-  }
-
-  const handleWorkoutUpdate = (field: string, value: any) => {
-    if (!selectedWorkout) return
-
-    const updatedWorkout = { ...selectedWorkout, [field]: value }
-    setSelectedWorkout(updatedWorkout)
-    setWorkouts((prev) => ({
-      ...prev,
-      [selectedWorkout.id]: updatedWorkout,
-    }))
-  }
 
   const toggleExerciseExpansion = (exerciseId: string) => {
     setExpandedExercises((prev) => {
@@ -361,170 +364,110 @@ export default function FitnessCalendar() {
       {/* Workout Detail Modal */}
       <Dialog open={!!selectedWorkout} onOpenChange={() => setSelectedWorkout(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {selectedWorkout && (
-            <div className="space-y-6">
-              <DialogHeader>
-                <div className="flex items-center justify-between">
-                  <DialogTitle className="text-2xl font-bold text-gray-900">{selectedWorkout.type}</DialogTitle>
-                  <MoreHorizontal className="w-5 h-5 text-gray-400" />
+  {selectedWorkout && (
+    <div className="space-y-6">
+      <DialogHeader>
+        <div className="flex items-center justify-between">
+          <DialogTitle className="text-2xl font-bold">
+            Edit Workout - {selectedWorkout.title}
+          </DialogTitle>
+          <Button variant="ghost" onClick={() => setSelectedWorkout(null)}>
+            Close
+          </Button>
+        </div>
+      </DialogHeader>
+
+      <div className="space-y-4">
+        <Label>Title</Label>
+        <Input
+          value={selectedWorkout.title}
+          onChange={(e) => handleWorkoutUpdate("title", e.target.value)}
+        />
+
+        <Label>Description</Label>
+        <Textarea
+          value={selectedWorkout.description}
+          onChange={(e) => handleWorkoutUpdate("description", e.target.value)}
+        />
+
+        <Label>Exercises</Label>
+        <div className="space-y-4">
+          {selectedWorkout.exercises.map((exercise) => (
+            <Card key={exercise.id} className="p-4 space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Name</Label>
+                  <Input
+                    value={exercise.name}
+                    onChange={(e) =>
+                      handleExerciseUpdate(exercise.id, "name", e.target.value)
+                    }
+                  />
                 </div>
-              </DialogHeader>
-
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">DESCRIPTION</h3>
-                <Textarea
-                  value={selectedWorkout.description}
-                  onChange={(e) => handleWorkoutUpdate("description", e.target.value)}
-                  className="resize-none"
-                />
-              </div>
-
-              {/* Main Exercise Header */}
-              <div className="bg-indigo-900 text-white rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ChevronDown className="w-5 h-5" />
-                    <span className="font-medium">Full Body Warm Up</span>
-                    <span className="text-indigo-300">- AMRAP</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm">DURATION</span>
-                    <Input
-                      value={`${selectedWorkout.duration} min`}
-                      onChange={(e) => {
-                        const value = Number.parseInt(e.target.value.replace(" min", ""))
-                        if (!isNaN(value)) {
-                          handleWorkoutUpdate("duration", value)
-                        }
-                      }}
-                      className="w-20 bg-white text-black text-center"
-                    />
-                    <MoreHorizontal className="w-5 h-5" />
-                  </div>
+                <div>
+                  <Label>Sets</Label>
+                  <Input
+                    type="number"
+                    value={exercise.sets}
+                    onChange={(e) =>
+                      handleExerciseUpdate(exercise.id, "sets", +e.target.value)
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Reps</Label>
+                  <Input
+                    type="number"
+                    value={exercise.reps}
+                    onChange={(e) =>
+                      handleExerciseUpdate(exercise.id, "reps", +e.target.value)
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Rest (sec)</Label>
+                  <Input
+                    type="number"
+                    value={exercise.rest}
+                    onChange={(e) =>
+                      handleExerciseUpdate(exercise.id, "rest", +e.target.value)
+                    }
+                  />
                 </div>
               </div>
+            </Card>
+          ))}
+        </div>
 
-              <div className="text-gray-400 text-sm">Add instructions</div>
+        <Button
+          onClick={() => {
+            const newExercise = {
+              id: crypto.randomUUID(),
+              name: "New Exercise",
+              sets: 1,
+              reps: 1,
+              rest: 30,
+              duration: 1,
+              image: "/placeholder.svg",
+            };
+            const updatedWorkout = {
+              ...selectedWorkout,
+              exercises: [...selectedWorkout.exercises, newExercise],
+            };
+            setSelectedWorkout(updatedWorkout);
+            setWorkouts((prev) => ({
+              ...prev,
+              [selectedWorkout.id]: updatedWorkout,
+            }));
+          }}
+        >
+          Add Exercise
+        </Button>
+      </div>
+    </div>
+  )}
+</DialogContent>
 
-              {/* Exercises */}
-              <div className="space-y-4">
-                {selectedWorkout.exercises.map((exercise) => (
-                  <Card key={exercise.id} className="overflow-hidden">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-4">
-                        <img
-                          src={exercise.image || "/placeholder.svg"}
-                          alt={exercise.name}
-                          className="w-16 h-16 rounded-lg object-cover"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-medium text-lg">{exercise.name}</h4>
-                            <MoreHorizontal className="w-5 h-5 text-gray-400" />
-                          </div>
-
-                          {expandedExercises.has(exercise.id) && (
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                  <Label className="text-sm text-gray-600">Set</Label>
-                                  <Input
-                                    type="number"
-                                    value={exercise.sets}
-                                    onChange={(e) =>
-                                      handleExerciseUpdate(exercise.id, "sets", Number.parseInt(e.target.value))
-                                    }
-                                    className="mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-sm text-gray-600">Reps</Label>
-                                  <Input
-                                    type="number"
-                                    value={exercise.reps}
-                                    onChange={(e) =>
-                                      handleExerciseUpdate(exercise.id, "reps", Number.parseInt(e.target.value))
-                                    }
-                                    className="mt-1"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-sm text-gray-600">Rest</Label>
-                                  <Input
-                                    type="number"
-                                    value={exercise.rest}
-                                    onChange={(e) =>
-                                      handleExerciseUpdate(exercise.id, "rest", Number.parseInt(e.target.value))
-                                    }
-                                    className="mt-1"
-                                  />
-                                </div>
-                              </div>
-
-                              {exercise.eachSide !== undefined && (
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`each-side-${exercise.id}`}
-                                    checked={exercise.eachSide}
-                                    onCheckedChange={(checked) =>
-                                      handleExerciseUpdate(exercise.id, "eachSide", checked)
-                                    }
-                                  />
-                                  <Label htmlFor={`each-side-${exercise.id}`} className="text-sm">
-                                    Each Side
-                                  </Label>
-                                  {exercise.tempo && (
-                                    <span className="text-sm text-gray-500 ml-4">Tempo: {exercise.tempo}</span>
-                                  )}
-                                </div>
-                              )}
-
-                              <Textarea
-                                placeholder="Add note for this exercise"
-                                value={exercise.notes || ""}
-                                onChange={(e) => handleExerciseUpdate(exercise.id, "notes", e.target.value)}
-                                className="resize-none"
-                              />
-                            </div>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleExerciseExpansion(exercise.id)}
-                            className="mt-2 text-blue-600 hover:text-blue-700"
-                          >
-                            {expandedExercises.has(exercise.id) ? "Show Less" : "Show More"}
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {/* More Customization Options */}
-              <Card className="bg-blue-50 border-blue-200">
-                <CardContent className="p-4">
-                  <h3 className="font-medium mb-2">More customization options</h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Explore options to add <strong>alternate exercises</strong>, or change the{" "}
-                    <strong>tracking fields</strong> (RPE, Resting Heart Rate, and more)
-                  </p>
-                  <Button variant="outline" size="sm">
-                    Got it
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline">Save</Button>
-                <Button className="bg-blue-600 hover:bg-blue-700">Save & Close</Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
       </Dialog>
     </div>
   )

@@ -108,20 +108,20 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <StatCard 
-          title="Daily steps" 
-          value="12,345" 
+          title="Engagement Score" 
+          value="70" 
           icon={<Icons.FootprintsIcon className="h-5 w-5 text-blue-500 dark:text-blue-400" />}
           variant="info"
         />
         <StatCard 
-          title="Daily Check-ins" 
+          title="Nutritional Score" 
           value="15" 
           icon={<Icons.CheckIcon className="h-5 w-5 text-green-500 dark:text-green-400" />}
           variant="success"
         />
         <StatCard 
-          title="Calories burned" 
-          value="789 kcal" 
+          title="Streak" 
+          value="7" 
           icon={<Icons.FlameIcon className="h-5 w-5 text-orange-500 dark:text-orange-400" />}
           variant="warning"
         />

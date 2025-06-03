@@ -26,12 +26,25 @@ import {
   HelpCircle,
 } from "lucide-react"
 
-const exercises = [
-    {
+const dummyOptions = {
+  modality: ["Strength", "Conditioning", "Mobility"],
+  muscleGroup: ["Chest", "Back", "Shoulders", "Biceps", "Quads", "Core"],
+  movementPattern: [
+    "Upper Body Horizontal Push",
+    "Upper Body Horizontal Pull",
+    "Core Flexion / Extension",
+    "Static Stretch",
+    "Locomotion",
+  ],
+  category: ["Strength", "Bodyweight", "Timed"],
+}
+
+const initialExercises = [
+  {
     id: 1,
     name: "Dumbbell Floor Press",
     image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
+    tags: "",
     modality: "Strength",
     muscleGroup: "Chest",
     movementPattern: "Upper Body Horizontal Push",
@@ -53,32 +66,9 @@ const exercises = [
   },
   {
     id: 2,
-    name: "Dumbbell Rear Delt Row",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
-    modality: "Strength",
-    muscleGroup: "Shoulders",
-    movementPattern: "Upper Body Horizontal Pull",
-    category: "Strength",
-    time: "3d",
-    primaryFocus: {
-      modality: "Strength",
-      muscleGroup: "Shoulders, Rear Delts",
-      movementPattern: "Upper Body Horizontal Pull",
-    },
-    trackingFields: ["Weight", "Reps"],
-    instructions: [
-      "Hold dumbbells with arms extended in front of you.",
-      "Pull elbows back squeezing shoulder blades together.",
-      "Focus on rear deltoid engagement.",
-      "Return to starting position with control.",
-    ],
-  },
-  {
-    id: 3,
     name: "Jumping Jacks",
     image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
+    tags: "",
     modality: "Conditioning",
     muscleGroup: "Quads",
     movementPattern: "Locomotion",
@@ -98,101 +88,22 @@ const exercises = [
       "Maintain a steady rhythm throughout.",
     ],
   },
-  {
-    id: 4,
-    name: "Dumbbell Bicep Curl",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
-    modality: "Strength",
-    muscleGroup: "Biceps",
-    movementPattern: "Upper Body Vertical Pull",
-    category: "Strength",
-    time: "3d",
-    primaryFocus: {
-      modality: "Strength",
-      muscleGroup: "Biceps",
-      movementPattern: "Upper Body Vertical Pull",
-    },
-    trackingFields: ["Weight", "Reps"],
-    instructions: [
-      "Hold dumbbells at your sides with palms facing forward.",
-      "Keep elbows close to your torso.",
-      "Curl weights up towards shoulders.",
-      "Squeeze biceps at the top.",
-      "Lower with control to starting position.",
-    ],
-  },
-  {
-    id: 5,
-    name: "Standing Biceps Stretch",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
-    modality: "Mobility",
-    muscleGroup: "Biceps",
-    movementPattern: "--",
-    category: "Timed",
-    time: "3d",
-    primaryFocus: {
-      modality: "Mobility",
-      muscleGroup: "Biceps, Shoulders",
-      movementPattern: "Static Stretch",
-    },
-    trackingFields: ["Time"],
-    instructions: [
-      "Extend arm straight out to the side.",
-      "Place palm against a wall or doorframe.",
-      "Gently turn body away from extended arm.",
-      "Feel stretch in bicep and front of shoulder.",
-      "Hold for desired duration.",
-    ],
-  },
-  {
-    id: 6,
-    name: "Hanging Oblique Knee Raise",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "--",
-    modality: "Strength",
-    muscleGroup: "Core",
-    movementPattern: "Core Flexion / Extension",
-    category: "Bodyweight",
-    time: "3d",
-    primaryFocus: {
-      modality: "Strength",
-      muscleGroup: "Core, Obliques",
-      movementPattern: "Core Flexion / Extension",
-    },
-    trackingFields: ["Reps"],
-    instructions: [
-      "Hang from a pull-up bar with arms extended.",
-      "Engage core and lift knees towards one side.",
-      "Focus on oblique contraction.",
-      "Lower knees with control.",
-      "Alternate sides or complete one side at a time.",
-    ],
-  },
-
 ]
 
-const dummyOptions = {
-  modality: ["Strength", "Conditioning", "Mobility"],
-  muscleGroup: ["Chest", "Back", "Shoulders", "Biceps", "Quads", "Core"],
-  movementPattern: [
-    "Upper Body Horizontal Push",
-    "Upper Body Horizontal Pull",
-    "Core Flexion / Extension",
-    "Static Stretch",
-    "Locomotion",
-  ],
-  category: ["Strength", "Bodyweight", "Timed"],
-}
-
 export default function ExerciseLibrary() {
+  const [exercises, setExercises] = useState(initialExercises)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedExercise, setSelectedExercise] = useState<
-    (typeof exercises)[0] | null
-  >(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedExercise, setSelectedExercise] = useState<typeof exercises[0] | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [newModality, setNewModality] = useState("")
+const [newMuscleGroup, setNewMuscleGroup] = useState("")
+const [newMovementPattern, setNewMovementPattern] = useState("")
+const [newCategory, setNewCategory] = useState("")
+const [newTime, setNewTime] = useState("")
+
+  const [newExerciseName, setNewExerciseName] = useState("")
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -206,14 +117,45 @@ export default function ExerciseLibrary() {
       .includes(searchTerm.toLowerCase())
     const matchTags =
       selectedTags.length === 0 ||
-      selectedTags.every((tag) => exercise.tags?.includes(tag))
+      selectedTags.every((tag) =>
+        exercise.muscleGroup.toLowerCase().includes(tag.toLowerCase())
+      )
     return matchName && matchTags
   })
 
-  const handleExerciseClick = (exercise: (typeof exercises)[0]) => {
+  const handleExerciseClick = (exercise: typeof exercises[0]) => {
     setSelectedExercise(exercise)
     setIsModalOpen(true)
   }
+const handleAddExercise = () => {
+  const newExercise = {
+    id: exercises.length + 1,
+    name: newExerciseName,
+    image: "/placeholder.svg?height=60&width=60",
+    tags: "",
+    modality: newModality,
+    muscleGroup: newMuscleGroup,
+    movementPattern: newMovementPattern,
+    category: newCategory,
+    time: newTime,
+    primaryFocus: {
+      modality: newModality,
+      muscleGroup: newMuscleGroup,
+      movementPattern: newMovementPattern,
+    },
+    trackingFields: ["Reps"],
+    instructions: ["Do your reps!"],
+  }
+  setExercises((prev) => [...prev, newExercise])
+  setIsAddModalOpen(false)
+  setNewExerciseName("")
+  setNewModality("")
+  setNewMuscleGroup("")
+  setNewMovementPattern("")
+  setNewCategory("")
+  setNewTime("")
+}
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -232,8 +174,8 @@ export default function ExerciseLibrary() {
           <Filter className="h-4 w-4" />
           Filter
         </Button>
-        <div className="flex items-center gap-2">
-          {["Upper", "Chest", "Lower", "Mobility"].map((tag) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {dummyOptions.muscleGroup.map((tag) => (
             <Badge
               key={tag}
               variant={selectedTags.includes(tag) ? "default" : "secondary"}
@@ -243,7 +185,10 @@ export default function ExerciseLibrary() {
               {tag}
             </Badge>
           ))}
-          <Button className="flex items-center gap-2">
+          <Button
+            className="flex items-center gap-2"
+            onClick={() => setIsAddModalOpen(true)}
+          >
             <Plus className="h-4 w-4" />
             Add New Exercise
           </Button>
@@ -257,7 +202,6 @@ export default function ExerciseLibrary() {
             <TableRow className="bg-gray-50">
               <TableHead className="w-12"></TableHead>
               <TableHead>Exercise Name</TableHead>
-              <TableHead>Tags</TableHead>
               <TableHead>Modality</TableHead>
               <TableHead>Muscle Group</TableHead>
               <TableHead>Movement Pattern</TableHead>
@@ -273,40 +217,35 @@ export default function ExerciseLibrary() {
                 onClick={() => handleExerciseClick(exercise)}
               >
                 <TableCell>
-                  <div className="relative w-12 h-12">
-                    <img
-                      src={exercise.image}
-                      className="object-cover rounded"
-                    />
-                  </div>
+                  <img
+                    src={exercise.image}
+                    className="object-cover rounded w-12 h-12"
+                  />
                 </TableCell>
                 <TableCell className="font-medium">{exercise.name}</TableCell>
-                <TableCell className="text-gray-500">
-                  {(exercise.tags || [])}
-                </TableCell>
                 <TableCell>{exercise.modality}</TableCell>
                 <TableCell>{exercise.muscleGroup}</TableCell>
                 <TableCell>{exercise.movementPattern}</TableCell>
                 <TableCell>{exercise.category}</TableCell>
-                <TableCell className="text-gray-500">{exercise.time}</TableCell>
+                <TableCell>{exercise.time}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination Placeholder */}
       <div className="flex items-center justify-center gap-4 mt-6 text-sm text-gray-500">
         <Button variant="ghost" size="sm">
           {"<"}
         </Button>
-        <span>1 - 50 of 2515</span>
+        <span>1 - {filteredExercises.length} of {exercises.length}</span>
         <Button variant="ghost" size="sm">
           {">"}
         </Button>
       </div>
 
-      {/* Exercise Modal */}
+      {/* View Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedExercise && (
@@ -325,67 +264,30 @@ export default function ExerciseLibrary() {
                 {(["modality", "muscleGroup", "movementPattern"] as const).map(
                   (key) => (
                     <div key={key}>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1 tracking-wide capitalize">
-                        {key.replace(/([A-Z])/g, " $1").toUpperCase()}
+                      <h3 className="text-sm font-medium text-gray-500 mb-1 capitalize">
+                        {key}
                       </h3>
                       <select className="w-full border p-2 rounded-lg">
                         {dummyOptions[key].map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
+                          <option key={option}>{option}</option>
                         ))}
                       </select>
                     </div>
-                  ),
+                  )
                 )}
-
-                {/* Category Dropdown */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1 tracking-wide">
-                    CATEGORY
-                  </h3>
-                  <select className="w-full border p-2 rounded-lg">
-                    {dummyOptions.category.map((cat) => (
-                      <option key={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Tracking Fields */}
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <h3 className="text-sm font-medium text-gray-500 tracking-wide">
-                      TRACKING FIELDS
-                    </h3>
-                    <HelpCircle className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {selectedExercise.trackingFields.map((field, index) => (
-                      <Badge key={field} variant="secondary" className="px-3 py-2">
-                        {index + 1}. {field}
-                      </Badge>
-                    ))}
-                    <Button variant="outline" size="icon" className="h-10 w-10">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
                 {/* Instructions */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-4 tracking-wide">
-                    INSTRUCTIONS (Separate each step on a new line)
+                  <h3 className="text-sm font-medium text-gray-500 mb-4">
+                    INSTRUCTIONS
                   </h3>
                   <Card>
                     <CardContent className="p-4">
-                      <div className="space-y-3">
-                        {selectedExercise.instructions.map((instruction, index) => (
-                          <div key={index} className="flex gap-3">
-                            <span className="text-gray-400 font-medium">{index + 1}.</span>
-                            <span className="text-gray-700">{instruction}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {selectedExercise.instructions.map((ins, i) => (
+                        <div key={i} className="flex gap-2 text-sm">
+                          <span className="text-gray-400">{i + 1}.</span>
+                          <span>{ins}</span>
+                        </div>
+                      ))}
                     </CardContent>
                   </Card>
                 </div>
@@ -394,6 +296,71 @@ export default function ExerciseLibrary() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add Modal */}
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Add New Exercise</DialogTitle>
+    </DialogHeader>
+    <div className="space-y-4">
+      <Input
+        placeholder="Exercise name"
+        value={newExerciseName}
+        onChange={(e) => setNewExerciseName(e.target.value)}
+      />
+      <select
+        value={newModality}
+        onChange={(e) => setNewModality(e.target.value)}
+        className="w-full border p-2 rounded-lg"
+      >
+        <option value="">Select Modality</option>
+        {dummyOptions.modality.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+      <select
+        value={newMuscleGroup}
+        onChange={(e) => setNewMuscleGroup(e.target.value)}
+        className="w-full border p-2 rounded-lg"
+      >
+        <option value="">Select Muscle Group</option>
+        {dummyOptions.muscleGroup.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+      <select
+        value={newMovementPattern}
+        onChange={(e) => setNewMovementPattern(e.target.value)}
+        className="w-full border p-2 rounded-lg"
+      >
+        <option value="">Select Movement Pattern</option>
+        {dummyOptions.movementPattern.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+      <select
+        value={newCategory}
+        onChange={(e) => setNewCategory(e.target.value)}
+        className="w-full border p-2 rounded-lg"
+      >
+        <option value="">Select Category</option>
+        {dummyOptions.category.map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+      <Input
+        placeholder="Time (e.g. 3d)"
+        value={newTime}
+        onChange={(e) => setNewTime(e.target.value)}
+      />
+      <Button onClick={handleAddExercise} disabled={!newExerciseName || !newModality || !newMuscleGroup || !newMovementPattern || !newCategory || !newTime}>
+        Save Exercise
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
+
     </div>
   )
 }
