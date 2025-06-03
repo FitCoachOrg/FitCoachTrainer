@@ -136,6 +136,7 @@ const NavItem: React.FC<NavItemProps> = ({
   const isActive = location.pathname.startsWith(href)
   const [open, setOpen] = React.useState(false)
   const hasChildren = children && children.length > 0
+  const closeTimeout = React.useRef<NodeJS.Timeout | null>(null)
 
   return (
     <li className="relative group">
@@ -143,14 +144,23 @@ const NavItem: React.FC<NavItemProps> = ({
         to={href}
         className={({ isActive }) =>
           cn(
-            "flex items-center px-3 py-3 rounded-lg transition-all duration-200 cursor-pointer relative",
+            "flex items-center px-3 py-3 rounded-lg transition-all duration-500 cursor-pointer relative",
             isActive || isActive
               ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium"
               : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700"
           )
         }
-        onMouseEnter={() => hasChildren && setOpen(true)}
-        onMouseLeave={() => hasChildren && setOpen(false)}
+        onMouseEnter={() => {
+          if (hasChildren) {
+            if (closeTimeout.current) clearTimeout(closeTimeout.current)
+            setOpen(true)
+          }
+        }}
+        onMouseLeave={() => {
+          if (hasChildren) {
+            closeTimeout.current = setTimeout(() => setOpen(false), 150)
+          }
+        }}
       >
         <span className="flex items-center justify-center w-8 h-8 relative flex-shrink-0">
           {icon}
@@ -180,7 +190,7 @@ const NavItem: React.FC<NavItemProps> = ({
         </div>
 
         {!isExpanded && (
-          <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+          <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none whitespace-nowrap z-50">
             {name}
             <div className="absolute top-1/2 left-0 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-gray-900 dark:bg-gray-100 rotate-45"></div>
           </div>
@@ -191,9 +201,16 @@ const NavItem: React.FC<NavItemProps> = ({
       {hasChildren && isExpanded && (
         <ul
           className={cn(
-            "ml-8 mt-1 space-y-1 transition-all duration-200 overflow-hidden",
+            "ml-8 mt-1 space-y-1 transition-all duration-500 overflow-hidden",
             open ? "opacity-100 max-h-[200px]" : "opacity-0 max-h-0"
           )}
+          onMouseEnter={() => {
+            if (closeTimeout.current) clearTimeout(closeTimeout.current)
+            setOpen(true)
+          }}
+          onMouseLeave={() => {
+            closeTimeout.current = setTimeout(() => setOpen(false), 150)
+          }}
         >
           {children.map((child) => (
             <NavItem key={child.name} {...child} isExpanded={isExpanded} />
