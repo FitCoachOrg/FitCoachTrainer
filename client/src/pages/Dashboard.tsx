@@ -114,13 +114,13 @@ const Dashboard: React.FC = () => {
           variant="info"
         />
         <StatCard 
-          title="Nutritional Score" 
+          title="Outcome Score" 
           value="15" 
           icon={<Icons.CheckIcon className="h-5 w-5 text-green-500 dark:text-green-400" />}
           variant="success"
         />
         <StatCard 
-          title="Streak" 
+          title="Check In" 
           value="7" 
           icon={<Icons.FlameIcon className="h-5 w-5 text-orange-500 dark:text-orange-400" />}
           variant="warning"

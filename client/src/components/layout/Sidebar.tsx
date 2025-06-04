@@ -30,8 +30,8 @@ const navigationItems: NavItem[] = [
     icon: <Icons.ClipboardIcon className="h-5 w-5" />,
     children: [
       {
-        name: "Nutrition Plans",
-        href: "/nutrition-plans",
+        name: "Excercise Library",
+        href: "/excercise-lib",
         icon: <Icons.UtensilsIcon className="h-4 w-4" />,
       },
       {
