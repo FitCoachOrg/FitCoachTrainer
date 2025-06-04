@@ -138,17 +138,7 @@ function App() {
                   }
                 /> 
                 <Route
-                  path="/nutrition-plans"
-                  element={
-                    <ProtectedRoute>
-                      <ProtectedLayout>
-                        <NutritionPlans />
-                      </ProtectedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                 <Route
-                  path="/excerise-lib"
+                  path="/excercise-lib"
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>
@@ -158,21 +148,11 @@ function App() {
                   }
                 />
                 <Route
-                  path="/calendar"
-                  element={
-                    <ProtectedRoute>
-                      <ProtectedLayout>
-                        <FitnessCalendar />
-                      </ProtectedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
                   path="/fitness-plans"
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>
-                        <FitnessPlans />
+                        <FitnessCalendar />
                       </ProtectedLayout>
                     </ProtectedRoute>
                   }

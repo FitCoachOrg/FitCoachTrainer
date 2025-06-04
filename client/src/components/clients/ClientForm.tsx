@@ -115,62 +115,7 @@ const ClientForm: React.FC<ClientFormProps> = ({
               <FormMessage />
             </FormItem>
           )}
-        />
-
-        <FormField
-          control={form.control}
-          name="goals"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Goals</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Client's fitness and lifestyle goals"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Notes</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Additional notes about the client"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="isActive"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-              <div className="space-y-0.5">
-                <FormLabel>Active Status</FormLabel>
-                <div className="text-sm text-muted-foreground">
-                  Client will be visible in active clients list
-                </div>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
+        />    
 
         <div className="flex justify-end gap-2">
           <Button
