@@ -9,7 +9,7 @@ import RecommendedActionsCard from "@/components/dashboard/RecommendedActionsCar
 import ClientDetailPanel from "@/components/dashboard/ClientDetailPanel";
 import SlidingPanel from "@/components/layout/SlidingPanel";
 import * as Icons from "@/lib/icons";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import AverageClientScoreCard from "@/components/dashboard/AverageClientScoreCard";
 import { SupabaseTest } from "@/components/SupabaseTest";
 import Demo from "@/components/dashboard/demo";
@@ -59,9 +59,9 @@ const sampleClient = {
 };
 
 const Dashboard: React.FC = () => {
-  const [_, navigate] = useLocation();
+  const navigate = useNavigate();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<typeof sampleClient | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
 
   const recommendedActions = [
     {
@@ -70,8 +70,13 @@ const Dashboard: React.FC = () => {
       title: "4 clients need follow-up",
       description: "You have 4 clients who haven't checked in for over a week",
       actionLabel: "View Clients",
-      onAction: () => navigate("/clients"),
+      onAction: () => navigate("/clients?engagement=low"),
       priority: 'high' as const,
+      detailData: {
+        clients: ["John Smith", "Emma Davis", "Michael Brown", "Sarah Wilson"],
+        daysSince: [8, 9, 10, 12],
+        onClientClick: () => navigate("/client/34")
+      }
     },
     {
       id: 2,
@@ -80,10 +85,32 @@ const Dashboard: React.FC = () => {
       description: "Sarah has a question about her nutrition plan",
       actionLabel: "View Message",
       onAction: () => {
-        setSelectedClient(sampleClient);
+        setSelectedClient("Sarah Johnson");
         setIsPanelOpen(true);
       },
       priority: 'medium' as const,
+      detailData: {
+        messages: [
+          { 
+            from: "Sarah Johnson", 
+            preview: "Hi coach, I have a question about my nutrition plan",
+            lastMessage: "Hi coach, I have a question about my nutrition plan",
+            timestamp: "10:30 AM"
+          },
+          { 
+            from: "Tom Wilson", 
+            preview: "Can we schedule a review session?",
+            lastMessage: "Can we schedule a review session?",
+            timestamp: "9:45 AM"
+          },
+          { 
+            from: "Emma Davis", 
+            preview: "Just completed my workout!",
+            lastMessage: "Just completed my workout!",
+            timestamp: "Yesterday"
+          }
+        ]
+      }
     },
     {
       id: 3,
@@ -93,11 +120,36 @@ const Dashboard: React.FC = () => {
       actionLabel: "Review Plan",
       onAction: () => navigate("/plans"),
       priority: 'medium' as const,
+      detailData: {
+        plans: [
+          { client: "Tom Wilson", type: "Fitness Plan" },
+          { client: "Emma Davis", type: "Nutrition Plan" },
+          { client: "Michael Brown", type: "Combined Plan" }
+        ],
+        onClientClick: () => navigate("/client/34")
+      }
     },
+    {
+      id: 4,
+      icon: <Icons.ChartBarIcon className="h-4 w-4" />,
+      title: "Nutrition scores below target",
+      description: "3 clients have nutrition scores below 60%",
+      actionLabel: "View Scores",
+      onAction: () => navigate("/clients?outcome=low"),
+      priority: 'medium' as const,
+      detailData: {
+        scores: [
+          { client: "John Smith", score: 45 },
+          { client: "Emma Davis", score: 55 },
+          { client: "Michael Brown", score: 40 }
+        ],
+        onClientClick: () => navigate("/client/34")
+      }
+    }
   ];
 
   return (
-    <div className="px-4 md:px-6 max-w-7xl mx-auto">
+    <div className="px-2 md:px-4 max-w-[1600px] mx-auto">
       <div className="py-4">
         <WelcomeCard />
       </div>
@@ -106,7 +158,7 @@ const Dashboard: React.FC = () => {
         <Demo />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <StatCard 
           title="Engagement Score" 
           value="70" 

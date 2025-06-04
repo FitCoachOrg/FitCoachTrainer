@@ -1,6 +1,5 @@
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useClients } from "@/hooks/use-clients"
 import ClientProfileModal from "@/components/clients/ClientProfileModal"
 import { Button } from "@/components/ui/button"
@@ -15,11 +14,9 @@ import { useNavigate } from "react-router-dom"
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
-  { label: "Onboarding Status", value: "connected" },
-  { label: "Activity Status", value: "pending" },
-  { label: "Engagement Score", value: "offline" },
-  { label: "Outcome Score", value: "waiting" },
-
+  { label: "Activity Status", value: "inactive" },
+  { label: "Engagement Score", value: "low" },
+  { label: "Outcome Score", value: "low" }
 ]
 
 // Helper function to calculate days since last activity
@@ -62,14 +59,45 @@ const Clients: React.FC = () => {
   const { toast } = useToast()
   const navigate = useNavigate()
 
+  // Get filter from URL on component mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const filter = params.get('filter')
+    const engagement = params.get('engagement')
+    
+    if (filter && STATUS_FILTERS.some(f => f.value === filter)) {
+      setStatusFilter(filter)
+    }
+    
+    if (engagement === 'low') {
+      setEngagementFilter('low')
+    }
+  }, [])
+
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    
+    if (statusFilter === 'all') {
+      params.delete('filter')
+    } else {
+      params.set('filter', statusFilter)
+    }
+    
+    if (engagementFilter === 'all') {
+      params.delete('engagement')
+    } else {
+      params.set('engagement', engagementFilter)
+    }
+    
+    navigate(`?${params.toString()}`, { replace: true })
+  }, [statusFilter, engagementFilter, navigate])
+
   const filteredClients = clients?.filter((client) => {
     // Search filter
     const matchesSearch =
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       client.email?.toLowerCase().includes(searchQuery.toLowerCase())
-
-    // Status filter
-    const matchesStatus = statusFilter === "all" || statusFilter === "connected" // Placeholder logic
 
     // Mock data for demonstration - you can replace with actual client data
     const mockEngagementScore = Math.floor(Math.random() * 100) + 1
@@ -77,19 +105,26 @@ const Clients: React.FC = () => {
     const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString()
     const daysSinceActivity = getDaysSinceActivity(mockLastActivity)
 
+    // Status filter
+    const matchesStatus = 
+      statusFilter === "all" ||
+      (statusFilter === "inactive" && daysSinceActivity > 7) ||
+      (statusFilter === "low" && mockEngagementScore < 40) ||
+      (statusFilter === "low" && mockoutcomeScore < 40)
+
     // Engagement score filter
     const matchesEngagement = 
       engagementFilter === "all" ||
       (engagementFilter === "high" && mockEngagementScore >= 80) ||
-      (engagementFilter === "medium" && mockEngagementScore >= 50 && mockEngagementScore < 80) ||
-      (engagementFilter === "low" && mockEngagementScore < 50)
+      (engagementFilter === "medium" && mockEngagementScore >= 40 && mockEngagementScore < 80) ||
+      (engagementFilter === "low" && mockEngagementScore < 40)
 
-    // outcome score filter
+    // Outcome score filter
     const matchesoutcome = 
       outcomeFilter === "all" ||
       (outcomeFilter === "high" && mockoutcomeScore >= 80) ||
-      (outcomeFilter === "medium" && mockoutcomeScore >= 50 && mockoutcomeScore < 80) ||
-      (outcomeFilter === "low" && mockoutcomeScore < 50)
+      (outcomeFilter === "medium" && mockoutcomeScore >= 40 && mockoutcomeScore < 80) ||
+      (outcomeFilter === "low" && mockoutcomeScore < 40)
 
     // Activity filter
     const matchesActivity = 
@@ -167,7 +202,7 @@ const Clients: React.FC = () => {
                     >
                       {filter.value === "all"
                         ? clients?.length || 0
-                        : filter.value === "connected"
+                        : filter.value === "inactive"
                           ? clients?.length || 0
                           : 0}
                     </span>
