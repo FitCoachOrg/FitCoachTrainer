@@ -66,20 +66,54 @@ const Dashboard: React.FC = () => {
   const recommendedActions = [
     {
       id: 1,
-      icon: <Icons.UserIcon className="h-4 w-4" />,
-      title: "4 clients need follow-up",
-      description: "You have 4 clients who haven't checked in for over a week",
+      icon: <Icons.UsersIcon className="h-4 w-4" />,
+      title: "View Clients",
+      description: "Manage your client base and track their progress",
       actionLabel: "View Clients",
-      onAction: () => navigate("/clients?engagement=low"),
+      onAction: () => navigate("/clients"),
       priority: 'high' as const,
       detailData: {
         clients: ["John Smith", "Emma Davis", "Michael Brown", "Sarah Wilson"],
         daysSince: [8, 9, 10, 12],
-        onClientClick: () => navigate("/client/34")
+        onClientClick: () => navigate("/clients")
       }
     },
     {
       id: 2,
+      icon: <Icons.ClipboardIcon className="h-4 w-4" />,
+      title: "Review Plans",
+      description: "Check and update client training plans",
+      actionLabel: "Review Plans",
+      onAction: () => navigate("/clients?plans=review"),
+      priority: 'high' as const,
+      detailData: {
+        plans: [
+          { client: "Tom Wilson", type: "Fitness Plan" },
+          { client: "Emma Davis", type: "Nutrition Plan" },
+          { client: "Michael Brown", type: "Combined Plan" }
+        ],
+        onClientClick: () => navigate("/clients?plans=review")
+      }
+    },
+    {
+      id: 3,
+      icon: <Icons.ChartBarIcon className="h-4 w-4" />,
+      title: "View Scores",
+      description: "Monitor client engagement and outcome scores",
+      actionLabel: "View Scores",
+      onAction: () => navigate("/clients?outcome=low"),
+      priority: 'high' as const,
+      detailData: {
+        scores: [
+          { client: "John Smith", score: 45 },
+          { client: "Emma Davis", score: 55 },
+          { client: "Michael Brown", score: 40 }
+        ],
+        onClientClick: () => navigate("/clients?outcome=low")
+      }
+    },
+    {
+      id: 4,
       icon: <Icons.MessageCircleIcon className="h-4 w-4" />,
       title: "New message from Sarah Johnson",
       description: "Sarah has a question about her nutrition plan",
@@ -110,40 +144,6 @@ const Dashboard: React.FC = () => {
             timestamp: "Yesterday"
           }
         ]
-      }
-    },
-    {
-      id: 3,
-      icon: <Icons.ClipboardIcon className="h-4 w-4" />,
-      title: "Plan review needed",
-      description: "Tom's fitness plan is due for a 30-day review",
-      actionLabel: "Review Plan",
-      onAction: () => navigate("/plans"),
-      priority: 'medium' as const,
-      detailData: {
-        plans: [
-          { client: "Tom Wilson", type: "Fitness Plan" },
-          { client: "Emma Davis", type: "Nutrition Plan" },
-          { client: "Michael Brown", type: "Combined Plan" }
-        ],
-        onClientClick: () => navigate("/client/34")
-      }
-    },
-    {
-      id: 4,
-      icon: <Icons.ChartBarIcon className="h-4 w-4" />,
-      title: "Nutrition scores below target",
-      description: "3 clients have nutrition scores below 60%",
-      actionLabel: "View Scores",
-      onAction: () => navigate("/clients?outcome=low"),
-      priority: 'medium' as const,
-      detailData: {
-        scores: [
-          { client: "John Smith", score: 45 },
-          { client: "Emma Davis", score: 55 },
-          { client: "Michael Brown", score: 40 }
-        ],
-        onClientClick: () => navigate("/client/34")
       }
     }
   ];

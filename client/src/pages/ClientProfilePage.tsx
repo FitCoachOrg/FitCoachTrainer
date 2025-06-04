@@ -310,7 +310,20 @@ const METRIC_LIBRARY = [
     icon: Weight,
     type: 'line',
     color: '#3b82f6',
-    data: weightData,
+    data: [
+      { date: 'Jan', weight: 82.5 },
+      { date: 'Feb', weight: 81.8 },
+      { date: 'Mar', weight: 80.5 },
+      { date: 'Apr', weight: 79.2 },
+      { date: 'May', weight: 78.4 },
+      { date: 'Jun', weight: 77.6 },
+      { date: 'Jul', weight: 76.8 },
+      { date: 'Aug', weight: 76.2 },
+      { date: 'Sep', weight: 75.8 },
+      { date: 'Oct', weight: 75.2 },
+      { date: 'Nov', weight: 74.8 },
+      { date: 'Dec', weight: 74.4 }
+    ],
     dataKey: 'weight',
     yLabel: 'kg',
   },
@@ -320,7 +333,20 @@ const METRIC_LIBRARY = [
     icon: Clock,
     type: 'bar',
     color: '#14b8a6',
-    data: sleepData,
+    data: [
+      { date: 'Jan', hours: 5.8 },
+      { date: 'Feb', hours: 6.2 },
+      { date: 'Mar', hours: 6.5 },
+      { date: 'Apr', hours: 6.8 },
+      { date: 'May', hours: 7.0 },
+      { date: 'Jun', hours: 7.2 },
+      { date: 'Jul', hours: 7.0 },
+      { date: 'Aug', hours: 7.2 },
+      { date: 'Sep', hours: 7.4 },
+      { date: 'Oct', hours: 7.2 },
+      { date: 'Nov', hours: 7.0 },
+      { date: 'Dec', hours: 7.2 }
+    ],
     dataKey: 'hours',
     yLabel: 'h',
   },
@@ -330,7 +356,20 @@ const METRIC_LIBRARY = [
     icon: Heart,
     type: 'line',
     color: '#e11d48',
-    data: heartRateData,
+    data: [
+      { date: 'Jan', rate: 78 },
+      { date: 'Feb', rate: 76 },
+      { date: 'Mar', rate: 74 },
+      { date: 'Apr', rate: 72 },
+      { date: 'May', rate: 70 },
+      { date: 'Jun', rate: 68 },
+      { date: 'Jul', rate: 66 },
+      { date: 'Aug', rate: 64 },
+      { date: 'Sep', rate: 63 },
+      { date: 'Oct', rate: 62 },
+      { date: 'Nov', rate: 61 },
+      { date: 'Dec', rate: 60 }
+    ],
     dataKey: 'rate',
     yLabel: 'bpm',
   },
@@ -340,7 +379,20 @@ const METRIC_LIBRARY = [
     icon: Footprints,
     type: 'bar',
     color: '#d97706',
-    data: stepsData,
+    data: [
+      { date: 'Jan', steps: 6500 },
+      { date: 'Feb', steps: 7200 },
+      { date: 'Mar', steps: 7800 },
+      { date: 'Apr', steps: 8200 },
+      { date: 'May', steps: 8800 },
+      { date: 'Jun', steps: 9200 },
+      { date: 'Jul', steps: 9000 },
+      { date: 'Aug', steps: 9400 },
+      { date: 'Sep', steps: 9600 },
+      { date: 'Oct', steps: 9800 },
+      { date: 'Nov', steps: 9500 },
+      { date: 'Dec', steps: 10000 }
+    ],
     dataKey: 'steps',
     yLabel: 'steps',
   },
@@ -351,8 +403,18 @@ const METRIC_LIBRARY = [
     type: 'line',
     color: '#6366f1',
     data: [
-      { date: 'May', value: 90 },
-      { date: 'Jun', value: 87 },
+      { date: 'Jan', value: 65 },
+      { date: 'Feb', value: 70 },
+      { date: 'Mar', value: 75 },
+      { date: 'Apr', value: 78 },
+      { date: 'May', value: 82 },
+      { date: 'Jun', value: 85 },
+      { date: 'Jul', value: 88 },
+      { date: 'Aug', value: 90 },
+      { date: 'Sep', value: 92 },
+      { date: 'Oct', value: 94 },
+      { date: 'Nov', value: 93 },
+      { date: 'Dec', value: 95 }
     ],
     dataKey: 'value',
     yLabel: '%',
@@ -364,8 +426,18 @@ const METRIC_LIBRARY = [
     type: 'line',
     color: '#f59e42',
     data: [
-      { date: 'May', value: 1200 },
-      { date: 'Jun', value: 1500 },
+      { date: 'Jan', value: 800 },
+      { date: 'Feb', value: 950 },
+      { date: 'Mar', value: 1100 },
+      { date: 'Apr', value: 1250 },
+      { date: 'May', value: 1400 },
+      { date: 'Jun', value: 1550 },
+      { date: 'Jul', value: 1700 },
+      { date: 'Aug', value: 1850 },
+      { date: 'Sep', value: 2000 },
+      { date: 'Oct', value: 2150 },
+      { date: 'Nov', value: 2300 },
+      { date: 'Dec', value: 2450 }
     ],
     dataKey: 'value',
     yLabel: '$',
@@ -377,8 +449,18 @@ const METRIC_LIBRARY = [
     type: 'line',
     color: '#10b981',
     data: [
-      { date: 'May', value: 80 },
-      { date: 'Jun', value: 85 },
+      { date: 'Jan', value: 65 },
+      { date: 'Feb', value: 68 },
+      { date: 'Mar', value: 71 },
+      { date: 'Apr', value: 73 },
+      { date: 'May', value: 75 },
+      { date: 'Jun', value: 77 },
+      { date: 'Jul', value: 79 },
+      { date: 'Aug', value: 81 },
+      { date: 'Sep', value: 82 },
+      { date: 'Oct', value: 83 },
+      { date: 'Nov', value: 84 },
+      { date: 'Dec', value: 85 }
     ],
     dataKey: 'value',
     yLabel: '%',
@@ -390,8 +472,18 @@ const METRIC_LIBRARY = [
     type: 'line',
     color: '#9333ea',
     data: [
-      { date: 'May', value: 60 },
-      { date: 'Jun', value: 75 },
+      { date: 'Jan', value: 45 },
+      { date: 'Feb', value: 50 },
+      { date: 'Mar', value: 55 },
+      { date: 'Apr', value: 58 },
+      { date: 'May', value: 62 },
+      { date: 'Jun', value: 65 },
+      { date: 'Jul', value: 68 },
+      { date: 'Aug', value: 70 },
+      { date: 'Sep', value: 72 },
+      { date: 'Oct', value: 74 },
+      { date: 'Nov', value: 76 },
+      { date: 'Dec', value: 78 }
     ],
     dataKey: 'value',
     yLabel: '%',
@@ -423,19 +515,39 @@ const ClientStats = () => {
       icon: Activity, 
       color: "text-green-600", 
       data: [
-        { month: "May", value: 20 },
-        { month: "Jun", value: 27 }
+        { month: "Jan", value: 15 },
+        { month: "Feb", value: 18 },
+        { month: "Mar", value: 20 },
+        { month: "Apr", value: 22 },
+        { month: "May", value: 25 },
+        { month: "Jun", value: 28 },
+        { month: "Jul", value: 30 },
+        { month: "Aug", value: 32 },
+        { month: "Sep", value: 35 },
+        { month: "Oct", value: 38 },
+        { month: "Nov", value: 42 },
+        { month: "Dec", value: 47 }
       ]
     },
     { label: "Goals Achieved", value: "3", icon: Target, color: "text-blue-600" },
     { 
-      label: "Progress Score", 
+      label: "Engagement Score", 
       value: "85%", 
       icon: TrendingUp, 
       color: "text-purple-600", 
       data: [
-        { month: "May", value: 80 },
-        { month: "Jun", value: 85 }
+        { month: "Jan", value: 65 },
+        { month: "Feb", value: 68 },
+        { month: "Mar", value: 70 },
+        { month: "Apr", value: 72 },
+        { month: "May", value: 75 },
+        { month: "Jun", value: 77 },
+        { month: "Jul", value: 79 },
+        { month: "Aug", value: 81 },
+        { month: "Sep", value: 82 },
+        { month: "Oct", value: 83 },
+        { month: "Nov", value: 84 },
+        { month: "Dec", value: 85 }
       ]
     },
     { label: "Days Active", value: "127", icon: Clock, color: "text-orange-600" },
@@ -719,9 +831,6 @@ const WorkoutPlanSection = () => {
   const [customExercises, setCustomExercises] = useState<Exercise[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
   const [showAddExercise, setShowAddExercise] = useState(false)
-  const [showExerciseModal, setShowExerciseModal] = useState(false)
-  const [showPlanDetailsModal, setShowPlanDetailsModal] = useState(false)
-  const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null)
   const [newExercise, setNewExercise] = useState<Omit<Exercise, "id" | "createdAt">>({
     name: "",
     instructions: "",
@@ -764,60 +873,12 @@ const WorkoutPlanSection = () => {
       difficulty: "Intermediate",
       color: "bg-blue-500",
       exercises: [
-        { 
-          id: "1",
-          name: "Bench Press", 
-          sets: "4", 
-          reps: "8-10", 
-          equipment: "Barbell",
-          instructions: "Lie on bench, grip bar slightly wider than shoulder width, lower to chest and push up",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "2",
-          name: "Pull-ups", 
-          sets: "3", 
-          reps: "8-12", 
-          equipment: "Pull-up Bar",
-          instructions: "Hang from bar with overhand grip, pull body up until chin is over bar",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "3",
-          name: "Shoulder Press", 
-          sets: "3", 
-          reps: "10-12", 
-          equipment: "Dumbbells",
-          instructions: "Stand with feet shoulder-width apart, press weights overhead",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "4",
-          name: "Bent-over Rows", 
-          sets: "3", 
-          reps: "10-12", 
-          equipment: "Barbell",
-          instructions: "Bend at hips and knees, pull bar to lower chest",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "5",
-          name: "Bicep Curls", 
-          sets: "3", 
-          reps: "12-15", 
-          equipment: "Dumbbells",
-          instructions: "Stand with arms at sides, curl weights up to shoulders",
-          difficulty: "Beginner"
-        },
-        { 
-          id: "6",
-          name: "Tricep Dips", 
-          sets: "3", 
-          reps: "10-15", 
-          equipment: "Bench",
-          instructions: "Support body on bench, lower body by bending elbows",
-          difficulty: "Intermediate"
-        },
+        { name: "Bench Press", sets: 4, reps: "8-10", equipment: "Barbell" },
+        { name: "Pull-ups", sets: 3, reps: "8-12", equipment: "Pull-up Bar" },
+        { name: "Shoulder Press", sets: 3, reps: "10-12", equipment: "Dumbbells" },
+        { name: "Bent-over Rows", sets: 3, reps: "10-12", equipment: "Barbell" },
+        { name: "Bicep Curls", sets: 3, reps: "12-15", equipment: "Dumbbells" },
+        { name: "Tricep Dips", sets: 3, reps: "10-15", equipment: "Bench" },
       ],
     },
     {
@@ -828,60 +889,12 @@ const WorkoutPlanSection = () => {
       difficulty: "Intermediate",
       color: "bg-green-500",
       exercises: [
-        { 
-          id: "7",
-          name: "Squats", 
-          sets: "4", 
-          reps: "8-12", 
-          equipment: "Barbell",
-          instructions: "Stand with feet shoulder-width apart, lower body until thighs are parallel to ground",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "8",
-          name: "Deadlifts", 
-          sets: "3", 
-          reps: "6-8", 
-          equipment: "Barbell",
-          instructions: "Stand with feet hip-width apart, bend at hips and knees to lift bar",
-          difficulty: "Advanced"
-        },
-        { 
-          id: "9",
-          name: "Lunges", 
-          sets: "3", 
-          reps: "10 each leg", 
-          equipment: "Dumbbells",
-          instructions: "Step forward and lower body until both knees are bent at 90 degrees",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "10",
-          name: "Leg Press", 
-          sets: "3", 
-          reps: "12-15", 
-          equipment: "Leg Press Machine",
-          instructions: "Sit in machine, push platform away with feet",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "11",
-          name: "Calf Raises", 
-          sets: "4", 
-          reps: "15-20", 
-          equipment: "Dumbbells",
-          instructions: "Stand on edge of step, raise heels as high as possible",
-          difficulty: "Beginner"
-        },
-        { 
-          id: "12",
-          name: "Glute Bridges", 
-          sets: "3", 
-          reps: "15-20", 
-          equipment: "Bodyweight",
-          instructions: "Lie on back, lift hips while squeezing glutes",
-          difficulty: "Beginner"
-        },
+        { name: "Squats", sets: 4, reps: "8-12", equipment: "Barbell" },
+        { name: "Deadlifts", sets: 3, reps: "6-8", equipment: "Barbell" },
+        { name: "Lunges", sets: 3, reps: "10 each leg", equipment: "Dumbbells" },
+        { name: "Leg Press", sets: 3, reps: "12-15", equipment: "Leg Press Machine" },
+        { name: "Calf Raises", sets: 4, reps: "15-20", equipment: "Dumbbells" },
+        { name: "Glute Bridges", sets: 3, reps: "15-20", equipment: "Bodyweight" },
       ],
     },
     {
@@ -892,60 +905,12 @@ const WorkoutPlanSection = () => {
       difficulty: "Advanced",
       color: "bg-red-500",
       exercises: [
-        { 
-          id: "13",
-          name: "Burpees", 
-          sets: "4", 
-          reps: "30 seconds", 
-          equipment: "Bodyweight",
-          instructions: "Drop to push-up position, perform push-up, jump feet forward, jump up",
-          difficulty: "Advanced"
-        },
-        { 
-          id: "14",
-          name: "Mountain Climbers", 
-          sets: "4", 
-          reps: "30 seconds", 
-          equipment: "Bodyweight",
-          instructions: "In push-up position, alternate bringing knees to chest",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "15",
-          name: "Jump Squats", 
-          sets: "4", 
-          reps: "30 seconds", 
-          equipment: "Bodyweight",
-          instructions: "Perform squat, explode upward into jump",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "16",
-          name: "High Knees", 
-          sets: "4", 
-          reps: "30 seconds", 
-          equipment: "Bodyweight",
-          instructions: "Run in place, bringing knees up to waist height",
-          difficulty: "Beginner"
-        },
-        { 
-          id: "17",
-          name: "Plank Jacks", 
-          sets: "4", 
-          reps: "30 seconds", 
-          equipment: "Bodyweight",
-          instructions: "In plank position, jump feet in and out",
-          difficulty: "Intermediate"
-        },
-        { 
-          id: "18",
-          name: "Sprint Intervals", 
-          sets: "6", 
-          reps: "20 seconds", 
-          equipment: "Treadmill",
-          instructions: "Sprint at maximum effort for 20 seconds",
-          difficulty: "Advanced"
-        },
+        { name: "Burpees", sets: 4, reps: "30 seconds", equipment: "Bodyweight" },
+        { name: "Mountain Climbers", sets: 4, reps: "30 seconds", equipment: "Bodyweight" },
+        { name: "Jump Squats", sets: 4, reps: "30 seconds", equipment: "Bodyweight" },
+        { name: "High Knees", sets: 4, reps: "30 seconds", equipment: "Bodyweight" },
+        { name: "Plank Jacks", sets: 4, reps: "30 seconds", equipment: "Bodyweight" },
+        { name: "Sprint Intervals", sets: 6, reps: "20 seconds", equipment: "Treadmill" },
       ],
     },
   ]
@@ -973,28 +938,29 @@ const WorkoutPlanSection = () => {
     }
   }
 
-  const handleAddExerciseToPlan = (plan: WorkoutPlan) => {
-    setSelectedPlan(plan)
-    setShowExerciseModal(true)
+  const handleDragStart = (e:any, plan:any) => {
+    e.dataTransfer.setData("application/json", JSON.stringify(plan))
   }
 
-  const handleSaveExerciseToPlan = (exercise: Exercise) => {
-    if (selectedPlan) {
-      const updatedPlan = {
-        ...selectedPlan,
-        exercises: [...selectedPlan.exercises, exercise]
-      }
-      setWeeklyPlan(prev => ({
-        ...prev,
-        [selectedPlan.id]: updatedPlan
-      }))
-      setShowExerciseModal(false)
-    }
+  const handleDragOver = (e:any) => {
+    e.preventDefault()
   }
 
-  const handlePlanClick = (plan: WorkoutPlan) => {
-    setSelectedPlan(plan)
-    setShowPlanDetailsModal(true)
+  const handleDrop = (e:any, day:any) => {
+    e.preventDefault()
+    const planData = JSON.parse(e.dataTransfer.getData("application/json"))
+    setWeeklyPlan((prev) => ({
+      ...prev,
+      [day]: planData,
+    }))
+  }
+
+  const removeFromCalendar = (day:any) => {
+    setWeeklyPlan((prev) => {
+      const newPlan = { ...prev }
+      delete newPlan[day]
+      return newPlan
+    })
   }
 
   return (
@@ -1016,8 +982,9 @@ const WorkoutPlanSection = () => {
           {recommendedPlans.map((plan) => (
             <Card
               key={plan.id}
-              className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer dark:bg-black"
-              onClick={() => handlePlanClick(plan)}
+              className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-move dark:bg-black"
+              draggable
+              onDragStart={(e) => handleDragStart(e, plan)}
             >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -1049,33 +1016,11 @@ const WorkoutPlanSection = () => {
                     </div>
                   ))}
                   {plan.exercises.length > 3 && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlanClick(plan);
-                      }}
-                      className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 italic"
-                    >
-                      +{plan.exercises.length - 3} more exercises
-                    </button>
+                    <div className="text-sm text-gray-500 italic">+{plan.exercises.length - 3} more exercises</div>
                   )}
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddExerciseToPlan(plan);
-                    }}
-                    className="flex-1"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Exercise
-                  </Button>
-                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center flex-1">
-                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Drag to calendar</p>
-                  </div>
+                <div className="mt-4 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Drag to calendar to schedule</p>
                 </div>
               </CardContent>
             </Card>
@@ -1083,28 +1028,139 @@ const WorkoutPlanSection = () => {
         </div>
       </div>
 
-      {/* Exercise Modal */}
-      {showExerciseModal && selectedPlan && (
+      {/* Weekly Calendar */}
+      <div>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Weekly Workout Schedule</h3>
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+          {daysOfWeek.map((day) => (
+            <Card
+              key={day}
+              className="bg-white/80 backdrop-blur-sm border-2 border-dashed border-gray-200 hover:border-gray-300 transition-colors min-h-[200px] dark:bg-black dark:border-gray-700"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, day)}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-center">{day}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {weeklyPlan[day] ? (
+                  <div className="space-y-2">
+                    <div className={`p-3 rounded-lg text-white ${weeklyPlan[day].color}`}>
+                      <div className="font-medium text-sm">{weeklyPlan[day].name}</div>
+                      <div className="text-xs opacity-90">{weeklyPlan[day].duration}</div>
+                    </div>
+                    <div className="space-y-1">
+                      {weeklyPlan[day].exercises.slice(0, 2).map((exercise, i) => (
+                        <div key={i} className="text-xs text-gray-600 dark:text-gray-400">
+                          • {exercise.name}
+                        </div>
+                      ))}
+                      {weeklyPlan[day].exercises.length > 2 && (
+                        <div className="text-xs text-gray-500 italic">+{weeklyPlan[day].exercises.length - 2} more</div>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeFromCalendar(day)}
+                      className="w-full text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
+                    <div className="text-center">
+                      <Dumbbell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-xs">Drop workout here</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Exercises */}
+      {customExercises.length > 0 && (
+        <div>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Custom Exercises</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {customExercises.map((exercise) => (
+              <Card key={exercise.id} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">{exercise.name}</CardTitle>
+                  <Badge variant="outline" className="w-fit">
+                    {exercise.difficulty}
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-gray-600 dark:text-gray-400">{exercise.instructions}</p>
+                    {exercise.sets && (
+                      <div className="flex justify-between">
+                        <span>Sets:</span>
+                        <span className="font-medium">{exercise.sets}</span>
+                      </div>
+                    )}
+                    {exercise.reps && (
+                      <div className="flex justify-between">
+                        <span>Reps:</span>
+                        <span className="font-medium">{exercise.reps}</span>
+                      </div>
+                    )}
+                    {exercise.duration && (
+                      <div className="flex justify-between">
+                        <span>Duration:</span>
+                        <span className="font-medium">{exercise.duration}</span>
+                      </div>
+                    )}
+                    {exercise.equipment && (
+                      <div className="flex justify-between">
+                        <span>Equipment:</span>
+                        <span className="font-medium">{exercise.equipment}</span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add Exercise Modal */}
+      {showAddExercise && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl bg-white dark:bg-gray-900">
+          <Card className="w-full max-w-md bg-white dark:bg-gray-900">
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                Add Exercise to {selectedPlan.name}
-                <Button variant="ghost" size="sm" onClick={() => setShowExerciseModal(false)}>
+                Add Custom Exercise
+                <Button variant="ghost" size="sm" onClick={() => setShowAddExercise(false)}>
                   ×
                 </Button>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Exercise Name</label>
-                  <Input
-                    value={newExercise.name}
-                    onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
-                    placeholder="e.g., Push-ups"
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-medium">Exercise Name *</label>
+                <Input
+                  value={newExercise.name}
+                  onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
+                  placeholder="e.g., Push-ups"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Instructions *</label>
+                <Textarea
+                  value={newExercise.instructions}
+                  onChange={(e) => setNewExercise({ ...newExercise, instructions: e.target.value })}
+                  placeholder="Describe how to perform this exercise..."
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Sets</label>
                   <Input
@@ -1121,109 +1177,45 @@ const WorkoutPlanSection = () => {
                     placeholder="e.g., 10-12"
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-medium">Equipment</label>
-                  <Input
-                    value={newExercise.equipment}
-                    onChange={(e) => setNewExercise({ ...newExercise, equipment: e.target.value })}
-                    placeholder="e.g., Dumbbells"
-                  />
-                </div>
               </div>
               <div>
-                <label className="text-sm font-medium">Instructions</label>
-                <Textarea
-                  value={newExercise.instructions}
-                  onChange={(e) => setNewExercise({ ...newExercise, instructions: e.target.value })}
-                  placeholder="Describe how to perform this exercise..."
-                  rows={3}
+                <label className="text-sm font-medium">Duration</label>
+                <Input
+                  value={newExercise.duration}
+                  onChange={(e) => setNewExercise({ ...newExercise, duration: e.target.value })}
+                  placeholder="e.g., 30 seconds"
                 />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Equipment</label>
+                <Input
+                  value={newExercise.equipment}
+                  onChange={(e) => setNewExercise({ ...newExercise, equipment: e.target.value })}
+                  placeholder="e.g., Dumbbells"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Difficulty</label>
+                <select
+                  value={newExercise.difficulty}
+                  onChange={(e) => setNewExercise({ ...newExercise, difficulty: e.target.value })}
+                  className="w-full p-2 border rounded-md bg-white dark:bg-gray-800"
+                  aria-label="Select exercise difficulty level"
+                >
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
               </div>
               <div className="flex gap-2 pt-4">
                 <Button
-                  onClick={() => handleSaveExerciseToPlan({
-                    id: Date.now().toString(),
-                    ...newExercise,
-                    createdAt: new Date().toISOString(),
-                  })}
+                  onClick={handleAddExercise}
                   className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                 >
-                  Add to Plan
+                  Add Exercise
                 </Button>
-                <Button variant="outline" onClick={() => setShowExerciseModal(false)} className="flex-1">
+                <Button variant="outline" onClick={() => setShowAddExercise(false)} className="flex-1">
                   Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Plan Details Modal */}
-      {showPlanDetailsModal && selectedPlan && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-3xl bg-white dark:bg-gray-900">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${selectedPlan.color}`} />
-                  {selectedPlan.name}
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowPlanDetailsModal(false)}>
-                  ×
-                </Button>
-              </CardTitle>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  {selectedPlan.duration}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Dumbbell className="h-4 w-4" />
-                  {selectedPlan.type}
-                </span>
-                <Badge variant="outline">{selectedPlan.difficulty}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {selectedPlan.exercises.map((exercise, index) => (
-                  <div key={exercise.id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-lg">{exercise.name}</h4>
-                      <Badge variant="outline">{exercise.difficulty}</Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                      <div>
-                        <span className="text-sm text-gray-500">Sets:</span>
-                        <span className="ml-2 font-medium">{exercise.sets}</span>
-                      </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Reps:</span>
-                        <span className="ml-2 font-medium">{exercise.reps}</span>
-                      </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Equipment:</span>
-                        <span className="ml-2 font-medium">{exercise.equipment}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500">Instructions:</span>
-                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{exercise.instructions}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 flex justify-end">
-                <Button
-                  onClick={() => {
-                    setShowPlanDetailsModal(false);
-                    handleAddExerciseToPlan(selectedPlan);
-                  }}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add New Exercise
                 </Button>
               </div>
             </CardContent>

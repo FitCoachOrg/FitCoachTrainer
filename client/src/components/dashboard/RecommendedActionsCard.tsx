@@ -157,7 +157,20 @@ const FlipCard: React.FC<{ action: Action }> = ({ action }) => {
                     if (action.id === 2) {
                       setSelectedClient(action.detailData.messages[0].from)
                     } else {
-                      action.onAction()
+                      // Navigate to clients page with appropriate filters
+                      switch (action.id) {
+                        case 1: // View Clients
+                          window.location.href = "/clients"
+                          break
+                        case 3: // Review Plans
+                          window.location.href = "/clients?plans=review"
+                          break
+                        case 4: // View Scores
+                          window.location.href = "/clients?outcome=low"
+                          break
+                        default:
+                          action.onAction()
+                      }
                     }
                   }}
                 >
