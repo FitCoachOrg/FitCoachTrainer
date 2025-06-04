@@ -46,6 +46,9 @@ import {
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useNavigate } from "react-router-dom"
+import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface EditableSectionProps {
   title: string
@@ -299,11 +302,141 @@ const nutritionPlan = [
   },
 ]
 
+const METRIC_LIBRARY = [
+  {
+    key: 'weight',
+    label: 'Weight',
+    icon: Weight,
+    type: 'line',
+    color: '#3b82f6',
+    data: weightData,
+    dataKey: 'weight',
+    yLabel: 'kg',
+  },
+  {
+    key: 'sleep',
+    label: 'Sleep',
+    icon: Clock,
+    type: 'bar',
+    color: '#14b8a6',
+    data: sleepData,
+    dataKey: 'hours',
+    yLabel: 'h',
+  },
+  {
+    key: 'heartRate',
+    label: 'Resting Heart Rate',
+    icon: Heart,
+    type: 'line',
+    color: '#e11d48',
+    data: heartRateData,
+    dataKey: 'rate',
+    yLabel: 'bpm',
+  },
+  {
+    key: 'steps',
+    label: 'Steps',
+    icon: Footprints,
+    type: 'bar',
+    color: '#d97706',
+    data: stepsData,
+    dataKey: 'steps',
+    yLabel: 'steps',
+  },
+  {
+    key: 'workoutAdherence',
+    label: 'Workout Adherence',
+    icon: Activity,
+    type: 'line',
+    color: '#6366f1',
+    data: [
+      { date: 'May', value: 90 },
+      { date: 'Jun', value: 87 },
+    ],
+    dataKey: 'value',
+    yLabel: '%',
+  },
+  {
+    key: 'revenue',
+    label: 'Revenue Analytics',
+    icon: LineChart,
+    type: 'line',
+    color: '#f59e42',
+    data: [
+      { date: 'May', value: 1200 },
+      { date: 'Jun', value: 1500 },
+    ],
+    dataKey: 'value',
+    yLabel: '$',
+  },
+  {
+    key: 'retention',
+    label: 'Client Retention Rate',
+    icon: Target,
+    type: 'line',
+    color: '#10b981',
+    data: [
+      { date: 'May', value: 80 },
+      { date: 'Jun', value: 85 },
+    ],
+    dataKey: 'value',
+    yLabel: '%',
+  },
+  {
+    key: 'progress',
+    label: 'Progress Improvement',
+    icon: TrendingUp,
+    type: 'line',
+    color: '#9333ea',
+    data: [
+      { date: 'May', value: 60 },
+      { date: 'Jun', value: 75 },
+    ],
+    dataKey: 'value',
+    yLabel: '%',
+  },
+];
+
+function SortableMetric({ metric, listeners, attributes, isDragging }: { metric: any, listeners: any, attributes: any, isDragging: boolean }) {
+  const { setNodeRef, transform, transition } = useSortable({ id: metric.key });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    cursor: 'grab',
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex items-center gap-2 p-2 bg-slate-100 rounded mb-2">
+      <metric.icon className="h-4 w-4" />
+      <span>{metric.label}</span>
+    </div>
+  );
+}
+
 const ClientStats = () => {
   const stats = [
-    { label: "Workouts Completed", value: "47", icon: Activity, color: "text-green-600" },
+    { 
+      label: "Workouts Completed", 
+      value: "47", 
+      subtitle: "in Last 30 Days",
+      icon: Activity, 
+      color: "text-green-600", 
+      data: [
+        { month: "May", value: 20 },
+        { month: "Jun", value: 27 }
+      ]
+    },
     { label: "Goals Achieved", value: "3", icon: Target, color: "text-blue-600" },
-    { label: "Progress Score", value: "85%", icon: TrendingUp, color: "text-purple-600" },
+    { 
+      label: "Progress Score", 
+      value: "85%", 
+      icon: TrendingUp, 
+      color: "text-purple-600", 
+      data: [
+        { month: "May", value: 80 },
+        { month: "Jun", value: 85 }
+      ]
+    },
     { label: "Days Active", value: "127", icon: Clock, color: "text-orange-600" },
   ]
 
@@ -314,18 +447,52 @@ const ClientStats = () => {
         return (
           <Card
             key={index}
-            className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black"
+            className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black group"
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{stat.label}</p>
                   <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+                  {stat.subtitle && (
+                    <p className="text-xs text-gray-400 mt-1">{stat.subtitle}</p>
+                  )}
                 </div>
                 <div className={`p-3 rounded-full bg-gray-50 dark:bg-gray-800 ${stat.color}`}>
                   <Icon className="h-6 w-6" />
                 </div>
               </div>
+              {stat.data && (
+                <div className="h-0 group-hover:h-[100px] w-full mt-2 overflow-hidden transition-all duration-300">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <Chart data={stat.data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                      <CartesianGrid vertical={false} stroke="#f0f0f0" strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="month" 
+                        tick={{ fontSize: 12 }}
+                        interval="preserveStartEnd"
+                        tickLine={false}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="value" 
+                        stroke={stat.color.replace('text-', '#').replace('green-600', '22c55e').replace('purple-600', '9333ea')}
+                        strokeWidth={2}
+                        dot={{ r: 3, strokeWidth: 2, fill: 'white' }}
+                        activeDot={{ r: 4, strokeWidth: 2 }}
+                      />
+                    </Chart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </CardContent>
           </Card>
         )
@@ -392,10 +559,13 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
         ) : (
           <div className="space-y-2">
             {content ? (
-              content.split("\n").map((line, i) => (
-                <p key={i} className="text-sm text-gray-700 dark:text-gray-300">
-                  {line || <br />}
-                </p>
+              content.split(".").map((sentence, i) => (
+                sentence.trim() && (
+                  <div key={i} className="flex items-center justify-between">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">{sentence.trim()}</p>
+                    <input type="checkbox" className="ml-2 w-5 h-5" aria-label={`Goal ${i + 1}`} style={{ accentColor: 'green' }} />
+                  </div>
+                )
               ))
             ) : (
               <p className="text-sm text-gray-500 italic">No {title.toLowerCase()} added yet.</p>
@@ -408,119 +578,113 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 const MetricsSection = () => {
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
+    const saved = localStorage.getItem('selectedMetrics');
+    return saved ? JSON.parse(saved) : ['weight', 'sleep', 'heartRate', 'steps'];
+  });
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('selectedMetrics', JSON.stringify(selectedKeys));
+  }, [selectedKeys]);
+
+  const selectedMetrics = selectedKeys.map((key: string) => METRIC_LIBRARY.find(m => m.key === key)).filter(Boolean) as typeof METRIC_LIBRARY;
+  const availableMetrics = METRIC_LIBRARY.filter(m => !selectedKeys.includes(m.key));
+
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
+    if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
+      setSelectedKeys([...selectedKeys, value]);
+    }
+  }
+
+  function handleRemove(key: string) {
+    setSelectedKeys(selectedKeys.filter((k: string) => k !== key));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = selectedKeys.indexOf(active.id as string);
+      const newIndex = selectedKeys.indexOf(over.id as string);
+      setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex));
+    }
+    setDraggingId(null);
+  }
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Weight Chart */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Weight className="h-5 w-5 text-blue-600" />
-              Weight
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                74.4 kg
-              </Badge>
-              <Badge variant="secondary" className="text-xs font-normal text-red-500 bg-red-50">
-                -0.8%
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <Chart data={weightData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[73.5, 75.5]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                </Chart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Sleep Chart */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-teal-600" />
-              Sleep
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                6h 59min
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sleepData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[0, 10]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="hours" fill="#14b8a6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Heart Rate Chart */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Heart className="h-5 w-5 text-rose-600" />
-              Resting Heart Rate
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                62 bpm
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <Chart data={heartRateData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[55, 70]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="rate" stroke="#e11d48" strokeWidth={2} dot={{ r: 3 }} />
-                </Chart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Steps Chart */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Footprints className="h-5 w-5 text-amber-600" />
-              Steps
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                8,700 steps
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stepsData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis domain={[5000, 10000]} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="steps" fill="#d97706" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Customization Panel */}
+      <div className="mb-4 p-4 bg-slate-50 rounded-lg border flex flex-col md:flex-row md:items-center gap-4">
+        <div className="flex-1 flex flex-wrap gap-2 items-center">
+          <span className="font-medium mr-2">Your Metrics:</span>
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={e => setDraggingId(String(e.active.id))}>
+            <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
+              {selectedMetrics.map((metric: any) => (
+                <div key={metric.key} className="flex items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm cursor-grab" tabIndex={0} aria-label={`Drag to reorder ${metric.label}`}>
+                  <span className="mr-1 cursor-grab" title="Drag to reorder">☰</span>
+                  <metric.icon className="h-4 w-4" />
+                  <span className="text-sm">{metric.label}</span>
+                  <button onClick={() => handleRemove(metric.key)} className="ml-1 text-xs text-red-500" aria-label={`Remove ${metric.label}`}>✕</button>
+                </div>
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+        <div>
+          {/* Accessibility: label for select */}
+          <label htmlFor="metric-select" className="sr-only">Add Metric</label>
+          <select id="metric-select" className="border rounded px-2 py-1 text-sm" onChange={handleSelectChange} value="">
+            <option value="">Add Metric...</option>
+            {availableMetrics.map((m: any) => (
+              <option key={m.key} value={m.key}>{m.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
+      {/* Metrics Grid */}
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {selectedMetrics.map((metric: any) => (
+              <div key={metric.key} className="cursor-grab">
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2">
+                      <metric.icon className="h-5 w-5" style={{ color: metric.color }} />
+                      {metric.label}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[200px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {metric.type === 'line' ? (
+                          <Chart data={metric.data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Line type="monotone" dataKey={metric.dataKey} stroke={metric.color} strokeWidth={2} dot={{ r: 3 }} />
+                          </Chart>
+                        ) : (
+                          <BarChart data={metric.data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Bar dataKey={metric.dataKey} fill={metric.color} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
-  )
-}
+  );
+};
 
 const WorkoutPlanSection = () => {
   const [customExercises, setCustomExercises] = useState<Exercise[]>([])
