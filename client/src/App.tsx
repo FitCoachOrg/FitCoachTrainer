@@ -18,7 +18,6 @@ import FitnessPlans from "@/pages/FitnessPlans"
 import Notes from "@/pages/Notes"
 import Payments from "@/pages/Payments"
 import Branding from "@/pages/Branding"
-import Alerts from "@/pages/Alerts"
 import Login from "@/pages/login"
 import Sidebar from "@/components/layout/Sidebar"
 import TopBar from "@/components/layout/TopBar"
@@ -204,16 +203,6 @@ function App() {
                     <ProtectedRoute>
                       <ProtectedLayout>
                         <Branding />
-                      </ProtectedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/alerts"
-                  element={
-                    <ProtectedRoute>
-                      <ProtectedLayout>
-                        <Alerts />
                       </ProtectedLayout>
                     </ProtectedRoute>
                   }

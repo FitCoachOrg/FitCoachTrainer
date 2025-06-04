@@ -45,6 +45,7 @@ import {
   Bar,
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useNavigate } from "react-router-dom"
 
 interface EditableSectionProps {
   title: string
@@ -991,6 +992,7 @@ export default function ClientDashboard() {
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [showClientFilter, setShowClientFilter] = useState(false)
   const [activeClientFilter, setActiveClientFilter] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   const filteredClients = sampleClients.filter(
     (client) =>
@@ -1001,6 +1003,10 @@ export default function ClientDashboard() {
   const handleClientSelect = (clientId: string) => {
     setSelectedClientId(clientId)
     // In real app, fetch client data here
+  }
+
+  const handleSmartAlertsClick = () => {
+    navigate("/dashboard")
   }
 
   if (loading) {
@@ -1110,6 +1116,9 @@ export default function ClientDashboard() {
             </CardContent>
           </Card>
         </div>
+        <button onClick={handleSmartAlertsClick} className="mt-4 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">
+          Smart Alerts
+        </button>
       </aside>
       {/* Main Content */}
       <main className="flex-1 flex flex-col p-8">

@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import * as Icons from "@/lib/icons"
 import React from "react"
@@ -15,7 +15,7 @@ interface NavItem {
 const navigationItems: NavItem[] = [
   {
     name: "Smart Alerts",
-    href: "/alerts",
+    href: "/dashboard",
     icon: <Icons.BellIcon className="h-5 w-5" />,
     alert: true,
   },
@@ -68,6 +68,11 @@ const secondaryNavItems: NavItem[] = [
 
 const Sidebar: React.FC = () => {
   const { isExpanded, setIsExpanded } = useSidebar()
+  const navigate = useNavigate()
+
+  const handleSmartAlertsClick = () => {
+    navigate("/dashboard")
+  }
 
   return (
     <div
