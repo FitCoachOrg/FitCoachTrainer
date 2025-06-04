@@ -15,13 +15,38 @@ import { useNavigate } from "react-router-dom"
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
-  { label: "Connected", value: "connected" },
-  { label: "Pending", value: "pending" },
-  { label: "Offline", value: "offline" },
-  { label: "Waiting Activation", value: "waiting" },
-  { label: "Need Programming", value: "need_programming" },
-  { label: "Archived", value: "archived" },
+  { label: "Onboarding Status", value: "connected" },
+  { label: "Activity Status", value: "pending" },
+  { label: "Engagement Score", value: "offline" },
+  { label: "Outcome Score", value: "waiting" },
+
 ]
+
+// Helper function to calculate days since last activity
+const getDaysSinceActivity = (lastActivity: string) => {
+  const today = new Date()
+  const activityDate = new Date(lastActivity)
+  const diffTime = Math.abs(today.getTime() - activityDate.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays
+}
+
+// Helper function to get activity status color
+const getActivityStatusColor = (days: number) => {
+  if (days <= 3) return "text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30"
+  if (days <= 5) return "text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-900/30"
+  return "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30"
+}
+
+// Progress bar component
+const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, className = "" }) => (
+  <div className={`w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 ${className}`}>
+    <div
+      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300"
+      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+    />
+  </div>
+)
 
 const Clients: React.FC = () => {
   const { clients, isLoading, error } = useClients(1)
@@ -30,16 +55,50 @@ const Clients: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [engagementFilter, setEngagementFilter] = useState("all")
+  const [outcomeFilter, setoutcomeFilter] = useState("all")
+  const [activityFilter, setActivityFilter] = useState("all")
   const { toast } = useToast()
   const navigate = useNavigate()
 
   const filteredClients = clients?.filter((client) => {
+    // Search filter
     const matchesSearch =
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchQuery.toLowerCase())
-    // Placeholder: all clients are 'connected' for now
-    const matchesStatus = statusFilter === "all" || statusFilter === "connected"
-    return matchesSearch && matchesStatus
+      client.email?.toLowerCase().includes(searchQuery.toLowerCase())
+
+    // Status filter
+    const matchesStatus = statusFilter === "all" || statusFilter === "connected" // Placeholder logic
+
+    // Mock data for demonstration - you can replace with actual client data
+    const mockEngagementScore = Math.floor(Math.random() * 100) + 1
+    const mockoutcomeScore = Math.floor(Math.random() * 100) + 1
+    const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString()
+    const daysSinceActivity = getDaysSinceActivity(mockLastActivity)
+
+    // Engagement score filter
+    const matchesEngagement = 
+      engagementFilter === "all" ||
+      (engagementFilter === "high" && mockEngagementScore >= 80) ||
+      (engagementFilter === "medium" && mockEngagementScore >= 50 && mockEngagementScore < 80) ||
+      (engagementFilter === "low" && mockEngagementScore < 50)
+
+    // outcome score filter
+    const matchesoutcome = 
+      outcomeFilter === "all" ||
+      (outcomeFilter === "high" && mockoutcomeScore >= 80) ||
+      (outcomeFilter === "medium" && mockoutcomeScore >= 50 && mockoutcomeScore < 80) ||
+      (outcomeFilter === "low" && mockoutcomeScore < 50)
+
+    // Activity filter
+    const matchesActivity = 
+      activityFilter === "all" ||
+      (activityFilter === "recent" && daysSinceActivity <= 3) ||
+      (activityFilter === "moderate" && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
+      (activityFilter === "inactive" && daysSinceActivity > 7)
+
+    return matchesSearch && matchesStatus && matchesEngagement && matchesoutcome && matchesActivity
   })
 
   const handleViewProfile = (client: Client) => {
@@ -128,31 +187,60 @@ const Clients: React.FC = () => {
                 </h1>
                 <div className="flex gap-3 flex-wrap">
                   <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
                     title="Category"
                   >
-                    <option>Category: All</option>
+                    <option value="all">Category: All</option>
+                    <option value="premium">Premium</option>
+                    <option value="basic">Basic</option>
                   </select>
                   <select
+                    value={engagementFilter}
+                    onChange={(e) => setEngagementFilter(e.target.value)}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Status"
+                    title="Engagement Score"
                   >
-                    <option>Status: All</option>
+                    <option value="all">Engagement: All</option>
+                    <option value="high">High (80-100)</option>
+                    <option value="medium">Medium (50-79)</option>
+                    <option value="low">Low (0-49)</option>
                   </select>
                   <select
+                    value={outcomeFilter}
+                    onChange={(e) => setoutcomeFilter(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                    title="Outcome Score"
+                  >
+                    <option value="all">Outcome: All</option>
+                    <option value="high">High (80-100)</option>
+                    <option value="medium">Medium (50-79)</option>
+                    <option value="low">Low (0-49)</option>
+                  </select>
+                  <select
+                    value={activityFilter}
+                    onChange={(e) => setActivityFilter(e.target.value)}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
                     title="Last Activity"
                   >
-                    <option>Last Activity</option>
+                    <option value="all">Activity: All</option>
+                    <option value="recent">Recent (≤3 days)</option>
+                    <option value="moderate">Moderate (4-7 days)</option>
+                    <option value="inactive">Inactive ({'>'}7 days)</option>
                   </select>
-                  <select
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Last Assigned Workout"
+                  <button 
+                    onClick={() => {
+                      setCategoryFilter("all")
+                      setEngagementFilter("all")
+                      setoutcomeFilter("all")
+                      setActivityFilter("all")
+                      setStatusFilter("all")
+                      setSearchQuery("")
+                    }}
+                    className="text-blue-600 text-sm font-medium ml-2 hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
                   >
-                    <option>Last Assigned Workout</option>
-                  </select>
-                  <button className="text-blue-600 text-sm font-medium ml-2 hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                    Hide filters
+                    Clear filters
                   </button>
                 </div>
               </div>
@@ -186,7 +274,6 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Last Activity
                     </th>
-                    
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Status
                     </th>
@@ -194,14 +281,14 @@ const Clients: React.FC = () => {
                       Engagement Score
                     </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Nutritional Score
+                      Outcome Score
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-16">
+                      <td colSpan={5} className="text-center py-16">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
                           <p className="text-gray-500 dark:text-gray-400 font-medium">Loading clients...</p>
@@ -209,66 +296,90 @@ const Clients: React.FC = () => {
                       </td>
                     </tr>
                   ) : filteredClients && filteredClients.length > 0 ? (
-                    filteredClients.map((client, index) => (
-                      <tr
-                        key={client.client_id}
-                        className={`${
-                          index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
-                        } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
-                        onClick={() => navigate(`/client/${client.client_id}`)}
-                      >
-                        <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
-                          <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
-                            {client.avatarUrl ? (
-                              <img
-                                src={client.avatarUrl || "/placeholder.svg"}
-                                alt={client.name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
-                                {client.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </div>
-                            )}
-                          </div>
-                          <span
-                            className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-base"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigate(`/client/${client.client_id}`)
-                            }}
-                          >
-                            {client.name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></div>
-                            <span className="text-gray-700 dark:text-gray-300 font-medium">5d</span>
-                          </div>
-                        </td>
-                        
-                        
-                        <td className="px-6 py-5">
-                          <span className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
-                            Online
-                          </span>
-                        </td>
-                        
-                        <td className="px-6 py-5">
-                          <p className="text-center">80</p>
-                        </td>
-                        <td className="px-6 py-5">
-                         <p className="text-center">60</p>
-                        </td>
-                      </tr>
-                    ))
+                    filteredClients.map((client, index) => {
+                      // Mock data for demonstration
+                      const mockEngagementScore = Math.floor(Math.random() * 100) + 1
+                      const mockoutcomeScore = Math.floor(Math.random() * 100) + 1
+                      const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString()
+                      const daysSinceActivity = getDaysSinceActivity(mockLastActivity)
+                      const activityColorClass = getActivityStatusColor(daysSinceActivity)
+
+                      return (
+                        <tr
+                          key={client.client_id}
+                          className={`${
+                            index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
+                          } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
+                          onClick={() => navigate(`/client/${client.client_id}`)}
+                        >
+                          <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
+                            <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
+                              {client.avatarUrl ? (
+                                <img
+                                  src={client.avatarUrl || "/placeholder.svg"}
+                                  alt={client.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
+                                  {client.name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-base"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(`/client/${client.client_id}`)
+                              }}
+                            >
+                              {client.name}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${
+                                daysSinceActivity <= 3 ? 'bg-green-500 animate-pulse' : 
+                                daysSinceActivity <= 5 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}></div>
+                              <span className={`font-medium ${
+                                daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
+                                daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
+                              }`}>
+                                {daysSinceActivity}d ago
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
+                              {daysSinceActivity <= 3 ? 'Active' : daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <ProgressBar value={mockEngagementScore} className="flex-1" />
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
+                                {mockEngagementScore}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <ProgressBar value={mockoutcomeScore} className="flex-1" />
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
+                                {mockoutcomeScore}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="text-center py-16">
+                      <td colSpan={5} className="text-center py-16">
                         <div className="flex flex-col items-center">
                           <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                             <Icons.SearchIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
