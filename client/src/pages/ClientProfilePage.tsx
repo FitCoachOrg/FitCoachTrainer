@@ -1,57 +1,24 @@
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Search,
-  User,
-  Mail,
-  Phone,
-  Calendar,
-  Ruler,
-  Weight,
-  MapPin,
-  Edit,
-  MoreHorizontal,
-  Activity,
-  Target,
-  TrendingUp,
-  Clock,
-  ArrowLeft,
-  Save,
-  Dumbbell,
-  Utensils,
-  LineChart,
-  Heart,
-  Footprints,
-  Pencil,
-  Plus,
-  Filter,
-} from "lucide-react"
-import {
-  LineChart as Chart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useNavigate } from "react-router-dom"
+import { useParams, useNavigate } from 'react-router-dom';
+import { useClientProfile } from '@/hooks/use-clients';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, Mail, Phone, Calendar, MapPin, Activity, Target, TrendingUp, Dumbbell, Utensils, FileText, Settings, Search, User, Ruler, Weight, Edit, MoreHorizontal, Clock, Save, LineChart, Heart, Footprints, Pencil, Plus, Filter, Check } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { LineChart as Chart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useState, useEffect } from 'react';
 
 interface EditableSectionProps {
   title: string
+<<<<<<< Updated upstream
   icon: React.ElementType
   initialContent?: string
   storageKey: string
@@ -405,12 +372,407 @@ function SortableMetric({ metric, listeners, attributes, isDragging }: { metric:
     opacity: isDragging ? 0.5 : 1,
     cursor: 'grab',
   };
+=======
+  icon: LucideIcon
+  children: React.ReactNode
+  onEdit?: () => void
+  isEditing?: boolean
+}
+
+const EditableSection = ({ title, icon: Icon, children, onEdit, isEditing }: EditableSectionProps) => {
+>>>>>>> Stashed changes
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex items-center gap-2 p-2 bg-slate-100 rounded mb-2">
-      <metric.icon className="h-4 w-4" />
-      <span>{metric.label}</span>
+    <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <Icon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+          </div>
+          {onEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            >
+              {isEditing ? (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Save
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+const MetricsSection = () => {
+  const metrics = [
+    {
+      title: "Weight",
+      value: "75 kg",
+      change: "+2.5 kg",
+      changeType: "increase",
+      data: [
+        { date: "Jan", value: 72.5 },
+        { date: "Feb", value: 73.0 },
+        { date: "Mar", value: 73.5 },
+        { date: "Apr", value: 74.0 },
+        { date: "May", value: 74.5 },
+        { date: "Jun", value: 75.0 }
+      ]
+    },
+    {
+      title: "Sleep",
+      value: "7.5 hrs",
+      change: "-0.5 hrs",
+      changeType: "decrease",
+      data: [
+        { date: "Jan", value: 8.0 },
+        { date: "Feb", value: 7.8 },
+        { date: "Mar", value: 7.7 },
+        { date: "Apr", value: 7.6 },
+        { date: "May", value: 7.5 },
+        { date: "Jun", value: 7.5 }
+      ]
+    }
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {metrics.map((metric, index) => (
+          <Card key={index} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{metric.title}</h3>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{metric.value}</p>
+                    <p className={`text-sm ${metric.changeType === 'increase' ? 'text-green-600' : 'text-red-600'}`}>
+                      {metric.change}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                  <LineChart className="h-4 w-4 mr-2" />
+                  View Details
+                </Button>
+              </div>
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <Chart data={metric.data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid vertical={false} stroke="#f0f0f0" strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      interval="preserveStartEnd"
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke={metric.changeType === 'increase' ? '#22c55e' : '#ef4444'}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 2, fill: 'white' }}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                    />
+                  </Chart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
-  );
+  )
+}
+
+const WorkoutPlanSection = () => {
+  const workouts = [
+    {
+      id: 1,
+      name: "Full Body Strength",
+      description: "Focus on compound movements and overall strength",
+      exercises: [
+        { name: "Squats", sets: 4, reps: "8-10", weight: "80kg" },
+        { name: "Bench Press", sets: 4, reps: "8-10", weight: "60kg" },
+        { name: "Deadlifts", sets: 4, reps: "6-8", weight: "100kg" }
+      ],
+      duration: "60 min",
+      difficulty: "Intermediate",
+      targetMuscles: ["Legs", "Chest", "Back"],
+      equipment: ["Barbell", "Bench", "Squat Rack"]
+    },
+    {
+      id: 2,
+      name: "HIIT Cardio",
+      description: "High-intensity interval training for fat loss",
+      exercises: [
+        { name: "Burpees", sets: 4, reps: "30 sec", weight: "Bodyweight" },
+        { name: "Mountain Climbers", sets: 4, reps: "30 sec", weight: "Bodyweight" },
+        { name: "Jump Rope", sets: 4, reps: "30 sec", weight: "Bodyweight" }
+      ],
+      duration: "30 min",
+      difficulty: "Advanced",
+      targetMuscles: ["Full Body"],
+      equipment: ["None"]
+    }
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Workout Plans</h2>
+        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Plus className="h-4 w-4 mr-2" />
+          Create New Plan
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        {workouts.map((workout) => (
+          <Card key={workout.id} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{workout.name}</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">{workout.description}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">Exercises</h4>
+                  <div className="space-y-3">
+                    {workout.exercises.map((exercise, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{exercise.name}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {exercise.sets} sets × {exercise.reps}
+                          </p>
+                        </div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{exercise.weight}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-3">Details</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="text-gray-600 dark:text-gray-400">Duration</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{workout.duration}</p>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="text-gray-600 dark:text-gray-400">Difficulty</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{workout.difficulty}</p>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="text-gray-600 dark:text-gray-400">Target Muscles</p>
+                      <div className="flex gap-2">
+                        {workout.targetMuscles.map((muscle, index) => (
+                          <Badge key={index} variant="secondary">{muscle}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="text-gray-600 dark:text-gray-400">Equipment</p>
+                      <div className="flex gap-2">
+                        {workout.equipment.map((item, index) => (
+                          <Badge key={index} variant="outline">{item}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const NutritionPlanSection = () => {
+  const nutritionPlans = [
+    {
+      id: 1,
+      name: "High Protein Diet",
+      description: "Focused on muscle building and recovery",
+      meals: [
+        {
+          name: "Breakfast",
+          time: "8:00 AM",
+          foods: [
+            { name: "Oatmeal", amount: "1 cup", calories: 300 },
+            { name: "Protein Shake", amount: "1 serving", calories: 150 },
+            { name: "Banana", amount: "1 medium", calories: 105 }
+          ]
+        },
+        {
+          name: "Lunch",
+          time: "1:00 PM",
+          foods: [
+            { name: "Grilled Chicken Breast", amount: "200g", calories: 330 },
+            { name: "Brown Rice", amount: "1 cup", calories: 216 },
+            { name: "Mixed Vegetables", amount: "1 cup", calories: 100 }
+          ]
+        },
+        {
+          name: "Dinner",
+          time: "7:00 PM",
+          foods: [
+            { name: "Salmon", amount: "200g", calories: 412 },
+            { name: "Sweet Potato", amount: "1 medium", calories: 103 },
+            { name: "Broccoli", amount: "1 cup", calories: 55 }
+          ]
+        }
+      ],
+      totalCalories: 2125,
+      macros: {
+        protein: "180g",
+        carbs: "200g",
+        fats: "65g"
+      },
+      restrictions: ["No processed foods", "No added sugars"]
+    }
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Nutrition Plans</h2>
+        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Plus className="h-4 w-4 mr-2" />
+          Create New Plan
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        {nutritionPlans.map((plan) => (
+          <Card key={plan.id} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{plan.name}</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">{plan.description}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-4">Meal Plan</h4>
+                  <div className="space-y-4">
+                    {plan.meals.map((meal, index) => (
+                      <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <h5 className="font-medium text-gray-900 dark:text-white">{meal.name}</h5>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{meal.time}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {meal.foods.map((food, foodIndex) => (
+                            <div key={foodIndex} className="flex justify-between items-center text-sm">
+                              <div>
+                                <p className="text-gray-900 dark:text-white">{food.name}</p>
+                                <p className="text-gray-600 dark:text-gray-400">{food.amount}</p>
+                              </div>
+                              <p className="text-gray-600 dark:text-gray-400">{food.calories} cal</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-gray-900 dark:text-white mb-4">Nutrition Summary</h4>
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h5 className="font-medium text-gray-900 dark:text-white">Daily Calories</h5>
+                        <span className="text-lg font-semibold text-gray-900 dark:text-white">{plan.totalCalories} cal</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Protein</p>
+                          <p className="text-lg font-semibold text-gray-900 dark:text-white">{plan.macros.protein}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Carbs</p>
+                          <p className="text-lg font-semibold text-gray-900 dark:text-white">{plan.macros.carbs}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Fats</p>
+                          <p className="text-lg font-semibold text-gray-900 dark:text-white">{plan.macros.fats}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-900 dark:text-white mb-3">Dietary Restrictions</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {plan.restrictions.map((restriction, index) => (
+                          <Badge key={index} variant="secondary">{restriction}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 const ClientStats = () => {
@@ -501,6 +863,7 @@ const ClientStats = () => {
   )
 }
 
+<<<<<<< Updated upstream
 const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialContent, storageKey }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [content, setContent] = useState(initialContent || "")
@@ -683,9 +1046,19 @@ const MetricsSection = () => {
         </SortableContext>
       </DndContext>
     </div>
-  );
-};
+=======
+export default function ClientProfilePage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const trainerId = 1; // This should come from your auth context in a real app
 
+  const { data: client, isLoading, error } = useClientProfile(
+    id ? parseInt(id) : 0,
+    trainerId
+>>>>>>> Stashed changes
+  );
+
+<<<<<<< Updated upstream
 const WorkoutPlanSection = () => {
   const [customExercises, setCustomExercises] = useState<Exercise[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
@@ -1174,6 +1547,12 @@ export default function ClientDashboard() {
   }
 
   if (loading) {
+=======
+  const [activeTab, setActiveTab] = useState("metrics");
+  const [showProfileCard, setShowProfileCard] = useState(false);
+
+  if (isLoading) {
+>>>>>>> Stashed changes
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         <div className="text-center">
@@ -1181,7 +1560,7 @@ export default function ClientDashboard() {
           <p className="text-gray-600 font-medium">Loading client profile...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -1192,123 +1571,72 @@ export default function ClientDashboard() {
             <User className="h-8 w-8 text-red-500" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Client</h3>
-          <p className="text-red-600 mb-6">{error}</p>
-          <Button className="bg-gradient-to-r from-blue-500 to-indigo-600">
+          <p className="text-red-600 mb-6">{error.message}</p>
+          <Button onClick={() => navigate('/clients')} className="bg-gradient-to-r from-blue-500 to-indigo-600">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Clients
           </Button>
         </div>
       </div>
-    )
+    );
   }
+
+  if (!client) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="h-8 w-8 text-gray-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Client Not Found</h3>
+          <p className="text-gray-600 mb-6">The requested client profile could not be found.</p>
+          <Button onClick={() => navigate('/clients')} className="bg-gradient-to-r from-blue-500 to-indigo-600">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Clients
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const getAge = (dob: string) => {
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Sidebar */}
-      <aside className="w-80 min-h-screen bg-slate-800 text-white flex flex-col p-6 rounded-l-3xl">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold tracking-widest">ALL CLIENTS</h2>
-          <Popover open={showClientFilter} onOpenChange={setShowClientFilter}>
-            <PopoverTrigger asChild>
-              <button className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs font-semibold" title="Filter/Sort Clients">
-                <Filter className="h-4 w-4" />
-                Filter
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="p-2 w-48 bg-white text-slate-900 rounded shadow">
-              <div className="font-semibold mb-2 text-xs text-slate-700">Filter Clients</div>
-              <button onClick={() => { setActiveClientFilter('low-engagement'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-engagement' ? 'bg-blue-100 font-bold' : ''}`}>Low Engagement scores</button>
-              <button onClick={() => { setActiveClientFilter('low-outcome'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-outcome' ? 'bg-blue-100 font-bold' : ''}`}>Low Outcome scores</button>
-              <button onClick={() => { setActiveClientFilter(null); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${!activeClientFilter ? 'bg-blue-100 font-bold' : ''}`}>Clear Filter</button>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="relative mt-2 mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
-          />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <Card className="bg-slate-700 border-0 shadow-none">
-            <CardContent className="pt-0">
-              <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {filteredClients
-                  .filter(c => {
-                    if (activeClientFilter === 'low-engagement') {
-                      // Placeholder: implement real filter logic here
-                      return c.name.toLowerCase().includes('low engagement')
-                    }
-                    if (activeClientFilter === 'low-outcome') {
-                      // Placeholder: implement real filter logic here
-                      return c.name.toLowerCase().includes('low outcome')
-                    }
-                    return true;
-                  })
-                  .map((c) => (
-                  <button
-                    key={c.client_id}
-                    onClick={() => handleClientSelect(c.client_id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
-                      c.client_id === selectedClientId
-                        ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500 shadow-md dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-300"
-                        : "hover:bg-slate-600"
-                    }`}
-                  >
-                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
-                      <AvatarImage src={c.avatarUrl || "/placeholder.svg"} alt={c.name} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                        {c.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="font-semibold truncate">{c.name}</div>
-                      {c.email && <div className="text-xs text-slate-300 truncate">{c.email}</div>}
-                    </div>
-                    <div
-                      className={`w-2 h-2 rounded-full ${c.status === "active" ? "bg-green-500" : "bg-yellow-500"}`}
-                    />
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        <button onClick={handleSmartAlertsClick} className="mt-4 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">
-          Smart Alerts
-        </button>
-      </aside>
       {/* Main Content */}
       <main className="flex-1 flex flex-col p-8">
         {/* Gradient Top Bar with profile icon dropdown */}
         <div className="w-full flex items-center gap-6 px-8 h-24 rounded-xl mb-6 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-lg">
-          <span className="text-2xl font-bold text-white flex-1">{client.name}</span>
+          <span className="text-2xl font-bold text-white flex-1">{client.cl_name}</span>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1 text-white/80 text-base">
               <MapPin className="h-4 w-4" />
-              {client.location}
+              {client.cl_address}
             </span>
             <span className="flex items-center gap-1 text-white/80 text-base">
               <Calendar className="h-4 w-4" />
-              Age: {getAge(client.dob)}
+              Age: {getAge(client.cl_dob)}
             </span>
             <span className="flex items-center gap-1 text-white/80 text-base">
               <Weight className="h-4 w-4" />
-              {client.weight} kg
+              {client.cl_weight} kg
             </span>
             <Popover open={showProfileCard} onOpenChange={setShowProfileCard}>
               <PopoverTrigger asChild>
                 <button className="ml-4 focus:outline-none">
                   <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
-                    <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
+                    <AvatarImage src="/placeholder.svg" alt={client.cl_name} />
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xl">
-                      {client.name.split(" ").map((n) => n[0]).join("")}
+                      {client.cl_name.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
                 </button>
@@ -1317,46 +1645,45 @@ export default function ClientDashboard() {
                 <Card className="w-[350px] bg-white/90 backdrop-blur-sm border-0 shadow-xl overflow-hidden dark:bg-black">
                   <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-24 relative flex items-center px-6">
                     <Avatar className="h-16 w-16 ring-2 ring-white shadow-md">
-                      <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
+                      <AvatarImage src="/placeholder.svg" alt={client.cl_name} />
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-2xl">
-                        {client.name.split(" ").map((n) => n[0]).join("")}
+                        {client.cl_name.split(" ").map((n) => n[0]).join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="ml-4">
-                      <h1 className="text-2xl font-bold text-white mb-1">{client.name}</h1>
-                      {client.username && <p className="text-white/80 mb-1">@{client.username}</p>}
-                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">{client.membershipType}</Badge>
+                      <h1 className="text-2xl font-bold text-white mb-1">{client.cl_name}</h1>
+                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">{client.cl_membership_type}</Badge>
                     </div>
                   </div>
                   <CardContent className="pt-4 pb-6">
                     <div className="grid grid-cols-1 gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.email}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_email}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.phone}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_phone}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">Born {new Date(client.dob).toLocaleDateString()}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Born {new Date(client.cl_dob).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Ruler className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.height} cm</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_height} cm</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Weight className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.weight} kg</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_weight} kg</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.location}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_address}</span>
                       </div>
                     </div>
                     <div className="mt-4 text-xs text-gray-400">
-                      Member since {new Date(client.createdAt).toLocaleDateString()}
+                      Member since {new Date(client.cl_join_date).toLocaleDateString()}
                     </div>
                   </CardContent>
                 </Card>
@@ -1364,6 +1691,7 @@ export default function ClientDashboard() {
             </Popover>
           </div>
         </div>
+
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Enhanced Main Content */}
           <div className="flex-1 space-y-6">
@@ -1375,14 +1703,14 @@ export default function ClientDashboard() {
               <EditableSection
                 title="Goals & Limitations"
                 icon={Target}
-                initialContent="1. Run a marathon without stopping\n2. Lose 5kg by August\n3. Improve overall endurance\n4. Reduce body fat percentage to 15%"
-                storageKey="client-goals-1"
+                initialContent={client.cl_goals || "No goals set yet."}
+                storageKey={`client-goals-${client.client_id}`}
               />
               <EditableSection
                 title="Trainer Notes"
                 icon={Edit}
-                initialContent="Client is making good progress with their running program. Needs to focus more on nutrition and recovery. Suggested adding more protein to diet and implementing better sleep hygiene.\n\nLeg injury from last year occasionally flares up - modify lower body exercises as needed."
-                storageKey="client-notes-1"
+                initialContent={client.cl_notes || "No notes available."}
+                storageKey={`client-notes-${client.client_id}`}
               />
             </div>
 
@@ -1420,5 +1748,5 @@ export default function ClientDashboard() {
         </div>
       </main>
     </div>
-  )
+  );
 }

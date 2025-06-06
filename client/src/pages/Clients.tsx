@@ -65,8 +65,8 @@ const Clients: React.FC = () => {
   const filteredClients = clients?.filter((client) => {
     // Search filter
     const matchesSearch =
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchQuery.toLowerCase())
+      client.cl_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.cl_email?.toLowerCase().includes(searchQuery.toLowerCase())
 
     // Status filter
     const matchesStatus = statusFilter === "all" || statusFilter === "connected" // Placeholder logic
@@ -314,15 +314,15 @@ const Clients: React.FC = () => {
                         >
                           <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
                             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
-                              {client.avatarUrl ? (
+                              {client.cl_pic ? (
                                 <img
-                                  src={client.avatarUrl || "/placeholder.svg"}
-                                  alt={client.name}
+                                  src={client.cl_pic}
+                                  alt={client.cl_name}
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
                                 <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
-                                  {client.name
+                                  {client.cl_name
                                     .split(" ")
                                     .map((n) => n[0])
                                     .join("")}
@@ -336,7 +336,7 @@ const Clients: React.FC = () => {
                                 navigate(`/client/${client.client_id}`)
                               }}
                             >
-                              {client.name}
+                              {client.cl_name}
                             </span>
                           </td>
                           <td className="px-6 py-5">

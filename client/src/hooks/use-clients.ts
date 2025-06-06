@@ -5,15 +5,22 @@ import { supabase } from "@/lib/supabase";
 export interface MappedClient {
   client_id: number;
   trainerId: number;
-  name: string;
-  email: string;
-  avatarUrl: string | null;
-  phone: string | null;
-  username?: string | null;
-  height?: number | null;
-  weight?: number | null;
-  dob?: string | null;
-  genderName?: string | null;
+  cl_name: string;
+  cl_email: string;
+  cl_pic: string | null;
+  cl_phone: string | null;
+  cl_username?: string | null;
+  cl_height?: number | null;
+  cl_weight?: number | null;
+  cl_dob?: string | null;
+  cl_gender?: string | null;
+  cl_address?: string | null;
+  cl_join_date?: string | null;
+  cl_goal?: string | null;
+  cl_activity_level?: string | null;
+  cl_target_weight?: number | null;
+  cl_medical_conditions?: string | null;
+  cl_allergies?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -23,18 +30,25 @@ function mapClientFromDb(dbClient: any): MappedClient {
   return {
     client_id: dbClient.client_id,
     trainerId: dbClient.trainer_id,
-    name: dbClient.cl_name,
-    email: dbClient.cl_email,
-    avatarUrl: dbClient.cl_pic,
-    phone: dbClient.cl_phone,
-    username: dbClient.cl_username,
-    height: dbClient.cl_height,
-    weight: dbClient.cl_weight,
-    dob: dbClient.cl_dob,
-    genderName: dbClient.cl_gender_name,
-    isActive: true, // Since this isn't in the schema, we'll default to true
+    cl_name: dbClient.cl_name,
+    cl_email: dbClient.cl_email,
+    cl_pic: dbClient.cl_pic,
+    cl_phone: dbClient.cl_phone,
+    cl_username: dbClient.cl_username,
+    cl_height: dbClient.cl_height,
+    cl_weight: dbClient.cl_weight,
+    cl_dob: dbClient.cl_dob,
+    cl_gender: dbClient.cl_gender_name,
+    cl_address: dbClient.cl_address,
+    cl_join_date: dbClient.cl_join_date,
+    cl_goal: dbClient.cl_goal,
+    cl_activity_level: dbClient.cl_activity_level,
+    cl_target_weight: dbClient.cl_target_weight,
+    cl_medical_conditions: dbClient.cl_medical_conditions,
+    cl_allergies: dbClient.cl_allergies,
+    isActive: true,
     createdAt: dbClient.created_at,
-    updatedAt: dbClient.created_at // Using created_at as updatedAt isn't in schema
+    updatedAt: dbClient.created_at
   };
 }
 
@@ -158,5 +172,39 @@ export function useClientSchedule(clientId: number, weekStart: string, weekEnd: 
       return data;
     },
     enabled: !!clientId && !!weekStart && !!weekEnd,
+  });
+}
+
+export function useClientProfile(clientId: number, trainerId: number) {
+  return useQuery({
+    queryKey: ['clientProfile', clientId, trainerId],
+    queryFn: async () => {
+      console.log('useClientProfile - clientId:', clientId);
+      console.log('useClientProfile - trainerId:', trainerId);
+      
+      if (!clientId || !trainerId) {
+        console.log('useClientProfile - Missing clientId or trainerId');
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('client')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('trainer_id', trainerId)
+        .single();
+
+      console.log('useClientProfile - Supabase response:', { data, error });
+
+      if (error) {
+        console.error('useClientProfile - Supabase error:', error);
+        throw error;
+      }
+
+      const mappedClient = data ? mapClientFromDb(data) : null;
+      console.log('useClientProfile - Mapped client:', mappedClient);
+      return mappedClient;
+    },
+    enabled: !!clientId && !!trainerId,
   });
 }
