@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,91 +57,116 @@ const FloatingDots = () => {
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
+    // Check for error in URL
+    const hash = location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const error = params.get('error');
+      const errorDescription = params.get('error_description');
+      
+      if (error === 'access_denied') {
+        if (errorDescription?.includes('expired')) {
+          setError('Login link has expired. Please request a new one.');
+        } else {
+          setError('Invalid login link. Please request a new one.');
+        }
+        // Clean up the URL
+        navigate('/login', { replace: true });
+      }
+    }
+
     // Check if user is already logged in
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true });
         }
       } catch (err) {
         console.error('Error checking session:', err);
       }
     };
     checkUser();
-  }, [navigate]);
+  }, [navigate, location]);
+
+  // Check if trainer exists in database
+  const checkUserInDatabase = async (email: string) => {
+    try {
+      const { data: trainerData, error: trainerError } = await supabase
+        .from('trainer')
+        .select('id, trainer_name, trainer_email')
+        .eq('trainer_email', email.trim().toLowerCase())
+        .single();
+
+      if (trainerError) {
+        setError('Trainer account not found');
+        return null;
+      }
+      
+      return trainerData;
+    } catch (err) {
+      console.error('Error checking user in database:', err);
+      setError('Error checking database');
+      return null;
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setMessage("");
     
-    // Basic validation
-    if (!email || !password) {
-      setError("Please fill in all fields");
+    if (!email) {
+      setError("Please enter your email address");
       return;
     }
 
-    if (!email.includes('@')) {
-      setError("Please enter a valid email address");
+    const cleanEmail = email.trim().toLowerCase();
+
+    // First check if trainer exists in database
+    const trainerData = await checkUserInDatabase(cleanEmail);
+    
+    if (!trainerData) {
+      setError("Trainer account not found");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // First check if trainer exists with these credentials
-      const { data: trainerData, error: trainerError } = await supabase
-        .from('trainer')
-        .select('id, trainer_name, trainer_email')
-        .eq('trainer_email', email.trim().toLowerCase())
-        .eq('trainer_password', password)
-        .single();
-
-      if (trainerError || !trainerData) {
-        setError('Invalid email or password');
-        return;
-      }
-
-      // If trainer exists, sign in with Supabase
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      const { error } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          shouldCreateUser: false // Prevent creating new users
+        }
       });
 
-      if (authError) {
-        // Generic error messages for security
-        if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password');
-        } else if (authError.message.includes('Email not confirmed')) {
-          setError('Please check your email and confirm your account');
-        } else {
-          setError('Login failed. Please try again.');
-        }
+      if (error) {
+        setError(`Failed to send login link: ${error.message}`);
         return;
       }
 
-      if (data.session) {
-        // Store trainer info in session storage for quick access
-        sessionStorage.setItem('trainerId', trainerData.id);
-        sessionStorage.setItem('trainerName', trainerData.trainer_name);
+      setMessage(`Login link sent to ${cleanEmail}! Check your email and click the link to login.`);
+      
+      // Store trainer info temporarily
+      sessionStorage.setItem('pendingTrainerId', trainerData.id);
+      sessionStorage.setItem('pendingTrainerName', trainerData.trainer_name);
 
-        navigate("/dashboard");
-      }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError('An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
   };
-
-  
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -153,7 +178,7 @@ const LoginPage = () => {
               Welcome to FitPro
             </CardTitle>
             <p className="text-center text-slate-400">
-              Enter your credentials to access your dashboard
+              Enter your email to access your dashboard
             </p>
           </CardHeader>
           <CardContent>
@@ -167,36 +192,40 @@ const LoginPage = () => {
                   className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
                   required
                   disabled={isLoading}
+                  autoComplete="email"
                 />
               </div>
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
+
               {error && (
-                <p className="text-sm text-red-400 text-center">{error}</p>
+                <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
+                  <p className="text-sm text-red-400 text-center">{error}</p>
+                </div>
               )}
-              <Button 
-                type="submit" 
-                className="w-full bg-green-600 hover:bg-green-700"
+
+              {message && (
+                <div className="p-3 rounded-md bg-blue-900/20 border border-blue-400/20">
+                  <p className="text-sm text-blue-400 text-center">{message}</p>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Icons.Loader2Icon className="h-4 w-4 animate-spin" />
-                    Signing in...
+                    Sending Login Link...
                   </div>
                 ) : (
-                  "Sign In"
+                  "Send Login Link"
                 )}
               </Button>
+
+              <p className="text-xs text-slate-500 text-center">
+                We'll send you a secure login link to your email
+              </p>
             </form>
           </CardContent>
         </Card>
