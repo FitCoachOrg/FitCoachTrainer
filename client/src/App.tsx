@@ -27,6 +27,7 @@ import Navbar from "./components/layout/Navbar"
 import { cn } from "@/lib/utils"
 import ExerciseLibrary from "./pages/ExcerciseLibrary"
 import FitnessCalendar from "./pages/Calendar-excercise"
+import SignupPage from "./pages/Signup"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -91,6 +92,14 @@ function App() {
                   element={
                     <PublicLayout>
                       <Login />
+                    </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <PublicLayout>
+                      <SignupPage />
                     </PublicLayout>
                   }
                 />

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import * as Icons from "@/lib/icons"
 import React from "react"
 import { useSidebar } from "@/context/sidebar-context"
+import { supabase } from "@/lib/supabase"
 
 interface NavItem {
   name: string
@@ -61,7 +62,7 @@ const navigationItems: NavItem[] = [
 const secondaryNavItems: NavItem[] = [
   {
     name: "Log out",
-    href: "/logout",
+    href: "#",
     icon: <Icons.LogOutIcon className="h-5 w-5" />,
   },
 ]
@@ -72,6 +73,29 @@ const Sidebar: React.FC = () => {
 
   const handleSmartAlertsClick = () => {
     navigate("/dashboard")
+  }
+
+  const handleLogout = async () => {
+    try {
+      // Check if there's an active session
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        // Sign out from Supabase
+        const { error } = await supabase.auth.signOut()
+        if (error) throw error
+        
+        // Redirect to login page
+        navigate("/login")
+      } else {
+        // If no session exists, just redirect to login
+        navigate("/login")
+      }
+    } catch (error) {
+      console.error("Error logging out:", error)
+      // Even if there's an error, redirect to login
+      navigate("/login")
+    }
   }
 
   return (
@@ -116,7 +140,12 @@ const Sidebar: React.FC = () => {
 
           <ul className="space-y-1 px-2">
             {secondaryNavItems.map((item) => (
-              <NavItem key={item.name} {...item} isExpanded={isExpanded} />
+              <NavItem 
+                key={item.name} 
+                {...item} 
+                isExpanded={isExpanded} 
+                onClick={item.name === "Log out" ? handleLogout : undefined}
+              />
             ))}
           </ul>
         </nav>
@@ -127,6 +156,7 @@ const Sidebar: React.FC = () => {
 
 interface NavItemProps extends NavItem {
   isExpanded: boolean
+  onClick?: () => void
 }
 
 const NavItem: React.FC<NavItemProps> = ({
@@ -136,6 +166,7 @@ const NavItem: React.FC<NavItemProps> = ({
   alert,
   children,
   isExpanded,
+  onClick,
 }) => {
   const location = useLocation()
   const isActive = location.pathname.startsWith(href)
@@ -143,10 +174,18 @@ const NavItem: React.FC<NavItemProps> = ({
   const hasChildren = children && children.length > 0
   const closeTimeout = React.useRef<NodeJS.Timeout | null>(null)
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (onClick) {
+      e.preventDefault()
+      onClick()
+    }
+  }
+
   return (
     <li className="relative group">
       <NavLink
         to={href}
+        onClick={handleClick}
         className={({ isActive }) =>
           cn(
             "flex items-center px-3 py-3 rounded-lg transition-all duration-500 cursor-pointer relative",
