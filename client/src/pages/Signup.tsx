@@ -26,6 +26,7 @@ const FloatingDots = () => {
     };
     generateDots();
   }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {dots.map((dot) => (
@@ -55,93 +56,91 @@ const FloatingDots = () => {
   );
 };
 
-const LoginPage = () => {
+const SignupPage = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    trainerName: "",
+  });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     // Check if user is already logged in
     const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          navigate("/dashboard");
-        }
-      } catch (err) {
-        console.error('Error checking session:', err);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate("/dashboard");
       }
     };
     checkUser();
   }, [navigate]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
-    // Basic validation
-    if (!email || !password) {
-      setError("Please fill in all fields");
-      return;
-    }
-
-    if (!email.includes('@')) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
     setIsLoading(true);
 
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // First check if trainer exists with these credentials
+      // Create a record in the trainer table
       const { data: trainerData, error: trainerError } = await supabase
         .from('trainer')
-        .select('id, trainer_name, trainer_email')
-        .eq('trainer_email', email.trim().toLowerCase())
-        .eq('trainer_password', password)
+        .insert([
+          {
+            trainer_name: formData.trainerName,
+            trainer_email: formData.email,
+            trainer_password: formData.password,
+          },
+        ])
+        .select()
         .single();
 
-      if (trainerError || !trainerData) {
-        setError('Invalid email or password');
-        return;
+      if (trainerError) {
+        throw trainerError;
       }
 
-      // If trainer exists, sign in with Supabase
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      if (trainerData) {
+        // Sign up with Supabase using the generated trainer id
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              trainer_id: trainerData.id
+            }
+          }
+        });
 
-      if (authError) {
-        // Generic error messages for security
-        if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password');
-        } else if (authError.message.includes('Email not confirmed')) {
-          setError('Please check your email and confirm your account');
-        } else {
-          setError('Login failed. Please try again.');
+        if (signUpError) {
+          throw signUpError;
         }
-        return;
-      }
 
-      if (data.session) {
-        // Store trainer info in session storage for quick access
-        sessionStorage.setItem('trainerId', trainerData.id);
-        sessionStorage.setItem('trainerName', trainerData.trainer_name);
-
+        // Supabase automatically handles the session
         navigate("/dashboard");
       }
     } catch (err: any) {
-      console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setError(err.message || "An error occurred during signup");
     } finally {
       setIsLoading(false);
     }
   };
-
-  
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -150,20 +149,33 @@ const LoginPage = () => {
         <Card className="w-full max-w-md bg-slate-800/50 backdrop-blur-sm border-green-400 shadow-2xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-center text-white">
-              Welcome to FitPro
+              Create Your FitPro Account
             </CardTitle>
             <p className="text-center text-slate-400">
-              Enter your credentials to access your dashboard
+              Join our fitness community today
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div className="space-y-2">
+                <Input
+                  type="text"
+                  name="trainerName"
+                  placeholder="Full Name"
+                  value={formData.trainerName}
+                  onChange={handleInputChange}
+                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
               <div className="space-y-2">
                 <Input
                   type="email"
+                  name="email"
                   placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={formData.email}
+                  onChange={handleInputChange}
                   className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
                   required
                   disabled={isLoading}
@@ -172,9 +184,22 @@ const LoginPage = () => {
               <div className="space-y-2">
                 <Input
                   type="password"
+                  name="password"
                   placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Confirm Password"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
                   className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
                   required
                   disabled={isLoading}
@@ -191,12 +216,22 @@ const LoginPage = () => {
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Icons.Loader2Icon className="h-4 w-4 animate-spin" />
-                    Signing in...
+                    Creating Account...
                   </div>
                 ) : (
-                  "Sign In"
+                  "Create Account"
                 )}
               </Button>
+              <p className="text-sm text-center text-slate-400">
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="text-green-400 hover:text-green-300"
+                >
+                  Sign In
+                </button>
+              </p>
             </form>
           </CardContent>
         </Card>
@@ -205,4 +240,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage; 
+export default SignupPage;
