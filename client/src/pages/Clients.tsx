@@ -1,6 +1,7 @@
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useClients } from "@/hooks/use-clients"
+import { useClients, MappedClient } from "@/hooks/use-clients"
+import { useAuth } from "@/hooks/use-auth"
 import ClientProfileModal from "@/components/clients/ClientProfileModal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,13 +15,14 @@ import { useNavigate } from "react-router-dom"
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
-  { label: "Activity Status", value: "inactive" },
-  { label: "Engagement Score", value: "low" },
-  { label: "Outcome Score", value: "low" }
+  { label: "Active", value: "active" },
+  { label: "Pending", value: "pending" },
+  { label: "Inactive", value: "inactive" }
 ]
 
 // Helper function to calculate days since last activity
-const getDaysSinceActivity = (lastActivity: string) => {
+const getDaysSinceActivity = (lastActivity: string | null) => {
+  if (!lastActivity) return 999; // Return a large number for no activity
   const today = new Date()
   const activityDate = new Date(lastActivity)
   const diffTime = Math.abs(today.getTime() - activityDate.getTime())
@@ -46,16 +48,13 @@ const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, c
 )
 
 const Clients: React.FC = () => {
-  const { clients, isLoading, error } = useClients(1)
+  const { trainerId, isLoading: isAuthLoading } = useAuth()
+  const { clients, isLoading: isClientsLoading, error } = useClients(trainerId || undefined)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [selectedClient, setSelectedClient] = useState<MappedClient | null>(null)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [engagementFilter, setEngagementFilter] = useState("all")
-  const [outcomeFilter, setoutcomeFilter] = useState("all")
-  const [activityFilter, setActivityFilter] = useState("all")
   const { toast } = useToast()
   const navigate = useNavigate()
 
@@ -63,14 +62,9 @@ const Clients: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const filter = params.get('filter')
-    const engagement = params.get('engagement')
     
     if (filter && STATUS_FILTERS.some(f => f.value === filter)) {
       setStatusFilter(filter)
-    }
-    
-    if (engagement === 'low') {
-      setEngagementFilter('low')
     }
   }, [])
 
@@ -84,64 +78,62 @@ const Clients: React.FC = () => {
       params.set('filter', statusFilter)
     }
     
-    if (engagementFilter === 'all') {
-      params.delete('engagement')
-    } else {
-      params.set('engagement', engagementFilter)
-    }
-    
     navigate(`?${params.toString()}`, { replace: true })
-  }, [statusFilter, engagementFilter, navigate])
+  }, [statusFilter, navigate])
+
+  if (isAuthLoading || isClientsLoading) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    )
+  }
+
+  if (!trainerId) {
+    return (
+      <div className="text-center py-12">
+        <Icons.AlertTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
+        <h3 className="mt-2 text-lg font-semibold">Authentication Error</h3>
+        <p className="text-gray-500 dark:text-gray-400">Please log in to view your clients.</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <Icons.AlertTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
+        <h3 className="mt-2 text-lg font-semibold">Error Loading Clients</h3>
+        <p className="text-gray-500 dark:text-gray-400">{error.message}</p>
+      </div>
+    )
+  }
 
   const filteredClients = clients?.filter((client) => {
     // Search filter
     const matchesSearch =
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchQuery.toLowerCase())
-
-    // Mock data for demonstration - you can replace with actual client data
-    const mockEngagementScore = Math.floor(Math.random() * 100) + 1
-    const mockoutcomeScore = Math.floor(Math.random() * 100) + 1
-    const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString()
-    const daysSinceActivity = getDaysSinceActivity(mockLastActivity)
+      client.cl_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.cl_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.cl_username.toLowerCase().includes(searchQuery.toLowerCase())
 
     // Status filter
+    const daysSinceActivity = getDaysSinceActivity(client.last_active)
     const matchesStatus = 
       statusFilter === "all" ||
-      (statusFilter === "inactive" && daysSinceActivity > 7) ||
-      (statusFilter === "low" && mockEngagementScore < 40) ||
-      (statusFilter === "low" && mockoutcomeScore < 40)
+      (statusFilter === "active" && daysSinceActivity <= 3) ||
+      (statusFilter === "pending" && client.status === "pending") ||
+      (statusFilter === "inactive" && daysSinceActivity > 7)
 
-    // Engagement score filter
-    const matchesEngagement = 
-      engagementFilter === "all" ||
-      (engagementFilter === "high" && mockEngagementScore >= 80) ||
-      (engagementFilter === "medium" && mockEngagementScore >= 40 && mockEngagementScore < 80) ||
-      (engagementFilter === "low" && mockEngagementScore < 40)
+    return matchesSearch && matchesStatus
+  }) || []
 
-    // Outcome score filter
-    const matchesoutcome = 
-      outcomeFilter === "all" ||
-      (outcomeFilter === "high" && mockoutcomeScore >= 80) ||
-      (outcomeFilter === "medium" && mockoutcomeScore >= 40 && mockoutcomeScore < 80) ||
-      (outcomeFilter === "low" && mockoutcomeScore < 40)
-
-    // Activity filter
-    const matchesActivity = 
-      activityFilter === "all" ||
-      (activityFilter === "recent" && daysSinceActivity <= 3) ||
-      (activityFilter === "moderate" && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
-      (activityFilter === "inactive" && daysSinceActivity > 7)
-
-    return matchesSearch && matchesStatus && matchesEngagement && matchesoutcome && matchesActivity
-  })
-
-  const handleViewProfile = (client: Client) => {
+  const handleViewProfile = (client: MappedClient) => {
     setSelectedClient(client)
     setIsProfileModalOpen(true)
   }
 
-  const handleEdit = (client: Client) => {
+  const handleEdit = (client: MappedClient) => {
     setSelectedClient(client)
     setIsFormModalOpen(true)
   }
@@ -159,17 +151,6 @@ const Clients: React.FC = () => {
         ? "The client has been successfully updated."
         : "The client has been successfully added.",
     })
-    window.location.reload()
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <Icons.AlertTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
-        <h3 className="mt-2 text-lg font-semibold">Error Loading Clients</h3>
-        <p className="text-gray-500 dark:text-gray-400">{error.message}</p>
-      </div>
-    )
   }
 
   return (
@@ -202,9 +183,12 @@ const Clients: React.FC = () => {
                     >
                       {filter.value === "all"
                         ? clients?.length || 0
-                        : filter.value === "inactive"
-                          ? clients?.length || 0
-                          : 0}
+                        : clients?.filter(c => {
+                            if (filter.value === "active") return getDaysSinceActivity(c.last_active) <= 3;
+                            if (filter.value === "pending") return c.status === "pending";
+                            if (filter.value === "inactive") return getDaysSinceActivity(c.last_active) > 7;
+                            return false;
+                          }).length || 0}
                     </span>
                   </button>
                 </li>
@@ -218,66 +202,8 @@ const Clients: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
               <div className="flex items-center gap-4 flex-wrap">
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-400">
-                  All Clients ({filteredClients?.length || 0})
+                  All Clients ({filteredClients.length})
                 </h1>
-                <div className="flex gap-3 flex-wrap">
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Category"
-                  >
-                    <option value="all">Category: All</option>
-                    <option value="premium">Premium</option>
-                    <option value="basic">Basic</option>
-                  </select>
-                  <select
-                    value={engagementFilter}
-                    onChange={(e) => setEngagementFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Engagement Score"
-                  >
-                    <option value="all">Engagement: All</option>
-                    <option value="high">High (80-100)</option>
-                    <option value="medium">Medium (50-79)</option>
-                    <option value="low">Low (0-49)</option>
-                  </select>
-                  <select
-                    value={outcomeFilter}
-                    onChange={(e) => setoutcomeFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Outcome Score"
-                  >
-                    <option value="all">Outcome: All</option>
-                    <option value="high">High (80-100)</option>
-                    <option value="medium">Medium (50-79)</option>
-                    <option value="low">Low (0-49)</option>
-                  </select>
-                  <select
-                    value={activityFilter}
-                    onChange={(e) => setActivityFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Last Activity"
-                  >
-                    <option value="all">Activity: All</option>
-                    <option value="recent">Recent (≤3 days)</option>
-                    <option value="moderate">Moderate (4-7 days)</option>
-                    <option value="inactive">Inactive ({'>'}7 days)</option>
-                  </select>
-                  <button 
-                    onClick={() => {
-                      setCategoryFilter("all")
-                      setEngagementFilter("all")
-                      setoutcomeFilter("all")
-                      setActivityFilter("all")
-                      setStatusFilter("all")
-                      setSearchQuery("")
-                    }}
-                    className="text-blue-600 text-sm font-medium ml-2 hover:text-blue-800 transition-colors dark:text-blue-400 dark:hover:text-blue-300 px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                  >
-                    Clear filters
-                  </button>
-                </div>
               </div>
               <div className="flex items-center gap-3 w-full md:w-auto">
                 <div className="relative w-full md:w-72">
@@ -313,106 +239,15 @@ const Clients: React.FC = () => {
                       Status
                     </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Engagement Score
+                      Goals
                     </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Outcome Score
+                      Experience
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-16">
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                          <p className="text-gray-500 dark:text-gray-400 font-medium">Loading clients...</p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : filteredClients && filteredClients.length > 0 ? (
-                    filteredClients.map((client, index) => {
-                      // Mock data for demonstration
-                      const mockEngagementScore = Math.floor(Math.random() * 100) + 1
-                      const mockoutcomeScore = Math.floor(Math.random() * 100) + 1
-                      const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString()
-                      const daysSinceActivity = getDaysSinceActivity(mockLastActivity)
-                      const activityColorClass = getActivityStatusColor(daysSinceActivity)
-
-                      return (
-                        <tr
-                          key={client.client_id}
-                          className={`${
-                            index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
-                          } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
-                          onClick={() => navigate(`/client/${client.client_id}`)}
-                        >
-                          <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
-                            <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
-                              {client.avatarUrl ? (
-                                <img
-                                  src={client.avatarUrl || "/placeholder.svg"}
-                                  alt={client.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
-                                  {client.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </div>
-                              )}
-                            </div>
-                            <span
-                              className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-base"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                navigate(`/client/${client.client_id}`)
-                              }}
-                            >
-                              {client.name}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full ${
-                                daysSinceActivity <= 3 ? 'bg-green-500 animate-pulse' : 
-                                daysSinceActivity <= 5 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}></div>
-                              <span className={`font-medium ${
-                                daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
-                                daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
-                              }`}>
-                                {daysSinceActivity}d ago
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
-                              {daysSinceActivity <= 3 ? 'Active' : daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <ProgressBar value={mockEngagementScore} className="flex-1" />
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                {mockEngagementScore}%
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <ProgressBar value={mockoutcomeScore} className="flex-1" />
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                {mockoutcomeScore}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  ) : (
+                  {filteredClients.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="text-center py-16">
                         <div className="flex flex-col items-center">
@@ -433,6 +268,77 @@ const Clients: React.FC = () => {
                         </div>
                       </td>
                     </tr>
+                  ) : (
+                    filteredClients.map((client, index) => {
+                      const daysSinceActivity = getDaysSinceActivity(client.last_active)
+                      const activityColorClass = getActivityStatusColor(daysSinceActivity)
+
+                      return (
+                        <tr
+                          key={client.client_id}
+                          className={`${
+                            index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
+                          } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
+                          onClick={() => navigate(`/client/${client.client_id}`)}
+                        >
+                          <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
+                            <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
+                              {client.cl_pic ? (
+                                <img
+                                  src={client.cl_pic}
+                                  alt={client.cl_name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
+                                  {client.cl_name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-base">
+                                {client.cl_name}
+                              </span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {client.cl_email}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${
+                                daysSinceActivity <= 3 ? 'bg-green-500 animate-pulse' : 
+                                daysSinceActivity <= 5 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}></div>
+                              <span className={`font-medium ${
+                                daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
+                                daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
+                              }`}>
+                                {daysSinceActivity === 999 ? 'Never' : `${daysSinceActivity}d ago`}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
+                              {daysSinceActivity <= 3 ? 'Active' : daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {client.cl_primary_goal || 'Not set'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {client.training_experience || 'Not specified'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -450,7 +356,13 @@ const Clients: React.FC = () => {
                 <DialogHeader>
                   <DialogTitle>{selectedClient ? "Edit Client" : "Add New Client"}</DialogTitle>
                 </DialogHeader>
-                <ClientForm client={selectedClient ?? undefined} onSuccess={handleFormSuccess} trainerId={1} />
+                {trainerId && (
+                  <ClientForm 
+                    client={selectedClient ?? undefined} 
+                    onSuccess={handleFormSuccess} 
+                    trainerId={trainerId} 
+                  />
+                )}
               </DialogContent>
             </Dialog>
           </div>
