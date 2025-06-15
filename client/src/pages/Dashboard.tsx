@@ -1,5 +1,4 @@
 import { useState } from "react";
-import WelcomeCard from "@/components/dashboard/WelcomeCard";
 import StatCard from "@/components/dashboard/StatCard";
 import UpcomingWeekAppointments from "@/components/dashboard/PeriodTrackingCard";
 import SleepAnalysisCard from "@/components/dashboard/SleepAnalysisCard";
@@ -150,10 +149,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="px-2 md:px-4 max-w-[1600px] mx-auto">
-      <div className="py-4">
-        <WelcomeCard />
-      </div>
-
       <div className="mb-6">
         <Demo />
       </div>
@@ -198,6 +193,5 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
-
 
 export default Dashboard;

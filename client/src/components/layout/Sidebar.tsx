@@ -40,6 +40,11 @@ const navigationItems: NavItem[] = [
         href: "/fitness-plans",
         icon: <Icons.DumbbellIcon className="h-4 w-4" />,
       },
+      {
+        name: "Programs",
+        href: "/programs",
+        icon: <Icons.CalendarIcon className="h-4 w-4" />,
+      },
     ],
   },
   {

@@ -12,6 +12,14 @@ const TopBar: React.FC = () => {
   const { toggleTheme, theme } = useTheme()
   const { isExpanded } = useSidebar()
 
+  // Get current time of day
+  const getTimeOfDay = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return "morning"
+    if (hour < 18) return "afternoon"
+    return "evening"
+  }
+
   // Format the page title based on the current location
   const getPageTitle = () => {
     const path = location.split("/")[1]
@@ -30,7 +38,14 @@ const TopBar: React.FC = () => {
       )}
     >
       <div className="flex items-center justify-between px-6 py-4">
-        <h2 className="text-xl font-semibold">{getPageTitle()}</h2>
+        <div className="flex items-center gap-6">
+          <div>
+            <h2 className="text-xl font-semibold">{getPageTitle()}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Good {getTimeOfDay()}, <span className="text-green-600 dark:text-green-400 font-medium">Coach</span>!
+            </p>
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           <Button
