@@ -12,8 +12,8 @@ import { useNavigate } from "react-router-dom";
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
   { label: "Activity Status", value: "inactive" },
-  { label: "Engagement Score", value: "low" },
-  { label: "Outcome Score", value: "low" }
+  { label: "Engagement Score", value: "engagement_low" },
+  { label: "Outcome Score", value: "outcome_low" }
 ];
 
 // Helper function to calculate days since last activity
@@ -60,6 +60,7 @@ const Clients: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  let clientIds: number[] = [];
   useEffect(() => {
     const fetchClients = async () => {
       setLoading(true);
@@ -109,23 +110,52 @@ const Clients: React.FC = () => {
           console.log("[DEBUG] No client relationships found for trainer.");
           return;
         }
-        const clientIds = relationshipData.map((rel) => rel.client_id);
+        clientIds = relationshipData.map((rel) => rel.client_id);
         console.log("[DEBUG] Client IDs:", clientIds);
         // Get client names
         const { data: clientData, error: clientError } = await supabase
           .from("client")
-          .select("client_id, cl_name")
+          .select("client_id, cl_name,last_checkIn,last_active")
           .in("client_id", clientIds);
         console.log("[DEBUG] Client data:", clientData, clientError);
         if (clientError) throw clientError;
         setClients(clientData || []);
+        // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
+        console.log("[DEBUG] clientIds used for activity/meal queries:", clientIds);
+        const { data: allActivity, error: allActivityError } = await supabase
+          .from("activity_info")
+          .select("client_id, last_weight_time, last_excercise_input, last_sleep_info");
+        console.log("[DEBUG] All rows in activity_info:", allActivity, allActivityError);
+        const { data: allMeals, error: allMealsError } = await supabase
+          .from("meal_info")
+          .select("client_id,calories,protein,carbs,fat,meal_type");
+        console.log("[DEBUG] All rows in meal_info:", allMeals, allMealsError);
+        // --- END DEBUG ---
       } catch (err: any) {
         setError(err.message || "Unknown error");
         console.error("[DEBUG] Error in fetchClients:", err);
       } finally {
         setLoading(false);
       }
+      // Use the clientIds from the try block for the queries below
+      const { data: activityInfo, error: activityError } = await supabase
+        .from("activity_info")
+        .select("client_id, last_weight_time, last_excercise_input, last_sleep_info")
+        .in("client_id", clientIds);
+      if (activityError) {
+        console.error("[DEBUG] Error fetching activity info:", activityError);
+      }
+      console.log("[DEBUG] Activity info fetched:", activityInfo);
+      const { data: mealInfo, error: mealError } = await supabase
+        .from("meal_info")
+        .select("client_id,calories,protein,carbs,fat,meal_type")
+        .in("client_id", clientIds);
+      if (mealError) {
+        console.error("[DEBUG] Error fetching meal info:", mealError);
+      }
+      console.log("[DEBUG] Meal info fetched:", mealInfo);
     };
+
     fetchClients();
   }, []);
 
@@ -137,14 +167,13 @@ const Clients: React.FC = () => {
     
     if (filter && STATUS_FILTERS.some(f => f.value === filter)) {
       setStatusFilter(filter);
-    }
-    
+    }                                                                         
     if (engagement === 'low') {
       setEngagementFilter('low');
     }
   }, []);
 
-  // Update URL when filters change
+  
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     
