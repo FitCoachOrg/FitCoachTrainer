@@ -106,7 +106,7 @@ const SignupPage = () => {
     }
 
     try {
-      // Sign up with Supabase Auth
+      // First, sign up with Supabase Auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -124,6 +124,25 @@ const SignupPage = () => {
       }
 
       if (authData.user) {
+        // Also save to custom trainer table
+        const { data: trainerData, error: trainerError } = await supabase
+          .from('trainer')
+          .insert([
+            {
+              id: authData.user.id, // Use Supabase user ID as trainer ID
+              trainer_name: formData.trainerName,
+              trainer_email: formData.email.trim().toLowerCase(),
+              trainer_password: formData.password, // Supabase Auth already handles secure password storage
+            },
+          ])
+          .select()
+          .single();
+
+        if (trainerError) {
+          console.error('Error creating trainer profile:', trainerError);
+          // Continue anyway since Supabase Auth user was created successfully
+        }
+
         // Check if user needs email confirmation
         if (!authData.session) {
           setError("Please check your email and click the confirmation link to complete your registration.");
@@ -134,12 +153,16 @@ const SignupPage = () => {
         // Set localStorage authentication if session exists
         localStorage.setItem("isAuthenticated", "true");
         
+        console.log('Signup successful:', { authData, trainerData });
+        
         // Redirect to dashboard
         navigate("/dashboard");
       }
     } catch (err: any) {
       console.error('Signup error:', err);
-      if (err.message.includes('already registered')) {
+      if (err.message.includes('already registered') || err.message.includes('already been registered')) {
+        setError('This email is already registered. Please try logging in instead.');
+      } else if (err.message.includes('duplicate key value violates unique constraint')) {
         setError('This email is already registered. Please try logging in instead.');
       } else if (err.message.includes('email')) {
         setError('Please enter a valid email address.');

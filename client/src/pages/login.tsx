@@ -118,6 +118,21 @@ const LoginPage = () => {
         // Set localStorage authentication
         localStorage.setItem("isAuthenticated", "true");
         
+        // Optionally fetch trainer data from custom table for additional info
+        try {
+          const { data: trainerData } = await supabase
+            .from('trainer')
+            .select('id, trainer_name, trainer_email')
+            .eq('id', data.user.id)
+            .single();
+          
+          if (trainerData) {
+            console.log('Trainer data loaded:', trainerData);
+          }
+        } catch (trainerError) {
+          console.log('No trainer data found in custom table:', trainerError);
+        }
+        
         console.log('Login successful:', data.session);
         navigate("/dashboard");
       }

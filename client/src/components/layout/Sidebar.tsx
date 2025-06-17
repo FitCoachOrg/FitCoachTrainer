@@ -89,6 +89,8 @@ const Sidebar: React.FC = () => {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
       
+      console.log('Logout successful')
+      
       // Redirect to login page
       navigate("/login")
     } catch (error) {

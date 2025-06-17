@@ -12,7 +12,7 @@ export function useAuth() {
         console.log('Current session:', session); // Debug log
 
         if (session?.user) {
-          console.log('User metadata:', session.user.user_metadata); // Debug log
+          console.log('User authenticated:', session.user); // Debug log
           
           // Use the user ID as trainer ID
           const trainerId = session.user.id;
@@ -37,7 +37,7 @@ export function useAuth() {
       console.log('Auth state changed:', _event, session); // Debug log
       
       if (session?.user) {
-        console.log('User metadata on change:', session.user.user_metadata); // Debug log
+        console.log('User authenticated on change:', session.user); // Debug log
         
         // Use the user ID as trainer ID
         const trainerId = session.user.id;
