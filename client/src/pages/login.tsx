@@ -86,7 +86,35 @@ const LoginPage = () => {
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('Checking session on mount:', session);
+        
         if (session) {
+          // Get the trainer ID from the database using the user's email
+          const { data: trainerData, error: trainerError } = await supabase
+            .from('trainer')
+            .select('id')
+            .eq('trainer_email', session.user.email)
+            .single();
+
+          if (trainerError) {
+            console.error('Error fetching trainer data:', trainerError);
+            return;
+          }
+
+          if (trainerData) {
+            // Update the user's metadata with the trainer ID
+            const { error: updateError } = await supabase.auth.updateUser({
+              data: { trainer_id: trainerData.id }
+            });
+
+            if (updateError) {
+              console.error('Error updating user metadata:', updateError);
+              return;
+            }
+
+            console.log('Updated user metadata with trainer ID:', trainerData.id);
+          }
+
           navigate("/dashboard", { replace: true });
         }
       } catch (err) {
@@ -132,6 +160,7 @@ const LoginPage = () => {
 
     // First check if trainer exists in database
     const trainerData = await checkUserInDatabase(cleanEmail);
+    console.log('Found trainer data:', trainerData);
     
     if (!trainerData) {
       setError("Trainer account not found");
@@ -141,24 +170,22 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
+      console.log('Sending OTP with trainer ID:', trainerData.id);
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
-          shouldCreateUser: false // Prevent creating new users
+          shouldCreateUser: false
         }
       });
 
       if (error) {
+        console.error('OTP error:', error);
         setError(`Failed to send login link: ${error.message}`);
         return;
       }
 
       setMessage(`Login link sent to ${cleanEmail}! Check your email and click the link to login.`);
-      
-      // Store trainer info temporarily
-      sessionStorage.setItem('pendingTrainerId', trainerData.id);
-      sessionStorage.setItem('pendingTrainerName', trainerData.trainer_name);
 
     } catch (err) {
       console.error('Login error:', err);

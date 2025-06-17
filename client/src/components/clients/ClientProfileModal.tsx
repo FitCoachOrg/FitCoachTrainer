@@ -10,13 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Client, ClientPlan, Plan } from "@shared/schema";
 import * as Icons from "@/lib/icons";
-import { useClients } from "@/hooks/use-clients";
+import { useClients, MappedClient } from "@/hooks/use-clients";
 import { useLocation } from "wouter";
 
 interface ClientProfileModalProps {
-  client: Client | null;
+  client: MappedClient | null;
   open: boolean;
   onClose: () => void;
 }
@@ -33,7 +32,7 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
   if (!client) return null;
 
   const handleDelete = async () => {
-    await deleteClient.mutateAsync(client.id);
+    await deleteClient.mutateAsync(client.client_id);
     onClose();
   };
 
@@ -57,10 +56,10 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
           <TabsContent value="details" className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
-                {client.avatarUrl ? (
+                {client.cl_pic ? (
                   <img
-                    src={client.avatarUrl}
-                    alt={client.name}
+                    src={client.cl_pic}
+                    alt={client.cl_name}
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -71,15 +70,15 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold">{client.name}</h3>
-                <p className="text-gray-500 dark:text-gray-400">{client.email}</p>
+                <h3 className="text-xl font-semibold">{client.cl_name}</h3>
+                <p className="text-gray-500 dark:text-gray-400">{client.cl_email}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={client.isActive ? "default" : "secondary"}>
-                    {client.isActive ? "Active" : "Inactive"}
+                  <Badge variant={client.status === 'active' ? "default" : "secondary"}>
+                    {client.status}
                   </Badge>
-                  {client.phone && (
+                  {client.cl_phone && (
                     <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {client.phone}
+                      {client.cl_phone}
                     </span>
                   )}
                 </div>
@@ -90,14 +89,14 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
               <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                 Goals
               </h4>
-              <p className="text-sm">{client.goals || "No goals specified"}</p>
+              <p className="text-sm">{client.cl_primary_goal || "No goals specified"}</p>
             </div>
 
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Notes
+                Training Experience
               </h4>
-              <p className="text-sm">{client.notes || "No notes"}</p>
+              <p className="text-sm">{client.training_experience || "No experience specified"}</p>
             </div>
           </TabsContent>
 
@@ -137,7 +136,7 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
             </Button>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate(`/client/${client.id}`)}>
+            <Button variant="secondary" onClick={() => navigate(`/client/${client.client_id}`)}>
               View Full Profile
             </Button>
             <Button variant="default" onClick={onClose}>
