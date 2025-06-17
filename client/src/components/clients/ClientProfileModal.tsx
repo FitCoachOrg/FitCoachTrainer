@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import * as Icons from "@/lib/icons";
-import { useClients, MappedClient } from "@/hooks/use-clients";
+
 import { useLocation } from "wouter";
 
 interface ClientProfileModalProps {
-  client: MappedClient | null;
+  client: { client_id: number; cl_name: string } | null;
   open: boolean;
   onClose: () => void;
 }
@@ -25,14 +25,14 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
   open,
   onClose,
 }) => {
-  const { deleteClient } = useClients();
   const [activeTab, setActiveTab] = useState("details");
   const [, navigate] = useLocation();
 
   if (!client) return null;
 
   const handleDelete = async () => {
-    await deleteClient.mutateAsync(client.client_id);
+    // TODO: Implement delete functionality with direct Supabase call
+    console.log("Delete client:", client.client_id);
     onClose();
   };
 
@@ -56,31 +56,18 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
           <TabsContent value="details" className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
-                {client.cl_pic ? (
-                  <img
-                    src={client.cl_pic}
-                    alt={client.cl_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300">
-                    <Icons.UserIcon className="h-8 w-8" />
-                  </div>
-                )}
+                <div className="w-full h-full flex items-center justify-center bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300">
+                  <Icons.UserIcon className="h-8 w-8" />
+                </div>
               </div>
 
               <div>
                 <h3 className="text-xl font-semibold">{client.cl_name}</h3>
-                <p className="text-gray-500 dark:text-gray-400">{client.cl_email}</p>
+                <p className="text-gray-500 dark:text-gray-400">Client ID: {client.client_id}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={client.status === 'active' ? "default" : "secondary"}>
-                    {client.status}
+                  <Badge variant="default">
+                    Active
                   </Badge>
-                  {client.cl_phone && (
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {client.cl_phone}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
@@ -89,14 +76,14 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
               <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                 Goals
               </h4>
-              <p className="text-sm">{client.cl_primary_goal || "No goals specified"}</p>
+              <p className="text-sm">No goals specified</p>
             </div>
 
             <div className="mt-4">
               <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                 Training Experience
               </h4>
-              <p className="text-sm">{client.training_experience || "No experience specified"}</p>
+              <p className="text-sm">No experience specified</p>
             </div>
           </TabsContent>
 
@@ -130,7 +117,6 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={!!deleteClient && !!deleteClient.isPending ? deleteClient.isPending : false}
             >
               Delete client
             </Button>
