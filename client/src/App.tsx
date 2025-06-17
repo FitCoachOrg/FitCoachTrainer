@@ -2,6 +2,8 @@ import type React from "react"
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "./lib/queryClient"
+import { useState, useEffect } from "react"
+import { supabase } from "./lib/supabase"
 
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -33,7 +35,55 @@ import AllProgramsPage from './pages/programs'
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation()
-  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true"
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  useEffect(() => {
+    // Check authentication status
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const localAuth = localStorage.getItem("isAuthenticated") === "true"
+        
+        if (session && localAuth) {
+          setIsAuthenticated(true)
+        } else {
+          setIsAuthenticated(false)
+          // Clear localStorage if no session
+          localStorage.removeItem("isAuthenticated")
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error)
+        setIsAuthenticated(false)
+        localStorage.removeItem("isAuthenticated")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true)
+        localStorage.setItem("isAuthenticated", "true")
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false)
+        localStorage.removeItem("isAuthenticated")
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    )
+  }
 
   // If not authenticated, redirect to login
   if (!isAuthenticated) {

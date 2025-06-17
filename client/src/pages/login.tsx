@@ -58,30 +58,14 @@ const FloatingDots = () => {
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    // Check for error in URL
-    const hash = location.hash;
-    if (hash) {
-      const params = new URLSearchParams(hash.substring(1));
-      const error = params.get('error');
-      const errorDescription = params.get('error_description');
-      
-      if (error === 'access_denied') {
-        if (errorDescription?.includes('expired')) {
-          setError('Login link has expired. Please request a new one.');
-        } else {
-          setError('Invalid login link. Please request a new one.');
-        }
-        // Clean up the URL
-        navigate('/login', { replace: true });
-      }
-    }
-
     // Check if user is already logged in
     const checkUser = async () => {
       try {
@@ -89,32 +73,8 @@ const LoginPage = () => {
         console.log('Checking session on mount:', session);
         
         if (session) {
-          // Get the trainer ID from the database using the user's email
-          const { data: trainerData, error: trainerError } = await supabase
-            .from('trainer')
-            .select('id')
-            .eq('trainer_email', session.user.email)
-            .single();
-
-          if (trainerError) {
-            console.error('Error fetching trainer data:', trainerError);
-            return;
-          }
-
-          if (trainerData) {
-            // Update the user's metadata with the trainer ID
-            const { error: updateError } = await supabase.auth.updateUser({
-              data: { trainer_id: trainerData.id }
-            });
-
-            if (updateError) {
-              console.error('Error updating user metadata:', updateError);
-              return;
-            }
-
-            console.log('Updated user metadata with trainer ID:', trainerData.id);
-          }
-
+          // Set localStorage authentication
+          localStorage.setItem("isAuthenticated", "true");
           navigate("/dashboard", { replace: true });
         }
       } catch (err) {
@@ -124,72 +84,52 @@ const LoginPage = () => {
     checkUser();
   }, [navigate, location]);
 
-  // Check if trainer exists in database
-  const checkUserInDatabase = async (email: string) => {
-    try {
-      const { data: trainerData, error: trainerError } = await supabase
-        .from('trainer')
-        .select('id, trainer_name, trainer_email')
-        .eq('trainer_email', email.trim().toLowerCase())
-        .single();
-
-      if (trainerError) {
-        setError('Trainer account not found');
-        return null;
-      }
-      
-      return trainerData;
-    } catch (err) {
-      console.error('Error checking user in database:', err);
-      setError('Error checking database');
-      return null;
-    }
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setMessage("");
     
-    if (!email) {
-      setError("Please enter your email address");
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    // First check if trainer exists in database
-    const trainerData = await checkUserInDatabase(cleanEmail);
-    console.log('Found trainer data:', trainerData);
-    
-    if (!trainerData) {
-      setError("Trainer account not found");
+    if (!formData.email || !formData.password) {
+      setError("Please enter both email and password");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      console.log('Sending OTP with trainer ID:', trainerData.id);
-      const { error } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-          shouldCreateUser: false
-        }
+      // Sign in with Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
       });
 
       if (error) {
-        console.error('OTP error:', error);
-        setError(`Failed to send login link: ${error.message}`);
-        return;
+        throw error;
       }
 
-      setMessage(`Login link sent to ${cleanEmail}! Check your email and click the link to login.`);
-
-    } catch (err) {
+      if (data.session) {
+        // Set localStorage authentication
+        localStorage.setItem("isAuthenticated", "true");
+        
+        console.log('Login successful:', data.session);
+        navigate("/dashboard");
+      }
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred');
+      if (err.message.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please try again.');
+      } else if (err.message.includes('Email not confirmed')) {
+        setError('Please check your email and click the confirmation link first.');
+      } else {
+        setError(err.message || 'An error occurred during login');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -205,7 +145,7 @@ const LoginPage = () => {
               Welcome to FitPro
             </CardTitle>
             <p className="text-center text-slate-400">
-              Enter your email to access your dashboard
+              Sign in to your trainer dashboard
             </p>
           </CardHeader>
           <CardContent>
@@ -214,24 +154,32 @@ const LoginPage = () => {
                 <Input
                   type="email"
                   placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
                   className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
                   required
                   disabled={isLoading}
                   autoComplete="email"
                 />
               </div>
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  placeholder="Password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                  required
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                />
+              </div>
 
               {error && (
                 <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
                   <p className="text-sm text-red-400 text-center">{error}</p>
-                </div>
-              )}
-
-              {message && (
-                <div className="p-3 rounded-md bg-blue-900/20 border border-blue-400/20">
-                  <p className="text-sm text-blue-400 text-center">{message}</p>
                 </div>
               )}
 
@@ -243,15 +191,22 @@ const LoginPage = () => {
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Icons.Loader2Icon className="h-4 w-4 animate-spin" />
-                    Sending Login Link...
+                    Logging In...
                   </div>
                 ) : (
-                  "Send Login Link"
+                  "Login"
                 )}
               </Button>
 
-              <p className="text-xs text-slate-500 text-center">
-                We'll send you a secure login link to your email
+              <p className="text-sm text-center text-slate-400">
+                Don't have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/signup")}
+                  className="text-green-400 hover:text-green-300"
+                >
+                  Sign Up
+                </button>
               </p>
             </form>
           </CardContent>

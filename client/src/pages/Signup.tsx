@@ -98,45 +98,54 @@ const SignupPage = () => {
       return;
     }
 
-    try {
-      // Create a record in the trainer table
-      const { data: trainerData, error: trainerError } = await supabase
-        .from('trainer')
-        .insert([
-          {
-            trainer_name: formData.trainerName,
-            trainer_email: formData.email,
-            trainer_password: formData.password,
-          },
-        ])
-        .select()
-        .single();
+    // Validate password strength
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setIsLoading(false);
+      return;
+    }
 
-      if (trainerError) {
-        throw trainerError;
+    try {
+      // Sign up with Supabase Auth
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.trainerName,
+            trainer_name: formData.trainerName,
+            role: 'trainer'
+          }
+        }
+      });
+
+      if (signUpError) {
+        throw signUpError;
       }
 
-      if (trainerData) {
-        // Sign up with Supabase using the generated trainer id
-        const { error: signUpError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              trainer_id: trainerData.id
-            }
-          }
-        });
-
-        if (signUpError) {
-          throw signUpError;
+      if (authData.user) {
+        // Check if user needs email confirmation
+        if (!authData.session) {
+          setError("Please check your email and click the confirmation link to complete your registration.");
+          setIsLoading(false);
+          return;
         }
 
-        // Supabase automatically handles the session
+        // Set localStorage authentication if session exists
+        localStorage.setItem("isAuthenticated", "true");
+        
+        // Redirect to dashboard
         navigate("/dashboard");
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred during signup");
+      console.error('Signup error:', err);
+      if (err.message.includes('already registered')) {
+        setError('This email is already registered. Please try logging in instead.');
+      } else if (err.message.includes('email')) {
+        setError('Please enter a valid email address.');
+      } else {
+        setError(err.message || "An error occurred during signup");
+      }
     } finally {
       setIsLoading(false);
     }

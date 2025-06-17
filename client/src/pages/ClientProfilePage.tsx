@@ -32,6 +32,8 @@ import {
   Pencil,
   Plus,
   Filter,
+  Copy,
+  Trash2,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -49,6 +51,31 @@ import { useNavigate } from "react-router-dom"
 import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { HeaderBar } from "@/components/header-bar"
+import { DescriptionInput } from "@/components/description-input"
+import { ViewTabs } from "@/components/view-tabs"
+import { ProgramCardsContainer } from "@/components/program-cards-container"
+import { SaveButton } from "@/components/save-button"
+import { AddTaskDropdown } from "@/components/add-task-dropdown"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { ViewMode, Difficulty, StartDay, TaskType, Task, ProgramData } from "@/types/program"
 
 interface EditableSectionProps {
   title: string
@@ -128,6 +155,85 @@ const sampleClients = [
     status: "active",
   },
 ]
+
+// Mock data for programs
+const mockPrograms = [
+  {
+    id: 1,
+    title: "Morning Strength Training",
+    tag: "Strength",
+    difficulty: "Medium",
+    startDay: "Monday",
+    color: "#39FF14",
+    lastEdited: "2 days ago",
+    description: "A comprehensive strength training program designed to build muscle and improve overall fitness through progressive overload techniques.",
+    created: "2024-01-15",
+  },
+  {
+    id: 2,
+    title: "HIIT Cardio Blast",
+    tag: "Cardio",
+    difficulty: "Hard",
+    startDay: "Tuesday",
+    color: "#FF6B35",
+    lastEdited: "1 week ago",
+    description: "High-intensity interval training program that maximizes calorie burn and improves cardiovascular endurance in minimal time.",
+    created: "2024-01-10",
+  },
+  {
+    id: 3,
+    title: "Beginner Yoga Flow",
+    tag: "Flexibility",
+    difficulty: "Easy",
+    startDay: "Wednesday",
+    color: "#4ECDC4",
+    lastEdited: "3 days ago",
+    description: "Gentle yoga sequences perfect for beginners looking to improve flexibility, balance, and mindfulness.",
+    created: "2024-01-20",
+  },
+  {
+    id: 4,
+    title: "Powerlifting Fundamentals",
+    tag: "Strength",
+    difficulty: "Hard",
+    startDay: "Thursday",
+    color: "#FFD93D",
+    lastEdited: "5 days ago",
+    description: "Master the big three lifts with proper form and progressive programming for maximum strength gains.",
+    created: "2024-01-08",
+  },
+  {
+    id: 5,
+    title: "Recovery & Mobility",
+    tag: "Recovery",
+    difficulty: "Easy",
+    startDay: "Friday",
+    color: "#A8E6CF",
+    lastEdited: "1 day ago",
+    description: "Active recovery sessions focusing on mobility work, stretching, and muscle recovery techniques.",
+    created: "2024-01-25",
+  },
+  {
+    id: 6,
+    title: "Athletic Performance",
+    tag: "Performance",
+    difficulty: "Hard",
+    startDay: "Saturday",
+    color: "#FF8B94",
+    lastEdited: "4 days ago",
+    description: "Sport-specific training program designed to enhance athletic performance and competitive edge.",
+    created: "2024-01-12",
+  },
+]
+
+const difficultyColors = {
+  Easy: "#39FF14",
+  Medium: "#FFD93D",
+  Hard: "#FF6B35",
+}
+
+const programTags = ["All", "Strength", "Cardio", "Flexibility", "Recovery", "Performance"]
+const sortOptions = ["Recently updated", "Alphabetically", "Difficulty"]
 
 // Sample metrics data
 const weightData = [
@@ -964,11 +1070,11 @@ const WorkoutPlanSection = () => {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Recommended Plans */}
-      <div>
+    <div className="flex gap-6 h-full">
+      {/* Left Side - Weekly Calendar */}
+      <div className="flex-1">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Recommended Workout Plans</h3>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Weekly Workout Schedule</h3>
           <Button
             onClick={() => setShowAddExercise(true)}
             className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
@@ -977,61 +1083,8 @@ const WorkoutPlanSection = () => {
             Add Custom Exercise
           </Button>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {recommendedPlans.map((plan) => (
-            <Card
-              key={plan.id}
-              className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-move dark:bg-black"
-              draggable
-              onDragStart={(e) => handleDragStart(e, plan)}
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${plan.color}`} />
-                    {plan.name}
-                  </CardTitle>
-                  <Badge variant="outline">{plan.difficulty}</Badge>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {plan.duration}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Dumbbell className="h-4 w-4" />
-                    {plan.type}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {plan.exercises.slice(0, 3).map((exercise, i) => (
-                    <div key={i} className="flex justify-between text-sm">
-                      <span className="font-medium">{exercise.name}</span>
-                      <span className="text-gray-500">
-                        {exercise.sets} × {exercise.reps}
-                      </span>
-                    </div>
-                  ))}
-                  {plan.exercises.length > 3 && (
-                    <div className="text-sm text-gray-500 italic">+{plan.exercises.length - 3} more exercises</div>
-                  )}
-                </div>
-                <div className="mt-4 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
-                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Drag to calendar to schedule</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Weekly Calendar */}
-      <div>
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Weekly Workout Schedule</h3>
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+        
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
           {daysOfWeek.map((day) => (
             <Card
               key={day}
@@ -1080,55 +1133,114 @@ const WorkoutPlanSection = () => {
             </Card>
           ))}
         </div>
+
+        {/* Custom Exercises Section */}
+        {customExercises.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Custom Exercises</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {customExercises.map((exercise) => (
+                <Card key={exercise.id} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">{exercise.name}</CardTitle>
+                    <Badge variant="outline" className="w-fit">
+                      {exercise.difficulty}
+                    </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-sm">
+                      <p className="text-gray-600 dark:text-gray-400">{exercise.instructions}</p>
+                      {exercise.sets && (
+                        <div className="flex justify-between">
+                          <span>Sets:</span>
+                          <span className="font-medium">{exercise.sets}</span>
+                        </div>
+                      )}
+                      {exercise.reps && (
+                        <div className="flex justify-between">
+                          <span>Reps:</span>
+                          <span className="font-medium">{exercise.reps}</span>
+                        </div>
+                      )}
+                      {exercise.duration && (
+                        <div className="flex justify-between">
+                          <span>Duration:</span>
+                          <span className="font-medium">{exercise.duration}</span>
+                        </div>
+                      )}
+                      {exercise.equipment && (
+                        <div className="flex justify-between">
+                          <span>Equipment:</span>
+                          <span className="font-medium">{exercise.equipment}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Custom Exercises */}
-      {customExercises.length > 0 && (
-        <div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">Custom Exercises</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customExercises.map((exercise) => (
-              <Card key={exercise.id} className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">{exercise.name}</CardTitle>
-                  <Badge variant="outline" className="w-fit">
-                    {exercise.difficulty}
-                  </Badge>
+      {/* Right Side - Recommended Plans Sidebar */}
+      <div className="w-80 flex flex-col">
+        <div className="sticky top-0">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Recommended Plans</h3>
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+            {recommendedPlans.map((plan) => (
+              <Card
+                key={plan.id}
+                className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-move dark:bg-black"
+                draggable
+                onDragStart={(e) => handleDragStart(e, plan)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <div className={`w-3 h-3 rounded-full ${plan.color}`} />
+                      {plan.name}
+                    </CardTitle>
+                    <Badge variant="outline" className="text-xs">{plan.difficulty}</Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {plan.duration}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Dumbbell className="h-3 w-3" />
+                      {plan.type}
+                    </span>
+                  </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <p className="text-gray-600 dark:text-gray-400">{exercise.instructions}</p>
-                    {exercise.sets && (
-                      <div className="flex justify-between">
-                        <span>Sets:</span>
-                        <span className="font-medium">{exercise.sets}</span>
+                <CardContent className="pt-0">
+                  <div className="space-y-1 mb-3">
+                    {plan.exercises.slice(0, 4).map((exercise, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">{exercise.name}</span>
+                        <span className="text-gray-500 text-xs">
+                          {exercise.sets} × {exercise.reps}
+                        </span>
+                      </div>
+                    ))}
+                    {plan.exercises.length > 4 && (
+                      <div className="text-xs text-gray-500 italic text-center pt-1">
+                        +{plan.exercises.length - 4} more exercises
                       </div>
                     )}
-                    {exercise.reps && (
-                      <div className="flex justify-between">
-                        <span>Reps:</span>
-                        <span className="font-medium">{exercise.reps}</span>
-                      </div>
-                    )}
-                    {exercise.duration && (
-                      <div className="flex justify-between">
-                        <span>Duration:</span>
-                        <span className="font-medium">{exercise.duration}</span>
-                      </div>
-                    )}
-                    {exercise.equipment && (
-                      <div className="flex justify-between">
-                        <span>Equipment:</span>
-                        <span className="font-medium">{exercise.equipment}</span>
-                      </div>
-                    )}
+                  </div>
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                      Drag to calendar to schedule
+                    </p>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Add Exercise Modal */}
       {showAddExercise && (
@@ -1275,6 +1387,348 @@ const NutritionPlanSection = () => {
   )
 }
 
+const ProgramsSection = () => {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedTag, setSelectedTag] = useState("All")
+  const [sortBy, setSortBy] = useState("Recently updated")
+  const [programs, setPrograms] = useState(mockPrograms)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [programData, setProgramData] = useState<ProgramData>({
+    title: "New Program",
+    tag: "",
+    description: "",
+    difficulty: "Medium",
+    startDay: "Monday",
+    assignedColor: "#39FF14",
+    assignedClient: "",
+    isEditable: true,
+    tasks: {},
+    viewMode: "day"
+  })
+  const [viewMode, setViewMode] = useState<ViewMode>("day")
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+
+  const filteredPrograms = programs.filter((program) => {
+    const matchesSearch = program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         program.tag.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesTag = selectedTag === "All" || program.tag === selectedTag
+    return matchesSearch && matchesTag
+  })
+
+  const sortedPrograms = [...filteredPrograms].sort((a, b) => {
+    switch (sortBy) {
+      case "Alphabetically":
+        return a.title.localeCompare(b.title)
+      case "Difficulty":
+        const difficultyOrder = { Easy: 1, Medium: 2, Hard: 3 }
+        return difficultyOrder[a.difficulty as keyof typeof difficultyOrder] - difficultyOrder[b.difficulty as keyof typeof difficultyOrder]
+      default:
+        return new Date(b.created).getTime() - new Date(a.created).getTime()
+    }
+  })
+
+  const updateProgramData = (updates: Partial<ProgramData>) => {
+    setProgramData((prev) => ({ ...prev, ...updates }))
+  }
+
+  const addTask = (day: number, task: Task) => {
+    setProgramData((prev) => ({
+      ...prev,
+      tasks: {
+        ...prev.tasks,
+        [day]: [...(prev.tasks[day] || []), task],
+      },
+    }))
+  }
+
+  const removeTask = (day: number, taskId: string) => {
+    setProgramData((prev) => ({
+      ...prev,
+      tasks: {
+        ...prev.tasks,
+        [day]: (prev.tasks[day] || []).filter((task) => task.id !== taskId),
+      },
+    }))
+  }
+
+  const openAddTaskDropdown = (day: number) => {
+    setSelectedDay(day)
+    setDropdownOpen(true)
+  }
+
+  const handleSaveProgram = async () => {
+    setIsSaving(true)
+    try {
+      // Create new program from programData
+      const newProgram = {
+        id: Math.max(...programs.map((p) => p.id)) + 1,
+        title: programData.title,
+        tag: programData.tag,
+        difficulty: programData.difficulty,
+        startDay: programData.startDay,
+        color: programData.assignedColor,
+        lastEdited: "Just now",
+        description: programData.description,
+        created: new Date().toISOString().split("T")[0],
+      }
+      setPrograms([...programs, newProgram])
+      setIsCreating(false)
+      
+      // Reset program data
+      setProgramData({
+        title: "New Program",
+        tag: "",
+        description: "",
+        difficulty: "Medium",
+        startDay: "Monday",
+        assignedColor: "#39FF14",
+        assignedClient: "",
+        isEditable: true,
+        tasks: {},
+        viewMode: "day"
+      })
+    } catch (error) {
+      console.error("Error saving program:", error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDuplicate = (programId: number) => {
+    const programToDuplicate = programs.find((p) => p.id === programId)
+    if (programToDuplicate) {
+      const newProgram = {
+        ...programToDuplicate,
+        id: Math.max(...programs.map((p) => p.id)) + 1,
+        title: `${programToDuplicate.title} (Copy)`,
+        lastEdited: "Just now",
+        created: new Date().toISOString().split("T")[0],
+      }
+      setPrograms([...programs, newProgram])
+    }
+  }
+
+  const handleDelete = (programId: number) => {
+    setPrograms(programs.filter((p) => p.id !== programId))
+  }
+
+  if (isCreating) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-lg p-6 dark:bg-slate-800">
+          <HeaderBar programData={programData} updateProgramData={updateProgramData} />
+
+          <div className="mt-8">
+            <DescriptionInput
+              description={programData.description}
+              onChange={(description) => updateProgramData({ description })}
+            />
+          </div>
+
+          <div className="mt-8">
+            <ViewTabs viewMode={viewMode} setViewMode={setViewMode} />
+          </div>
+
+          <div className="mt-8">
+            <ProgramCardsContainer
+              viewMode={viewMode}
+              tasks={programData.tasks}
+              onAddTask={openAddTaskDropdown}
+              onRemoveTask={removeTask}
+              startDay={programData.startDay}
+            />
+          </div>
+
+          <div className="flex justify-end gap-4 mt-8">
+            <Button
+              variant="outline"
+              onClick={() => setIsCreating(false)}
+            >
+              Cancel
+            </Button>
+            <SaveButton onSave={handleSaveProgram} disabled={isSaving} />
+          </div>
+
+          <AddTaskDropdown
+            isOpen={dropdownOpen}
+            onClose={() => setDropdownOpen(false)}
+            onAddTask={(task) => {
+              if (selectedDay !== null) {
+                addTask(selectedDay, task)
+              }
+              setDropdownOpen(false)
+            }}
+            selectedDay={selectedDay}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header with search and filters */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-4 items-center flex-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search programs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={selectedTag} onValueChange={setSelectedTag}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {programTags.map((tag) => (
+                <SelectItem key={tag} value={tag}>
+                  {tag}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          onClick={() => setIsCreating(true)}
+          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          New Program
+        </Button>
+      </div>
+
+      {/* Programs Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {sortedPrograms.map((program) => (
+          <Card key={program.id} className="group hover:shadow-lg transition-shadow duration-200">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: program.color }}
+                    />
+                    <Badge variant="secondary" className="text-xs">
+                      {program.tag}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      style={{ 
+                        backgroundColor: difficultyColors[program.difficulty as keyof typeof difficultyColors] + '20',
+                        borderColor: difficultyColors[program.difficulty as keyof typeof difficultyColors],
+                        color: difficultyColors[program.difficulty as keyof typeof difficultyColors]
+                      }}
+                      className="text-xs"
+                    >
+                      {program.difficulty}
+                    </Badge>
+                  </div>
+                  <CardTitle className="text-lg font-semibold mb-1">{program.title}</CardTitle>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Starts {program.startDay} • {program.lastEdited}
+                  </p>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleDuplicate(program.id)}>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Duplicate
+                    </DropdownMenuItem>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Program</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{program.title}"? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(program.id)}>
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
+                {program.description}
+              </p>
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                  <Calendar className="w-3 h-3 mr-1" />
+                  Created {new Date(program.created).toLocaleDateString()}
+                </div>
+                <Button variant="outline" size="sm">
+                  View Details
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {sortedPrograms.length === 0 && (
+        <div className="text-center py-12">
+          <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+            <Search className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            {searchTerm || selectedTag !== "All" 
+              ? "No programs match your search criteria" 
+              : "No programs created yet"}
+          </p>
+          <Button
+            onClick={() => setIsCreating(true)}
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Your First Program
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Calculate age from DOB
 const getAge = (dob: string) => {
   const birthDate = new Date(dob);
@@ -1344,47 +1798,40 @@ export default function ClientDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Sidebar */}
-      <aside className="w-80 min-h-screen bg-slate-800 text-white flex flex-col p-6 rounded-l-3xl">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold tracking-widest">ALL CLIENTS</h2>
-          <Popover open={showClientFilter} onOpenChange={setShowClientFilter}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
+      {/* Main Content */}
+      <main className="flex flex-col p-8">
+        {/* Gradient Top Bar with profile icon dropdown */}
+        <div className="w-full flex items-center gap-6 px-8 h-24 rounded-xl mb-6 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-lg">
+          <Popover>
             <PopoverTrigger asChild>
-              <button className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs font-semibold" title="Filter/Sort Clients">
-                <Filter className="h-4 w-4" />
-                Filter
+              <button className="text-sm font-semibold text-white/80 hover:text-white transition-colors duration-200 flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm hover:bg-white/20">
+                ALL CLIENTS
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="p-2 w-48 bg-white text-slate-900 rounded shadow">
-              <div className="font-semibold mb-2 text-xs text-slate-700">Filter Clients</div>
-              <button onClick={() => { setActiveClientFilter('low-engagement'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-engagement' ? 'bg-blue-100 font-bold' : ''}`}>Low Engagement scores</button>
-              <button onClick={() => { setActiveClientFilter('low-outcome'); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${activeClientFilter === 'low-outcome' ? 'bg-blue-100 font-bold' : ''}`}>Low Outcome scores</button>
-              <button onClick={() => { setActiveClientFilter(null); setShowClientFilter(false); }} className={`block w-full text-left px-2 py-1 rounded hover:bg-blue-100 ${!activeClientFilter ? 'bg-blue-100 font-bold' : ''}`}>Clear Filter</button>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <div className="relative mt-2 mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
-          />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <Card className="bg-slate-700 border-0 shadow-none">
-            <CardContent className="pt-0">
-              <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <PopoverContent align="start" className="p-0 w-80 bg-white text-slate-900 rounded-lg shadow-xl border">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-semibold text-sm text-slate-700 mb-3">All Clients</h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search clients..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto p-2">
                 {filteredClients
                   .filter(c => {
                     if (activeClientFilter === 'low-engagement') {
-                      // Placeholder: implement real filter logic here
                       return c.name.toLowerCase().includes('low engagement')
                     }
                     if (activeClientFilter === 'low-outcome') {
-                      // Placeholder: implement real filter logic here
                       return c.name.toLowerCase().includes('low outcome')
                     }
                     return true;
@@ -1393,15 +1840,15 @@ export default function ClientDashboard() {
                   <button
                     key={c.client_id}
                     onClick={() => handleClientSelect(c.client_id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
                       c.client_id === selectedClientId
-                        ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500 shadow-md dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-300"
-                        : "hover:bg-slate-600"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : "hover:bg-gray-50"
                     }`}
                   >
-                    <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
+                    <Avatar className="h-8 w-8">
                       <AvatarImage src={c.avatarUrl || "/placeholder.svg"} alt={c.name} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold text-xs">
                         {c.name
                           .split(" ")
                           .map((n) => n[0])
@@ -1409,8 +1856,8 @@ export default function ClientDashboard() {
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 text-left">
-                      <div className="font-semibold truncate">{c.name}</div>
-                      {c.email && <div className="text-xs text-slate-300 truncate">{c.email}</div>}
+                      <div className="font-medium truncate text-sm">{c.name}</div>
+                      {c.email && <div className="text-xs text-gray-500 truncate">{c.email}</div>}
                     </div>
                     <div
                       className={`w-2 h-2 rounded-full ${c.status === "active" ? "bg-green-500" : "bg-yellow-500"}`}
@@ -1418,17 +1865,8 @@ export default function ClientDashboard() {
                   </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </div>
-        <button onClick={handleSmartAlertsClick} className="mt-4 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">
-          Smart Alerts
-        </button>
-      </aside>
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col p-8">
-        {/* Gradient Top Bar with profile icon dropdown */}
-        <div className="w-full flex items-center gap-6 px-8 h-24 rounded-xl mb-6 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-lg">
+            </PopoverContent>
+          </Popover>
           <span className="text-2xl font-bold text-white flex-1">{client.name}</span>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1 text-white/80 text-base">
@@ -1531,7 +1969,7 @@ export default function ClientDashboard() {
             <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
               <CardHeader className="pb-0">
                 <Tabs defaultValue="metrics" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid grid-cols-3 mb-4">
+                  <TabsList className="grid grid-cols-4 mb-4">
                     <TabsTrigger value="metrics" className="flex items-center gap-2">
                       <LineChart className="h-4 w-4" />
                       <span>Metrics</span>
@@ -1544,6 +1982,10 @@ export default function ClientDashboard() {
                       <Utensils className="h-4 w-4" />
                       <span>Nutrition Plan</span>
                     </TabsTrigger>
+                    <TabsTrigger value="programs" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Programs</span>
+                    </TabsTrigger>
                   </TabsList>
                   <TabsContent value="metrics">
                     <MetricsSection />
@@ -1553,6 +1995,9 @@ export default function ClientDashboard() {
                   </TabsContent>
                   <TabsContent value="nutrition">
                     <NutritionPlanSection />
+                  </TabsContent>
+                  <TabsContent value="programs">
+                    <ProgramsSection />
                   </TabsContent>
                 </Tabs>
               </CardHeader>

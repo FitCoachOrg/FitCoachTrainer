@@ -13,16 +13,11 @@ export function useAuth() {
 
         if (session?.user) {
           console.log('User metadata:', session.user.user_metadata); // Debug log
-          // Get trainer ID from user metadata
-          const trainerId = session.user.user_metadata.trainer_id;
-          console.log('Found trainer ID:', trainerId); // Debug log
-
-          if (!trainerId) {
-            console.error('No trainer ID found in user metadata');
-            setTrainerId(null);
-          } else {
-            setTrainerId(trainerId);
-          }
+          
+          // Use the user ID as trainer ID
+          const trainerId = session.user.id;
+          console.log('Using user ID as trainer ID:', trainerId); // Debug log
+          setTrainerId(trainerId);
         } else {
           console.log('No active session found'); // Debug log
           setTrainerId(null);
@@ -43,15 +38,11 @@ export function useAuth() {
       
       if (session?.user) {
         console.log('User metadata on change:', session.user.user_metadata); // Debug log
-        const trainerId = session.user.user_metadata.trainer_id;
-        console.log('Found trainer ID on change:', trainerId); // Debug log
-
-        if (!trainerId) {
-          console.error('No trainer ID found in user metadata');
-          setTrainerId(null);
-        } else {
-          setTrainerId(trainerId);
-        }
+        
+        // Use the user ID as trainer ID
+        const trainerId = session.user.id;
+        console.log('Using user ID as trainer ID on change:', trainerId); // Debug log
+        setTrainerId(trainerId);
       } else {
         console.log('No active session on change'); // Debug log
         setTrainerId(null);
