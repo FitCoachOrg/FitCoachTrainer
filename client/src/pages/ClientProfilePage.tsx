@@ -102,6 +102,9 @@ import { useToast } from "@/hooks/use-toast"
 import { ClientDataPopup } from "@/components/ClientDataPopup"
 import { AIResponsePopup } from "@/components/AIResponsePopup"
 import { AIMetricsPopup } from "@/components/AIMetricsPopup"
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 interface EditableSectionProps {
@@ -1914,6 +1917,7 @@ const WorkoutPlanSection = () => {
 
   return (
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     <div className="space-y-8">
       {/* Recommended Plans */}
       <div>
@@ -2153,10 +2157,184 @@ const WorkoutPlanSection = () => {
             </Button>
           </div>
         </div>
+=======
+    <div className="grid grid-cols-2 gap-6 h-full">
+      {/* Left Column - Recommended Plans */}
+      <div className="flex flex-col">
+        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recommended Plans</h3>
+            <Button
+              onClick={handleGenerateAIPlans}
+              disabled={isGeneratingAI}
+              size="sm"
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+            >
+              {isGeneratingAI ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                  Generating AI Plan...
+                </>
+              ) : (
+                <>
+                  <div className="mr-1">🤖</div>
+                  Generate AI Plan
+                </>
+              )}
+            </Button>
+          </div>
+
+        </div>
+        <div className="space-y-4 overflow-y-auto pr-2">
+
+          {/* AI Generated Plans */}
+          {aiGeneratedPlans.map((plan) => (
+            <Card
+              key={plan.id}
+              className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 backdrop-blur-sm border-2 border-purple-200 dark:border-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              onMouseDown={(e) => handleMouseDown(e, plan)}
+              onMouseUp={(e) => handleMouseUp(e, plan)}
+              onClick={(e) => handlePlanClick(e, plan)}
+              draggable
+              onDragStart={(e) => handleDragStart(e, plan)}
+              onDragEnd={handleDragEnd}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
+                    {plan.name}
+                    <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1">
+                      🤖 AI
+                    </Badge>
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-600">
+                    {plan.difficulty}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {plan.duration} min
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Dumbbell className="h-3 w-3" />
+                    {plan.type}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-1 mb-3">
+                  {plan.exercises.slice(0, 4).map((exercise, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{exercise.workout}</span>
+                      <span className="text-gray-500 text-xs">
+                        {exercise.sets} × {exercise.reps}
+                      </span>
+                    </div>
+                  ))}
+                  {plan.exercises.length > 4 && (
+                    <div className="text-xs text-gray-500 italic text-center pt-1">
+                      +{plan.exercises.length - 4} more exercises
+                    </div>
+                  )}
+                </div>
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center relative">
+                  <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                    AI Generated • Click to edit • Drag to schedule
+                  </p>
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Edit className="h-3 w-3 text-purple-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          
+          {/* Default Recommended Plans */}
+          {recommendedPlans.map((plan) => (
+            <Card
+              key={plan.id}
+              className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group dark:bg-black"
+              onMouseDown={(e) => handleMouseDown(e, plan)}
+              onMouseUp={(e) => handleMouseUp(e, plan)}
+              onClick={(e) => handlePlanClick(e, plan)}
+              draggable
+              onDragStart={(e) => handleDragStart(e, plan)}
+              onDragEnd={handleDragEnd}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <div className={`w-3 h-3 rounded-full ${plan.color}`} />
+                    {plan.name}
+                  </CardTitle>
+                  <Badge variant="outline" className="text-xs">{plan.difficulty}</Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {plan.duration} min
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Dumbbell className="h-3 w-3" />
+                    {plan.type}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-1 mb-3">
+                  {plan.exercises.slice(0, 4).map((exercise, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{exercise.workout}</span>
+                      <span className="text-gray-500 text-xs">
+                        {exercise.sets} × {exercise.reps}
+                      </span>
+                    </div>
+                  ))}
+                  {plan.exercises.length > 4 && (
+                    <div className="text-xs text-gray-500 italic text-center pt-1">
+                      +{plan.exercises.length - 4} more exercises
+                    </div>
+                  )}
+                </div>
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center relative">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                    Click to edit • Drag to schedule
+                  </p>
+                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Edit className="h-3 w-3 text-blue-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Right Column - Weekly Calendar & Custom Exercises */}
+      <div className="flex flex-col">
+        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Weekly Schedule</h3>
+            <Button
+              onClick={() => setShowAddExercise(true)}
+              size="sm"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Exercise
+            </Button>
+          </div>
+        </div>
+>>>>>>> Stashed changes
         
         {/* Weekly Calendar - Compact 2-column layout */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {daysOfWeek.map((day, index) => (
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
             <Card
               key={day}
@@ -2210,6 +2388,7 @@ const WorkoutPlanSection = () => {
 <<<<<<< Updated upstream
       </div>
 
+<<<<<<< Updated upstream
       {/* Custom Exercises */}
       {customExercises.length > 0 && (
         <div>
@@ -2260,6 +2439,8 @@ const WorkoutPlanSection = () => {
 
 =======
 
+=======
+>>>>>>> Stashed changes
         {/* Custom Exercises Section - Compact */}
         {customExercises.length > 0 && (
           <div className="mt-4">
@@ -2292,6 +2473,9 @@ const WorkoutPlanSection = () => {
         )}
       </div>
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       {/* Add Exercise Modal */}
       {showAddExercise && (
@@ -2676,6 +2860,447 @@ const NutritionPlanSection = () => {
       { name: "Sweet potato", calories: 180, protein: 4, carbs: 41, fats: 0 },
       { name: "Steamed broccoli", calories: 55, protein: 6, carbs: 11, fats: 1 },
     ],
+<<<<<<< Updated upstream
+=======
+  })
+  const [newItem, setNewItem] = useState({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
+
+  interface WeeklyTarget {
+    name: string
+    current: number
+    target: number
+    unit: string
+    icon: React.ReactNode
+    color: string
+  }
+
+  interface DayTotal {
+    day: string
+    date: string
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+    completed: boolean
+  }
+
+  interface MealItem {
+    name: string
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+  }
+
+  const weeklyTargets: WeeklyTarget[] = [
+    {
+      name: "Calories",
+      current: 9850,
+      target: 14000,
+      unit: "kcal",
+      icon: <Target className="w-5 h-5" />,
+      color: "from-green-400 to-emerald-500",
+    },
+    {
+      name: "Protein",
+      current: 420,
+      target: 840,
+      unit: "g",
+      icon: <Dumbbell className="w-5 h-5" />,
+      color: "from-green-400 to-emerald-500",
+    },
+    {
+      name: "Carbs",
+      current: 680,
+      target: 1260,
+      unit: "g",
+      icon: <Utensils className="w-5 h-5" />,
+      color: "from-green-400 to-emerald-500",
+    },
+    {
+      name: "Fats",
+      current: 245,
+      target: 490,
+      unit: "g",
+      icon: <Heart className="w-5 h-5" />,
+      color: "from-green-400 to-emerald-500",
+    },
+    {
+      name: "Vitamins",
+      current: 65,
+      target: 100,
+      unit: "%",
+      icon: <Activity className="w-5 h-5" />,
+      color: "from-green-400 to-emerald-500",
+    },
+  ]
+
+  const dailyTotals: DayTotal[] = [
+    { day: "Monday", date: "", calories: 1950, protein: 85, carbs: 180, fats: 65, completed: true },
+    { day: "Tuesday", date: "", calories: 2100, protein: 92, carbs: 195, fats: 70, completed: true },
+    { day: "Wednesday", date: "", calories: 1850, protein: 78, carbs: 165, fats: 58, completed: true },
+    { day: "Thursday", date: "", calories: 2050, protein: 88, carbs: 185, fats: 68, completed: true },
+    { day: "Friday", date: "", calories: 1900, protein: 82, carbs: 175, fats: 62, completed: true },
+    { day: "Saturday", date: "", calories: 0, protein: 0, carbs: 0, fats: 0, completed: false },
+    { day: "Sunday", date: "", calories: 0, protein: 0, carbs: 0, fats: 0, completed: false },
+  ]
+
+  const completedDays = dailyTotals.filter((day) => day.completed).length
+  const weekProgress = (completedDays / 7) * 100
+
+  const updateMealItem = (mealType: string, index: number, field: string, value: number | string) => {
+    setMealItems((prev) => ({
+      ...prev,
+      [mealType]: prev[mealType as keyof typeof prev].map((item, i) =>
+        i === index ? { ...item, [field]: value } : item,
+      ),
+    }))
+  }
+
+  const deleteMealItem = (mealType: string, index: number) => {
+    setMealItems((prev) => ({
+      ...prev,
+      [mealType]: prev[mealType as keyof typeof prev].filter((_, i) => i !== index),
+    }))
+  }
+
+  const addMealItem = (mealType: string) => {
+    if (newItem.name.trim()) {
+      setMealItems((prev) => ({
+        ...prev,
+        [mealType]: [...prev[mealType as keyof typeof prev], { ...newItem }],
+      }))
+      setNewItem({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
+      setNewItemDialog(null)
+    }
+  }
+
+  const MacroChart = ({ protein, carbs, fats }: { protein: number; carbs: number; fats: number }) => {
+    const total = protein + carbs + fats
+    if (total === 0) return null
+
+    const proteinPercent = (protein / total) * 100
+    const carbsPercent = (carbs / total) * 100
+    const fatsPercent = (fats / total) * 100
+
+    return (
+      <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-200 dark:bg-gray-800">
+        <div className="bg-green-400" style={{ width: `${proteinPercent}%` }} title={`Protein: ${protein}g`} />
+        <div className="bg-blue-400" style={{ width: `${carbsPercent}%` }} title={`Carbs: ${carbs}g`} />
+        <div className="bg-yellow-400" style={{ width: `${fatsPercent}%` }} title={`Fats: ${fats}g`} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Calendar className="w-8 h-8 text-emerald-600" />
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Weekly Nutrition Plan
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Week of December 18-24, 2023</p>
+          </div>
+        </div>
+        <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg">
+          <TrendingUp className="w-4 h-4 mr-2" />
+          Generate Plan
+        </Button>
+      </div>
+
+      {/* Weekly Targets */}
+      <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="text-xl text-emerald-600">Weekly Targets</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{completedDays}/7 days completed</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+            {weeklyTargets.map((target) => (
+              <div key={target.name} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
+                    {target.icon}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{target.name}</span>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{target.current.toLocaleString()}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    / {target.target.toLocaleString()}
+                    {target.unit}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min((target.current / target.target) * 100, 100)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-emerald-600 font-medium">
+                  {Math.round((target.current / target.target) * 100)}%
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Week Progress</span>
+              <span className="text-sm text-emerald-600 font-medium">{Math.round(weekProgress)}% Complete</span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+              <div 
+                className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${weekProgress}%` }}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left Column - Daily Totals */}
+        <div className="lg:col-span-1 space-y-3">
+          <h3 className="text-lg font-semibold text-emerald-600 mb-4">Daily Totals</h3>
+          {dailyTotals.map((day, index) => (
+            <Card
+              key={day.day}
+              className={`bg-white/80 backdrop-blur-sm border shadow-lg cursor-pointer transition-all duration-200 dark:bg-black ${
+                selectedDay === day.day.toLowerCase() ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              }`}
+              onClick={() => setSelectedDay(day.day.toLowerCase())}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-medium text-gray-900 dark:text-white text-sm">{day.day}</div>
+                  <div className={`w-3 h-3 rounded-full ${day.completed ? "bg-emerald-400" : "bg-gray-400"}`} />
+                </div>
+                {day.completed ? (
+                  <div className="space-y-3">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-emerald-600">{day.calories}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">calories</div>
+                    </div>
+                    <MacroChart protein={day.protein} carbs={day.carbs} fats={day.fats} />
+                    <div className="grid grid-cols-3 gap-1 text-xs">
+                      <div className="text-center">
+                        <div className="text-green-500 font-medium">{day.protein}g</div>
+                        <div className="text-gray-500 dark:text-gray-400">Protein</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-blue-500 font-medium">{day.carbs}g</div>
+                        <div className="text-gray-500 dark:text-gray-400">Carbs</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-yellow-500 font-medium">{day.fats}g</div>
+                        <div className="text-gray-500 dark:text-gray-400">Fats</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">Not planned yet</div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Right Column - Meal Columns */}
+        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Breakfast */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-lg">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <span className="text-gray-900 dark:text-white">Breakfast</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mealItems.breakfast.map((item, index) => (
+                <div
+                  key={index}
+                  className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-400 transition-all duration-200 group"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    {editingItem === `breakfast-${index}` ? (
+                      <Input
+                        value={item.name}
+                        onChange={(e) => updateMealItem("breakfast", index, "name", e.target.value)}
+                        className="text-sm font-medium h-6 p-1"
+                        onBlur={() => setEditingItem(null)}
+                        onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
+                        autoFocus
+                      />
+                    ) : (
+                      <div
+                        className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1"
+                        onClick={() => setEditingItem(`breakfast-${index}`)}
+                      >
+                        {item.name}
+                      </div>
+                    )}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-600"
+                        onClick={() => setEditingItem(`breakfast-${index}`)}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                        onClick={() => deleteMealItem("breakfast", index)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="cursor-pointer hover:text-emerald-600">
+                        {item.calories} cal
+                      </span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="cursor-pointer hover:text-green-500">
+                        P: {item.protein}g
+                      </span>
+                      <span className="cursor-pointer hover:text-blue-500">
+                        C: {item.carbs}g
+                      </span>
+                      <span className="cursor-pointer hover:text-yellow-500">
+                        F: {item.fats}g
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-600"
+                onClick={() => setNewItemDialog("breakfast")}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Item
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Similar structure for Lunch, Snack, and Dinner - abbreviated for brevity */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-lg">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <span className="text-gray-900 dark:text-white">Lunch</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mealItems.lunch.map((item, index) => (
+                <div key={index} className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">{item.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div>{item.calories} cal</div>
+                    <div className="flex gap-3">
+                      <span>P: {item.protein}g</span>
+                      <span>C: {item.carbs}g</span>
+                      <span>F: {item.fats}g</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-lg">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <span className="text-gray-900 dark:text-white">Snack</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mealItems.snack.map((item, index) => (
+                <div key={index} className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">{item.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div>{item.calories} cal</div>
+                    <div className="flex gap-3">
+                      <span>P: {item.protein}g</span>
+                      <span>C: {item.carbs}g</span>
+                      <span>F: {item.fats}g</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-3 text-lg">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <span className="text-gray-900 dark:text-white">Dinner</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mealItems.dinner.map((item, index) => (
+                <div key={index} className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white mb-2">{item.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    <div>{item.calories} cal</div>
+                    <div className="flex gap-3">
+                      <span>P: {item.protein}g</span>
+                      <span>C: {item.carbs}g</span>
+                      <span>F: {item.fats}g</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ProgramsSection = () => {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedTag, setSelectedTag] = useState("All")
+  const [sortBy, setSortBy] = useState("Recently updated")
+  const [programs, setPrograms] = useState(mockPrograms)
+  const [isCreating, setIsCreating] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [programData, setProgramData] = useState<ProgramData>({
+    title: "New Program",
+    tag: "",
+    description: "",
+    difficulty: "Medium",
+    startDay: "Monday",
+    assignedColor: "#39FF14",
+    assignedClient: "",
+    isEditable: true,
+    tasks: {},
+    viewMode: "day"
+>>>>>>> Stashed changes
   })
   const [newItem, setNewItem] = useState({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
 
