@@ -16,31 +16,12 @@ const STATUS_FILTERS = [
   { label: "Outcome Score", value: "outcome_low" }
 ];
 
-// Helper function to calculate days since last activity
-const getDaysSinceActivity = (lastActivity: string) => {
-  const today = new Date();
-  const activityDate = new Date(lastActivity);
-  const diffTime = Math.abs(today.getTime() - activityDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
-
-// Helper function to get activity status color
-const getActivityStatusColor = (days: number) => {
-  if (days <= 3) return "text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/30";
-  if (days <= 5) return "text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-900/30";
-  return "text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30";
-};
-
-// Progress bar component
-const ProgressBar: React.FC<{ value: number; className?: string }> = ({ value, className = "" }) => (
-  <div className={`w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 ${className}`}>
-    <div
-      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300"
-      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
-    />
-  </div>
-);
+const ACTIVITY_TYPES = [
+  "hydration",
+  "Sleep Duration",
+  "Sleep Quality",
+  "Energy Level"
+];
 
 const Clients: React.FC = () => {
   const [clients, setClients] = useState<{ client_id: number; cl_name: string }[]>([]);
@@ -60,6 +41,12 @@ const Clients: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const [activityBreakdown, setActivityBreakdown] = useState<{
+    [clientId: number]: {
+      [activityType: string]: number | null;
+    };
+  }>({});
+  
   let clientIds: number[] = [];
   useEffect(() => {
     const fetchClients = async () => {
@@ -86,51 +73,85 @@ const Clients: React.FC = () => {
           .select("id")
           .eq("trainer_email", authUserEmail)
           .limit(1);
-        console.log("[DEBUG] Trainer row:", trainerRows, trainerError);
+
         if (trainerError) throw trainerError;
         if (!trainerRows || trainerRows.length === 0) {
           setClients([]);
           setLoading(false);
-          console.log("[DEBUG] No trainer found for this email.");
+          
           return;
         }
         const trainerId = trainerRows[0].id;
-        console.log("[DEBUG] Trainer Table ID:", trainerId);
+
         // Get client ids
         const { data: relationshipData, error: relationshipError } = await supabase
           .from("trainer_client_web")
           .select("client_id")
           .eq("trainer_id", trainerId);
           
-        console.log("[DEBUG] Relationship data:", relationshipData, relationshipError);
+        
         if (relationshipError) throw relationshipError;
         if (!relationshipData || relationshipData.length === 0) {
           setClients([]);
           setLoading(false);
-          console.log("[DEBUG] No client relationships found for trainer.");
           return;
         }
         clientIds = relationshipData.map((rel) => rel.client_id);
-        console.log("[DEBUG] Client IDs:", clientIds);
         // Get client names
         const { data: clientData, error: clientError } = await supabase
           .from("client")
           .select("client_id, cl_name,last_checkIn,last_active")
           .in("client_id", clientIds);
-        console.log("[DEBUG] Client data:", clientData, clientError);
         if (clientError) throw clientError;
         setClients(clientData || []);
         // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
-        console.log("[DEBUG] clientIds used for activity/meal queries:", clientIds);
         const { data: allActivity, error: allActivityError } = await supabase
           .from("activity_info")
-          .select("client_id, last_weight_time, last_excercise_input, last_sleep_info");
-        console.log("[DEBUG] All rows in activity_info:", allActivity, allActivityError);
+          .select("client_id,activity,created_at");
         const { data: allMeals, error: allMealsError } = await supabase
           .from("meal_info")
           .select("client_id,calories,protein,carbs,fat,meal_type");
-        console.log("[DEBUG] All rows in meal_info:", allMeals, allMealsError);
         // --- END DEBUG ---
+        // --- Fetch and process activity info for the 4 types ---
+        const { data: activityRows, error: activityRowsError } = await supabase
+          .from("activity_info")
+          .select("client_id,activity,created_at")
+          .in("client_id", clientIds)
+          .in("activity", ACTIVITY_TYPES);
+        if (activityRowsError) {
+          console.error("[DEBUG] Error fetching filtered activity_info:", activityRowsError);
+        }
+        // Process: for each client, for each activity type, get the latest created_at
+        const summary: { [clientId: number]: { [activityType: string]: { created_at: string | null } } } = {};
+        if (activityRows) {
+          for (const row of activityRows) {
+            const cid = row.client_id;
+            const atype = row.activity;
+            const created = row.created_at;
+            if (!summary[cid]) summary[cid] = {};
+            if (!summary[cid][atype] || (created && summary[cid][atype].created_at && new Date(created) > new Date(summary[cid][atype].created_at!))) {
+              summary[cid][atype] = { created_at: created };
+            }
+          }
+        }
+        // Convert summary to days-since breakdown
+        const now = new Date();
+        const breakdown: { [clientId: number]: { [activityType: string]: number | null } } = {};
+        for (const cid in summary) {
+          breakdown[cid] = {};
+          for (const atype of ACTIVITY_TYPES) {
+            const createdAt = summary[cid][atype]?.created_at;
+            if (createdAt) {
+              const last = new Date(createdAt);
+              const diffTime = Math.abs(now.getTime() - last.getTime());
+              breakdown[cid][atype] = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            } else {
+              breakdown[cid][atype] = null;
+            }
+          }
+        }
+        setActivityBreakdown(breakdown);
+        // --- END activity summary ---
       } catch (err: any) {
         setError(err.message || "Unknown error");
         console.error("[DEBUG] Error in fetchClients:", err);
@@ -145,7 +166,6 @@ const Clients: React.FC = () => {
       if (activityError) {
         console.error("[DEBUG] Error fetching activity info:", activityError);
       }
-      console.log("[DEBUG] Activity info fetched:", activityInfo);
       const { data: mealInfo, error: mealError } = await supabase
         .from("meal_info")
         .select("client_id,calories,protein,carbs,fat,meal_type")
@@ -153,7 +173,6 @@ const Clients: React.FC = () => {
       if (mealError) {
         console.error("[DEBUG] Error fetching meal info:", mealError);
       }
-      console.log("[DEBUG] Meal info fetched:", mealInfo);
     };
 
     fetchClients();
@@ -192,44 +211,38 @@ const Clients: React.FC = () => {
     navigate(`?${params.toString()}`, { replace: true });
   }, [statusFilter, engagementFilter, navigate]);
 
+  // Helper function to calculate days since last check-in
+  const getDaysSinceLastCheckIn = (lastCheckIn: string | null | undefined) => {
+    if (!lastCheckIn) return null;
+    const now = new Date();
+    const last = new Date(lastCheckIn);
+    const diffTime = Math.abs(now.getTime() - last.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   // Enhanced filtering logic that works with the existing data structure
   const filteredClients = clients.filter((client) => {
     // Search filter - use cl_name since that's what we have from Supabase
     const matchesSearch = client.cl_name.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Mock data for demonstration - you can replace with actual client data
-    const mockEngagementScore = Math.floor(Math.random() * 100) + 1;
-    const mockOutcomeScore = Math.floor(Math.random() * 100) + 1;
-    const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString();
-    const daysSinceActivity = getDaysSinceActivity(mockLastActivity);
+    // Use actual last_checkIn for activity calculation
+    const daysSinceActivity = getDaysSinceLastCheckIn((client as any).last_checkIn || (client as any).lastCheckIn || (client as any).last_checkin);
 
     // Status filter
     const matchesStatus = 
       statusFilter === "all" ||
-      (statusFilter === "inactive" && daysSinceActivity > 7) ||
-      (statusFilter === "low" && mockEngagementScore < 40) ||
-      (statusFilter === "low" && mockOutcomeScore < 40);
+      (statusFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
-    // Engagement score filter
-    const matchesEngagement = 
-      engagementFilter === "all" ||
-      (engagementFilter === "high" && mockEngagementScore >= 80) ||
-      (engagementFilter === "medium" && mockEngagementScore >= 40 && mockEngagementScore < 80) ||
-      (engagementFilter === "low" && mockEngagementScore < 40);
-
-    // Outcome score filter
-    const matchesOutcome = 
-      outcomeFilter === "all" ||
-      (outcomeFilter === "high" && mockOutcomeScore >= 80) ||
-      (outcomeFilter === "medium" && mockOutcomeScore >= 40 && mockOutcomeScore < 80) ||
-      (outcomeFilter === "low" && mockOutcomeScore < 40);
-
+    // Engagement score filter (mocked for now)
+    const matchesEngagement = true;
+    // Outcome score filter (mocked for now)
+    const matchesOutcome = true;
     // Activity filter
     const matchesActivity = 
       activityFilter === "all" ||
-      (activityFilter === "recent" && daysSinceActivity <= 3) ||
-      (activityFilter === "moderate" && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
-      (activityFilter === "inactive" && daysSinceActivity > 7);
+      (activityFilter === "recent" && daysSinceActivity !== null && daysSinceActivity <= 3) ||
+      (activityFilter === "moderate" && daysSinceActivity !== null && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
+      (activityFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
     return matchesSearch && matchesStatus && matchesEngagement && matchesOutcome && matchesActivity;
   });
@@ -258,6 +271,36 @@ const Clients: React.FC = () => {
         : "The client has been successfully added.",
     });
     window.location.reload();
+  };
+
+  // Helper to get color class for activity status
+  function getActivityStatusColor(days: number) {
+    if (days <= 3) return 'bg-green-500';
+    if (days <= 5) return 'bg-yellow-500';
+    return 'bg-red-500';
+  }
+
+  // Add state for invite method and input
+  const [inviteMethod, setInviteMethod] = useState<'email' | 'sms' | null>(null);
+  const [inviteValue, setInviteValue] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Placeholder: Replace with your backend/email service
+  const handleSendInvite = async () => {
+    setInviteLoading(true);
+    setInviteError(null);
+    try {
+      // Replace this with your actual email/SMS sending logic
+      // For now, just simulate a delay
+      await new Promise((res) => setTimeout(res, 1200));
+      setInviteSent(true);
+    } catch (err: any) {
+      setInviteError('Failed to send invite.');
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   if (loading) {
@@ -413,6 +456,12 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Name
                     </th>
+                    {/* Dynamically add a column for each activity type */}
+                    {ACTIVITY_TYPES.map((type) => (
+                      <th key={type} className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </th>
+                    ))}
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
                       Last Activity
                     </th>
@@ -430,17 +479,13 @@ const Clients: React.FC = () => {
                 <tbody>
                   {filteredClients.length > 0 ? (
                     filteredClients.map((client, index) => {
-                      // Mock data for demonstration
-                      const mockEngagementScore = Math.floor(Math.random() * 100) + 1;
-                      const mockOutcomeScore = Math.floor(Math.random() * 100) + 1;
-                      const mockLastActivity = new Date(Date.now() - Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000).toISOString();
-                      const daysSinceActivity = getDaysSinceActivity(mockLastActivity);
-                      const activityColorClass = getActivityStatusColor(daysSinceActivity);
-
+                      const daysSinceActivity = getDaysSinceLastCheckIn((client as any).last_checkIn || (client as any).lastCheckIn || (client as any).last_checkin);
+                      const activityColorClass = getActivityStatusColor(daysSinceActivity ?? 999);
+                      const breakdown = activityBreakdown[client.client_id] || {};
                       return (
                         <tr
                           key={client.client_id}
-                          className={`${
+                          className={`$${
                             index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
                           } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
                           onClick={() => navigate(`/client/${client.client_id}`)}
@@ -464,38 +509,58 @@ const Clients: React.FC = () => {
                               {client.cl_name}
                             </span>
                           </td>
+                          {/* Render a cell for each activity type */}
+                          {ACTIVITY_TYPES.map((type) => (
+                            <td key={type} className="px-6 py-5">
+                              <span className="font-medium flex items-center gap-2">
+                                {/* Color dot logic: green (≤1), yellow (≤5), red (>5), gray for N/A */}
+                                {breakdown[type] !== undefined && breakdown[type] !== null ? (
+                                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${
+                                    breakdown[type] <= 1 ? 'bg-green-500' :
+                                    breakdown[type] <= 5 ? 'bg-yellow-500' :
+                                    'bg-red-500'
+                                  }`}></span>
+                                ) : (
+                                  <span className="w-2.5 h-2.5 rounded-full inline-block bg-gray-300"></span>
+                                )}
+                                {breakdown[type] !== undefined && breakdown[type] !== null ? `${breakdown[type]}d ago` : 'N/A'}
+                              </span>
+                            </td>
+                          ))}
+                          {/* Last Activity column: show days since lastCheckIn from client */}
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full ${
-                                daysSinceActivity <= 3 ? 'bg-green-500 animate-pulse' : 
-                                daysSinceActivity <= 5 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}></div>
+                              <div className={`w-2.5 h-2.5 rounded-full ${activityColorClass}`}></div>
                               <span className={`font-medium ${
-                                daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
-                                daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
+                                daysSinceActivity !== null && daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
+                                daysSinceActivity !== null && daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
                               }`}>
-                                {daysSinceActivity}d ago
+                                {daysSinceActivity !== null ? `${daysSinceActivity}d ago` : 'N/A'}
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-5">
                             <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
-                              {daysSinceActivity <= 3 ? 'Active' : daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
+                              {daysSinceActivity !== null && daysSinceActivity <= 3 ? 'Active' : daysSinceActivity !== null && daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
                             </span>
                           </td>
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
-                              <ProgressBar value={mockEngagementScore} className="flex-1" />
+                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
+                              </div>
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                {mockEngagementScore}%
+                                100%
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
-                              <ProgressBar value={mockOutcomeScore} className="flex-1" />
+                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
+                              </div>
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                {mockOutcomeScore}%
+                                100%
                               </span>
                             </div>
                           </td>
@@ -538,17 +603,55 @@ const Clients: React.FC = () => {
             <Dialog open={isFormModalOpen} onOpenChange={setIsFormModalOpen}>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>{selectedClient ? "Edit Client" : "Add New Client"}</DialogTitle>
+                  <DialogTitle>Add New Client</DialogTitle>
                 </DialogHeader>
                 <div className="p-4">
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Client form functionality is not yet implemented. This would integrate with your Supabase client table.
-                  </p>
-                  <div className="mt-4 flex justify-end">
-                    <Button onClick={() => setIsFormModalOpen(false)}>
-                      Close
-                    </Button>
-                  </div>
+                  {/* Invite method selection */}
+                  {!inviteMethod && !inviteSent && (
+                    <div className="flex flex-col gap-4 items-center">
+                      <Button onClick={() => setInviteMethod('email')} className="w-full max-w-xs">Invite via Email</Button>
+                      <Button onClick={() => setInviteMethod('sms')} className="w-full max-w-xs" variant="outline">Invite via SMS</Button>
+                    </div>
+                  )}
+                  {/* Email invite */}
+                  {inviteMethod === 'email' && !inviteSent && (
+                    <form onSubmit={e => { e.preventDefault(); handleSendInvite(); }} className="flex flex-col gap-4 items-center mt-4">
+                      <input
+                        type="email"
+                        required
+                        placeholder="Client's Email"
+                        value={inviteValue}
+                        onChange={e => setInviteValue(e.target.value)}
+                        className="border rounded px-4 py-2 w-full max-w-xs"
+                      />
+                      <Button type="submit" className="w-full max-w-xs" disabled={inviteLoading}>{inviteLoading ? 'Sending...' : 'Send Invite'}</Button>
+                      <Button type="button" variant="ghost" onClick={() => { setInviteMethod(null); setInviteValue(''); }}>Back</Button>
+                      {inviteError && <div className="text-red-500 text-sm">{inviteError}</div>}
+                    </form>
+                  )}
+                  {/* SMS invite */}
+                  {inviteMethod === 'sms' && !inviteSent && (
+                    <form onSubmit={e => { e.preventDefault(); handleSendInvite(); }} className="flex flex-col gap-4 items-center mt-4">
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Client's Phone Number"
+                        value={inviteValue}
+                        onChange={e => setInviteValue(e.target.value)}
+                        className="border rounded px-4 py-2 w-full max-w-xs"
+                      />
+                      <Button type="submit" className="w-full max-w-xs" disabled={inviteLoading}>{inviteLoading ? 'Sending...' : 'Send Invite'}</Button>
+                      <Button type="button" variant="ghost" onClick={() => { setInviteMethod(null); setInviteValue(''); }}>Back</Button>
+                      {inviteError && <div className="text-red-500 text-sm">{inviteError}</div>}
+                    </form>
+                  )}
+                  {/* Success message */}
+                  {inviteSent && (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="text-green-600 font-semibold text-lg">Invite sent successfully!</div>
+                      <Button onClick={() => { setIsFormModalOpen(false); setInviteMethod(null); setInviteValue(''); setInviteSent(false); }}>Close</Button>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
