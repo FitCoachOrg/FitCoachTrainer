@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Menu, X, User, LogIn } from 'lucide-react';
 
@@ -78,6 +78,22 @@ function Navbar() {
                   </Link>
                 </motion.div>
               ))}
+              {/* Trainer Profile Link */}
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 + navItems.length * 0.1, duration: 0.6 }}
+              >
+                <NavLink
+                  to="/trainer-profile"
+                  className={({ isActive }) => 
+                    `text-white hover:text-green-400 px-3 py-2 text-sm font-medium transition-colors duration-200 relative group ${isActive ? 'text-blue-600 font-bold' : ''}`
+                  }
+                >
+                  Profile
+                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-green-500 group-hover:w-full transition-all duration-300"></span>
+                </NavLink>
+              </motion.div>
             </div>
           </motion.div>
 
@@ -133,6 +149,14 @@ function Navbar() {
                 {item.name}
               </Link>
             ))}
+            {/* Trainer Profile Link for Mobile */}
+            <Link
+              to="/trainer-profile"
+              className="text-white hover:text-green-400 hover:bg-white/10 block px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md"
+              onClick={() => setIsOpen(false)}
+            >
+              Profile
+            </Link>
             <div className="border-t border-white/20 pt-4 space-y-2">
               <Link
                 to="/login"
