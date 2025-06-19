@@ -47,7 +47,7 @@ import {
   Bar,
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -76,6 +76,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ViewMode, Difficulty, StartDay, TaskType, Task, ProgramData } from "@/types/program"
+import { supabase } from "@/lib/supabase"
 
 interface EditableSectionProps {
   title: string
@@ -1731,6 +1732,7 @@ const ProgramsSection = () => {
 
 // Calculate age from DOB
 const getAge = (dob: string) => {
+  if (!dob) return "N/A"
   const birthDate = new Date(dob);
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
@@ -1742,17 +1744,62 @@ const getAge = (dob: string) => {
 };
 
 export default function ClientDashboard() {
-  const [client, setClient] = useState(sampleClient)
+  const { id } = useParams<{ id: string }>()
+  const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedClientId, setSelectedClientId] = useState("1")
   const [activeTab, setActiveTab] = useState("metrics")
   const [showProfileCard, setShowProfileCard] = useState(false)
+  const [notes, setNotes] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editableNotes, setEditableNotes] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
   const [showClientFilter, setShowClientFilter] = useState(false)
   const [activeClientFilter, setActiveClientFilter] = useState<string | null>(null)
   const navigate = useNavigate()
 
+  useEffect(() => {
+    if (notes) {
+      setEditableNotes(notes)
+    }
+  }, [notes])
+
+  const handleSaveNotes = async () => {
+    try {
+      setIsSaving(true)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      const authUserEmail = session?.user?.email
+      if (!authUserEmail) {
+        console.log("[DEBUG] No auth user email found")
+        return
+      }
+      const { data: trainerRows, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", authUserEmail)
+        .limit(1)
+      if (trainerError) throw trainerError
+      if (!trainerRows || trainerRows.length === 0) {
+        console.log("[DEBUG] No trainer found for email:", authUserEmail)
+        return
+      }
+      const trainerId = trainerRows[0].id
+      console.log("[DEBUG] Saving notes for trainer:", trainerId)
+      const { error: updateError } = await supabase
+        .from("trainer")
+        .update({ trainer_notes: editableNotes })
+        .eq("id", trainerId)
+      if (updateError) throw updateError
+      setNotes(editableNotes)
+      setIsEditing(false)
+    } catch (err) {
+      console.error("Error saving trainer notes:", err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
   const filteredClients = sampleClients.filter(
     (client) =>
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1760,13 +1807,138 @@ export default function ClientDashboard() {
   )
 
   const handleClientSelect = (clientId: string) => {
-    setSelectedClientId(clientId)
-    // In real app, fetch client data here
+    navigate(`/client/${clientId}`)
   }
 
   const handleSmartAlertsClick = () => {
     navigate("/dashboard")
   }
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        
+        const authUserEmail = session?.user?.email;
+        if (!authUserEmail) {
+          console.log("[DEBUG] No auth user email found");
+          return;
+        }
+        const { data: trainerRows, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", authUserEmail)
+          .limit(1);
+
+        if (trainerError) throw trainerError;
+        if (!trainerRows || trainerRows.length === 0) {
+          console.log("[DEBUG] No trainer found for email:", authUserEmail);
+          return;
+        }
+
+        const trainerId = trainerRows[0].id;
+        console.log("[DEBUG] Trainer ID:", trainerId);
+        const { data, error } = await supabase
+          .from("trainer")
+          .select("trainer_notes")
+          .eq("id", trainerId)
+          .single();
+
+        if (error) throw error;
+        setNotes(data.trainer_notes);
+      } catch (err) {
+        console.error("Error fetching trainer notes:", err);
+      }
+    };
+    fetchNotes();
+  }, []);
+  useEffect(() => {
+    if (!id) {
+      setError("No client ID provided in URL.")
+      setClient(null)
+      return
+    }
+    async function fetchClient() {
+      setLoading(true)
+      setError(null)
+      try {
+        const { data, error } = await supabase
+          .from("client")
+          .select("*")
+          .eq("client_id", id)
+          .single()
+        if (error) throw error
+        setClient({
+          id: data.client_id,
+          trainerId: data.trainer_id,
+          name: data.cl_name,
+          preferredName: data.cl_prefer_name,
+          email: data.cl_email,
+          avatarUrl: data.cl_pic || "/placeholder.svg?height=120&width=120",
+          phone: data.cl_phone,
+          username: data.cl_username,
+          height: data.cl_height,
+          weight: data.cl_weight,
+          age: data.cl_age,
+          sex: data.cl_sex,
+          dob: data.cl_dob,
+          primaryGoal: data.cl_primary_goal,
+          targetWeight: data.cl_target_weight,
+          activityLevel: data.cl_activity_level,
+          specificOutcome: data.specific_outcome,
+          goalTimeline: data.goal_timeline,
+          obstacles: data.obstacles,
+          confidenceLevel: data.confidence_level,
+          trainingExperience: data.training_experience,
+          previousTraining: data.previous_training,
+          trainingDaysPerWeek: data.training_days_per_week,
+          trainingTimePerSession: data.training_time_per_session,
+          trainingLocation: data.training_location,
+          availableEquipment: data.available_equipment || [],
+          injuriesLimitations: data.injuries_limitations,
+          focusAreas: data.focus_areas || [],
+          eatingHabits: data.eating_habits,
+          dietPreferences: data.diet_preferences || [],
+          foodAllergies: data.food_allergies,
+          preferredMealsPerDay: data.preferred_meals_per_day,
+          sleepHours: data.sleep_hours,
+          stress: data.cl_stress,
+          alcohol: data.cl_alcohol,
+          supplements: data.cl_supplements,
+          gastricIssues: data.cl_gastric_issues,
+          motivationStyle: data.motivation_style,
+          wakeTime: data.wake_time,
+          bedTime: data.bed_time,
+          workoutTime: data.workout_time,
+          workoutDays: data.workout_days,
+          mealtimes: {
+            breakfast: data.bf_time,
+            lunch: data.lunch_time,
+            dinner: data.dinner_time,
+            snack: data.snack_time
+          },
+          onboardingCompleted: data.onboarding_completed || false,
+          onboardingProgress: data.onboarding_progress,
+          lastLogin: data.last_login,
+          lastLogout: data.last_logout,
+          lastActive: data.last_active,
+          lastCheckIn: data.last_checkIn,
+          streaks: {
+            current: data.current_streak || 0,
+            longest: data.longest_streak || 0
+          },
+          isActive: data.active_session || false,
+          createdAt: data.created_at
+        })
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch client")
+        setClient(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchClient()
+  }, [id])
 
   if (loading) {
     return (
@@ -1792,6 +1964,17 @@ export default function ClientDashboard() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Clients
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!client) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-600 font-medium">No client data found.</p>
         </div>
       </div>
     )
@@ -1841,7 +2024,7 @@ export default function ClientDashboard() {
                     key={c.client_id}
                     onClick={() => handleClientSelect(c.client_id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
-                      c.client_id === selectedClientId
+                      c.client_id === id
                         ? "bg-blue-50 text-blue-700 border border-blue-200"
                         : "hover:bg-gray-50"
                     }`}
@@ -1871,15 +2054,15 @@ export default function ClientDashboard() {
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1 text-white/80 text-base">
               <MapPin className="h-4 w-4" />
-              {client.location}
+              {client.trainingLocation || "Location not set"}
             </span>
             <span className="flex items-center gap-1 text-white/80 text-base">
               <Calendar className="h-4 w-4" />
-              Age: {getAge(client.dob)}
+              Age: {client.age || getAge(client.dob)}
             </span>
             <span className="flex items-center gap-1 text-white/80 text-base">
               <Weight className="h-4 w-4" />
-              {client.weight} kg
+              {client.weight || "N/A"} kg
             </span>
             <Popover open={showProfileCard} onOpenChange={setShowProfileCard}>
               <PopoverTrigger asChild>
@@ -1887,7 +2070,7 @@ export default function ClientDashboard() {
                   <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
                     <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xl">
-                      {client.name.split(" ").map((n) => n[0]).join("")}
+                      {client.name.split(" ").map((n: string) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
                 </button>
@@ -1898,40 +2081,42 @@ export default function ClientDashboard() {
                     <Avatar className="h-16 w-16 ring-2 ring-white shadow-md">
                       <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
                       <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-2xl">
-                        {client.name.split(" ").map((n) => n[0]).join("")}
+                        {client.name.split(" ").map((n: string) => n[0]).join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="ml-4">
                       <h1 className="text-2xl font-bold text-white mb-1">{client.name}</h1>
                       {client.username && <p className="text-white/80 mb-1">@{client.username}</p>}
-                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">{client.membershipType}</Badge>
+                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+                        {client.onboardingCompleted ? "Active Client" : "Onboarding"}
+                      </Badge>
                     </div>
                   </div>
                   <CardContent className="pt-4 pb-6">
                     <div className="grid grid-cols-1 gap-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.email}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.email || "No email"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.phone}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.phone || "No phone"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">Born {new Date(client.dob).toLocaleDateString()}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Born {client.dob ? new Date(client.dob).toLocaleDateString() : 'N/A'}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Ruler className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.height} cm</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.height || "N/A"} cm</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Weight className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.weight} kg</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.weight || "N/A"} kg</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.location}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{client.trainingLocation || "No location"}</span>
                       </div>
                     </div>
                     <div className="mt-4 text-xs text-gray-400">
@@ -1951,18 +2136,130 @@ export default function ClientDashboard() {
 
             {/* Editable Sections */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <EditableSection
-                title="Goals & Limitations"
-                icon={Target}
-                initialContent="1. Run a marathon without stopping\n2. Lose 5kg by August\n3. Improve overall endurance\n4. Reduce body fat percentage to 15%"
-                storageKey="client-goals-1"
-              />
-              <EditableSection
-                title="Trainer Notes"
-                icon={Edit}
-                initialContent="Client is making good progress with their running program. Needs to focus more on nutrition and recovery. Suggested adding more protein to diet and implementing better sleep hygiene.\n\nLeg injury from last year occasionally flares up - modify lower body exercises as needed."
-                storageKey="client-notes-1"
-              />
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5 text-rose-500" />
+                      Goals & Limitations
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {client.primaryGoal && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Primary Goal</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.primaryGoal}</p>
+                      </div>
+                    )}
+                    {client.specificOutcome && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Specific Outcome</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.specificOutcome}</p>
+                      </div>
+                    )}
+                    {client.goalTimeline && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.goalTimeline}</p>
+                      </div>
+                    )}
+                    {client.obstacles && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Potential Obstacles</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.obstacles}</p>
+                      </div>
+                    )}
+                    {client.injuriesLimitations && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Injuries & Limitations</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.injuriesLimitations}</p>
+                      </div>
+                    )}
+                    {client.focusAreas && client.focusAreas.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Focus Areas</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {client.focusAreas.map((area: string, index: number) => (
+                            <Badge key={index} variant="secondary" className="bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
+                              {area}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {client.confidenceLevel && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Confidence Level</h3>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                          <div 
+                            className="bg-rose-500 h-2.5 rounded-full" 
+                            style={{ width: `${client.confidenceLevel}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-500 text-right">{client.confidenceLevel}%</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Edit className="h-5 w-5 text-rose-500" />
+                      Trainer Notes
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
+                      className="h-8 px-2"
+                      disabled={isEditing && isSaving}
+                    >
+                      {isEditing ? (
+                        isSaving ? (
+                          <>
+                            <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" />
+                            Save
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <Pencil className="h-4 w-4 mr-1" />
+                          Edit
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isEditing ? (
+                    <Textarea
+                      value={editableNotes}
+                      onChange={(e) => setEditableNotes(e.target.value)}
+                      className="min-h-[200px] focus:border-rose-300 focus:ring-rose-200/50"
+                      placeholder="Add your notes about the client here..."
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      {notes ? (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                          {notes}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No notes added yet.</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             {/* Tabbed Content */}
