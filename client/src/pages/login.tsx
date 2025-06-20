@@ -60,29 +60,34 @@ const LoginPage = () => {
   const location = useLocation();
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const checkUser = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Checking session on mount:', session);
-        
-        if (session) {
-          // Set localStorage authentication
-          localStorage.setItem("isAuthenticated", "true");
-          navigate("/dashboard", { replace: true });
-        }
-      } catch (err) {
-        console.error('Error checking session:', err);
-      }
+    // Get current session on mount
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
     };
-    checkUser();
-  }, [navigate, location]);
+    getSession();
+
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [session, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -95,56 +100,26 @@ const LoginPage = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
-    if (!formData.email || !formData.password) {
-      setError("Please enter both email and password");
+    setOtpSent(false);
+    if (!formData.email) {
+      setError("Please enter your email");
       return;
     }
-
     setIsLoading(true);
-
     try {
-      // Sign in with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Sign in with OTP (magic link)
+      const { error } = await supabase.auth.signInWithOtp({
         email: formData.email.trim().toLowerCase(),
-        password: formData.password,
+        options: {
+          // Ensure the magic link redirects back to the login page for session handling
+          emailRedirectTo: 'http://localhost:3000/login',
+        },
       });
-
-      if (error) {
-        throw error;
-      }
-
-      if (data.session) {
-        // Set localStorage authentication
-        localStorage.setItem("isAuthenticated", "true");
-        
-        // Optionally fetch trainer data from custom table for additional info
-        try {
-          const { data: trainerData } = await supabase
-            .from('trainer')
-            .select('id, trainer_name, trainer_email')
-            .eq('id', data.user.id)
-            .single();
-          
-          if (trainerData) {
-            console.log('Trainer data loaded:', trainerData);
-          }
-        } catch (trainerError) {
-          console.log('No trainer data found in custom table:', trainerError);
-        }
-        
-        console.log('Login successful:', data.session);
-        navigate("/dashboard");
-      }
+      if (error) throw error;
+      setOtpSent(true);
+      // Removed navigate("/dashboard") here. Redirect will be handled by useEffect below.
     } catch (err: any) {
-      console.error('Login error:', err);
-      if (err.message.includes('Invalid login credentials')) {
-        setError('Invalid email or password. Please try again.');
-      } else if (err.message.includes('Email not confirmed')) {
-        setError('Please check your email and click the confirmation link first.');
-      } else {
-        setError(err.message || 'An error occurred during login');
-      }
+      setError(err.message || 'An error occurred during login');
     } finally {
       setIsLoading(false);
     }
@@ -178,26 +153,16 @@ const LoginPage = () => {
                   autoComplete="email"
                 />
               </div>
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
-                  required
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
-              </div>
-
               {error && (
                 <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
                   <p className="text-sm text-red-400 text-center">{error}</p>
                 </div>
               )}
-
+              {otpSent && (
+                <div className="p-3 rounded-md bg-green-900/20 border border-green-400/20">
+                  <p className="text-sm text-green-400 text-center">Magic link sent! Check your email to log in.</p>
+                </div>
+              )}
               <Button
                 type="submit"
                 className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
@@ -206,13 +171,12 @@ const LoginPage = () => {
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <Icons.Loader2Icon className="h-4 w-4 animate-spin" />
-                    Logging In...
+                    {'Sending Link...'}
                   </div>
                 ) : (
-                  "Login"
+                  'Send Magic Link'
                 )}
               </Button>
-
               <p className="text-sm text-center text-slate-400">
                 Don't have an account?{" "}
                 <button
@@ -231,4 +195,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage; 
+export default LoginPage;
