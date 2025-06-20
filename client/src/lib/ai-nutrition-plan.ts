@@ -1,4 +1,4 @@
-// AI Fitness Plan Generation with OpenAI Integration
+// AI Nutrition Plan Generation with OpenAI Integration
 import { supabase } from './supabase'
 import OpenAI from 'openai'
 
@@ -23,83 +23,108 @@ async function generateAIResponse(clientInfo: any) {
     dangerouslyAllowBrowser: true // Required for client-side usage
   });
   
-  console.log('📋 Preparing comprehensive fitness coach prompt...');
+  console.log('📋 Preparing comprehensive nutrition coach prompt...');
   
-  // Use the comprehensive world-class fitness coach prompt template
-  const fitnessCoachPrompt = `You are a world-class fitness coach. Based on the inputs below, create a personalized, evidence-based training program tailored to the client's goals, preferences, and constraints.
+  // Use the comprehensive world-class nutrition coach prompt template
+const nutritionCoachPrompt = `You are a world-class nutrition coach and registered dietitian. Based on the inputs below, create a personalized, evidence-based nutrition plan tailored to the client's goals, preferences, dietary restrictions, and lifestyle. Make sure you provide with meals for atleastr
 
 Inputs:
-Goal: ${clientInfo.primaryGoal || 'N/A'}
+Primary Goal: ${clientInfo.primaryGoal || 'N/A'}
 Specific Outcome: ${clientInfo.specificOutcome || 'N/A'}
 Goal Deadline: ${clientInfo.goalTimeline || 'N/A'}
-Confidence Rating (1–10): ${clientInfo.confidenceLevel || 'N/A'}
-Challenges/Obstacles: ${clientInfo.obstacles || 'N/A'}
-Training Experience: ${clientInfo.trainingExperience || 'Beginner'}
-Training History (Last 6 Months): ${clientInfo.previousTraining || 'Unknown'}
-Training Frequency: ${clientInfo.trainingDaysPerWeek || '3'}x/week
-Session Duration: ${clientInfo.trainingTimePerSession || '30-45 min'}
-Training Location: ${clientInfo.trainingLocation || 'Home'}
-Available Equipment: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
-Limitations/Injuries: ${clientInfo.injuriesLimitations || 'None'}
-Body Area Focus: ${Array.isArray(clientInfo.focusAreas) ? clientInfo.focusAreas.join(', ') : clientInfo.focusAreas || 'None'}
-Workout Style Preferences: ${clientInfo.activityLevel || 'General'}
+Current Weight: ${clientInfo.weight || 'N/A'} kg
+Target Weight: ${clientInfo.targetWeight || 'N/A'} kg
+Height: ${clientInfo.height || 'N/A'} cm
+Age: ${clientInfo.age || 'N/A'}
+Sex: ${clientInfo.sex || 'N/A'}
+Activity Level: ${clientInfo.activityLevel || 'Moderate'}
+Training Days/Week: ${clientInfo.trainingDaysPerWeek || '3'}
+
+Dietary Information:
+Eating Habits: ${clientInfo.eatingHabits || 'N/A'}
+Diet Preferences: ${Array.isArray(clientInfo.dietPreferences) ? clientInfo.dietPreferences.join(', ') : clientInfo.dietPreferences || 'None'}
+Food Allergies: ${Array.isArray(clientInfo.foodAllergies) ? clientInfo.foodAllergies.join(', ') : clientInfo.foodAllergies || 'None'}
+Preferred Meals Per Day: ${clientInfo.preferredMealsPerDay || '3 meals + 2 snacks'}
+Gastric Issues: ${clientInfo.gastricIssues || 'None'}
+Supplements: ${clientInfo.supplements || 'None'}
+
+Schedule Information:
+Wake Time: ${clientInfo.wakeTime || 'N/A'}
+Bed Time: ${clientInfo.bedTime || 'N/A'}
+Breakfast Time: ${clientInfo.breakfastTime || 'N/A'}
+Lunch Time: ${clientInfo.lunchTime || 'N/A'}
+Dinner Time: ${clientInfo.dinnerTime || 'N/A'}
+Snack Time: ${clientInfo.snackTime || 'N/A'}
+Workout Time: ${clientInfo.workoutTime || 'N/A'}
+
+Lifestyle Information:
+Sleep Hours: ${clientInfo.sleepHours || 'N/A'}
+Stress Level: ${clientInfo.stress || 'N/A'}
+Alcohol Consumption: ${clientInfo.alcohol || 'N/A'}
 
 Additional Client Information:
 Name: ${clientInfo.name || clientInfo.preferredName || 'N/A'}
-Age: ${clientInfo.age || 'N/A'}
-Sex: ${clientInfo.sex || 'N/A'}
-Height: ${clientInfo.height || 'N/A'} cm
-Current Weight: ${clientInfo.weight || 'N/A'} kg
-Target Weight: ${clientInfo.targetWeight || 'N/A'} kg
-Sleep Hours: ${clientInfo.sleepHours || 'N/A'}
-Stress Level: ${clientInfo.stress || 'N/A'}
 Motivation Style: ${clientInfo.motivationStyle || 'N/A'}
+Obstacles: ${clientInfo.obstacles || 'N/A'}
+Confidence Level (1–10): ${clientInfo.confidenceLevel || 'N/A'}
 
 Guidelines:
-Use the correct training philosophy based on the goal and training age
-Choose appropriate progression models (linear, undulating, or block periodization) based on experience and timeline.
-Structure training based on available days and session duration.
-Respect equipment limitations and substitute intelligently.
-Adjust exercises based on injury/limitation info.
-Emphasize specified body areas without neglecting full-body balance.
-Include progression triggers.
-Insert deload every 4–6 weeks with 40% volume reduction if program spans 8+ weeks.
-If timeline is <6 weeks, consider a short cycle without deload.
+Calculate appropriate caloric intake based on BMR, activity level, and goals (weight loss, maintenance, or gain).
+Determine optimal macronutrient ratios (protein, carbs, fats) based on goals and activity level.
+Consider meal timing around workouts for optimal performance and recovery.
+Respect dietary preferences, restrictions, and allergies.
+Account for gastric issues and food sensitivities.
+Include hydration recommendations.
+Provide practical meal suggestions that fit the client's schedule.
+Consider supplement recommendations if appropriate.
+Include progression and adjustment guidelines.
+Ensure nutritional adequacy and sustainability.
+Make sure the plan is atleast 7 days long.
+Make sure the plan is atleast 3 meals per day(Breakfast, Lunch, Dinner, Snacks).
 
 Output Format (in JSON):
 {
-  "overview": "...",
-  "split": "...",
-  "progression_model": "...",
-  "weekly_breakdown": {
-    "Monday": "...",
-    "Tuesday": "...",
-    "Wednesday": "...",
-    "Thursday": "...",
-    "Friday": "...",
-    "Saturday": "...",
-    "Sunday": "..."
+  "overview": "Brief summary of the nutrition plan approach and rationale",
+  "daily_targets": {
+    "calories": int,
+    "protein": int,
+    "carbs": int,
+    "fats": int,
+    "fiber": int,
+    "water_liters": int
   },
-  "workout_plan": [
+  "meal_timing": {
+    "breakfast": "07:00",
+    "lunch": "12:00",
+    "dinner": "19:00",
+    "snacks": ["10:00", "15:00"]
+  },
+  "nutrition_plan": [
     {
-      "workout": "Glute Bridges",
-      "day": "Monday",
-      "sets": 3,
-      "reps": 15,
-      "duration": 30,
-      "weights": "bodyweight",
-      "for_date": "2025-06-21",
-      "for_time": "08:00:00",
-      "body_part": "Glutes",
-      "category": "Strength",
-      "coach_tip": "Push through the heels",
-      "icon": "🏋️‍♂️",
-      "progression_notes": "Add 2 reps when RPE ≤ 8"
-    }
-  ]
+      "food_name": "",
+      "meal_type": "breakfast/lunch/snack/dinner",
+      "portion_size": "",
+      "calories": int,
+      "protein": int,
+      "carbs": int,
+      "fats": int,
+      "fiber": int,
+      "for_date": "",
+      "for_time": "",
+      "coach_tip": "",
+      "icon": "🥣",
+      "category": "",
+      "dietary_tags": ["..", "..."]
+      ..........
+    }.....
+  ],
+  "hydration_plan": "Drink 500ml upon waking, 250ml before each meal...",
+  "supplement_recommendations": "Based on your goals and dietary intake...",
+  "meal_prep_tips": "Practical suggestions for meal preparation...",
+  "progress_tracking": "How to monitor and adjust the plan..."
 }`;
   
-  console.log('📝 Fitness coach prompt prepared with client data');
+  console.log('📝 Nutrition coach prompt prepared with client data');
   
   console.log('🚀 Sending request to OpenAI using client SDK...');
   
@@ -109,7 +134,7 @@ Output Format (in JSON):
       messages: [
         {
           role: 'user',
-          content: fitnessCoachPrompt
+          content: nutritionCoachPrompt
         }
       ],
       max_tokens: 3000,
@@ -139,11 +164,11 @@ Output Format (in JSON):
 }
 
 /**
- * Function to retrieve client data and generate AI workout plan
+ * Function to retrieve client data and generate AI nutrition plan
  * @param clientId - The ID of the client to fetch data for
  */
-export async function generateAIWorkoutPlan(clientId: number) {
-  console.log('🤖 Starting AI workout plan generation for client:', clientId);
+export async function generateAINutritionPlan(clientId: number) {
+  console.log('🤖 Starting AI nutrition plan generation for client:', clientId);
   console.log('📊 Target Table: client');
   console.log('🔍 Query Parameters:', { client_id: clientId });
   
@@ -290,7 +315,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
     console.log('💾 Organized Client Variables:');
     console.log(clientInfo);
     
-    // Generate AI response using the comprehensive fitness coach prompt
+    // Generate AI response using the comprehensive nutrition coach prompt
     console.log('🤖 Starting OpenAI ChatGPT integration...');
     
     try {
@@ -300,7 +325,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
       
       return {
         success: true,
-        message: `Successfully generated AI workout plan for client: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
+        message: `Successfully generated AI nutrition plan for client: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
         clientData: clientData,
         clientInfo: clientInfo,
         aiResponse: aiResponse
@@ -322,4 +347,95 @@ export async function generateAIWorkoutPlan(clientId: number) {
       message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
+}
+
+/**
+ * Helper function to calculate BMR (Basal Metabolic Rate) using Mifflin-St Jeor Equation
+ * @param weight - Weight in kg
+ * @param height - Height in cm
+ * @param age - Age in years
+ * @param sex - 'male' or 'female'
+ */
+export function calculateBMR(weight: number, height: number, age: number, sex: string): number {
+  const baseBMR = 10 * weight + 6.25 * height - 5 * age;
+  return sex.toLowerCase() === 'male' ? baseBMR + 5 : baseBMR - 161;
+}
+
+/**
+ * Helper function to calculate TDEE (Total Daily Energy Expenditure)
+ * @param bmr - Basal Metabolic Rate
+ * @param activityLevel - Activity level multiplier
+ */
+export function calculateTDEE(bmr: number, activityLevel: string): number {
+  const activityMultipliers: { [key: string]: number } = {
+    'sedentary': 1.2,
+    'lightly_active': 1.375,
+    'moderately_active': 1.55,
+    'very_active': 1.725,
+    'extremely_active': 1.9
+  };
+  
+  const multiplier = activityMultipliers[activityLevel.toLowerCase()] || 1.55;
+  return bmr * multiplier;
+}
+
+/**
+ * Helper function to calculate caloric needs based on goals
+ * @param tdee - Total Daily Energy Expenditure
+ * @param goal - 'weight_loss', 'maintenance', or 'weight_gain'
+ */
+export function calculateCaloricNeeds(tdee: number, goal: string): number {
+  switch (goal.toLowerCase()) {
+    case 'weight_loss':
+    case 'fat_loss':
+      return Math.round(tdee - 500); // 500 calorie deficit for ~1lb/week loss
+    case 'weight_gain':
+    case 'muscle_gain':
+      return Math.round(tdee + 300); // 300 calorie surplus for lean gains
+    case 'maintenance':
+    default:
+      return Math.round(tdee);
+  }
+}
+
+/**
+ * Helper function to calculate macronutrient distribution
+ * @param calories - Total daily calories
+ * @param goal - Primary goal
+ * @param weight - Body weight in kg
+ */
+export function calculateMacros(calories: number, goal: string, weight: number) {
+  let proteinRatio, carbRatio, fatRatio;
+  
+  switch (goal.toLowerCase()) {
+    case 'weight_loss':
+    case 'fat_loss':
+      proteinRatio = 0.35; // Higher protein for satiety and muscle preservation
+      fatRatio = 0.25;
+      carbRatio = 0.40;
+      break;
+    case 'muscle_gain':
+    case 'weight_gain':
+      proteinRatio = 0.25;
+      fatRatio = 0.25;
+      carbRatio = 0.50; // Higher carbs for energy
+      break;
+    case 'maintenance':
+    default:
+      proteinRatio = 0.30;
+      fatRatio = 0.25;
+      carbRatio = 0.45;
+      break;
+  }
+  
+  const proteinCalories = calories * proteinRatio;
+  const carbCalories = calories * carbRatio;
+  const fatCalories = calories * fatRatio;
+  
+  return {
+    protein: Math.round(proteinCalories / 4), // 4 calories per gram
+    carbs: Math.round(carbCalories / 4), // 4 calories per gram
+    fats: Math.round(fatCalories / 9), // 9 calories per gram
+    fiber: Math.round(weight * 0.5), // 0.5g per kg body weight
+  };
 } 
