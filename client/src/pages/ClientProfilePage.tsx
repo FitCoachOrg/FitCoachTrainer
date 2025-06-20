@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Search,
   User,
@@ -84,6 +85,7 @@ import { supabase } from "@/lib/supabase"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
+import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -103,10 +105,543 @@ interface ClientInfo {
   [key: string]: any;
 }
 
-// Stub components for popups - these need to be implemented
-const ClientDataPopup = ({ isOpen, onClose, clientInfo }: any) => null
-const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetrics }: any) => null
-const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => null
+// AI Response Popup Component
+const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetrics }: {
+  isOpen: boolean;
+  onClose: () => void;
+  aiResponse: AIResponse | null;
+  clientName?: string;
+  onShowMetrics?: () => void;
+}) => {
+  const [activeTab, setActiveTab] = useState<'table' | 'raw'>('table');
+  const [workoutPlan, setWorkoutPlan] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Parse workout plan from AI response
+  useEffect(() => {
+    if (aiResponse?.response) {
+      try {
+        const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsedData = JSON.parse(jsonMatch[0]);
+          if (parsedData.workout_plan && Array.isArray(parsedData.workout_plan)) {
+            setWorkoutPlan(parsedData.workout_plan);
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing workout plan:', error);
+      }
+    }
+  }, [aiResponse]);
+
+  const handleWorkoutChange = (index: number, field: string, value: any) => {
+    const updatedPlan = [...workoutPlan];
+    updatedPlan[index] = { ...updatedPlan[index], [field]: value };
+    setWorkoutPlan(updatedPlan);
+  };
+
+  const addNewWorkout = () => {
+    const newWorkout = {
+      workout: "New Exercise",
+      sets: 3,
+      reps: "10",
+      duration: 15,
+      weights: "bodyweight",
+      for_date: new Date().toISOString().split('T')[0],
+      for_time: "08:00:00",
+      body_part: "Full Body",
+      category: "Strength",
+      coach_tip: "Focus on proper form",
+      icon: "💪",
+      progression_notes: "Increase intensity when RPE ≤ 8"
+    };
+    setWorkoutPlan([...workoutPlan, newWorkout]);
+  };
+
+  const removeWorkout = (index: number) => {
+    const updatedPlan = workoutPlan.filter((_, i) => i !== index);
+    setWorkoutPlan(updatedPlan);
+  };
+
+  const saveChanges = () => {
+    setIsEditing(false);
+    // Here you could save the changes to your backend or state management
+    console.log('Saved workout plan:', workoutPlan);
+  };
+
+  if (!isOpen || !aiResponse) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
+              🤖
+            </div>
+            AI Fitness Plan Generated{clientName ? ` for ${clientName}` : ''}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Your personalized fitness plan has been generated using AI. You can view and edit the workout plan in the table below.
+            </p>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab('table')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'table'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              📊 Workout Table
+            </button>
+            <button
+              onClick={() => setActiveTab('raw')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'raw'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              📄 Raw Response
+            </button>
+          </div>
+
+          {/* Workout Plan Table */}
+          {activeTab === 'table' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-semibold text-gray-900 dark:text-white">Workout Plan</h4>
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <Button onClick={saveChanges} size="sm" className="bg-green-600 hover:bg-green-700">
+                        💾 Save Changes
+                      </Button>
+                      <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
+                      ✏️ Edit Plan
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {workoutPlan.length > 0 ? (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Exercise</th>
+                          <th className="px-3 py-2 text-left font-medium">Sets</th>
+                          <th className="px-3 py-2 text-left font-medium">Reps</th>
+                          <th className="px-3 py-2 text-left font-medium">Duration</th>
+                          <th className="px-3 py-2 text-left font-medium">Equipment</th>
+                          <th className="px-3 py-2 text-left font-medium">Body Part</th>
+                          <th className="px-3 py-2 text-left font-medium">Category</th>
+                          <th className="px-3 py-2 text-left font-medium">Date</th>
+                          <th className="px-3 py-2 text-left font-medium">Coach Tip</th>
+                          {isEditing && <th className="px-3 py-2 text-left font-medium">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {workoutPlan.map((workout, index) => (
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg">{workout.icon}</span>
+                                {isEditing ? (
+                                  <Input
+                                    value={workout.workout}
+                                    onChange={(e) => handleWorkoutChange(index, 'workout', e.target.value)}
+                                    className="w-full"
+                                  />
+                                ) : (
+                                  <span className="font-medium">{workout.workout}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Input
+                                  type="number"
+                                  value={workout.sets}
+                                  onChange={(e) => handleWorkoutChange(index, 'sets', parseInt(e.target.value) || 0)}
+                                  className="w-16"
+                                />
+                              ) : (
+                                workout.sets
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Input
+                                  value={workout.reps}
+                                  onChange={(e) => handleWorkoutChange(index, 'reps', e.target.value)}
+                                  className="w-24"
+                                />
+                              ) : (
+                                workout.reps
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    value={workout.duration}
+                                    onChange={(e) => handleWorkoutChange(index, 'duration', parseInt(e.target.value) || 0)}
+                                    className="w-16"
+                                  />
+                                  <span className="text-xs text-gray-500">min</span>
+                                </div>
+                              ) : (
+                                `${workout.duration} min`
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.weights}
+                                  onValueChange={(value) => handleWorkoutChange(index, 'weights', value)}
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="bodyweight">Bodyweight</SelectItem>
+                                    <SelectItem value="Dumbbells">Dumbbells</SelectItem>
+                                    <SelectItem value="Barbell">Barbell</SelectItem>
+                                    <SelectItem value="Resistance Bands">Resistance Bands</SelectItem>
+                                    <SelectItem value="Machine">Machine</SelectItem>
+                                    <SelectItem value="Kettlebell">Kettlebell</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                workout.weights
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.body_part}
+                                  onValueChange={(value) => handleWorkoutChange(index, 'body_part', value)}
+                                >
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Full Body">Full Body</SelectItem>
+                                    <SelectItem value="Upper Body">Upper Body</SelectItem>
+                                    <SelectItem value="Lower Body">Lower Body</SelectItem>
+                                    <SelectItem value="Core">Core</SelectItem>
+                                    <SelectItem value="Arms">Arms</SelectItem>
+                                    <SelectItem value="Legs">Legs</SelectItem>
+                                    <SelectItem value="Chest">Chest</SelectItem>
+                                    <SelectItem value="Back">Back</SelectItem>
+                                    <SelectItem value="Shoulders">Shoulders</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                workout.body_part
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.category}
+                                  onValueChange={(value) => handleWorkoutChange(index, 'category', value)}
+                                >
+                                  <SelectTrigger className="w-28">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Strength">Strength</SelectItem>
+                                    <SelectItem value="Cardio">Cardio</SelectItem>
+                                    <SelectItem value="Flexibility">Flexibility</SelectItem>
+                                    <SelectItem value="HIIT">HIIT</SelectItem>
+                                    <SelectItem value="Endurance">Endurance</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  workout.category === 'Strength' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                                  workout.category === 'Cardio' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                  workout.category === 'Flexibility' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                                }`}>
+                                  {workout.category}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <Input
+                                  type="date"
+                                  value={workout.for_date}
+                                  onChange={(e) => handleWorkoutChange(index, 'for_date', e.target.value)}
+                                  className="w-32"
+                                />
+                              ) : (
+                                new Date(workout.for_date).toLocaleDateString()
+                              )}
+                            </td>
+                            <td className="px-3 py-2 max-w-48">
+                              {isEditing ? (
+                                <textarea
+                                  value={workout.coach_tip}
+                                  onChange={(e) => handleWorkoutChange(index, 'coach_tip', e.target.value)}
+                                  className="w-full p-2 text-xs border rounded resize-none"
+                                  rows={2}
+                                />
+                              ) : (
+                                <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                  {workout.coach_tip}
+                                </div>
+                              )}
+                            </td>
+                            {isEditing && (
+                              <td className="px-3 py-2">
+                                <Button
+                                  onClick={() => removeWorkout(index)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  🗑️
+                                </Button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {isEditing && (
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t">
+                      <Button onClick={addNewWorkout} variant="outline" size="sm">
+                        ➕ Add New Exercise
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No workout plan found in the AI response
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Raw Response Tab */}
+          {activeTab === 'raw' && (
+            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">AI Response:</h4>
+              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96">
+                {aiResponse.response}
+              </pre>
+            </div>
+          )}
+
+          {/* Usage Statistics */}
+          {aiResponse.usage && (
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2 text-green-900 dark:text-green-100">Usage Statistics:</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-green-700 dark:text-green-300">Model:</span> {aiResponse.model || 'gpt-4'}
+                </div>
+                <div>
+                  <span className="text-green-700 dark:text-green-300">Total Tokens:</span> {aiResponse.usage.total_tokens}
+                </div>
+                <div>
+                  <span className="text-green-700 dark:text-green-300">Input Tokens:</span> {aiResponse.usage.prompt_tokens}
+                </div>
+                <div>
+                  <span className="text-green-700 dark:text-green-300">Output Tokens:</span> {aiResponse.usage.completion_tokens}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex justify-between">
+            {onShowMetrics && aiResponse.usage && (
+              <Button variant="outline" onClick={onShowMetrics}>
+                View Detailed Metrics
+              </Button>
+            )}
+            <Button onClick={onClose} className="ml-auto">
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Client Data Popup Component
+const ClientDataPopup = ({ isOpen, onClose, clientInfo }: {
+  isOpen: boolean;
+  onClose: () => void;
+  clientInfo: any;
+}) => {
+  if (!isOpen || !clientInfo) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Client Data Retrieved</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Successfully retrieved client data from the database. This information will be used to generate personalized AI plans.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <h4 className="font-semibold mb-2">Basic Information</h4>
+              <div className="space-y-1">
+                <div><span className="font-medium">Name:</span> {clientInfo.name || 'N/A'}</div>
+                <div><span className="font-medium">Preferred Name:</span> {clientInfo.preferredName || 'N/A'}</div>
+                <div><span className="font-medium">Age:</span> {clientInfo.age || 'N/A'}</div>
+                <div><span className="font-medium">Sex:</span> {clientInfo.sex || 'N/A'}</div>
+                <div><span className="font-medium">Height:</span> {clientInfo.height ? `${clientInfo.height} cm` : 'N/A'}</div>
+                <div><span className="font-medium">Weight:</span> {clientInfo.weight ? `${clientInfo.weight} kg` : 'N/A'}</div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-2">Goals & Training</h4>
+              <div className="space-y-1">
+                <div><span className="font-medium">Primary Goal:</span> {clientInfo.primaryGoal || 'N/A'}</div>
+                <div><span className="font-medium">Activity Level:</span> {clientInfo.activityLevel || 'N/A'}</div>
+                <div><span className="font-medium">Training Experience:</span> {clientInfo.trainingExperience || 'N/A'}</div>
+                <div><span className="font-medium">Training Days/Week:</span> {clientInfo.trainingDaysPerWeek || 'N/A'}</div>
+                <div><span className="font-medium">Available Equipment:</span> {clientInfo.availableEquipment || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// AI Metrics Popup Component
+const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: {
+  isOpen: boolean;
+  onClose: () => void;
+  metrics: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    model: string;
+    timestamp: string;
+    responseTime?: number;
+  } | null;
+  clientName?: string;
+}) => {
+  if (!isOpen || !metrics) return null;
+
+  const formatTime = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  const estimatedCost = (metrics.totalTokens * 0.00003).toFixed(4); // Rough GPT-4 estimate
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
+              📊
+            </div>
+            AI Generation Metrics{clientName ? ` - ${clientName}` : ''}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {metrics.inputTokens.toLocaleString()}
+              </div>
+              <div className="text-sm text-blue-700 dark:text-blue-300">Input Tokens</div>
+              <div className="text-xs text-gray-500 mt-1">Prompt & Context</div>
+            </div>
+            
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {metrics.outputTokens.toLocaleString()}
+              </div>
+              <div className="text-sm text-green-700 dark:text-green-300">Output Tokens</div>
+              <div className="text-xs text-gray-500 mt-1">Generated Content</div>
+            </div>
+            
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                {metrics.totalTokens.toLocaleString()}
+              </div>
+              <div className="text-sm text-purple-700 dark:text-purple-300">Total Tokens</div>
+              <div className="text-xs text-gray-500 mt-1">Combined Usage</div>
+            </div>
+            
+            <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                ${estimatedCost}
+              </div>
+              <div className="text-sm text-orange-700 dark:text-orange-300">Est. Cost</div>
+              <div className="text-xs text-gray-500 mt-1">Approximate</div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+            <h4 className="font-semibold mb-3">Generation Details</h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Model:</span> {metrics.model}
+              </div>
+              <div>
+                <span className="font-medium">Response Time:</span> {metrics.responseTime ? formatTime(metrics.responseTime) : 'N/A'}
+              </div>
+              <div>
+                <span className="font-medium">Generated:</span> {new Date(metrics.timestamp).toLocaleString()}
+              </div>
+              <div>
+                <span className="font-medium">Token Ratio:</span> {((metrics.outputTokens / metrics.inputTokens) * 100).toFixed(1)}%
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 interface EditableSectionProps {
   title: string
@@ -1041,367 +1576,290 @@ const WorkoutPlanSection = () => {
     localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
   }, [weeklyPlan])
 
-  // Recommended workout plans - Compatible with Supabase workout_plan table
-  const recommendedPlans = [
-    {
-      id: "upper-body-strength",
-      name: "Upper Body Strength",
-      type: "Upper Body",
-      duration: 45,
-      difficulty: "Intermediate",
-      color: "bg-blue-500",
-      category: "strength",
-      body_part: "upper_body",
-      exercises: [
-        {
-          workout: "Bench Press",
-          duration: 3,
-          sets: 4,
-          reps: "8-10",
-          weights: "70kg",
-          coach_tip: "Keep your core engaged and maintain proper form throughout the movement",
-          icon: "💪",
-          category: "strength",
-          body_part: "chest",
-          workout_yt_link: "https://youtube.com/watch?v=bench-press-tutorial"
-        },
-        {
-          workout: "Pull-ups",
-          duration: 2.5,
-          sets: 3,
-          reps: "8-12",
-          weights: "bodyweight",
-          coach_tip: "Focus on controlled movement, engage your lats",
-          icon: "🏋️",
-          category: "strength",
-          body_part: "back",
-          workout_yt_link: "https://youtube.com/watch?v=pullups-tutorial"
-        },
-        {
-          workout: "Shoulder Press",
-          duration: 2,
-          sets: 3,
-          reps: "10-12",
-          weights: "20kg dumbbells",
-          coach_tip: "Keep shoulders stable, press straight up",
-          icon: "🏋️‍♀️",
-          category: "strength",
-          body_part: "shoulders",
-          workout_yt_link: "https://youtube.com/watch?v=shoulder-press-tutorial"
-        },
-        {
-          workout: "Bent-over Rows",
-          duration: 2.5,
-          sets: 3,
-          reps: "10-12",
-          weights: "60kg barbell",
-          coach_tip: "Keep back straight, pull to lower chest",
-          icon: "💪",
-          category: "strength",
-          body_part: "back",
-          workout_yt_link: "https://youtube.com/watch?v=bent-rows-tutorial"
-        },
-        {
-          workout: "Bicep Curls",
-          duration: 1.5,
-          sets: 3,
-          reps: "12-15",
-          weights: "15kg dumbbells",
-          coach_tip: "Control the negative, squeeze at the top",
-          icon: "💪",
-          category: "strength",
-          body_part: "arms",
-          workout_yt_link: "https://youtube.com/watch?v=bicep-curls-tutorial"
-        },
-        {
-          workout: "Tricep Dips",
-          duration: 1.5,
-          sets: 3,
-          reps: "10-15",
-          weights: "bodyweight",
-          coach_tip: "Keep elbows close to body, full range of motion",
-          icon: "💪",
-          category: "strength",
-          body_part: "arms",
-          workout_yt_link: "https://youtube.com/watch?v=tricep-dips-tutorial"
-        }
-      ],
-    },
-    {
-      id: "lower-body-power",
-      name: "Lower Body Power",
-      type: "Lower Body",
-      duration: 50,
-      difficulty: "Intermediate",
-      color: "bg-green-500",
-      category: "strength",
-      body_part: "lower_body",
-      exercises: [
-        {
-          workout: "Squats",
-          duration: 4,
-          sets: 4,
-          reps: "8-12",
-          weights: "90kg barbell",
-          coach_tip: "Keep chest up, knees tracking over toes",
-          icon: "🏋️",
-          category: "strength",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=squats-tutorial"
-        },
-        {
-          workout: "Deadlifts",
-          duration: 4,
-          sets: 3,
-          reps: "6-8",
-          weights: "100kg barbell",
-          coach_tip: "Keep bar close to body, drive through heels",
-          icon: "🏋️‍♂️",
-          category: "strength",
-          body_part: "full_body",
-          workout_yt_link: "https://youtube.com/watch?v=deadlifts-tutorial"
-        },
-        {
-          workout: "Lunges",
-          duration: 3,
-          sets: 3,
-          reps: "10 each leg",
-          weights: "25kg dumbbells",
-          coach_tip: "Step forward with control, keep torso upright",
-          icon: "🦵",
-          category: "strength",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=lunges-tutorial"
-        },
-        {
-          workout: "Leg Press",
-          duration: 3,
-          sets: 3,
-          reps: "12-15",
-          weights: "120kg",
-          coach_tip: "Full range of motion, control the weight",
-          icon: "🏋️",
-          category: "strength",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=leg-press-tutorial"
-        },
-        {
-          workout: "Calf Raises",
-          duration: 2,
-          sets: 4,
-          reps: "15-20",
-          weights: "40kg dumbbells",
-          coach_tip: "Full extension, pause at the top",
-          icon: "🦵",
-          category: "strength",
-          body_part: "calves",
-          workout_yt_link: "https://youtube.com/watch?v=calf-raises-tutorial"
-        },
-        {
-          workout: "Glute Bridges",
-          duration: 2,
-          sets: 3,
-          reps: "15-20",
-          weights: "bodyweight",
-          coach_tip: "Squeeze glutes at top, control the descent",
-          icon: "🍑",
-          category: "strength",
-          body_part: "glutes",
-          workout_yt_link: "https://youtube.com/watch?v=glute-bridges-tutorial"
-        }
-      ],
-    },
-    {
-      id: "cardio-hiit-blast",
-      name: "HIIT Cardio Blast",
-      type: "Cardio",
-      duration: 30,
-      difficulty: "Advanced",
-      color: "bg-red-500",
-      category: "cardio",
-      body_part: "full_body",
-      exercises: [
-        {
-          workout: "Burpees",
-          duration: 0.5,
-          sets: 4,
-          reps: "30 seconds",
-          weights: "bodyweight",
-          coach_tip: "Maintain form even when tired, full body engagement",
-          icon: "🔥",
-          category: "cardio",
-          body_part: "full_body",
-          workout_yt_link: "https://youtube.com/watch?v=burpees-tutorial"
-        },
-        {
-          workout: "Mountain Climbers",
-          duration: 0.5,
-          sets: 4,
-          reps: "30 seconds",
-          weights: "bodyweight",
-          coach_tip: "Keep core tight, rapid alternating movement",
-          icon: "⛰️",
-          category: "cardio",
-          body_part: "core",
-          workout_yt_link: "https://youtube.com/watch?v=mountain-climbers-tutorial"
-        },
-        {
-          workout: "Jump Squats",
-          duration: 0.5,
-          sets: 4,
-          reps: "30 seconds",
-          weights: "bodyweight",
-          coach_tip: "Land softly, explosive upward movement",
-          icon: "🦘",
-          category: "cardio",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=jump-squats-tutorial"
-        },
-        {
-          workout: "High Knees",
-          duration: 0.5,
-          sets: 4,
-          reps: "30 seconds",
-          weights: "bodyweight",
-          coach_tip: "Drive knees up high, stay on balls of feet",
-          icon: "🏃",
-          category: "cardio",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=high-knees-tutorial"
-        },
-        {
-          workout: "Plank Jacks",
-          duration: 0.5,
-          sets: 4,
-          reps: "30 seconds",
-          weights: "bodyweight",
-          coach_tip: "Maintain plank position, quick feet movement",
-          icon: "🏃‍♀️",
-          category: "cardio",
-          body_part: "core",
-          workout_yt_link: "https://youtube.com/watch?v=plank-jacks-tutorial"
-        },
-        {
-          workout: "Sprint Intervals",
-          duration: 0.33,
-          sets: 6,
-          reps: "20 seconds",
-          weights: "bodyweight",
-          coach_tip: "Maximum effort, full recovery between sets",
-          icon: "💨",
-          category: "cardio",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=sprint-intervals-tutorial"
-        }
-      ],
-    },
-    {
-      id: "flexibility-recovery",
-      name: "Flexibility & Recovery",
-      type: "Flexibility",
-      duration: 25,
-      difficulty: "Beginner",
-      color: "bg-purple-500",
-      category: "flexibility",
-      body_part: "full_body",
-      exercises: [
-        {
-          workout: "Cat-Cow Stretch",
-          duration: 2,
-          sets: 3,
-          reps: "10-15",
-          weights: "bodyweight",
-          coach_tip: "Slow, controlled movement, feel the stretch",
-          icon: "🐱",
-          category: "flexibility",
-          body_part: "spine",
-          workout_yt_link: "https://youtube.com/watch?v=cat-cow-tutorial"
-        },
-        {
-          workout: "Downward Dog",
-          duration: 1.5,
-          sets: 3,
-          reps: "30 seconds hold",
-          weights: "bodyweight",
-          coach_tip: "Press hands down, lengthen spine",
-          icon: "🐕",
-          category: "flexibility",
-          body_part: "full_body",
-          workout_yt_link: "https://youtube.com/watch?v=downward-dog-tutorial"
-        },
-        {
-          workout: "Pigeon Pose",
-          duration: 2,
-          sets: 2,
-          reps: "45 seconds each side",
-          weights: "bodyweight",
-          coach_tip: "Breathe deeply, relax into the stretch",
-          icon: "🕊️",
-          category: "flexibility",
-          body_part: "hips",
-          workout_yt_link: "https://youtube.com/watch?v=pigeon-pose-tutorial"
-        },
-        {
-          workout: "Hamstring Stretch",
-          duration: 1.5,
-          sets: 2,
-          reps: "30 seconds each leg",
-          weights: "bodyweight",
-          coach_tip: "Keep back straight, reach forward gently",
-          icon: "🦵",
-          category: "flexibility",
-          body_part: "legs",
-          workout_yt_link: "https://youtube.com/watch?v=hamstring-stretch-tutorial"
-        },
-        {
-          workout: "Shoulder Rolls",
-          duration: 1,
-          sets: 3,
-          reps: "10 forward, 10 backward",
-          weights: "bodyweight",
-          coach_tip: "Large, slow circles, release tension",
-          icon: "🔄",
-          category: "flexibility",
-          body_part: "shoulders",
-          workout_yt_link: "https://youtube.com/watch?v=shoulder-rolls-tutorial"
-        },
-        {
-          workout: "Child's Pose",
-          duration: 2,
-          sets: 1,
-          reps: "60 seconds hold",
-          weights: "bodyweight",
-          coach_tip: "Focus on breathing, complete relaxation",
-          icon: "🧘",
-          category: "flexibility",
-          body_part: "full_body",
-          workout_yt_link: "https://youtube.com/watch?v=childs-pose-tutorial"
-        }
-      ],
-    }
+  // New editable table state for workout plans
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
+  const [editValue, setEditValue] = useState<string | number>("")
+  const [allWorkoutPlans, setAllWorkoutPlans] = useState<any[]>([])
+
+  // Initialize workout plans from recommended and AI generated
+  useEffect(() => {
+    const initialPlans = [
+      // Convert AI generated plans to flat exercises
+      ...aiGeneratedPlans.flatMap(plan => 
+        plan.exercises.map((exercise: any, index: number) => ({
+          id: `${plan.id}-${index}`,
+          day: "Monday", // Default day
+          exercise: exercise.workout,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          duration: exercise.duration,
+          weight: exercise.weights,
+          coach_tip: exercise.coach_tip,
+          category: exercise.category,
+          body_part: exercise.body_part,
+          icon: exercise.icon,
+          source: "ai"
+        }))
+      )
+    ];
+    setAllWorkoutPlans(initialPlans);
+  }, [aiGeneratedPlans])
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+  const weightOptions = [
+    "bodyweight",
+    "5kg",
+    "10kg", 
+    "15kg",
+    "20kg",
+    "25kg",
+    "30kg",
+    "Dumbbells",
+    "Barbell",
+    "Kettlebell",
+    "Resistance Bands",
   ]
+
+  const getDayColor = (day: string) => {
+    const colors = {
+      Monday: "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm",
+      Tuesday: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm", 
+      Wednesday: "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm",
+      Thursday: "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm",
+      Friday: "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm",
+      Saturday: "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm",
+      Sunday: "bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-sm",
+    }
+    return colors[day as keyof typeof colors] || "bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-sm"
+  }
+
+  const handleCellClick = (workout: any, field: string) => {
+    setEditingCell({ id: workout.id, field })
+    setEditValue(workout[field])
+  }
+
+  const handleSave = () => {
+    if (editingCell) {
+      setAllWorkoutPlans((prev) =>
+        prev.map((w) =>
+          w.id === editingCell.id
+            ? {
+                ...w,
+                [editingCell.field]:
+                  editingCell.field === "sets" || editingCell.field === "duration" ? Number(editValue) : editValue,
+              }
+            : w,
+        ),
+      )
+      setEditingCell(null)
+      setEditValue("")
+    }
+  }
+
+  const handleCancel = () => {
+    setEditingCell(null)
+    setEditValue("")
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave()
+    } else if (e.key === "Escape") {
+      handleCancel()
+    }
+  }
+
+  const handleDeleteWorkout = (id: string) => {
+    setAllWorkoutPlans((prev) => prev.filter((w) => w.id !== id))
+  }
+
+  const handleAddNewWorkout = () => {
+    const newWorkout = {
+      id: Date.now().toString(),
+      day: "Monday",
+      exercise: "New Exercise",
+      sets: 3,
+      reps: "10",
+      duration: 30,
+      weight: "bodyweight",
+      coach_tip: "Focus on proper form",
+      category: "strength",
+      body_part: "full_body",
+      icon: "💪",
+      source: "custom"
+    }
+    setAllWorkoutPlans((prev) => [...prev, newWorkout])
+  }
+
+  const renderEditableCell = (
+    workout: any,
+    field: string,
+    type: "text" | "number" | "select" | "textarea" = "text",
+  ) => {
+    const isEditing = editingCell?.id === workout.id && editingCell?.field === field
+    const value = workout[field]
+
+    if (isEditing) {
+      if (type === "select") {
+        const options = field === "day" ? days : weightOptions
+        return (
+          <div className="flex items-center gap-1">
+            <Select
+              value={String(editValue)}
+              onValueChange={setEditValue}
+              onOpenChange={(open) => !open && handleSave()}
+            >
+              <SelectTrigger className="h-6 min-w-[80px] text-xs border-0 p-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option} value={option} className="text-xs">
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+      }
+
+      if (type === "textarea") {
+        return (
+          <div className="flex items-start gap-1">
+            <Textarea
+              value={String(editValue)}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="min-h-[60px] text-xs resize-none w-full border-0 p-1"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex flex-col gap-1 flex-shrink-0">
+              <Button size="sm" onClick={handleSave} className="h-4 w-4 p-0">
+                <Save className="h-2 w-2" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleCancel} className="h-4 w-4 p-0">
+                <X className="h-2 w-2" />
+              </Button>
+            </div>
+          </div>
+        )
+      }
+
+      return (
+        <div className="flex items-center gap-1">
+          <Input
+            type={type}
+            value={editValue}
+            onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="h-6 text-xs border-0 p-1"
+            autoFocus
+          />
+          <div className="flex gap-1">
+            <Button size="sm" onClick={handleSave} className="h-4 w-4 p-0">
+              <Save className="h-2 w-2" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCancel} className="h-4 w-4 p-0">
+              <X className="h-2 w-2" />
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    const cellContent = () => {
+      if (field === "day") {
+        return (
+          <Badge className={`${getDayColor(String(value))} font-medium cursor-pointer text-xs px-1.5 py-0.5 border-0`}>
+            {String(value).slice(0, 3)}
+          </Badge>
+        )
+      }
+      if (field === "duration") {
+        return <span className="font-semibold text-blue-600 text-xs">{value}min</span>
+      }
+      if (field === "sets") {
+        return <span className="font-bold text-gray-800 text-sm">{value}</span>
+      }
+      if (field === "coach_tip") {
+        return (
+          <div className="w-full">
+            <p
+              className="text-xs text-gray-600 cursor-pointer hover:text-gray-800 leading-tight break-words"
+              style={{
+                lineHeight: "1.3",
+                minHeight: "3.9em",
+                display: "block",
+              }}
+              title={String(value)}
+            >
+              {String(value)}
+            </p>
+          </div>
+        )
+      }
+      if (field === "exercise") {
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{workout.icon || "💪"}</span>
+            <span className="cursor-pointer hover:text-blue-600 font-medium text-sm text-gray-800">{String(value)}</span>
+          </div>
+        )
+      }
+      return <span className="cursor-pointer hover:text-blue-600 text-xs text-gray-700">{String(value)}</span>
+    }
+
+    return (
+      <div
+        onClick={() => handleCellClick(workout, field)}
+        className="cursor-pointer hover:bg-blue-50 rounded transition-all duration-200 hover:shadow-sm w-full p-0.5"
+        title="Click to edit"
+        draggable
+        onDragStart={(e) => {
+          // Enable dragging for workout rows
+          const workoutData = {
+            id: workout.id,
+            name: workout.exercise,
+            type: workout.category,
+            duration: workout.duration,
+            difficulty: "Custom",
+            color: "bg-gray-500",
+            category: workout.category,
+            body_part: workout.body_part,
+            exercises: [{
+              workout: workout.exercise,
+              duration: workout.duration,
+              sets: workout.sets,
+              reps: workout.reps,
+              weights: workout.weight,
+              coach_tip: workout.coach_tip,
+              icon: workout.icon,
+              category: workout.category,
+              body_part: workout.body_part,
+              workout_yt_link: ""
+            }]
+          }
+          e.dataTransfer.setData("text/plain", JSON.stringify(workoutData))
+        }}
+      >
+        {cellContent()}
+      </div>
+    )
+  }
+
+  // Sort workouts by day
+  const sortedWorkouts = [...allWorkoutPlans].sort((a, b) => {
+    const dayOrder = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 }
+    return (dayOrder[a.day as keyof typeof dayOrder] || 8) - (dayOrder[b.day as keyof typeof dayOrder] || 8)
+  })
 
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
   const handleAddExercise = () => {
-    if (newExercise.name && newExercise.instructions) {
-      const exercise = {
-        id: Date.now().toString(),
-        ...newExercise,
-        createdAt: new Date().toISOString(),
-      }
-      setCustomExercises([...customExercises, exercise])
-      setNewExercise({
-        name: "",
-        instructions: "",
-        sets: "",
-        reps: "",
-        duration: "",
-        equipment: "",
-        difficulty: "Beginner",
-      })
-      setShowAddExercise(false)
-    }
+    // This function is now handled by handleAddNewWorkout in the table
+    handleAddNewWorkout()
   }
 
   const handleDragStart = (e:any, plan:any) => {
@@ -1487,13 +1945,10 @@ const WorkoutPlanSection = () => {
         prev.map(plan => plan.id === editingPlan.id ? editedPlan : plan)
       )
     } else {
-      // For default plans, we'll update them in the recommendedPlans array
-      // Since recommendedPlans is a const, we'll store edited versions separately
-      const updatedPlans = recommendedPlans.map(plan => 
-        plan.id === editingPlan.id ? editedPlan : plan
+      // For custom plans, we'll update them in allWorkoutPlans
+      setAllWorkoutPlans(prev => 
+        prev.map(plan => plan.id === editingPlan.id ? editedPlan : plan)
       )
-      // You might want to store this in state or localStorage
-      localStorage.setItem('editedRecommendedPlans', JSON.stringify(updatedPlans))
     }
 
     setShowEditPlanModal(false)
@@ -1795,253 +2250,150 @@ const WorkoutPlanSection = () => {
         </div>
       </div>
 
-      {/* Right Column - Recommended Plans */}
+      {/* Right Column - Workout Plans Table */}
       <div className="col-span-2 flex flex-col">
         <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recommended Plans</h3>
-            <Button
-              onClick={handleGenerateAIPlans}
-              disabled={isGeneratingAI}
-              size="sm"
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-            >
-              {isGeneratingAI ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                  Generating AI Plan...
-                </>
-              ) : (
-                <>
-                  <div className="mr-1">🤖</div>
-                  Generate AI Plan
-                </>
-              )}
-            </Button>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Workout Plans</h3>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAddNewWorkout}
+                size="sm"
+                variant="outline"
+                className="text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Exercise
+              </Button>
+              <Button
+                onClick={handleGenerateAIPlans}
+                disabled={isGeneratingAI}
+                size="sm"
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+              >
+                {isGeneratingAI ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                    Generating AI Plan...
+                  </>
+                ) : (
+                  <>
+                    <div className="mr-1">🤖</div>
+                    Generate AI Plan
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-
         </div>
-        <div className="space-y-4 overflow-y-auto pr-2">
 
-          {/* AI Generated Plans */}
-          {aiGeneratedPlans.map((plan) => (
-            <Card
-              key={plan.id}
-              className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 backdrop-blur-sm border-2 border-purple-200 dark:border-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
-              onMouseDown={(e) => handleMouseDown(e, plan)}
-              onMouseUp={(e) => handleMouseUp(e, plan)}
-              onClick={(e) => handlePlanClick(e, plan)}
-              draggable
-              onDragStart={(e) => handleDragStart(e, plan)}
-              onDragEnd={handleDragEnd}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <div className="w-3 h-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" />
-                    {plan.name}
-                    <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1">
-                      🤖 AI
-                    </Badge>
-                  </CardTitle>
-                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-600">
-                    {plan.difficulty}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {plan.duration} min
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Dumbbell className="h-3 w-3" />
-                    {plan.type}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-1 mb-3">
-                  {plan.exercises.slice(0, 4).map((exercise, i) => (
-                    <div key={i} className="flex justify-between text-xs">
-                      <span className="font-medium text-gray-700 dark:text-gray-300">{exercise.workout}</span>
-                      <span className="text-gray-500 text-xs">
-                        {exercise.sets} × {exercise.reps}
+        <div className="overflow-y-auto pr-2">
+          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-900/80">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Dumbbell className="h-4 w-4" />
+                Editable Workout Plan
+                <Badge variant="secondary" className="text-xs">
+                  {sortedWorkouts.length} exercises
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                      <TableHead className="font-semibold text-xs w-[80px]">Day</TableHead>
+                      <TableHead className="font-semibold text-xs min-w-[200px]">Exercise</TableHead>
+                      <TableHead className="font-semibold text-xs w-[60px] text-center">Sets</TableHead>
+                      <TableHead className="font-semibold text-xs w-[80px] text-center">Reps</TableHead>
+                      <TableHead className="font-semibold text-xs w-[80px] text-center">Duration</TableHead>
+                      <TableHead className="font-semibold text-xs w-[100px] text-center">Weight</TableHead>
+                      <TableHead className="font-semibold text-xs min-w-[250px]">Coach Tip</TableHead>
+                      <TableHead className="font-semibold text-xs w-[60px] text-center">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedWorkouts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                          <div className="flex flex-col items-center gap-2">
+                            <Dumbbell className="h-8 w-8 text-gray-300" />
+                            <p>No workout exercises yet</p>
+                            <p className="text-xs">Click "Generate AI Plan" or "Add Exercise" to get started</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedWorkouts.map((workout) => (
+                        <TableRow 
+                          key={workout.id} 
+                          className="hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors group border-b border-gray-100 dark:border-gray-800"
+                        >
+                          <TableCell className="py-2">
+                            {renderEditableCell(workout, "day", "select")}
+                          </TableCell>
+                          <TableCell className="py-2">
+                            {renderEditableCell(workout, "exercise", "text")}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            {renderEditableCell(workout, "sets", "number")}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            {renderEditableCell(workout, "reps", "text")}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            {renderEditableCell(workout, "duration", "number")}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            {renderEditableCell(workout, "weight", "select")}
+                          </TableCell>
+                          <TableCell className="py-2 max-w-[250px]">
+                            {renderEditableCell(workout, "coach_tip", "textarea")}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteWorkout(workout.id)}
+                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {sortedWorkouts.length > 0 && (
+                <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-4">
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        💡 Tips: Click any cell to edit • Drag rows to calendar • Use keyboard shortcuts (Enter/Escape)
                       </span>
                     </div>
-                  ))}
-                  {plan.exercises.length > 4 && (
-                    <div className="text-xs text-gray-500 italic text-center pt-1">
-                      +{plan.exercises.length - 4} more exercises
-                    </div>
-                  )}
-                </div>
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center relative">
-                  <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                    AI Generated • Click to edit • Drag to schedule
-                  </p>
-                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Edit className="h-3 w-3 text-purple-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          
-          {/* Default Recommended Plans */}
-          {recommendedPlans.map((plan) => (
-            <Card
-              key={plan.id}
-              className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group dark:bg-black"
-              onMouseDown={(e) => handleMouseDown(e, plan)}
-              onMouseUp={(e) => handleMouseUp(e, plan)}
-              onClick={(e) => handlePlanClick(e, plan)}
-              draggable
-              onDragStart={(e) => handleDragStart(e, plan)}
-              onDragEnd={handleDragEnd}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <div className={`w-3 h-3 rounded-full ${plan.color}`} />
-                    {plan.name}
-                  </CardTitle>
-                  <Badge variant="outline" className="text-xs">{plan.difficulty}</Badge>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {plan.duration} min
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Dumbbell className="h-3 w-3" />
-                    {plan.type}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-1 mb-3">
-                  {plan.exercises.slice(0, 4).map((exercise, i) => (
-                    <div key={i} className="flex justify-between text-xs">
-                      <span className="font-medium text-gray-700 dark:text-gray-300">{exercise.workout}</span>
-                      <span className="text-gray-500 text-xs">
-                        {exercise.sets} × {exercise.reps}
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <span>Total exercises: {sortedWorkouts.length}</span>
+                      <span>•</span>
+                      <span>
+                        Total duration: {sortedWorkouts.reduce((sum, w) => sum + (w.duration || 0), 0)} min
                       </span>
                     </div>
-                  ))}
-                  {plan.exercises.length > 4 && (
-                    <div className="text-xs text-gray-500 italic text-center pt-1">
-                      +{plan.exercises.length - 4} more exercises
-                    </div>
-                  )}
-                </div>
-                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center relative">
-                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                    Click to edit • Drag to schedule
-                  </p>
-                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Edit className="h-3 w-3 text-blue-500" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
 
 
-      {/* Add Exercise Modal */}
-      {showAddExercise && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md bg-white dark:bg-gray-900">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Add Custom Exercise
-                <Button variant="ghost" size="sm" onClick={() => setShowAddExercise(false)}>
-                  ×
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Exercise Name *</label>
-                <Input
-                  value={newExercise.name}
-                  onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
-                  placeholder="e.g., Push-ups"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Instructions *</label>
-                <Textarea
-                  value={newExercise.instructions}
-                  onChange={(e) => setNewExercise({ ...newExercise, instructions: e.target.value })}
-                  placeholder="Describe how to perform this exercise..."
-                  rows={3}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Sets</label>
-                  <Input
-                    value={newExercise.sets}
-                    onChange={(e) => setNewExercise({ ...newExercise, sets: e.target.value })}
-                    placeholder="e.g., 3"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Reps</label>
-                  <Input
-                    value={newExercise.reps}
-                    onChange={(e) => setNewExercise({ ...newExercise, reps: e.target.value })}
-                    placeholder="e.g., 10-12"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Duration</label>
-                <Input
-                  value={newExercise.duration}
-                  onChange={(e) => setNewExercise({ ...newExercise, duration: e.target.value })}
-                  placeholder="e.g., 30 seconds"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Equipment</label>
-                <Input
-                  value={newExercise.equipment}
-                  onChange={(e) => setNewExercise({ ...newExercise, equipment: e.target.value })}
-                  placeholder="e.g., Dumbbells"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Difficulty</label>
-                <select
-                  value={newExercise.difficulty}
-                  onChange={(e) => setNewExercise({ ...newExercise, difficulty: e.target.value })}
-                  className="w-full p-2 border rounded-md bg-white dark:bg-gray-800"
-                  aria-label="Select exercise difficulty level"
-                >
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
-                </select>
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button
-                  onClick={handleAddExercise}
-                  className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                >
-                  Add Exercise
-                </Button>
-                <Button variant="outline" onClick={() => setShowAddExercise(false)} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+
        
        {/* Client Data Popup */}
       <ClientDataPopup 
@@ -2310,9 +2662,13 @@ const WorkoutPlanSection = () => {
 }
 
 const NutritionPlanSection = () => {
+  const { toast } = useToast()
   const [selectedDay, setSelectedDay] = useState("monday")
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [newItemDialog, setNewItemDialog] = useState<string | null>(null)
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+  const [showNutritionAIResponse, setShowNutritionAIResponse] = useState(false)
+  const [nutritionAiResponse, setNutritionAiResponse] = useState<any>(null)
   const [mealItems, setMealItems] = useState({
     breakfast: [
       { name: "Oatmeal with berries", calories: 320, protein: 12, carbs: 58, fats: 6 },
@@ -2464,6 +2820,167 @@ const NutritionPlanSection = () => {
     )
   }
 
+  const parseAINutritionResponse = (aiResponseText: string) => {
+    try {
+      console.log('🔍 Parsing AI nutrition response:', aiResponseText)
+      
+      // Remove any markdown code blocks
+      const cleanedResponse = aiResponseText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
+      
+      // Parse the JSON
+      const parsedResponse = JSON.parse(cleanedResponse)
+      console.log('✅ Successfully parsed AI nutrition response:', parsedResponse)
+      
+      // Extract nutrition plan items
+      if (parsedResponse.nutrition_plan && Array.isArray(parsedResponse.nutrition_plan)) {
+        const nutritionItems = parsedResponse.nutrition_plan
+        
+        // Group by meal type
+        const groupedMeals: {
+          breakfast: MealItem[];
+          lunch: MealItem[];
+          snack: MealItem[];
+          dinner: MealItem[];
+        } = {
+          breakfast: [],
+          lunch: [],
+          snack: [],
+          dinner: []
+        }
+        
+        nutritionItems.forEach((item: any) => {
+          const mealType = item.meal_type?.toLowerCase()
+          if (groupedMeals[mealType as keyof typeof groupedMeals]) {
+            groupedMeals[mealType as keyof typeof groupedMeals].push({
+              name: item.food_name || item.name,
+              calories: item.calories || 0,
+              protein: item.protein || 0,
+              carbs: item.carbs || 0,
+              fats: item.fats || 0
+            })
+          }
+        })
+        
+        console.log('🍽️ Grouped meals:', groupedMeals)
+        return groupedMeals
+      }
+      
+      return null
+    } catch (error) {
+      console.error('❌ Error parsing AI nutrition response:', error)
+      return null
+    }
+  }
+
+  const handleGenerateAINutritionPlan = async () => {
+    console.log('🚀 Button clicked - Starting AI nutrition generation process');
+    console.log('⏰ Timestamp:', new Date().toISOString());
+    
+    setIsGeneratingAI(true)
+    const startTime = Date.now() // Track response time
+    
+    try {
+      const clientId = 34 // Hardcoded for now to match working fitness plan
+      console.log('🎯 Using hardcoded client ID:', clientId);
+      
+      toast({
+        title: "Generating AI Nutrition Plan",
+        description: "Please wait while we create a personalized nutrition plan...",
+      })
+      
+      const result = await generateAINutritionPlan(clientId)
+      const responseTime = Date.now() - startTime // Calculate response time
+      
+      console.log('📬 Function Response:');
+      console.log('  - Success:', result.success);
+      console.log('  - Message:', result.message);
+      console.log('  - Has Client Data:', !!result.clientData);
+      
+      if (result.success) {
+        console.log('✅ SUCCESS - Data retrieval completed');
+        
+        // Log the client data to console for inspection
+        if (result.clientData && result.clientInfo) {
+          console.log('🎉 CLIENT DATA SUCCESSFULLY RETRIEVED:');
+          console.log('📋 Data Format: JavaScript Object');
+          console.log('🔢 Number of Properties:', Object.keys(result.clientData).length);
+          console.log('🏷️ Property Names:', Object.keys(result.clientData));
+          console.log('📊 Full Client Data Object:');
+          console.table(result.clientData); // Display as table for better readability
+          console.log('📄 JSON Format:');
+          console.log(JSON.stringify(result.clientData, null, 2));
+          console.log('💾 Organized Client Info:');
+          console.log(result.clientInfo);
+          
+          // If AI response is available, parse and update meal items
+          if (result.aiResponse) {
+            try {
+              const parsedMeals = parseAINutritionResponse(result.aiResponse.response);
+              if (parsedMeals) {
+                setMealItems(parsedMeals);
+              }
+              
+              // Always show the complete AI response first
+              setNutritionAiResponse(result.aiResponse);
+              setShowNutritionAIResponse(true);
+              
+              const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
+              toast({
+                title: "AI Nutrition Plan Generated",
+                description: `Personalized nutrition plan created for ${clientName}. Click to view full response.`,
+              })
+            } catch (parseError) {
+              console.error('Error parsing AI nutrition response:', parseError);
+              // Show the raw response in popup (parsing failed)
+              setNutritionAiResponse(result.aiResponse);
+              setShowNutritionAIResponse(true);
+              
+              toast({
+                title: "AI Response Generated",
+                description: "View the complete AI response. Meals may need manual parsing.",
+              })
+            }
+          } else {
+            const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
+            toast({
+              title: "Client Data Retrieved",
+              description: `Showing data for ${clientName}`,
+            })
+          }
+        } else {
+          console.warn('⚠️ Success reported but no client data in response');
+          toast({
+            title: "Client Data Retrieved", 
+            description: result.message,
+          })
+        }
+      } else {
+        console.log('❌ FAILURE - Data retrieval failed');
+        console.log('💬 Error Message:', result.message);
+        
+        toast({
+          title: "Error",
+          description: result.message,
+          variant: "destructive"
+        })
+      }
+    } catch (err) {
+      console.error('💥 EXCEPTION CAUGHT in handleGenerateAINutritionPlan:');
+      console.error('  - Error Type:', typeof err);
+      console.error('  - Error:', err);
+      console.error('  - Stack:', err instanceof Error ? err.stack : 'No stack');
+      
+      toast({
+        title: "Error",
+        description: "Something went wrong while fetching client data.",
+        variant: "destructive"
+      })
+    } finally {
+      console.log('🏁 Process completed - Resetting loading state');
+      setIsGeneratingAI(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -2477,9 +2994,22 @@ const NutritionPlanSection = () => {
             <p className="text-gray-500 dark:text-gray-400 text-sm">Week of December 18-24, 2023</p>
           </div>
         </div>
-        <Button className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg">
-          <TrendingUp className="w-4 h-4 mr-2" />
-          Generate Plan
+        <Button 
+          onClick={handleGenerateAINutritionPlan}
+          disabled={isGeneratingAI}
+          className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg disabled:opacity-50"
+        >
+          {isGeneratingAI ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Generating...
+            </>
+          ) : (
+            <>
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Generate AI Plan
+            </>
+          )}
         </Button>
       </div>
 
@@ -2994,6 +3524,62 @@ const NutritionPlanSection = () => {
                 </Button>
                 <Button onClick={() => newItemDialog && addMealItem(newItemDialog)}>
                   Add Item
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* AI Response Dialog */}
+      {showNutritionAIResponse && nutritionAiResponse && (
+        <Dialog open={showNutritionAIResponse} onOpenChange={setShowNutritionAIResponse}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
+                  <Utensils className="h-5 w-5 text-emerald-600" />
+                </div>
+                AI Nutrition Plan Generated
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
+                <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                  Your personalized nutrition plan has been generated using AI. The meal items have been automatically added to your plan above.
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">AI Response:</h4>
+                <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                  {nutritionAiResponse.response}
+                </pre>
+              </div>
+              
+              {nutritionAiResponse.usage && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">Usage Statistics:</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-blue-700 dark:text-blue-300">Model:</span> {nutritionAiResponse.model || 'gpt-4'}
+                    </div>
+                    <div>
+                      <span className="text-blue-700 dark:text-blue-300">Total Tokens:</span> {nutritionAiResponse.usage.total_tokens}
+                    </div>
+                    <div>
+                      <span className="text-blue-700 dark:text-blue-300">Input Tokens:</span> {nutritionAiResponse.usage.prompt_tokens}
+                    </div>
+                    <div>
+                      <span className="text-blue-700 dark:text-blue-300">Output Tokens:</span> {nutritionAiResponse.usage.completion_tokens}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end">
+                <Button onClick={() => setShowNutritionAIResponse(false)}>
+                  Close
                 </Button>
               </div>
             </div>
