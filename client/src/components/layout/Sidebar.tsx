@@ -82,9 +82,6 @@ const Sidebar: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      // Clear localStorage
-      localStorage.removeItem("isAuthenticated")
-      
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
       if (error) throw error
@@ -95,8 +92,6 @@ const Sidebar: React.FC = () => {
       navigate("/login")
     } catch (error) {
       console.error("Error logging out:", error)
-      // Even if there's an error, clear localStorage and redirect to login
-      localStorage.removeItem("isAuthenticated")
       navigate("/login")
     }
   }
