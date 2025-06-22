@@ -1230,31 +1230,42 @@ function SortableMetric({
 }
 
 // Enhanced Client Stats Component
-const ClientStats = ({ clientId }: { clientId?: number }) => {
-  const [workoutsLast30Days, setWorkoutsLast30Days] = useState<number | null>(null)
+  const ClientStats = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+    const [loading, setLoading] = useState(false)
+    const [statsData, setStatsData] = useState<any>(null)
 
-  useEffect(() => {
-    if (!clientId) return
-    ;(async () => {
-      const since = new Date()
-      since.setDate(since.getDate() - 30)
-      const sinceISO = since.toISOString()
-      const { count, error } = await supabase
-        .from("workout_info")
-        .select("id", { count: "exact", head: true })
-        .eq("client_id", clientId)
-        .gte("created_at", sinceISO)
-      if (!error) setWorkoutsLast30Days(count ?? 0)
-      else setWorkoutsLast30Days(null)
-    })()
-  }, [clientId])
+    useEffect(() => {
+      if (clientId && isActive && !statsData) {
+        setLoading(true)
+        // Simulate API call - replace with actual data fetching
+        setTimeout(() => {
+          setStatsData({
+            // Mock data - replace with actual stats
+            totalSessions: 24,
+            weeklyProgress: 85,
+            monthlyGoals: 3
+          })
+          setLoading(false)
+        }, 1000)
+      }
+    }, [clientId, isActive, statsData])
 
-  const stats = [
-    {
-      label: "Workouts Completed",
-      value: workoutsLast30Days !== null ? workoutsLast30Days.toString() : "-",
-      subtitle: "in Last 30 Days",
-      icon: Activity,
+    if (loading) {
+      return (
+        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6">
+          <CardContent className="flex items-center justify-center py-8">
+            <LoadingSpinner />
+          </CardContent>
+        </Card>
+      )
+    }
+
+        const stats = [
+      {
+        label: "Workouts Completed",
+        value: statsData?.totalSessions?.toString() || "0",
+        subtitle: "in Last 30 Days",
+        icon: Activity,
       color: "text-emerald-600",
       bgColor: "from-emerald-500 to-green-600",
       data: [
@@ -1529,84 +1540,86 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 // Enhanced Metrics Section
-const MetricsSection = ({ clientId }: { clientId?: number }) => {
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
-    const saved = localStorage.getItem("selectedMetrics")
-    return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
-  })
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
-  const [loadingWorkout, setLoadingWorkout] = useState(false)
-  const [workoutError, setWorkoutError] = useState<string | null>(null)
-  const [workoutCount, setWorkoutCount] = useState<number>(0);
+  const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+    const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
+      const saved = localStorage.getItem("selectedMetrics")
+      return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
+    })
+    const [draggingId, setDraggingId] = useState<string | null>(null)
+    const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
+    const [loadingWorkout, setLoadingWorkout] = useState(false)
+    const [workoutError, setWorkoutError] = useState<string | null>(null)
+    const [workoutCount, setWorkoutCount] = useState<number>(0);
+    const [dataLoaded, setDataLoaded] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
-  }, [selectedKeys])
+    useEffect(() => {
+      localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
+    }, [selectedKeys])
 
-  useEffect(() => {
-    console.log("[MetricsSection] Effect running, clientId:", clientId);
-    if (!clientId) {
-      console.log("[MetricsSection] No clientId, returning early");
-      return;
-    }
-    setLoadingWorkout(true)
-    setWorkoutError(null)
-    ;(async () => {
-      try {
-        console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
-        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
-        console.log("[MetricsSection] Query result:", data, error);
-        if (error) throw error;
-        setWorkoutInfo(data || []);
-
-        // Fetch count of workouts in last 30 days
-        const sinceDate = new Date();
-        sinceDate.setDate(sinceDate.getDate() - 30);
-        const sinceISOString = sinceDate.toISOString();
-        const { count, error: countError } = await supabase
-          .from("workout_info")
-          .select("id", { count: "exact", head: true })
-          .eq("client_id", clientId)
-          .gte("created_at", sinceISOString);
-        console.log("[MetricsSection] 30-day count:", count, countError);
-        if (countError) throw countError;
-        setWorkoutCount(count || 0);
-      } catch (err: any) {
-        setWorkoutError(err.message || "Failed to fetch workout info");
-        setWorkoutInfo([]);
-        setWorkoutCount(0);
-      } finally {
-        setLoadingWorkout(false);
+    useEffect(() => {
+      console.log("[MetricsSection] Effect running, clientId:", clientId, "isActive:", isActive);
+      if (!clientId || !isActive || dataLoaded) {
+        console.log("[MetricsSection] Not loading - clientId:", clientId, "isActive:", isActive, "dataLoaded:", dataLoaded);
+        return;
       }
-    })();
-  }, [clientId]);
+      setLoadingWorkout(true)
+      setWorkoutError(null)
+      ;(async () => {
+        try {
+          console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
+          const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
+          console.log("[MetricsSection] Query result:", data, error);
+          if (error) throw error;
+          setWorkoutInfo(data || []);
 
-  const selectedMetrics = selectedKeys
-    .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
-    .filter(Boolean) as typeof METRIC_LIBRARY
-  const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
+          // Fetch count of workouts in last 30 days
+          const sinceDate = new Date();
+          sinceDate.setDate(sinceDate.getDate() - 30);
+          const sinceISOString = sinceDate.toISOString();
+          const { count, error: countError } = await supabase
+            .from("workout_info")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .gte("created_at", sinceISOString);
+          console.log("[MetricsSection] 30-day count:", count, countError);
+          if (countError) throw countError;
+          setWorkoutCount(count || 0);
+          setDataLoaded(true);
+        } catch (err: any) {
+          setWorkoutError(err.message || "Failed to fetch workout info");
+          setWorkoutInfo([]);
+          setWorkoutCount(0);
+        } finally {
+          setLoadingWorkout(false);
+        }
+      })();
+    }, [clientId, isActive, dataLoaded]);
 
-  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value
-    if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
-      setSelectedKeys([...selectedKeys, value])
+    const selectedMetrics = selectedKeys
+      .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
+      .filter(Boolean) as typeof METRIC_LIBRARY
+    const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
+
+    function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+      const value = e.target.value
+      if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
+        setSelectedKeys([...selectedKeys, value])
+      }
     }
-  }
 
-  function handleRemove(key: string) {
-    setSelectedKeys(selectedKeys.filter((k: string) => k !== key))
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (over && active.id !== over.id) {
-      const oldIndex = selectedKeys.indexOf(active.id as string)
-      const newIndex = selectedKeys.indexOf(over.id as string)
-      setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex))
+    function handleRemove(key: string) {
+      setSelectedKeys(selectedKeys.filter((k: string) => k !== key))
     }
-    setDraggingId(null)
-  }
+
+    function handleDragEnd(event: DragEndEvent) {
+      const { active, over } = event
+      if (over && active.id !== over.id) {
+        const oldIndex = selectedKeys.indexOf(active.id as string)
+        const newIndex = selectedKeys.indexOf(over.id as string)
+        setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex))
+      }
+      setDraggingId(null)
+    }
 
   return (
     <div className="space-y-8">
@@ -1854,8 +1867,11 @@ const MetricsSection = ({ clientId }: { clientId?: number }) => {
 }
 
 // Enhanced Workout Plan Section
-const WorkoutPlanSection = () => {
-  const { toast } = useToast()
+    const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+    const { toast } = useToast()
+    const [loading, setLoading] = useState(false)
+    const [workoutPlans, setWorkoutPlans] = useState<any[]>([])
+    const [dataLoaded, setDataLoaded] = useState(false)
   const [customExercises, setCustomExercises] = useState<Exercise[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
   const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() =>
@@ -2558,6 +2574,39 @@ const WorkoutPlanSection = () => {
     }
   }
 
+  // Data loading effect - placed after all hooks
+  useEffect(() => {
+    if (clientId && isActive && !dataLoaded) {
+      setLoading(true)
+      // Simulate API call - replace with actual workout plans fetching
+      setTimeout(() => {
+        setWorkoutPlans([
+          // Mock data - replace with actual workout plans
+          { id: 1, name: "Upper Body", exercises: [] },
+          { id: 2, name: "Lower Body", exercises: [] }
+        ])
+        setDataLoaded(true)
+        setLoading(false)
+      }, 1200)
+    }
+  }, [clientId, isActive, dataLoaded])
+
+  // Early return for loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+          <CardContent className="flex items-center justify-center py-16">
+            <div className="text-center space-y-4">
+              <LoadingSpinner />
+              <p className="text-gray-600 dark:text-gray-400">Loading workout plans...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-7 gap-8 h-full">
       {/* Enhanced Left Column - Weekly Calendar */}
@@ -3081,8 +3130,11 @@ const WorkoutPlanSection = () => {
 }
 
 // Enhanced Nutrition Plan Section
-const NutritionPlanSection = () => {
-  const [mealPlan, setMealPlan] = useState<Record<string, MealItem[]>>({
+  const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+    const [loading, setLoading] = useState(false)
+    const [nutritionData, setNutritionData] = useState<any>(null)
+    const [dataLoaded, setDataLoaded] = useState(false)
+    const [mealPlan, setMealPlan] = useState<Record<string, MealItem[]>>({
     breakfast: [
       { name: "Greek Yogurt with Berries", calories: 150, protein: 15, carbs: 20, fats: 2 },
       { name: "Whole Grain Toast", calories: 80, protein: 3, carbs: 15, fats: 1 },
@@ -3147,6 +3199,48 @@ const NutritionPlanSection = () => {
       ...prev,
       [mealType]: prev[mealType].filter((_, i) => i !== index),
     }))
+  }
+
+  // Data loading effect - placed after all hooks
+  useEffect(() => {
+    if (clientId && isActive && !dataLoaded) {
+      setLoading(true)
+      // Simulate API call - replace with actual nutrition data fetching
+      setTimeout(() => {
+        setNutritionData({
+          // Mock data - replace with actual nutrition data
+          dailyCalories: 2200,
+          meals: {}
+        })
+        setDataLoaded(true)
+        setLoading(false)
+      }, 900)
+    }
+  }, [clientId, isActive, dataLoaded])
+
+  // Early return for loading state
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+              <CardContent className="p-6 text-center">
+                <LoadingSpinner size="small" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="text-center space-y-4">
+              <LoadingSpinner />
+              <p className="text-gray-600 dark:text-gray-400">Loading nutrition plan...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   const totals = getTotalNutrition()
@@ -3385,9 +3479,11 @@ const NutritionPlanSection = () => {
 }
 
 // Enhanced Program Management Section
-const ProgramManagementSection = () => {
-  const [programs, setPrograms] = useState(mockPrograms)
-  const [filteredPrograms, setFilteredPrograms] = useState(mockPrograms)
+  const ProgramManagementSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+    const [loading, setLoading] = useState(false)
+    const [programs, setPrograms] = useState<any[]>([])
+    const [dataLoaded, setDataLoaded] = useState(false)
+    const [filteredPrograms, setFilteredPrograms] = useState(mockPrograms)
   const [selectedTag, setSelectedTag] = useState("All")
   const [sortBy, setSortBy] = useState("Recently updated")
   const [searchQuery, setSearchQuery] = useState("")
@@ -3395,7 +3491,7 @@ const ProgramManagementSection = () => {
 
   // Filter and sort programs
   useEffect(() => {
-    let filtered = programs
+    let filtered = mockPrograms
 
     // Filter by tag
     if (selectedTag !== "All") {
@@ -3429,7 +3525,7 @@ const ProgramManagementSection = () => {
     }
 
     setFilteredPrograms(filtered)
-  }, [programs, selectedTag, sortBy, searchQuery])
+  }, [mockPrograms, selectedTag, sortBy, searchQuery])
 
   const handleDeleteProgram = (id: number) => {
     setPrograms(programs.filter((p) => p.id !== id))
@@ -3446,6 +3542,37 @@ const ProgramManagementSection = () => {
     setPrograms([...programs, newProgram])
   }
 
+  // Data loading effect - placed after all hooks
+  useEffect(() => {
+    if (clientId && isActive && !dataLoaded) {
+      setLoading(true)
+      // Simulate API call - replace with actual programs fetching
+      setTimeout(() => {
+        setPrograms([
+          // Mock data - replace with actual programs
+          { id: 1, name: "Weight Loss Program", status: "active" },
+          { id: 2, name: "Strength Building", status: "completed" }
+        ])
+        setDataLoaded(true)
+        setLoading(false)
+      }, 1100)
+    }
+  }, [clientId, isActive, dataLoaded])
+
+  // Early return for loading state
+  if (loading) {
+    return (
+      <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+        <CardContent className="flex items-center justify-center py-16">
+          <div className="text-center space-y-4">
+            <LoadingSpinner />
+            <p className="text-gray-600 dark:text-gray-400">Loading programs...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <div className="space-y-8">
       {/* Enhanced Header with Search and Filters */}
@@ -3457,7 +3584,7 @@ const ProgramManagementSection = () => {
           <div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Program Management</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              {filteredPrograms.length} of {programs.length} programs
+              {filteredPrograms.length} of {mockPrograms.length} programs
             </p>
           </div>
         </div>
@@ -3701,6 +3828,36 @@ const ProgramManagementSection = () => {
   )
 }
 
+// Loading Spinner Component
+const LoadingSpinner = ({ size = "default" }: { size?: "small" | "default" | "large" }) => {
+  const sizeClasses = {
+    small: "h-4 w-4",
+    default: "h-8 w-8", 
+    large: "h-12 w-12"
+  }
+  
+  return (
+    <div className="flex items-center justify-center">
+      <div className={`${sizeClasses[size]} animate-spin rounded-full border-2 border-blue-500 border-t-transparent`} />
+    </div>
+  )
+}
+
+// Page Loading Component
+const PageLoading = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <LoadingSpinner size="large" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Loading Client Profile</h2>
+          <p className="text-gray-600 dark:text-gray-400">Please wait while we fetch the client data...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Enhanced Main Component
 export default function ClientDashboard() {
   const params = useParams();
@@ -3709,7 +3866,7 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([]);
   const [trainerNotes, setTrainerNotes] = useState<string>("");
@@ -3754,12 +3911,17 @@ export default function ClientDashboard() {
 
   // State for all clients of the trainer
   const [trainerClients, setTrainerClients] = useState<any[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
 
   // Fetch trainer id and clients for dropdown
   useEffect(() => {
     (async () => {
+      setClientsLoading(true);
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.email) return;
+      if (sessionError || !sessionData?.session?.user?.email) {
+        setClientsLoading(false);
+        return;
+      }
       const trainerEmail = sessionData.session.user.email;
       // Fetch trainer id
       const { data: trainerData, error: trainerError } = await supabase
@@ -3767,7 +3929,10 @@ export default function ClientDashboard() {
         .select("id")
         .eq("trainer_email", trainerEmail)
         .single();
-      if (trainerError || !trainerData?.id) return;
+      if (trainerError || !trainerData?.id) {
+        setClientsLoading(false);
+        return;
+      }
       // Fetch all client_ids for this trainer from the linking table
       const { data: linkRows, error: linkError } = await supabase
         .from("trainer_client_web")
@@ -3775,11 +3940,13 @@ export default function ClientDashboard() {
         .eq("trainer_id", trainerData.id);
       if (linkError || !linkRows || linkRows.length === 0) {
         setTrainerClients([]);
+        setClientsLoading(false);
         return;
       }
       const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
       if (clientIds.length === 0) {
         setTrainerClients([]);
+        setClientsLoading(false);
         return;
       }
       // Fetch client names for these client_ids
@@ -3792,6 +3959,7 @@ export default function ClientDashboard() {
       } else {
         setTrainerClients([]);
       }
+      setClientsLoading(false);
     })();
   }, []);
 
@@ -3833,23 +4001,66 @@ export default function ClientDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!clientId) {
+      setLoading(false);
+      setError("No client ID provided");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     (async () => {
-      const { data, error } = await supabase
-        .from("client")
-        .select("*")
-        .eq("client_id", clientId)
-        .single();
-      if (error) setError(error.message);
-      else setClient(data);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase
+          .from("client")
+          .select("*")
+          .eq("client_id", clientId)
+          .single();
+        
+        if (error) {
+          setError(error.message);
+        } else if (!data) {
+          setError("Client not found");
+        } else {
+          setClient(data);
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch client data");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [clientId]);
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (!client) return <div>No client found.</div>;
+  // Show page loading while fetching main client data
+  if (loading) return <PageLoading />;
+  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-red-500 text-6xl">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Error Loading Client</h2>
+          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!client) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-gray-400 text-6xl">👤</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">No Client Found</h2>
+          <p className="text-gray-600 dark:text-gray-400">The requested client could not be found.</p>
+        </div>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
@@ -3883,7 +4094,7 @@ export default function ClientDashboard() {
                   </h1>
                   <div className="flex items-center gap-3 mt-1">
                     <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-lg">
-                      {client.membershipType}
+                      {client.membershipType || "Premium"}
                     </Badge>
                     <span className="text-sm text-gray-600 dark:text-gray-400">
                       Member since {new Date(client.created_at).getFullYear()}
@@ -3916,8 +4127,13 @@ export default function ClientDashboard() {
                     variant="outline"
                     size="sm"
                     className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800 transition-all duration-300"
+                    disabled={clientsLoading}
                   >
-                    All Clients
+                    {clientsLoading ? (
+                      <LoadingSpinner size="small" />
+                    ) : (
+                      "All Clients"
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -3942,16 +4158,16 @@ export default function ClientDashboard() {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl">
                     <img
-                      src={client.avatarUrl || "/placeholder.svg"}
+                      src={client.cl_pic || "/placeholder.svg"}
                       alt={client.cl_name}
                       className="w-full h-full rounded-2xl object-cover"
                     />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.name}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{client.email}</p>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.cl_name}</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{client.cl_email}</p>
                     <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 text-xs mt-1">
-                      {client.membershipType}
+                      {client.membershipType || "Premium"}
                     </Badge>
                   </div>
                 </div>
@@ -3962,7 +4178,7 @@ export default function ClientDashboard() {
                     <div className="text-xs text-blue-700 dark:text-blue-300">Weight (kg)</div>
                   </div>
                   <div className="text-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-xl">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{client.cl_eight}</div>
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{client.cl_height}</div>
                     <div className="text-xs text-green-700 dark:text-green-300">Height (cm)</div>
                   </div>
                 </div>
@@ -3972,7 +4188,7 @@ export default function ClientDashboard() {
                     <User className="h-4 w-4 text-gray-400" />
                     <span className="text-gray-600 dark:text-gray-400">Age:</span>
                     <span className="font-medium text-gray-900 dark:text-white">
-                      {new Date().getFullYear() - new Date(client.dob).getFullYear()}
+                      {client.cl_dob ? new Date().getFullYear() - new Date(client.cl_dob).getFullYear() : "N/A"}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
@@ -3987,19 +4203,14 @@ export default function ClientDashboard() {
                 <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Current Goals</h4>
                   <div className="space-y-2">
-                    <div>
-                      <h5 className="font-semibold text-gray-900 dark:text-white mb-1 text-xs">All Clients' Primary Goals:</h5>
-                      {client.cl_primary_goal.length === 0 ? (
-                        <span className="text-gray-400 text-xs">No goals found.</span>
-                      ) : (
-                        client.map((goal: string, index: number) => (
-                          <div key={index} className="flex items-center gap-2 text-xs mb-1">
-                            <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
-                            <span className="text-gray-600 dark:text-gray-400">{goal}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    {client.cl_primary_goal ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_primary_goal}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No goals set yet.</span>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -4034,8 +4245,7 @@ export default function ClientDashboard() {
         <div className="space-y-8">
           {activeTab === "overview" && (
             <div className="space-y-8">
-              <ClientStats clientId={client?.id} />
-              <MetricsSection clientId={clientId} />
+              <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -4062,7 +4272,14 @@ export default function ClientDashboard() {
                         {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
                         <div className="flex gap-2 mt-2">
                           <Button size="sm" onClick={handleSaveTrainerNotes} disabled={isSavingNotes}>
-                            {isSavingNotes ? "Saving..." : "Save"}
+                            {isSavingNotes ? (
+                              <div className="flex items-center gap-2">
+                                <LoadingSpinner size="small" />
+                                Saving...
+                              </div>
+                            ) : (
+                              "Save"
+                            )}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => { setIsEditingNotes(false); setNotesError(null); setNotesDraft(trainerNotes); }} disabled={isSavingNotes}>
                             Cancel
@@ -4125,10 +4342,10 @@ export default function ClientDashboard() {
               </div>
             </div>
           )}
-          {activeTab === "metrics" && <MetricsSection clientId={client.id} />}
-          {activeTab === "workout" && <WorkoutPlanSection />}
-          {activeTab === "nutrition" && <NutritionPlanSection />}
-          {activeTab === "programs" && <ProgramManagementSection />}
+          {activeTab === "metrics" && <MetricsSection clientId={clientId} isActive={activeTab === "metrics"} />}
+          {activeTab === "workout" && <WorkoutPlanSection clientId={clientId} isActive={activeTab === "workout"} />}
+          {activeTab === "nutrition" && <NutritionPlanSection clientId={clientId} isActive={activeTab === "nutrition"} />}
+          {activeTab === "programs" && <ProgramManagementSection clientId={clientId} isActive={activeTab === "programs"} />}
         </div>
       </div>
     </div>
