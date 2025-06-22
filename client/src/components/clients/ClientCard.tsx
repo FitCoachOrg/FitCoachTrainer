@@ -1,10 +1,26 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import * as Icons from "@/lib/icons";
-import { MappedClient } from "@/hooks/use-clients";
 import { useLocation } from "wouter";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Button } from "@/components/ui/button";
+
+interface MappedClient {
+    client_id: number;
+    name: string;
+    email: string;
+    is_active: boolean;
+    created_at: string;
+    avatar_url: string | null;
+    username?: string;
+    height?: number;
+    weight?: number;
+    dob?: string;
+    phone?: string;
+    program?: {
+        program_id: number;
+        program_name: string;
+    } | null;
+}
 
 interface ClientCardProps {
   client: MappedClient;
@@ -25,100 +41,53 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onEdit, onViewProfile }
   ];
 
   return (
-    <Card className="overflow-visible group relative">
-      <CardContent className="p-0">
-        <div className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0">
-              {client.avatarUrl ? (
-                <img 
-                  src={client.avatarUrl} 
-                  alt={client.name} 
-                  className="w-full h-full object-cover"
-                />
+    <div className="bg-white dark:bg-black shadow-lg rounded-xl overflow-hidden transform hover:-translate-y-1 transition-transform duration-300">
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gray-200 flex items-center justify-center">
+              {client.avatar_url ? (
+                <img src={client.avatar_url} alt={client.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300">
-                  <Icons.UserIcon className="h-7 w-7" />
-                </div>
+                <Icons.UserIcon className="h-8 w-8 text-gray-400" />
               )}
             </div>
-            
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
-                <h3 className="text-lg font-semibold truncate">{client.name}</h3>
-                <Badge variant={client.isActive ? "default" : "secondary"}>
-                  {client.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                {client.email} {client.username ? `• ${client.username}` : ""}
-              </p>
-              
-              <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                <p>Height: {client.height ?? "-"}cm • Weight: {client.weight ?? "-"}kg</p>
-                <p>DOB: {client.dob ? new Date(client.dob).toLocaleDateString() : "-"}</p>
-                {client.phone && <p>Phone: {client.phone}</p>}
-              </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white">{client.name}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{client.email}</p>
             </div>
           </div>
+          <Badge variant={client.is_active ? "default" : "secondary"}>
+            {client.is_active ? "Active" : "Inactive"}
+          </Badge>
+        </div>
+
+        <div className="mt-4">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Current Program:</p>
+          <p className="text-md font-semibold text-gray-800 dark:text-white">{client.program?.program_name || 'Not Assigned'}</p>
         </div>
         
-        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 bg-gray-50 dark:bg-slate-800/50">
-          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-            <Icons.CalendarIcon className="mr-2 h-4 w-4" />
-            <span>
-              Joined {new Date(client.createdAt).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      </CardContent>
-
-      {/* Dropdown below card */}
-      <div className="absolute left-0 right-0 top-full mt-2 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-4 mx-2">
-          <div className="h-32 w-full mb-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={progressData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <XAxis dataKey="week" hide />
-                <YAxis domain={[0, 100]} hide />
-                <Tooltip />
-                <Line type="monotone" dataKey="progress" stroke="#2563eb" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex gap-2 mb-3">
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate("/nutrition-plans")}>
-              <Icons.UtensilsIcon className="mr-2 h-4 w-4" />
-              Nutritional Plan
-            </Button>
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => navigate("/fitness-plans")}>
-              <Icons.DumbbellIcon className="mr-2 h-4 w-4" />
-              Fitness Plan
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1"
-              onClick={() => onEdit(client)}
-            >
-              <Icons.PencilIcon className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-            <Button 
-              size="sm" 
-              className="flex-1"
-              onClick={() => navigate(`/client/${client.client_id}`)}
-            >
-              <Icons.UserIcon className="mr-2 h-4 w-4" />
-              Profile
-            </Button>
-          </div>
+        <div className="h-24 mt-4 -mx-5">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={progressData} margin={{ top: 10, right: 20, left: 20, bottom: 0 }}>
+              <Tooltip
+                contentStyle={{
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '0.5rem',
+                }}
+              />
+              <Line type="monotone" dataKey="progress" stroke="#3b82f6" strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
-    </Card>
+      
+      <div className="bg-gray-50 dark:bg-slate-900 px-5 py-3 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onEdit(client)}>Quick Edit</Button>
+        <Button variant="default" size="sm" onClick={() => navigate(`/client/${client.client_id}`)}>View Profile</Button>
+      </div>
+    </div>
   );
 };
 

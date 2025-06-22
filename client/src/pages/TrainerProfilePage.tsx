@@ -248,16 +248,19 @@ export default function TrainerProfilePage() {
                     />
                     <br />
                     <input
-                      className="text-gray-600 border rounded px-2 py-1 mt-2"
+                      className="text-sm text-gray-500 border rounded px-2 py-1"
                       value={editEmail}
                       onChange={e => setEditEmail(e.target.value)}
-                      disabled={true} // set to false if you want to allow email editing
+                      disabled={loading}
                     />
                   </>
                 ) : (
                   <>
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">{trainer.trainer_name}</h1>
-                    <p className="text-gray-600">Professional Fitness Trainer</p>
+                    <h1 className="text-2xl font-bold text-gray-900">{trainer.trainer_name}</h1>
+                    <div className="flex items-center justify-center text-sm text-gray-500 mt-1">
+                      <Mail className="w-4 h-4 mr-2" />
+                      {trainer.trainer_email}
+                    </div>
                   </>
                 )}
               </div>
