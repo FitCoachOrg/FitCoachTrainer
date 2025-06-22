@@ -925,6 +925,7 @@ interface Exercise {
 
 interface WorkoutExercise {
   workout: string
+  day?: string
   duration: number
   sets: number
   reps: string
@@ -1872,7 +1873,6 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
     const [loading, setLoading] = useState(false)
     const [workoutPlans, setWorkoutPlans] = useState<any[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
-  const [customExercises, setCustomExercises] = useState<Exercise[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
   const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() =>
     Array(7)
@@ -1895,6 +1895,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
     timestamp: string
     responseTime?: number
   } | null>(null)
+  const [weeklyBreakdown, setWeeklyBreakdown] = useState<Record<string, string> | null>(null)
   const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
   const [showEditPlanModal, setShowEditPlanModal] = useState(false)
   const [editedPlan, setEditedPlan] = useState<WorkoutPlan | null>(null)
@@ -1916,25 +1917,36 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 
   // Load data from localStorage on component mount
   useEffect(() => {
-    const savedExercises = localStorage.getItem("custom-exercises")
     const savedWeeklyPlan = localStorage.getItem("weekly-plan")
+    const savedAiPlans = localStorage.getItem("ai-generated-plans")
 
-    if (savedExercises) {
-      setCustomExercises(JSON.parse(savedExercises))
-    }
     if (savedWeeklyPlan) {
       setWeeklyPlan(JSON.parse(savedWeeklyPlan))
     }
+    
+    if (savedAiPlans) {
+      try {
+        const parsedPlans = JSON.parse(savedAiPlans)
+        setAiGeneratedPlans(parsedPlans)
+        console.log("📚 Loaded", parsedPlans.length, "AI plans from localStorage")
+      } catch (error) {
+        console.error("Error parsing saved AI plans:", error)
+        localStorage.removeItem("ai-generated-plans") // Clear corrupted data
+      }
+    }
   }, [])
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem("custom-exercises", JSON.stringify(customExercises))
-  }, [customExercises])
 
   useEffect(() => {
     localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
   }, [weeklyPlan])
+
+  // Save AI generated plans to localStorage whenever they change
+  useEffect(() => {
+    if (aiGeneratedPlans.length > 0) {
+      localStorage.setItem("ai-generated-plans", JSON.stringify(aiGeneratedPlans))
+      console.log("💾 Saved", aiGeneratedPlans.length, "AI plans to localStorage")
+    }
+  }, [aiGeneratedPlans])
 
   // New editable table state for workout plans
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
@@ -1948,7 +1960,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
       ...aiGeneratedPlans.flatMap((plan) =>
         plan.exercises.map((exercise: any, index: number) => ({
           id: `${plan.id}-${index}`,
-          day: "Monday", // Default day
+          day: exercise.day || "Monday", // Use the day from AI response or default to Monday
           exercise: exercise.workout,
           sets: exercise.sets,
           reps: exercise.reps,
@@ -2396,6 +2408,209 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
   }
 
   // Function to parse AI response and convert to recommended plans format
+  // Clear all saved AI plans
+  const handleClearAIPlans = () => {
+    setAiGeneratedPlans([])
+    localStorage.removeItem("ai-generated-plans")
+    toast({
+      title: "Exercise Library Cleared",
+      description: "All AI generated plans have been removed",
+    })
+  }
+
+  // Apply AI weekly breakdown to workout schedule
+  const handleApplyWeeklyBreakdown = async () => {
+    if (aiGeneratedPlans.length === 0) {
+      toast({
+        title: "No AI Plans Available",
+        description: "Generate an AI plan first to apply weekly breakdown",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!clientId) {
+      toast({
+        title: "No Client Selected",
+        description: "Client ID is required to save workout plans",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Use all available AI plans from the exercise library
+    const allAvailablePlans = aiGeneratedPlans
+
+    // Convert all AI generated plans to individual workout items with correct days
+    const appliedWorkouts = allAvailablePlans.flatMap((plan) =>
+      plan.exercises.map((exercise: any, index: number) => {
+        // Find the correct day from the AI response data
+        const exerciseDay = exercise.day || "Monday" // Use the day from AI response or default
+        
+        return {
+          id: `applied-${plan.id}-${index}-${Date.now()}`, // Add timestamp to ensure uniqueness
+          day: exerciseDay,
+          exercise: exercise.workout,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          duration: exercise.duration,
+          weight: exercise.weights,
+          coach_tip: exercise.coach_tip,
+          category: exercise.category,
+          body_part: exercise.body_part,
+          icon: exercise.icon,
+          source: "ai-applied",
+          planName: plan.name, // Track which plan this exercise came from
+        }
+      })
+    )
+
+    // Update the workout table with applied exercises
+    setAllWorkoutPlans(appliedWorkouts)
+
+    // Also populate the weekly schedule calendar
+    const newScheduledWorkouts: any[][] = Array(7).fill(null).map(() => [])
+    const dayOrder = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6 }
+
+    // Group all AI plans by day for the weekly calendar
+    allAvailablePlans.forEach((plan) => {
+      plan.exercises.forEach((exercise: any) => {
+        const exerciseDay = exercise.day || "Monday"
+        const dayIndex = dayOrder[exerciseDay as keyof typeof dayOrder] ?? 0
+        
+        // Create a calendar-friendly workout object
+        const calendarWorkout = {
+          id: `calendar-${plan.id}-${exercise.workout}-${Date.now()}`,
+          name: exercise.workout,
+          duration: exercise.duration || 30,
+          difficulty: plan.difficulty || "Moderate",
+          type: exercise.category || "Strength",
+          sets: exercise.sets,
+          reps: exercise.reps,
+          weights: exercise.weights,
+          coach_tip: exercise.coach_tip,
+          icon: exercise.icon,
+          planName: plan.name, // Track source plan
+        }
+        
+        newScheduledWorkouts[dayIndex].push(calendarWorkout)
+      })
+    })
+
+    // Update the scheduled workouts for the calendar
+    setScheduledWorkouts(newScheduledWorkouts)
+
+    // Save to Supabase database
+    try {
+      console.log("💾 Saving workout plans to Supabase...")
+      
+      // Prepare data for Supabase insertion
+      const workoutPlansForDB = allAvailablePlans.flatMap((plan) =>
+        plan.exercises.map((exercise: any) => {
+          // Calculate the date based on the day
+          const today = new Date()
+          const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
+          const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+          const targetDayName = exercise.day || "Monday"
+          const targetDayIndex = dayNames.indexOf(targetDayName)
+          
+          // Calculate days to add to get to the target day
+          let daysToAdd = targetDayIndex - currentDay
+          if (daysToAdd < 0) daysToAdd += 7 // If target day is in the past this week, schedule for next week
+          
+          const targetDate = new Date(today)
+          targetDate.setDate(today.getDate() + daysToAdd)
+          
+          // Helper function to convert to numeric or null
+          const toNumericOrNull = (value: any) => {
+            if (value === null || value === undefined || value === "" || value === "N/A") {
+              return null
+            }
+            const num = Number(value)
+            return isNaN(num) ? null : num
+          }
+
+          // Helper function to convert reps (can be text like "10-12" or "N/A")
+          const parseReps = (value: any) => {
+            if (value === null || value === undefined || value === "" || value === "N/A") {
+              return null
+            }
+            // If it's already a number, convert to string
+            if (typeof value === 'number') {
+              return value.toString()
+            }
+            // If it's a string, return as is (handles cases like "10-12", "to failure", etc.)
+            return String(value)
+          }
+
+          return {
+            client_id: clientId,
+            workout: exercise.workout,
+            duration: toNumericOrNull(exercise.duration),
+            sets: toNumericOrNull(exercise.sets),
+            reps: parseReps(exercise.reps),
+            weights: exercise.weights || null,
+            for_date: targetDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+            for_time: exercise.for_time || "08:00:00", // Default to 8 AM if no time specified
+            workout_yt_link: exercise.workout_yt_link || null,
+            coach_tip: exercise.coach_tip || null,
+            icon: exercise.icon || null,
+            category: exercise.category || null,
+            body_part: exercise.body_part || null,
+            workout_id: crypto.randomUUID(), // Generate unique UUID
+          }
+        })
+      )
+
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('workout_plan')
+        .insert(workoutPlansForDB)
+        .select()
+
+      if (error) {
+        console.error("❌ Error saving to Supabase:", error)
+        toast({
+          title: "Database Error",
+          description: `Failed to save workout plans: ${error.message}`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("✅ Successfully saved to Supabase:", data)
+
+      // Create a summary of applied plans
+      const planNames = allAvailablePlans.map(plan => plan.name).join(", ")
+      const totalExercises = appliedWorkouts.length
+      const totalPlans = allAvailablePlans.length
+
+      toast({
+        title: "Exercise Library Applied & Saved",
+        description: `Applied ${totalExercises} exercises from ${totalPlans} AI plans to your schedule and database`,
+      })
+
+      console.log("📅 Applied workout plans:", {
+        totalPlans,
+        totalExercises,
+        planNames,
+        savedToDatabase: data?.length || 0,
+        exercisesByDay: newScheduledWorkouts.map((day, index) => ({
+          day: Object.keys(dayOrder)[index],
+          exerciseCount: day.length
+        }))
+      })
+
+    } catch (error) {
+      console.error("💥 Exception saving to Supabase:", error)
+      toast({
+        title: "Save Error",
+        description: "Failed to save workout plans to database",
+        variant: "destructive",
+      })
+    }
+  }
+
   const parseAIResponseToPlans = (aiResponseText: string) => {
     try {
       // Extract JSON from the AI response
@@ -2410,10 +2625,16 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
         throw new Error("Invalid workout plan format in AI response")
       }
 
+      // Store the weekly breakdown if available
+      if (aiData.weekly_breakdown) {
+        setWeeklyBreakdown(aiData.weekly_breakdown)
+      }
+
       // Convert AI workout plan to recommended plans format
+      const timestamp = new Date().toLocaleString()
       const aiPlan: WorkoutPlan = {
         id: `ai-plan-${Date.now()}`,
-        name: `AI Generated Plan`,
+        name: `AI Plan - ${timestamp}`,
         type: "AI Generated",
         duration: aiData.workout_plan.reduce((total: number, exercise: any) => total + (exercise.duration || 0), 0),
         difficulty: "AI Recommended",
@@ -2422,6 +2643,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
         body_part: "full_body",
         exercises: aiData.workout_plan.map((exercise: any) => ({
           workout: exercise.workout,
+          day: exercise.day || "Monday", // Preserve the day from AI response
           duration: exercise.duration || 0,
           sets: exercise.sets || 1,
           reps: exercise.reps ? exercise.reps.toString() : "1",
@@ -2480,11 +2702,12 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
           // Set client info
           setClientInfo(result.clientInfo)
 
-          // If AI response is available, parse and add to recommended plans
-          if (result.aiResponse) {
-            try {
-              const aiPlans = parseAIResponseToPlans(result.aiResponse.response)
-              setAiGeneratedPlans(aiPlans)
+                      // If AI response is available, parse and add to recommended plans
+            if (result.aiResponse) {
+              try {
+                const newAiPlans = parseAIResponseToPlans(result.aiResponse.response)
+                // Accumulate plans instead of replacing them
+                setAiGeneratedPlans(prev => [...prev, ...newAiPlans])
               setAiResponse(result.aiResponse)
 
               // Always show the complete AI response first
@@ -2724,14 +2947,27 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
           {/* Enhanced AI Generated Plans Section */}
           {aiGeneratedPlans.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-                  <Sparkles className="h-4 w-4 text-white" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
+                    <Sparkles className="h-4 w-4 text-white" />
+                  </div>
+                  <h4 className="font-bold text-gray-900 dark:text-gray-100">Exercise Library</h4>
+                  <Badge className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 dark:from-purple-900 dark:to-pink-900 dark:text-purple-300 border-0">
+                    {aiGeneratedPlans.length} plans
+                  </Badge>
                 </div>
-                <h4 className="font-bold text-gray-900 dark:text-gray-100">AI Generated Plans</h4>
-                <Badge className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 dark:from-purple-900 dark:to-pink-900 dark:text-purple-300 border-0">
-                  {aiGeneratedPlans.length}
-                </Badge>
+                {aiGeneratedPlans.length > 0 && (
+                  <Button
+                    onClick={handleClearAIPlans}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 text-xs"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Clear All
+                  </Button>
+                )}
               </div>
               {aiGeneratedPlans.map((plan) => (
                 <div
@@ -2789,62 +3025,20 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
                 </div>
               ))}
+              
+              {/* Apply Weekly Schedule Button */}
+              <Button
+                onClick={handleApplyWeeklyBreakdown}
+                disabled={aiGeneratedPlans.length === 0}
+                className="w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Apply All Plans to Schedule
+              </Button>
             </div>
           )}
 
-          {/* Enhanced Custom Exercises Section */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                <Dumbbell className="h-4 w-4 text-white" />
-              </div>
-              <h4 className="font-bold text-gray-900 dark:text-gray-100">Custom Exercises</h4>
-              <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-0">
-                {customExercises.length}
-              </Badge>
-            </div>
-            {customExercises.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Dumbbell className="w-8 h-8" />
-                </div>
-                <p className="text-sm mb-2">No custom exercises yet</p>
-                <p className="text-xs">Add your first exercise to get started</p>
-              </div>
-            ) : (
-              customExercises.map((exercise) => (
-                <div
-                  key={exercise.id}
-                  draggable
-                  className="group p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 cursor-grab active:cursor-grabbing shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                      <Activity className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h5 className="font-bold text-gray-900 dark:text-gray-100 text-sm mb-1">{exercise.name}</h5>
-                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-2">
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
-                        >
-                          {exercise.difficulty}
-                        </Badge>
-                        {exercise.duration && (
-                          <>
-                            <Clock className="h-3 w-3" />
-                            <span>{exercise.duration}</span>
-                          </>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{exercise.instructions}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+
         </div>
       </div>
 
