@@ -4,5 +4,21 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment files - comprehensive patterns
 .env
 .env.local
+.env.development
+.env.production
+.env.test
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
+client/.env
+client/.env.local
+client/src/.env
+client/src/.env.local
+server/.env
+server/.env.local
