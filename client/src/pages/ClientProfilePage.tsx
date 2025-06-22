@@ -59,6 +59,7 @@ import { ViewTabs } from "@/components/view-tabs"
 import { ProgramCardsContainer } from "@/components/program-cards-container"
 import { SaveButton } from "@/components/save-button"
 import { AddTaskDropdown } from "@/components/add-task-dropdown"
+import WorkoutPlanSection from "@/components/WorkoutPlanSection"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,6 +87,7 @@ import { supabase } from "@/lib/supabase"
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
+import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -641,6 +643,252 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: {
       </DialogContent>
     </Dialog>
   );
+};
+
+// AI Notes Summary Popup Component
+const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
+  isOpen: boolean;
+  onClose: () => void;
+  summaryResponse: any | null;
+  clientName?: string;
+}) => {
+  const [activeTab, setActiveTab] = useState<'summary' | 'actions' | 'insights' | 'raw'>('summary');
+  const [parsedSummary, setParsedSummary] = useState<any>(null);
+
+  // Parse summary from AI response
+  useEffect(() => {
+    if (summaryResponse?.aiResponse?.response) {
+      try {
+        const jsonMatch = summaryResponse.aiResponse.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsedData = JSON.parse(jsonMatch[0]);
+          setParsedSummary(parsedData);
+        }
+      } catch (error) {
+        console.error('Error parsing summary:', error);
+      }
+    }
+  }, [summaryResponse]);
+
+  if (!isOpen || !summaryResponse) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
+              📋
+            </div>
+            AI Notes Summary & Action Items{clientName ? ` for ${clientName}` : ''}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <p className="text-sm text-purple-700 dark:text-purple-300">
+              Your trainer notes have been analyzed using AI to generate insights, action items, and recommendations.
+            </p>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            {['summary', 'actions', 'insights', 'raw'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+                  activeTab === tab
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {tab === 'summary' ? 'Summary' : tab === 'actions' ? 'Action Items' : tab === 'insights' ? 'Insights' : 'Raw Data'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'summary' && parsedSummary?.summary && (
+            <div className="space-y-6">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Key Points</h3>
+                <ul className="space-y-2">
+                  {parsedSummary.summary.key_points?.map((point: string, index: number) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">•</span>
+                      <span className="text-gray-700 dark:text-gray-300">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Client Progress</h4>
+                  <p className="text-sm text-green-700 dark:text-green-400">{parsedSummary.summary.client_progress}</p>
+                </div>
+                
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <h4 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-2">Challenges Identified</h4>
+                  <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
+                    {parsedSummary.summary.challenges_identified?.map((challenge: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{challenge}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {parsedSummary.summary.successes_highlighted?.length > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Successes Highlighted</h4>
+                  <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                    {parsedSummary.summary.successes_highlighted.map((success: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{success}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'actions' && parsedSummary?.action_items && (
+            <div className="space-y-6">
+              <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg border border-red-200 dark:border-red-800">
+                <h3 className="text-lg font-semibold mb-4 text-red-800 dark:text-red-300">Immediate Actions</h3>
+                <div className="space-y-3">
+                  {parsedSummary.action_items.immediate_actions?.map((action: any, index: number) => (
+                    <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                      <div className={`px-2 py-1 rounded text-xs font-medium ${
+                        action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                        action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {action.priority}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{action.action}</p>
+                        <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          <span>⏰ {action.timeframe}</span>
+                          <span>📂 {action.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800 dark:text-blue-300">Follow-up Items</h3>
+                <div className="space-y-3">
+                  {parsedSummary.action_items.follow_up_items?.map((action: any, index: number) => (
+                    <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                      <div className={`px-2 py-1 rounded text-xs font-medium ${
+                        action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                        action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {action.priority}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{action.action}</p>
+                        <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          <span>⏰ {action.timeframe}</span>
+                          <span>📂 {action.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'insights' && parsedSummary?.insights && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">Patterns Observed</h4>
+                  <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
+                    {parsedSummary.insights.patterns_observed?.map((pattern: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{pattern}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2">Areas for Improvement</h4>
+                  <ul className="text-sm text-orange-700 dark:text-orange-400 space-y-1">
+                    {parsedSummary.insights.areas_for_improvement?.map((area: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{area}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Positive Trends</h4>
+                  <ul className="text-sm text-green-700 dark:text-green-400 space-y-1">
+                    {parsedSummary.insights.positive_trends?.map((trend: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{trend}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {parsedSummary.next_session_focus && (
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border">
+                    <h4 className="font-semibold text-indigo-800 dark:text-indigo-300 mb-2">Next Session Focus</h4>
+                    <div className="space-y-2 text-sm text-indigo-700 dark:text-indigo-400">
+                      {parsedSummary.next_session_focus.primary_objectives && (
+                        <div>
+                          <span className="font-medium">Objectives:</span>
+                          <ul className="ml-4 mt-1">
+                            {parsedSummary.next_session_focus.primary_objectives.map((obj: string, index: number) => (
+                              <li key={index}>• {obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'raw' && (
+            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                {summaryResponse.aiResponse?.response || 'No response data available'}
+              </pre>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button onClick={onClose} variant="outline">
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 };
 
 interface EditableSectionProps {
@@ -1514,1152 +1762,11 @@ const MetricsSection = () => {
   );
 };
 
-const WorkoutPlanSection = () => {
-  const { toast } = useToast()
-  const [customExercises, setCustomExercises] = useState<Exercise[]>([])
-  const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
-  const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() => Array(7).fill(null).map(() => []))
-  const [showAddExercise, setShowAddExercise] = useState(false)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [showClientDataPopup, setShowClientDataPopup] = useState(false)
-  const [clientInfo, setClientInfo] = useState<any>(null)
-  const [showAIResponsePopup, setShowAIResponsePopup] = useState(false)
-  const [aiResponse, setAiResponse] = useState<any>(null)
-  const [aiGeneratedPlans, setAiGeneratedPlans] = useState<WorkoutPlan[]>([])
-  const [showAIMetricsPopup, setShowAIMetricsPopup] = useState(false)
-  const [aiMetrics, setAiMetrics] = useState<{
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    model: string
-    timestamp: string
-    responseTime?: number
-  } | null>(null)
-  const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
-  const [showEditPlanModal, setShowEditPlanModal] = useState(false)
-  const [editedPlan, setEditedPlan] = useState<WorkoutPlan | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStartTime, setDragStartTime] = useState(0)
-  const [mouseDownTime, setMouseDownTime] = useState(0)
-  const [mouseDownPosition, setMouseDownPosition] = useState({ x: 0, y: 0 })
-
-  const [newExercise, setNewExercise] = useState<Omit<Exercise, "id" | "createdAt">>({
-  name: "",
-  instructions: "",
-  sets: "",
-  reps: "",
-  duration: "",
-  equipment: "",
-  difficulty: "Beginner",
-})
-  const [showProfileCard, setShowProfileCard] = useState(false)
-
-  // Load data from localStorage on component mount
-  useEffect(() => {
-    const savedExercises = localStorage.getItem("custom-exercises")
-    const savedWeeklyPlan = localStorage.getItem("weekly-plan")
-
-    if (savedExercises) {
-      setCustomExercises(JSON.parse(savedExercises))
-    }
-    if (savedWeeklyPlan) {
-      setWeeklyPlan(JSON.parse(savedWeeklyPlan))
-    }
-  }, [])
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem("custom-exercises", JSON.stringify(customExercises))
-  }, [customExercises])
-
-  useEffect(() => {
-    localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
-  }, [weeklyPlan])
-
-  // New editable table state for workout plans
-  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
-  const [editValue, setEditValue] = useState<string | number>("")
-  const [allWorkoutPlans, setAllWorkoutPlans] = useState<any[]>([])
-
-  // Initialize workout plans from recommended and AI generated
-  useEffect(() => {
-    const initialPlans = [
-      // Convert AI generated plans to flat exercises
-      ...aiGeneratedPlans.flatMap(plan => 
-        plan.exercises.map((exercise: any, index: number) => ({
-          id: `${plan.id}-${index}`,
-          day: "Monday", // Default day
-          exercise: exercise.workout,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          duration: exercise.duration,
-          weight: exercise.weights,
-          coach_tip: exercise.coach_tip,
-          category: exercise.category,
-          body_part: exercise.body_part,
-          icon: exercise.icon,
-          source: "ai"
-        }))
-      )
-    ];
-    setAllWorkoutPlans(initialPlans);
-  }, [aiGeneratedPlans])
-
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-  const weightOptions = [
-    "bodyweight",
-    "5kg",
-    "10kg", 
-    "15kg",
-    "20kg",
-    "25kg",
-    "30kg",
-    "Dumbbells",
-    "Barbell",
-    "Kettlebell",
-    "Resistance Bands",
-  ]
-
-  const getDayColor = (day: string) => {
-    const colors = {
-      Monday: "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm",
-      Tuesday: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm", 
-      Wednesday: "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm",
-      Thursday: "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm",
-      Friday: "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm",
-      Saturday: "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm",
-      Sunday: "bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-sm",
-    }
-    return colors[day as keyof typeof colors] || "bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-sm"
-  }
-
-  const handleCellClick = (workout: any, field: string) => {
-    setEditingCell({ id: workout.id, field })
-    setEditValue(workout[field])
-  }
-
-  const handleSave = () => {
-    if (editingCell) {
-      setAllWorkoutPlans((prev) =>
-        prev.map((w) =>
-          w.id === editingCell.id
-            ? {
-                ...w,
-                [editingCell.field]:
-                  editingCell.field === "sets" || editingCell.field === "duration" ? Number(editValue) : editValue,
-              }
-            : w,
-        ),
-      )
-      setEditingCell(null)
-      setEditValue("")
-    }
-  }
-
-  const handleCancel = () => {
-    setEditingCell(null)
-    setEditValue("")
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave()
-    } else if (e.key === "Escape") {
-      handleCancel()
-    }
-  }
-
-  const handleDeleteWorkout = (id: string) => {
-    setAllWorkoutPlans((prev) => prev.filter((w) => w.id !== id))
-  }
-
-  const handleAddNewWorkout = () => {
-    const newWorkout = {
-      id: Date.now().toString(),
-      day: "Monday",
-      exercise: "New Exercise",
-      sets: 3,
-      reps: "10",
-      duration: 30,
-      weight: "bodyweight",
-      coach_tip: "Focus on proper form",
-      category: "strength",
-      body_part: "full_body",
-      icon: "💪",
-      source: "custom"
-    }
-    setAllWorkoutPlans((prev) => [...prev, newWorkout])
-  }
-
-  const renderEditableCell = (
-    workout: any,
-    field: string,
-    type: "text" | "number" | "select" | "textarea" = "text",
-  ) => {
-    const isEditing = editingCell?.id === workout.id && editingCell?.field === field
-    const value = workout[field]
-
-    if (isEditing) {
-      if (type === "select") {
-        const options = field === "day" ? days : weightOptions
-        return (
-          <div className="flex items-center gap-1">
-            <Select
-              value={String(editValue)}
-              onValueChange={setEditValue}
-              onOpenChange={(open) => !open && handleSave()}
-            >
-              <SelectTrigger className="h-6 min-w-[80px] text-xs border-0 p-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option) => (
-                  <SelectItem key={option} value={option} className="text-xs">
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
-      }
-
-      if (type === "textarea") {
-        return (
-          <div className="flex items-start gap-1">
-            <Textarea
-              value={String(editValue)}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="min-h-[60px] text-xs resize-none w-full border-0 p-1"
-              rows={3}
-              autoFocus
-            />
-            <div className="flex flex-col gap-1 flex-shrink-0">
-              <Button size="sm" onClick={handleSave} className="h-4 w-4 p-0">
-                <Save className="h-2 w-2" />
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleCancel} className="h-4 w-4 p-0">
-                <X className="h-2 w-2" />
-              </Button>
-            </div>
-          </div>
-        )
-      }
-
-      return (
-        <div className="flex items-center gap-1">
-          <Input
-            type={type}
-            value={editValue}
-            onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="h-6 text-xs border-0 p-1"
-            autoFocus
-          />
-          <div className="flex gap-1">
-            <Button size="sm" onClick={handleSave} className="h-4 w-4 p-0">
-              <Save className="h-2 w-2" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleCancel} className="h-4 w-4 p-0">
-              <X className="h-2 w-2" />
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    const cellContent = () => {
-      if (field === "day") {
-        return (
-          <Badge className={`${getDayColor(String(value))} font-medium cursor-pointer text-xs px-1.5 py-0.5 border-0`}>
-            {String(value).slice(0, 3)}
-          </Badge>
-        )
-      }
-      if (field === "duration") {
-        return <span className="font-semibold text-blue-600 text-xs">{value}min</span>
-      }
-      if (field === "sets") {
-        return <span className="font-bold text-gray-800 text-sm">{value}</span>
-      }
-      if (field === "coach_tip") {
-        return (
-          <div className="w-full">
-            <p
-              className="text-xs text-gray-600 cursor-pointer hover:text-gray-800 leading-tight break-words"
-              style={{
-                lineHeight: "1.3",
-                minHeight: "3.9em",
-                display: "block",
-              }}
-              title={String(value)}
-            >
-              {String(value)}
-            </p>
-          </div>
-        )
-      }
-      if (field === "exercise") {
-        return (
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{workout.icon || "💪"}</span>
-            <span className="cursor-pointer hover:text-blue-600 font-medium text-sm text-gray-800">{String(value)}</span>
-          </div>
-        )
-      }
-      return <span className="cursor-pointer hover:text-blue-600 text-xs text-gray-700">{String(value)}</span>
-    }
-
-    return (
-      <div
-        onClick={() => handleCellClick(workout, field)}
-        className="cursor-pointer hover:bg-blue-50 rounded transition-all duration-200 hover:shadow-sm w-full p-0.5"
-        title="Click to edit"
-        draggable
-        onDragStart={(e) => {
-          // Enable dragging for workout rows
-          const workoutData = {
-            id: workout.id,
-            name: workout.exercise,
-            type: workout.category,
-            duration: workout.duration,
-            difficulty: "Custom",
-            color: "bg-gray-500",
-            category: workout.category,
-            body_part: workout.body_part,
-            exercises: [{
-              workout: workout.exercise,
-              duration: workout.duration,
-              sets: workout.sets,
-              reps: workout.reps,
-              weights: workout.weight,
-              coach_tip: workout.coach_tip,
-              icon: workout.icon,
-              category: workout.category,
-              body_part: workout.body_part,
-              workout_yt_link: ""
-            }]
-          }
-          e.dataTransfer.setData("text/plain", JSON.stringify(workoutData))
-        }}
-      >
-        {cellContent()}
-      </div>
-    )
-  }
-
-  // Sort workouts by day
-  const sortedWorkouts = [...allWorkoutPlans].sort((a, b) => {
-    const dayOrder = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 }
-    return (dayOrder[a.day as keyof typeof dayOrder] || 8) - (dayOrder[b.day as keyof typeof dayOrder] || 8)
-  })
-
-  const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-  const handleAddExercise = () => {
-    // This function is now handled by handleAddNewWorkout in the table
-    handleAddNewWorkout()
-  }
-
-  const handleDragStart = (e:any, plan:any) => {
-    setIsDragging(true)
-    setDragStartTime(Date.now())
-    e.dataTransfer.setData("application/json", JSON.stringify(plan))
-  }
-
-  const handleDragEnd = () => {
-    // Reset dragging state after a short delay to allow click detection
-    setTimeout(() => {
-      setIsDragging(false)
-      setDragStartTime(0)
-    }, 100)
-  }
-
-  const handleMouseDown = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    console.log('Mouse down on plan:', plan.name)
-    setMouseDownTime(Date.now())
-    setMouseDownPosition({ x: e.clientX, y: e.clientY })
-  }
-
-  const handleMouseUp = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    const timeDiff = Date.now() - mouseDownTime
-    const positionDiff = Math.abs(e.clientX - mouseDownPosition.x) + Math.abs(e.clientY - mouseDownPosition.y)
-    
-    console.log('Mouse up on plan:', plan.name, { timeDiff, positionDiff, isDragging })
-    
-    // Consider it a click if:
-    // 1. Mouse was down for less than 300ms
-    // 2. Mouse didn't move more than 5 pixels
-    // 3. Not currently dragging
-    if (timeDiff < 300 && positionDiff < 5 && !isDragging) {
-      console.log('✅ Plan clicked - opening edit modal:', plan.name)
-      handleEditPlan(plan)
-    } else {
-      console.log('❌ Click ignored - conditions not met')
-    }
-  }
-
-  const handlePlanClick = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    // Fallback click handler
-    e.preventDefault()
-    e.stopPropagation()
-  }
-
-  const handleDragOver = (e:any) => {
-    e.preventDefault()
-  }
-
-  const handleDrop = (e:any, day:any) => {
-    e.preventDefault()
-    const planData = JSON.parse(e.dataTransfer.getData("application/json"))
-    setWeeklyPlan((prev) => ({
-      ...prev,
-      [day]: planData,
-    }))
-  }
-
-  const removeFromCalendar = (day:any) => {
-    setWeeklyPlan((prev) => {
-      const newPlan = { ...prev }
-      delete newPlan[day]
-      return newPlan
-    })
-  }
-
-  // Handle plan editing
-  const handleEditPlan = (plan: WorkoutPlan) => {
-    console.log('🎯 handleEditPlan called for:', plan.name)
-    setEditingPlan(plan)
-    setEditedPlan(JSON.parse(JSON.stringify(plan))) // Deep copy
-    setShowEditPlanModal(true)
-    console.log('📱 Edit modal should now be open')
-  }
-
-  const handleSavePlan = () => {
-    if (!editedPlan || !editingPlan) return
-
-    // Update the plan in the appropriate array
-    if (editingPlan.category === 'ai_generated') {
-      setAiGeneratedPlans(prev => 
-        prev.map(plan => plan.id === editingPlan.id ? editedPlan : plan)
-      )
-    } else {
-      // For custom plans, we'll update them in allWorkoutPlans
-      setAllWorkoutPlans(prev => 
-        prev.map(plan => plan.id === editingPlan.id ? editedPlan : plan)
-      )
-    }
-
-    setShowEditPlanModal(false)
-    setEditingPlan(null)
-    setEditedPlan(null)
-    
-    toast({
-      title: "Plan Updated",
-      description: "Your workout plan has been successfully updated.",
-    })
-  }
-
-  const handleAddExerciseToPlan = () => {
-    if (!editedPlan) return
-    
-    const newExercise: WorkoutExercise = {
-      workout: "New Exercise",
-      duration: 2,
-      sets: 3,
-      reps: "10",
-      weights: "bodyweight",
-      coach_tip: "Focus on proper form",
-      icon: "💪",
-      category: "strength",
-      body_part: "full_body",
-      workout_yt_link: ""
-    }
-    
-    setEditedPlan({
-      ...editedPlan,
-      exercises: [...editedPlan.exercises, newExercise]
-    })
-  }
-
-  const handleRemoveExerciseFromPlan = (index: number) => {
-    if (!editedPlan) return
-    
-    setEditedPlan({
-      ...editedPlan,
-      exercises: editedPlan.exercises.filter((_, i) => i !== index)
-    })
-  }
-
-  const handleUpdateExercise = (index: number, field: keyof WorkoutExercise, value: any) => {
-    if (!editedPlan) return
-    
-    const updatedExercises = [...editedPlan.exercises]
-    updatedExercises[index] = {
-      ...updatedExercises[index],
-      [field]: value
-    }
-    
-    setEditedPlan({
-      ...editedPlan,
-      exercises: updatedExercises
-    })
-  }
-
-  // Function to parse AI response and convert to recommended plans format
-  const parseAIResponseToPlans = (aiResponseText: string) => {
-    try {
-      // Extract JSON from the AI response
-      const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in AI response');
-      }
-      
-      const aiData = JSON.parse(jsonMatch[0]);
-      
-      if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
-        throw new Error('Invalid workout plan format in AI response');
-      }
-
-      // Convert AI workout plan to recommended plans format
-      const aiPlan: WorkoutPlan = {
-        id: `ai-plan-${Date.now()}`,
-        name: `AI Generated Plan`,
-        type: "AI Generated",
-        duration: aiData.workout_plan.reduce((total: number, exercise: any) => total + (exercise.duration || 0), 0),
-        difficulty: "AI Recommended",
-        color: "bg-gradient-to-r from-purple-500 to-pink-500",
-        category: "ai_generated",
-        body_part: "full_body",
-        exercises: aiData.workout_plan.map((exercise: any) => ({
-          workout: exercise.workout,
-          duration: exercise.duration || 0,
-          sets: exercise.sets || 1,
-          reps: exercise.reps ? exercise.reps.toString() : "1",
-          weights: exercise.weights || "bodyweight",
-          coach_tip: exercise.coach_tip || "Follow proper form",
-          icon: exercise.icon || "💪",
-          category: exercise.category || "strength",
-          body_part: exercise.body_part || "full_body",
-          workout_yt_link: ""
-        }))
-      };
-
-      return [aiPlan];
-    } catch (error) {
-      console.error('Error parsing AI response:', error);
-      throw new Error('Failed to parse AI response');
-    }
-  }
-
-  // Handle AI fitness plan generation
-  const handleGenerateAIPlans = async () => {
-    console.log('🚀 Button clicked - Starting AI generation process');
-    console.log('⏰ Timestamp:', new Date().toISOString());
-    
-    setIsGeneratingAI(true)
-    const startTime = Date.now() // Track response time
-    
-    try {
-      const clientId = 34 // Hardcoded for now as requested
-      console.log('🎯 Using hardcoded client ID:', clientId);
-      
-      const result = await generateAIWorkoutPlan(clientId)
-      const responseTime = Date.now() - startTime // Calculate response time
-      
-      console.log('📬 Function Response:');
-      console.log('  - Success:', result.success);
-      console.log('  - Message:', result.message);
-      console.log('  - Has Client Data:', !!result.clientData);
-      
-      if (result.success) {
-        console.log('✅ SUCCESS - Data retrieval completed');
-        
-        // Log the client data to console for inspection
-        if (result.clientData && result.clientInfo) {
-          console.log('🎉 CLIENT DATA SUCCESSFULLY RETRIEVED:');
-          console.log('📋 Data Format: JavaScript Object');
-          console.log('🔢 Number of Properties:', Object.keys(result.clientData).length);
-          console.log('🏷️ Property Names:', Object.keys(result.clientData));
-          console.log('📊 Full Client Data Object:');
-          console.table(result.clientData); // Display as table for better readability
-          console.log('📄 JSON Format:');
-          console.log(JSON.stringify(result.clientData, null, 2));
-          console.log('💾 Organized Client Info:');
-          console.log(result.clientInfo);
-          
-          // Set client info
-          setClientInfo(result.clientInfo);
-          
-          // If AI response is available, parse and add to recommended plans
-          if (result.aiResponse) {
-            try {
-              const aiPlans = parseAIResponseToPlans(result.aiResponse.response);
-              setAiGeneratedPlans(aiPlans);
-              setAiResponse(result.aiResponse);
-              
-              // Always show the complete AI response first
-              setShowAIResponsePopup(true);
-              
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || 'gpt-4',
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime
-                };
-                setAiMetrics(metrics);
-              }
-              
-              const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
-              toast({
-                title: "AI Workout Plan Generated",
-                description: `Personalized plan created for ${clientName}. Click to view full response.`,
-              })
-            } catch (parseError) {
-              console.error('Error parsing AI response:', parseError);
-              // Show the raw response in popup (parsing failed)
-              setAiResponse(result.aiResponse);
-              setShowAIResponsePopup(true);
-              
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || 'gpt-4',
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime
-                };
-                setAiMetrics(metrics);
-              }
-              
-              toast({
-                title: "AI Response Generated",
-                description: "View the complete AI response. Plans may need manual parsing.",
-              })
-            }
-          } else {
-            setShowClientDataPopup(true);
-            const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
-            toast({
-              title: "Client Data Retrieved",
-              description: `Showing data for ${clientName}`,
-            })
-          }
-        } else {
-          console.warn('⚠️ Success reported but no client data in response');
-          toast({
-            title: "Client Data Retrieved", 
-            description: result.message,
-          })
-        }
-      } else {
-        console.log('❌ FAILURE - Data retrieval failed');
-        console.log('💬 Error Message:', result.message);
-        
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive"
-        })
-      }
-      
-    } catch (err) {
-      console.error('💥 EXCEPTION CAUGHT in handleGenerateAIPlans:');
-      console.error('  - Error Type:', typeof err);
-      console.error('  - Error:', err);
-      console.error('  - Stack:', err instanceof Error ? err.stack : 'No stack');
-      
-      toast({
-        title: "Error",
-        description: "Something went wrong while fetching client data.",
-        variant: "destructive"
-      })
-    } finally {
-      console.log('🏁 Process completed - Resetting loading state');
-      setIsGeneratingAI(false)
-    }
-  }
-
-  return (
-    <div className="grid grid-cols-7 gap-6 h-full">
-      {/* Left Column - Weekly Calendar & Custom Exercises */}
-      <div className="col-span-5 flex flex-col">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Weekly Schedule</h3>
-            <Button
-              onClick={() => setShowAddExercise(true)}
-              size="sm"
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Exercise
-            </Button>
-          </div>
-        </div>
-        <div className="grid grid-cols-7 gap-2 flex-1 overflow-y-auto">
-          {daysOfWeek.map((day, index) => (
-            <div key={day} className="min-h-0">
-              <div className="sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-20 pb-2 mb-2">
-                <h4 className="text-xs font-semibold text-center text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  {day}
-                </h4>
-              </div>
-              <div
-                className="space-y-2 min-h-[200px] p-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg transition-colors"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                {scheduledWorkouts[index]?.map((workout, workoutIndex) => (
-                  <div
-                    key={workoutIndex}
-                    className="p-2 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg border border-emerald-200 dark:border-emerald-700 text-xs group relative"
-                  >
-                    <div className="font-medium text-emerald-800 dark:text-emerald-200 mb-1 text-xs truncate">
-                      {workout.name}
-                    </div>
-                    <div className="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1">
-                      <Clock className="h-2 w-2" />
-                      {workout.duration}m
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="absolute -top-1 -right-1 h-4 w-4 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-800/30"
-                      onClick={() => removeFromCalendar(index)}
-                    >
-                      <X className="h-2 w-2 text-red-600 dark:text-red-400" />
-                    </Button>
-                  </div>
-                ))}
-                {(!scheduledWorkouts[index] || scheduledWorkouts[index].length === 0) && (
-                  <div className="text-center text-gray-400 dark:text-gray-600 text-xs py-8">
-                    Drop workout here
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right Column - Workout Plans Table */}
-      <div className="col-span-2 flex flex-col">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Workout Plans</h3>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleAddNewWorkout}
-                size="sm"
-                variant="outline"
-                className="text-xs"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Exercise
-              </Button>
-              <Button
-                onClick={handleGenerateAIPlans}
-                disabled={isGeneratingAI}
-                size="sm"
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-              >
-                {isGeneratingAI ? (
-                  <>
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
-                    Generating AI Plan...
-                  </>
-                ) : (
-                  <>
-                    <div className="mr-1">🤖</div>
-                    Generate AI Plan
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="overflow-y-auto pr-2">
-          <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-900/80">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Dumbbell className="h-4 w-4" />
-                Editable Workout Plan
-                <Badge variant="secondary" className="text-xs">
-                  {sortedWorkouts.length} exercises
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
-                      <TableHead className="font-semibold text-xs w-[80px]">Day</TableHead>
-                      <TableHead className="font-semibold text-xs min-w-[200px]">Exercise</TableHead>
-                      <TableHead className="font-semibold text-xs w-[60px] text-center">Sets</TableHead>
-                      <TableHead className="font-semibold text-xs w-[80px] text-center">Reps</TableHead>
-                      <TableHead className="font-semibold text-xs w-[80px] text-center">Duration</TableHead>
-                      <TableHead className="font-semibold text-xs w-[100px] text-center">Weight</TableHead>
-                      <TableHead className="font-semibold text-xs min-w-[250px]">Coach Tip</TableHead>
-                      <TableHead className="font-semibold text-xs w-[60px] text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedWorkouts.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                          <div className="flex flex-col items-center gap-2">
-                            <Dumbbell className="h-8 w-8 text-gray-300" />
-                            <p>No workout exercises yet</p>
-                            <p className="text-xs">Click "Generate AI Plan" or "Add Exercise" to get started</p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      sortedWorkouts.map((workout) => (
-                        <TableRow 
-                          key={workout.id} 
-                          className="hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors group border-b border-gray-100 dark:border-gray-800"
-                        >
-                          <TableCell className="py-2">
-                            {renderEditableCell(workout, "day", "select")}
-                          </TableCell>
-                          <TableCell className="py-2">
-                            {renderEditableCell(workout, "exercise", "text")}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            {renderEditableCell(workout, "sets", "number")}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            {renderEditableCell(workout, "reps", "text")}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            {renderEditableCell(workout, "duration", "number")}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            {renderEditableCell(workout, "weight", "select")}
-                          </TableCell>
-                          <TableCell className="py-2 max-w-[250px]">
-                            {renderEditableCell(workout, "coach_tip", "textarea")}
-                          </TableCell>
-                          <TableCell className="py-2 text-center">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteWorkout(workout.id)}
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {sortedWorkouts.length > 0 && (
-                <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-4">
-                      <span className="font-medium text-gray-700 dark:text-gray-300">
-                        💡 Tips: Click any cell to edit • Drag rows to calendar • Use keyboard shortcuts (Enter/Escape)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span>Total exercises: {sortedWorkouts.length}</span>
-                      <span>•</span>
-                      <span>
-                        Total duration: {sortedWorkouts.reduce((sum, w) => sum + (w.duration || 0), 0)} min
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
 
 
+// WorkoutPlanSection is now imported from separate component file
 
 
-       
-       {/* Client Data Popup */}
-      <ClientDataPopup 
-        isOpen={showClientDataPopup}
-        onClose={() => setShowClientDataPopup(false)}
-        clientInfo={clientInfo}
-      />
-      
-      {/* AI Response Popup */}
-      <AIResponsePopup 
-        isOpen={showAIResponsePopup}
-        onClose={() => setShowAIResponsePopup(false)}
-        aiResponse={aiResponse}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-        onShowMetrics={() => {
-          setShowAIResponsePopup(false)
-          setShowAIMetricsPopup(true)
-        }}
-      />
-      
-      {/* AI Metrics Popup */}
-      <AIMetricsPopup 
-        isOpen={showAIMetricsPopup}
-        onClose={() => setShowAIMetricsPopup(false)}
-        metrics={aiMetrics}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-      />
-
-      {/* Edit Plan Modal */}
-      <Dialog open={showEditPlanModal} onOpenChange={setShowEditPlanModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Workout Plan</DialogTitle>
-          </DialogHeader>
-          
-          {editedPlan && (
-            <div className="space-y-6">
-              {/* Plan Details */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="plan-name">Plan Name</Label>
-                  <Input
-                    id="plan-name"
-                    value={editedPlan.name}
-                    onChange={(e) => setEditedPlan({...editedPlan, name: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-type">Type</Label>
-                  <Input
-                    id="plan-type"
-                    value={editedPlan.type}
-                    onChange={(e) => setEditedPlan({...editedPlan, type: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-duration">Duration (minutes)</Label>
-                  <Input
-                    id="plan-duration"
-                    type="number"
-                    value={editedPlan.duration}
-                    onChange={(e) => setEditedPlan({...editedPlan, duration: parseInt(e.target.value) || 0})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-difficulty">Difficulty</Label>
-                  <Select
-                    value={editedPlan.difficulty}
-                    onValueChange={(value) => setEditedPlan({...editedPlan, difficulty: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Beginner">Beginner</SelectItem>
-                      <SelectItem value="Intermediate">Intermediate</SelectItem>
-                      <SelectItem value="Advanced">Advanced</SelectItem>
-                      <SelectItem value="AI Recommended">AI Recommended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-category">Category</Label>
-                  <Select
-                    value={editedPlan.category}
-                    onValueChange={(value) => setEditedPlan({...editedPlan, category: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="strength">Strength</SelectItem>
-                      <SelectItem value="cardio">Cardio</SelectItem>
-                      <SelectItem value="flexibility">Flexibility</SelectItem>
-                      <SelectItem value="ai_generated">AI Generated</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plan-body-part">Body Part</Label>
-                  <Select
-                    value={editedPlan.body_part}
-                    onValueChange={(value) => setEditedPlan({...editedPlan, body_part: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full_body">Full Body</SelectItem>
-                      <SelectItem value="upper_body">Upper Body</SelectItem>
-                      <SelectItem value="lower_body">Lower Body</SelectItem>
-                      <SelectItem value="core">Core</SelectItem>
-                      <SelectItem value="arms">Arms</SelectItem>
-                      <SelectItem value="legs">Legs</SelectItem>
-                      <SelectItem value="chest">Chest</SelectItem>
-                      <SelectItem value="back">Back</SelectItem>
-                      <SelectItem value="shoulders">Shoulders</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Exercises */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Exercises</h3>
-                  <Button onClick={handleAddExerciseToPlan} size="sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Exercise
-                  </Button>
-                </div>
-                
-                <div className="space-y-4">
-                  {editedPlan.exercises.map((exercise, index) => (
-                    <Card key={index} className="p-4">
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="space-y-2">
-                          <Label>Exercise Name</Label>
-                          <Input
-                            value={exercise.workout}
-                            onChange={(e) => handleUpdateExercise(index, 'workout', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Icon</Label>
-                          <Input
-                            value={exercise.icon}
-                            onChange={(e) => handleUpdateExercise(index, 'icon', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Sets</Label>
-                          <Input
-                            type="number"
-                            value={exercise.sets}
-                            onChange={(e) => handleUpdateExercise(index, 'sets', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Reps</Label>
-                          <Input
-                            value={exercise.reps}
-                            onChange={(e) => handleUpdateExercise(index, 'reps', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Duration (minutes)</Label>
-                          <Input
-                            type="number"
-                            value={exercise.duration}
-                            onChange={(e) => handleUpdateExercise(index, 'duration', parseFloat(e.target.value) || 0)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Weights</Label>
-                          <Input
-                            value={exercise.weights}
-                            onChange={(e) => handleUpdateExercise(index, 'weights', e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Category</Label>
-                          <Select
-                            value={exercise.category}
-                            onValueChange={(value) => handleUpdateExercise(index, 'category', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="strength">Strength</SelectItem>
-                              <SelectItem value="cardio">Cardio</SelectItem>
-                              <SelectItem value="flexibility">Flexibility</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Body Part</Label>
-                          <Select
-                            value={exercise.body_part}
-                            onValueChange={(value) => handleUpdateExercise(index, 'body_part', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="full_body">Full Body</SelectItem>
-                              <SelectItem value="chest">Chest</SelectItem>
-                              <SelectItem value="back">Back</SelectItem>
-                              <SelectItem value="shoulders">Shoulders</SelectItem>
-                              <SelectItem value="arms">Arms</SelectItem>
-                              <SelectItem value="legs">Legs</SelectItem>
-                              <SelectItem value="core">Core</SelectItem>
-                              <SelectItem value="glutes">Glutes</SelectItem>
-                              <SelectItem value="calves">Calves</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="space-y-2 mb-4">
-                        <Label>Coach Tip</Label>
-                        <Textarea
-                          value={exercise.coach_tip}
-                          onChange={(e) => handleUpdateExercise(index, 'coach_tip', e.target.value)}
-                          placeholder="Enter coaching tip for this exercise..."
-                        />
-                      </div>
-                      <div className="space-y-2 mb-4">
-                        <Label>YouTube Link</Label>
-                        <Input
-                          value={exercise.workout_yt_link}
-                          onChange={(e) => handleUpdateExercise(index, 'workout_yt_link', e.target.value)}
-                          placeholder="https://youtube.com/watch?v=..."
-                        />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={() => handleRemoveExerciseFromPlan(index)}
-                          variant="destructive"
-                          size="sm"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Remove Exercise
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => setShowEditPlanModal(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSavePlan}>
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
 
 const NutritionPlanSection = () => {
   const { toast } = useToast()
@@ -3959,6 +3066,9 @@ export default function ClientDashboard() {
   const [isSaving, setIsSaving] = useState(false)
   const [showClientFilter, setShowClientFilter] = useState(false)
   const [activeClientFilter, setActiveClientFilter] = useState<string | null>(null)
+  const [showNotesSummaryPopup, setShowNotesSummaryPopup] = useState(false)
+  const [notesSummaryResponse, setNotesSummaryResponse] = useState<any>(null)
+  const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -4002,6 +3112,38 @@ export default function ClientDashboard() {
       setIsSaving(false)
     }
   }
+
+  const handleSummarizeNotes = async () => {
+    if (!notes || notes.trim().length === 0) {
+      console.log("No notes to summarize");
+      return;
+    }
+
+    try {
+      setIsSummarizingNotes(true);
+      console.log('🔄 Starting notes summarization...');
+      
+      // Call the AI notes summary service (notes is guaranteed to be non-null here)
+      const result = await summarizeTrainerNotes(notes as string, client?.id);
+      
+      console.log('📊 Summary Result:', result);
+      
+      if (result.success) {
+        setNotesSummaryResponse(result);
+        setShowNotesSummaryPopup(true);
+        console.log('✅ Notes summary generated successfully');
+      } else {
+        console.error('❌ Failed to generate notes summary:', result.message);
+        // You could show a toast notification here
+      }
+    } catch (error) {
+      console.error('💥 Error summarizing notes:', error);
+      // You could show an error toast notification here
+    } finally {
+      setIsSummarizingNotes(false);
+    }
+  };
+
   const filteredClients = sampleClients.filter(
     (client) =>
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -4413,32 +3555,55 @@ export default function ClientDashboard() {
                       <Edit className="h-5 w-5 text-rose-500" />
                       Trainer Notes
                     </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
-                      className="h-8 px-2"
-                      disabled={isEditing && isSaving}
-                    >
-                      {isEditing ? (
-                        isSaving ? (
-                          <>
-                            <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
-                            Saving...
-                          </>
+                    <div className="flex items-center gap-2">
+                      {!isEditing && notes && notes.trim().length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSummarizeNotes}
+                          className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20"
+                          disabled={isSummarizingNotes}
+                        >
+                          {isSummarizingNotes ? (
+                            <>
+                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              📋
+                              <span className="ml-1">Summarize</span>
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
+                        className="h-8 px-2"
+                        disabled={isEditing && isSaving}
+                      >
+                        {isEditing ? (
+                          isSaving ? (
+                            <>
+                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-1" />
+                              Save
+                            </>
+                          )
                         ) : (
                           <>
-                            <Save className="h-4 w-4 mr-1" />
-                            Save
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Edit
                           </>
-                        )
-                      ) : (
-                        <>
-                          <Pencil className="h-4 w-4 mr-1" />
-                          Edit
-                        </>
-                      )}
-                    </Button>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -4490,7 +3655,7 @@ export default function ClientDashboard() {
                     <MetricsSection />
                   </TabsContent>
                   <TabsContent value="workout">
-                    <WorkoutPlanSection />
+                    <WorkoutPlanSection clientId={client?.id} />
                   </TabsContent>
                   <TabsContent value="nutrition">
                     <NutritionPlanSection />
@@ -4504,6 +3669,14 @@ export default function ClientDashboard() {
           </div>
         </div>
       </main>
+
+      {/* AI Notes Summary Popup */}
+      <AINotesSummaryPopup
+        isOpen={showNotesSummaryPopup}
+        onClose={() => setShowNotesSummaryPopup(false)}
+        summaryResponse={notesSummaryResponse}
+        clientName={client?.name || client?.preferredName}
+      />
     </div>
   )
 }
