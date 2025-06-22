@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import * as Icons from "@/lib/icons";
 import { MappedClient } from "@/hooks/use-clients";
-import { useLocation } from "wouter";
+import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface ClientCardProps {
@@ -13,7 +13,7 @@ interface ClientCardProps {
 }
 
 const ClientCard: React.FC<ClientCardProps> = ({ client, onEdit, onViewProfile }) => {
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   
   // Dummy progress data for the line graph
   const progressData = [

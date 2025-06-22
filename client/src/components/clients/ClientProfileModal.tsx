@@ -1,43 +1,58 @@
-import { useState } from "react";
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import * as Icons from "@/lib/icons";
-
-import { useLocation } from "wouter";
+} from "@/components/ui/dialog"
+import { useClients } from "@/hooks/use-clients"
+import { supabase } from "@/lib/supabase"
+import type { client } from "@/lib/database.types"
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
+import * as Icons from "@/lib/icons"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface ClientProfileModalProps {
-  client: { client_id: number; cl_name: string } | null;
-  open: boolean;
-  onClose: () => void;
+  client:
+    | (client & {
+        program: {
+          program_id: number
+          program_name: string
+        } | null
+      })
+    | null
+  onClose: () => void
 }
 
-const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
-  client,
-  open,
-  onClose,
-}) => {
-  const [activeTab, setActiveTab] = useState("details");
-  const [, navigate] = useLocation();
+export default function ClientProfileModal({ client, onClose }: ClientProfileModalProps) {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState("details")
+  const { deleteClient } = useClients(() => {
+    onClose()
+  })
 
-  if (!client) return null;
+  if (!client) return null
 
-  const handleDelete = async () => {
-    // TODO: Implement delete functionality with direct Supabase call
-    console.log("Delete client:", client.client_id);
-    onClose();
-  };
+  function handleNavigate() {
+    if (client) {
+      navigate(`/client/${client.client_id}`)
+      onClose()
+    }
+  }
+
+  async function handleDelete() {
+    if (client) {
+      await deleteClient(client.client_id)
+    }
+  }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={!!client} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Client profile</DialogTitle>
@@ -55,19 +70,18 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
 
           <TabsContent value="details" className="space-y-4">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
-                <div className="w-full h-full flex items-center justify-center bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300">
-                  <Icons.UserIcon className="h-8 w-8" />
-                </div>
+              <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-gray-200 flex items-center justify-center">
+                {client.avatar_url ? (
+                  <img src={client.avatar_url} alt={client.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Icons.UserIcon className="h-8 w-8 text-gray-400" />
+                )}
               </div>
-
               <div>
-                <h3 className="text-xl font-semibold">{client.cl_name}</h3>
+                <h3 className="text-xl font-semibold">{client.name}</h3>
                 <p className="text-gray-500 dark:text-gray-400">Client ID: {client.client_id}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="default">
-                    Active
-                  </Badge>
+                  <Badge variant="default">{client.is_active ? 'Active' : 'Inactive'}</Badge>
                 </div>
               </div>
             </div>
@@ -122,7 +136,7 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
             </Button>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate(`/client/${client.client_id}`)}>
+            <Button variant="secondary" onClick={handleNavigate}>
               View Full Profile
             </Button>
             <Button variant="default" onClick={onClose}>
@@ -132,7 +146,5 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-};
-
-export default ClientProfileModal;
+  )
+}
