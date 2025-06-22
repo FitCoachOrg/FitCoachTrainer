@@ -66,6 +66,7 @@ import { supabase } from "@/lib/supabase"
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useParams } from "react-router-dom"
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -1537,30 +1538,49 @@ const MetricsSection = ({ clientId }: { clientId?: number }) => {
   const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
   const [loadingWorkout, setLoadingWorkout] = useState(false)
   const [workoutError, setWorkoutError] = useState<string | null>(null)
+  const [workoutCount, setWorkoutCount] = useState<number>(0);
 
   useEffect(() => {
     localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
   }, [selectedKeys])
 
   useEffect(() => {
-    console.log(clientId)
-    if (!clientId) return
+    console.log("[MetricsSection] Effect running, clientId:", clientId);
+    if (!clientId) {
+      console.log("[MetricsSection] No clientId, returning early");
+      return;
+    }
     setLoadingWorkout(true)
     setWorkoutError(null)
     ;(async () => {
       try {
-        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId)
-        console.log(data)
-        if (error) throw error
-        setWorkoutInfo(data || [])
+        console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
+        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
+        console.log("[MetricsSection] Query result:", data, error);
+        if (error) throw error;
+        setWorkoutInfo(data || []);
+
+        // Fetch count of workouts in last 30 days
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 30);
+        const sinceISOString = sinceDate.toISOString();
+        const { count, error: countError } = await supabase
+          .from("workout_info")
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", clientId)
+          .gte("created_at", sinceISOString);
+        console.log("[MetricsSection] 30-day count:", count, countError);
+        if (countError) throw countError;
+        setWorkoutCount(count || 0);
       } catch (err: any) {
-        setWorkoutError(err.message || "Failed to fetch workout info")
-        setWorkoutInfo([])
+        setWorkoutError(err.message || "Failed to fetch workout info");
+        setWorkoutInfo([]);
+        setWorkoutCount(0);
       } finally {
-        setLoadingWorkout(false)
+        setLoadingWorkout(false);
       }
-    })()
-  }, [clientId])
+    })();
+  }, [clientId]);
 
   const selectedMetrics = selectedKeys
     .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
@@ -1739,6 +1759,16 @@ const MetricsSection = ({ clientId }: { clientId?: number }) => {
       </DndContext>
 
       {/* Enhanced Workout Info Table */}
+      <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90 mb-6">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <Dumbbell className="h-5 w-5 text-orange-500" />
+            <span className="text-gray-900 dark:text-white">Workouts Completed (Last 30 Days):</span>
+            <span className="ml-2 text-2xl font-bold text-orange-600 dark:text-orange-400">{workoutCount}</span>
+          </CardTitle>
+        </CardHeader>
+      </Card>
+
       <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90">
         <CardHeader className="pb-6">
           <CardTitle className="flex items-center gap-3 text-xl">
@@ -1775,48 +1805,46 @@ const MetricsSection = ({ clientId }: { clientId?: number }) => {
               <p className="text-sm text-gray-400">Start tracking workouts to see data here</p>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="bg-gradient-to-r from-gray-50 to-orange-50 dark:from-gray-800 dark:to-orange-950/50">
-                    <tr>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Date</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Exercise Name</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Duration</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Intensity</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Sets</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Reps</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Weight</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Feedback</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Rest</th>
-                      <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Distance</th>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-x-auto">
+              <table className="min-w-full text-sm text-left">
+                <thead className="bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/40 dark:to-red-900/40">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Exercise</th>
+                    <th className="px-4 py-3 font-semibold">Duration (min)</th>
+                    <th className="px-4 py-3 font-semibold">Intensity</th>
+                    <th className="px-4 py-3 font-semibold">Sets</th>
+                    <th className="px-4 py-3 font-semibold">Reps</th>
+                    <th className="px-4 py-3 font-semibold">Weight</th>
+                    <th className="px-4 py-3 font-semibold">Feedback</th>
+                    <th className="px-4 py-3 font-semibold">Rest (sec)</th>
+                    <th className="px-4 py-3 font-semibold">Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workoutInfo.map((w, idx) => (
+                    <tr
+                      key={w.id}
+                      className={
+                        idx % 2 === 0
+                          ? "bg-orange-50/40 dark:bg-orange-900/10"
+                          : "bg-white dark:bg-gray-900"
+                      }
+                    >
+                      <td className="px-4 py-3">{w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}</td>
+                      <td className="px-4 py-3 font-semibold">{w.exercise_name}</td>
+                      <td className="px-4 py-3">{w.duration ?? ""}</td>
+                      <td className="px-4 py-3">{w.intensity ?? ""}</td>
+                      <td className="px-4 py-3">{w.sets ?? ""}</td>
+                      <td className="px-4 py-3">{w.reps ?? ""}</td>
+                      <td className="px-4 py-3">{w.weight ?? ""}</td>
+                      <td className="px-4 py-3">{w.feedback ?? ""}</td>
+                      <td className="px-4 py-3">{w.rest ?? ""}</td>
+                      <td className="px-4 py-3">{w.distance ?? ""}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {workoutInfo.map((w) => (
-                      <tr
-                        key={w.id}
-                        className="hover:bg-gradient-to-r hover:from-orange-50/50 hover:to-red-50/50 dark:hover:from-orange-950/30 dark:hover:to-red-950/30 transition-all duration-200"
-                      >
-                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-medium">
-                          {w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-semibold">
-                          {w.exercise_name}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.duration ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.intensity ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.sets ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.reps ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.weight ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.feedback ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.rest ?? ""}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{w.distance ?? ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
@@ -3675,6 +3703,9 @@ const ProgramManagementSection = () => {
 
 // Enhanced Main Component
 export default function ClientDashboard() {
+  const params = useParams();
+  const clientId = params.id && !isNaN(Number(params.id)) ? Number(params.id) : undefined;
+  console.log("params:", params, "clientId:", clientId);
   const [activeTab, setActiveTab] = useState("overview")
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
@@ -3682,6 +3713,44 @@ export default function ClientDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([]);
   const [trainerNotes, setTrainerNotes] = useState<string>("");
+
+  // Editable Trainer Notes state
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(trainerNotes);
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNotesDraft(trainerNotes);
+  }, [trainerNotes]);
+
+  const handleSaveTrainerNotes = async () => {
+    setIsSavingNotes(true);
+    setNotesError(null);
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        setNotesError("Not logged in");
+        setIsSavingNotes(false);
+        return;
+      }
+      const trainerEmail = sessionData.session.user.email;
+      const { error } = await supabase
+        .from("trainer")
+        .update({ trainer_notes: notesDraft })
+        .eq("trainer_email", trainerEmail);
+      if (error) {
+        setNotesError(error.message);
+      } else {
+        setTrainerNotes(notesDraft);
+        setIsEditingNotes(false);
+      }
+    } catch (err: any) {
+      setNotesError(err.message || "Failed to save notes");
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
 
   // State for all clients of the trainer
   const [trainerClients, setTrainerClients] = useState<any[]>([]);
@@ -3763,8 +3832,6 @@ export default function ClientDashboard() {
     })();
   }, []);
 
-  // For now, use a hardcoded client_id (e.g., 1)
-  const clientId = 1;
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -3778,7 +3845,7 @@ export default function ClientDashboard() {
       else setClient(data);
       setLoading(false);
     })();
-  }, []);
+  }, [clientId]);
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -3967,20 +4034,45 @@ export default function ClientDashboard() {
         <div className="space-y-8">
           {activeTab === "overview" && (
             <div className="space-y-8">
-              <ClientStats clientId={client.id} />
+              <ClientStats clientId={client?.id} />
+              <MetricsSection clientId={clientId} />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-3">
                       <Dumbbell className="h-5 w-5 text-red-400" />
                       <span className="text-lg font-semibold text-gray-900 dark:text-white">Trainer Notes</span>
                     </CardTitle>
+                    {!isEditingNotes && (
+                      <Button size="icon" variant="ghost" onClick={() => setIsEditingNotes(true)}>
+                        <span className="sr-only">Edit</span>
+                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6-6m2 2l-6 6m-2 2h6" /></svg>
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent>
-                    {trainerNotes ? (
-                      <div className="text-gray-800 dark:text-gray-200 whitespace-pre-line">{trainerNotes}</div>
+                    {isEditingNotes ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={notesDraft}
+                          onChange={e => setNotesDraft(e.target.value)}
+                          disabled={isSavingNotes}
+                        />
+                        {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
+                        <div className="flex gap-2 mt-2">
+                          <Button size="sm" onClick={handleSaveTrainerNotes} disabled={isSavingNotes}>
+                            {isSavingNotes ? "Saving..." : "Save"}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => { setIsEditingNotes(false); setNotesError(null); setNotesDraft(trainerNotes); }} disabled={isSavingNotes}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="text-gray-400 italic">No notes from trainer yet.</div>
+                      <div className="text-gray-800 dark:text-gray-200 whitespace-pre-line">
+                        {trainerNotes ? trainerNotes : <span className="text-gray-400 italic">No notes from trainer yet.</span>}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
