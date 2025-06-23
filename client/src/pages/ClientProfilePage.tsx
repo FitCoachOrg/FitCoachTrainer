@@ -66,7 +66,7 @@ import { supabase } from "@/lib/supabase"
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useParams } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -1231,58 +1231,84 @@ function SortableMetric({
 }
 
 // Enhanced Client Stats Component
-  const ClientStats = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-    const [loading, setLoading] = useState(false)
-    const [statsData, setStatsData] = useState<any>(null)
+const ClientStats = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [statsData, setStatsData] = useState<any>(null)
 
-    useEffect(() => {
-      if (clientId && isActive && !statsData) {
-        setLoading(true)
-        // Simulate API call - replace with actual data fetching
-        setTimeout(() => {
+  useEffect(() => {
+    if (clientId && isActive) {
+      setLoading(true);
+      const fetchStats = async () => {
+        try {
+          // Workouts in last 30 days (existing)
+          const sinceDate = new Date();
+          sinceDate.setDate(sinceDate.getDate() - 30);
+          const sinceISOString = sinceDate.toISOString();
+
+          const { count: workoutCount, error: workoutError } = await supabase
+            .from("workout_info")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .gte("created_at", sinceISOString);
+
+          // Engagement Score
+          // 1. Total schedule rows for this client
+          const { count: totalSchedules, error: totalError } = await supabase
+            .from("schedule")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId);
+
+          // 2. Completed schedule rows for this client
+          const { count: completedSchedules, error: completedError } = await supabase
+            .from("schedule")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .eq("status", "completed");
+
+          let engagementScore = 0;
+          if (totalSchedules && totalSchedules > 0) {
+            engagementScore = Math.round((completedSchedules || 0) / totalSchedules * 100);
+          }
+
           setStatsData({
-            // Mock data - replace with actual stats
-            totalSessions: 24,
-            weeklyProgress: 85,
-            monthlyGoals: 3
-          })
-          setLoading(false)
-        }, 1000)
-      }
-    }, [clientId, isActive, statsData])
-
-    if (loading) {
-      return (
-        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6">
-          <CardContent className="flex items-center justify-center py-8">
-            <LoadingSpinner />
-          </CardContent>
-        </Card>
-      )
+            totalSessions: workoutCount || 0,
+            weeklyProgress: 85, // (keep or update as needed)
+            monthlyGoals: 3,    // (keep or update as needed)
+            engagementScore: engagementScore
+          });
+        } catch (err) {
+          setStatsData({
+            totalSessions: 0,
+            weeklyProgress: 0,
+            monthlyGoals: 0,
+            engagementScore: 0
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchStats();
     }
+  }, [clientId, isActive]);
 
-        const stats = [
-      {
-        label: "Workouts Completed",
-        value: statsData?.totalSessions?.toString() || "0",
-        subtitle: "in Last 30 Days",
-        icon: Activity,
+  if (loading) {
+    return (
+      <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6">
+        <CardContent className="flex items-center justify-center py-8">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const stats = [
+    {
+      label: "Workouts Completed",
+      value: statsData?.totalSessions?.toString() || "0",
+      subtitle: "in Last 30 Days",
+      icon: Activity,
       color: "text-emerald-600",
       bgColor: "from-emerald-500 to-green-600",
-      data: [
-        { month: "Jan", value: 15 },
-        { month: "Feb", value: 18 },
-        { month: "Mar", value: 20 },
-        { month: "Apr", value: 22 },
-        { month: "May", value: 25 },
-        { month: "Jun", value: 28 },
-        { month: "Jul", value: 30 },
-        { month: "Aug", value: 32 },
-        { month: "Sep", value: 35 },
-        { month: "Oct", value: 38 },
-        { month: "Nov", value: 42 },
-        { month: "Dec", value: 47 },
-      ],
     },
     {
       label: "Goals Achieved",
@@ -1290,41 +1316,13 @@ function SortableMetric({
       icon: Target,
       color: "text-blue-600",
       bgColor: "from-blue-500 to-indigo-600",
-      data: [
-        { month: "Jan", value: 0 },
-        { month: "Feb", value: 0 },
-        { month: "Mar", value: 1 },
-        { month: "Apr", value: 1 },
-        { month: "May", value: 1 },
-        { month: "Jun", value: 2 },
-        { month: "Jul", value: 2 },
-        { month: "Aug", value: 2 },
-        { month: "Sep", value: 2 },
-        { month: "Oct", value: 3 },
-        { month: "Nov", value: 3 },
-        { month: "Dec", value: 3 },
-      ],
     },
     {
       label: "Engagement Score",
-      value: "85%",
+      value: statsData?.engagementScore !== undefined ? `${statsData.engagementScore}%` : "0%",
       icon: TrendingUp,
       color: "text-purple-600",
       bgColor: "from-purple-500 to-pink-600",
-      data: [
-        { month: "Jan", value: 65 },
-        { month: "Feb", value: 68 },
-        { month: "Mar", value: 70 },
-        { month: "Apr", value: 72 },
-        { month: "May", value: 75 },
-        { month: "Jun", value: 77 },
-        { month: "Jul", value: 79 },
-        { month: "Aug", value: 81 },
-        { month: "Sep", value: 82 },
-        { month: "Oct", value: 83 },
-        { month: "Nov", value: 84 },
-        { month: "Dec", value: 85 },
-      ],
     },
     {
       label: "Days Active",
@@ -1332,20 +1330,6 @@ function SortableMetric({
       icon: Clock,
       color: "text-orange-600",
       bgColor: "from-orange-500 to-red-600",
-      data: [
-        { month: "Jan", value: 20 },
-        { month: "Feb", value: 35 },
-        { month: "Mar", value: 48 },
-        { month: "Apr", value: 62 },
-        { month: "May", value: 75 },
-        { month: "Jun", value: 88 },
-        { month: "Jul", value: 101 },
-        { month: "Aug", value: 114 },
-        { month: "Sep", value: 127 },
-        { month: "Oct", value: 127 },
-        { month: "Nov", value: 127 },
-        { month: "Dec", value: 127 },
-      ],
     },
   ]
 
@@ -1382,7 +1366,7 @@ function SortableMetric({
               {/* Mini Chart */}
               <div className="h-0 group-hover:h-[120px] w-full overflow-hidden transition-all duration-500 ease-out">
                 <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-                  <ResponsiveContainer width="100%" height="100%">
+                  {/* <ResponsiveContainer width="100%" height="100%">
                     <Chart data={stat.data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                       <CartesianGrid vertical={false} stroke="#f0f0f0" strokeDasharray="3 3" />
                       <XAxis
@@ -1415,7 +1399,7 @@ function SortableMetric({
                         activeDot={{ r: 6, strokeWidth: 2 }}
                       />
                     </Chart>
-                  </ResponsiveContainer>
+                  </ResponsiveContainer> */}
                 </div>
               </div>
             </CardContent>
@@ -1541,86 +1525,86 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 // Enhanced Metrics Section
-  const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-    const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
-      const saved = localStorage.getItem("selectedMetrics")
-      return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
-    })
-    const [draggingId, setDraggingId] = useState<string | null>(null)
-    const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
-    const [loadingWorkout, setLoadingWorkout] = useState(false)
-    const [workoutError, setWorkoutError] = useState<string | null>(null)
-    const [workoutCount, setWorkoutCount] = useState<number>(0);
-    const [dataLoaded, setDataLoaded] = useState(false);
+const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
+    const saved = localStorage.getItem("selectedMetrics")
+    return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
+  })
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
+  const [loadingWorkout, setLoadingWorkout] = useState(false)
+  const [workoutError, setWorkoutError] = useState<string | null>(null)
+  const [workoutCount, setWorkoutCount] = useState<number>(0);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
-    useEffect(() => {
-      localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
-    }, [selectedKeys])
+  useEffect(() => {
+    localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
+  }, [selectedKeys])
 
-    useEffect(() => {
-      console.log("[MetricsSection] Effect running, clientId:", clientId, "isActive:", isActive);
-      if (!clientId || !isActive || dataLoaded) {
-        console.log("[MetricsSection] Not loading - clientId:", clientId, "isActive:", isActive, "dataLoaded:", dataLoaded);
-        return;
-      }
-      setLoadingWorkout(true)
-      setWorkoutError(null)
-      ;(async () => {
-        try {
-          console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
-          const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
-          console.log("[MetricsSection] Query result:", data, error);
-          if (error) throw error;
-          setWorkoutInfo(data || []);
-
-          // Fetch count of workouts in last 30 days
-          const sinceDate = new Date();
-          sinceDate.setDate(sinceDate.getDate() - 30);
-          const sinceISOString = sinceDate.toISOString();
-          const { count, error: countError } = await supabase
-            .from("workout_info")
-            .select("id", { count: "exact", head: true })
-            .eq("client_id", clientId)
-            .gte("created_at", sinceISOString);
-          console.log("[MetricsSection] 30-day count:", count, countError);
-          if (countError) throw countError;
-          setWorkoutCount(count || 0);
-          setDataLoaded(true);
-        } catch (err: any) {
-          setWorkoutError(err.message || "Failed to fetch workout info");
-          setWorkoutInfo([]);
-          setWorkoutCount(0);
-        } finally {
-          setLoadingWorkout(false);
-        }
-      })();
-    }, [clientId, isActive, dataLoaded]);
-
-    const selectedMetrics = selectedKeys
-      .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
-      .filter(Boolean) as typeof METRIC_LIBRARY
-    const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
-
-    function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
-      const value = e.target.value
-      if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
-        setSelectedKeys([...selectedKeys, value])
-      }
+  useEffect(() => {
+    console.log("[MetricsSection] Effect running, clientId:", clientId, "isActive:", isActive);
+    if (!clientId || !isActive || dataLoaded) {
+      console.log("[MetricsSection] Not loading - clientId:", clientId, "isActive:", isActive, "dataLoaded:", dataLoaded);
+      return;
     }
+    setLoadingWorkout(true)
+    setWorkoutError(null)
+    ;(async () => {
+      try {
+        console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
+        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
+        console.log("[MetricsSection] Query result:", data, error);
+        if (error) throw error;
+        setWorkoutInfo(data || []);
 
-    function handleRemove(key: string) {
-      setSelectedKeys(selectedKeys.filter((k: string) => k !== key))
-    }
-
-    function handleDragEnd(event: DragEndEvent) {
-      const { active, over } = event
-      if (over && active.id !== over.id) {
-        const oldIndex = selectedKeys.indexOf(active.id as string)
-        const newIndex = selectedKeys.indexOf(over.id as string)
-        setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex))
+        // Fetch count of workouts in last 30 days
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 30);
+        const sinceISOString = sinceDate.toISOString();
+        const { count, error: countError } = await supabase
+          .from("workout_info")
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", clientId)
+          .gte("created_at", sinceISOString);
+        console.log("[MetricsSection] 30-day count:", count, countError);
+        if (countError) throw countError;
+        setWorkoutCount(count || 0);
+        setDataLoaded(true);
+      } catch (err: any) {
+        setWorkoutError(err.message || "Failed to fetch workout info");
+        setWorkoutInfo([]);
+        setWorkoutCount(0);
+      } finally {
+        setLoadingWorkout(false);
       }
-      setDraggingId(null)
+    })();
+  }, [clientId, isActive, dataLoaded]);
+
+  const selectedMetrics = selectedKeys
+    .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
+    .filter(Boolean) as typeof METRIC_LIBRARY
+  const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
+
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value
+    if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
+      setSelectedKeys([...selectedKeys, value])
     }
+  }
+
+  function handleRemove(key: string) {
+    setSelectedKeys(selectedKeys.filter((k: string) => k !== key))
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = selectedKeys.indexOf(active.id as string)
+      const newIndex = selectedKeys.indexOf(over.id as string)
+      setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex))
+    }
+    setDraggingId(null)
+  }
 
   return (
     <div className="space-y-8">
@@ -1868,11 +1852,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 // Enhanced Workout Plan Section
-    const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-    const { toast } = useToast()
-    const [loading, setLoading] = useState(false)
-    const [workoutPlans, setWorkoutPlans] = useState<any[]>([])
-    const [dataLoaded, setDataLoaded] = useState(false)
+const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [workoutPlans, setWorkoutPlans] = useState<any[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
   const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() =>
     Array(7)
@@ -3324,28 +3308,28 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 // Enhanced Nutrition Plan Section
-  const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-    const [loading, setLoading] = useState(false)
-    const [nutritionData, setNutritionData] = useState<any>(null)
-    const [dataLoaded, setDataLoaded] = useState(false)
-    const [mealPlan, setMealPlan] = useState<Record<string, MealItem[]>>({
-    breakfast: [
-      { name: "Greek Yogurt with Berries", calories: 150, protein: 15, carbs: 20, fats: 2 },
-      { name: "Whole Grain Toast", calories: 80, protein: 3, carbs: 15, fats: 1 },
-    ],
-    lunch: [
-      { name: "Grilled Chicken Salad", calories: 300, protein: 35, carbs: 10, fats: 12 },
-      { name: "Quinoa", calories: 120, protein: 4, carbs: 22, fats: 2 },
-    ],
-    dinner: [
-      { name: "Salmon Fillet", calories: 250, protein: 30, carbs: 0, fats: 14 },
-      { name: "Roasted Vegetables", calories: 100, protein: 3, carbs: 20, fats: 2 },
-    ],
-    snacks: [
-      { name: "Apple with Almond Butter", calories: 190, protein: 4, carbs: 25, fats: 8 },
-      { name: "Protein Shake", calories: 120, protein: 25, carbs: 3, fats: 1 },
-    ],
-  })
+const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [nutritionData, setNutritionData] = useState<any>(null)
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [mealPlan, setMealPlan] = useState<Record<string, MealItem[]>>({
+  breakfast: [
+    { name: "Greek Yogurt with Berries", calories: 150, protein: 15, carbs: 20, fats: 2 },
+    { name: "Whole Grain Toast", calories: 80, protein: 3, carbs: 15, fats: 1 },
+  ],
+  lunch: [
+    { name: "Grilled Chicken Salad", calories: 300, protein: 35, carbs: 10, fats: 12 },
+    { name: "Quinoa", calories: 120, protein: 4, carbs: 22, fats: 2 },
+  ],
+  dinner: [
+    { name: "Salmon Fillet", calories: 250, protein: 30, carbs: 0, fats: 14 },
+    { name: "Roasted Vegetables", calories: 100, protein: 3, carbs: 20, fats: 2 },
+  ],
+  snacks: [
+    { name: "Apple with Almond Butter", calories: 190, protein: 4, carbs: 25, fats: 8 },
+    { name: "Protein Shake", calories: 120, protein: 25, carbs: 3, fats: 1 },
+  ],
+})
 
   const [showAddMeal, setShowAddMeal] = useState(false)
   const [selectedMealType, setSelectedMealType] = useState<string>("breakfast")
@@ -3673,11 +3657,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 }
 
 // Enhanced Program Management Section
-  const ProgramManagementSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-    const [loading, setLoading] = useState(false)
-    const [programs, setPrograms] = useState<any[]>([])
-    const [dataLoaded, setDataLoaded] = useState(false)
-    const [filteredPrograms, setFilteredPrograms] = useState(mockPrograms)
+const ProgramManagementSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [programs, setPrograms] = useState<any[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [filteredPrograms, setFilteredPrograms] = useState(mockPrograms)
   const [selectedTag, setSelectedTag] = useState("All")
   const [sortBy, setSortBy] = useState("Recently updated")
   const [searchQuery, setSearchQuery] = useState("")
@@ -4064,6 +4048,7 @@ export default function ClientDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([]);
   const [trainerNotes, setTrainerNotes] = useState<string>("");
+  const navigate=useNavigate();
 
   // Editable Trainer Notes state
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -4320,8 +4305,7 @@ export default function ClientDashboard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800 transition-all duration-300"
-                    disabled={clientsLoading}
+                    className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50 transition-all duration-300"
                   >
                     {clientsLoading ? (
                       <LoadingSpinner size="small" />
@@ -4335,7 +4319,7 @@ export default function ClientDashboard() {
                     <DropdownMenuItem disabled>No clients found</DropdownMenuItem>
                   ) : (
                     trainerClients.map((c: any) => (
-                      <DropdownMenuItem key={c.client_id} onClick={() => console.log("Selected client:", c)}>
+                      <DropdownMenuItem key={c.client_id} onClick={() => navigate(`/client/${c.client_id}`)}>
                         {c.cl_name}
                       </DropdownMenuItem>
                     ))
