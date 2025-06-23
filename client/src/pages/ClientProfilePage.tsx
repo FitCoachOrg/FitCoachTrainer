@@ -28,6 +28,7 @@ import {
   X,
   Sparkles,
   Zap,
+  Edit3,
   Trophy,
   BarChart3,
   PieChart,
@@ -40,6 +41,7 @@ import {
   Download,
   Share,
   Settings,
+
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -65,8 +67,11 @@ import { supabase } from "@/lib/supabase"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
+// Import the AI nutrition plan generator
+import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useParams, useNavigate } from "react-router-dom"
+import { Progress } from "@/components/ui/progress"
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -464,6 +469,7 @@ const AIResponsePopup = ({
                                   onChange={(e) => handleWorkoutChange(index, "coach_tip", e.target.value)}
                                   className="w-full p-3 text-sm border-2 border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:border-blue-400 dark:bg-gray-800"
                                   rows={3}
+                                  placeholder="Enter coach tip..."
                                 />
                               ) : (
                                 <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -2510,21 +2516,51 @@ const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActiv
             if (value === null || value === undefined || value === "" || value === "N/A") {
               return null
             }
+            
+            // If it's already a number, return it
+            if (typeof value === 'number') {
+              return value
+            }
+            
+            // If it's a string, try to extract the first number
+            if (typeof value === 'string') {
+              // Extract first number from strings like "30 seconds work, 30 seconds rest" or "45 minutes"
+              const match = value.match(/(\d+(?:\.\d+)?)/)
+              if (match) {
+                const num = Number(match[1])
+                return isNaN(num) ? null : num
+              }
+              return null
+            }
+            
             const num = Number(value)
             return isNaN(num) ? null : num
           }
 
-          // Helper function to convert reps (can be text like "10-12" or "N/A")
+          // Helper function to convert reps to numeric (extracts first number from text like "10-12")
           const parseReps = (value: any) => {
             if (value === null || value === undefined || value === "" || value === "N/A") {
               return null
             }
-            // If it's already a number, convert to string
+            
+            // If it's already a number, return it
             if (typeof value === 'number') {
-              return value.toString()
+              return value
             }
-            // If it's a string, return as is (handles cases like "10-12", "to failure", etc.)
-            return String(value)
+            
+            // If it's a string, try to extract the first number
+            if (typeof value === 'string') {
+              // Extract first number from strings like "10-12", "8-10", "15 reps", etc.
+              const match = value.match(/(\d+(?:\.\d+)?)/)
+              if (match) {
+                const num = Number(match[1])
+                return isNaN(num) ? null : num
+              }
+              return null
+            }
+            
+            const num = Number(value)
+            return isNaN(num) ? null : num
           }
 
           return {
@@ -2687,7 +2723,7 @@ const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActiv
           setClientInfo(result.clientInfo)
 
                       // If AI response is available, parse and add to recommended plans
-            if (result.aiResponse) {
+            if (result.aiResponse && result.aiResponse.response) {
               try {
                 const newAiPlans = parseAIResponseToPlans(result.aiResponse.response)
                 // Accumulate plans instead of replacing them
@@ -2781,20 +2817,12 @@ const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActiv
     }
   }
 
-  // Data loading effect - placed after all hooks
+  // Data loading effect - removed mock data, using real AI-generated plans instead
   useEffect(() => {
     if (clientId && isActive && !dataLoaded) {
-      setLoading(true)
-      // Simulate API call - replace with actual workout plans fetching
-      setTimeout(() => {
-        setWorkoutPlans([
-          // Mock data - replace with actual workout plans
-          { id: 1, name: "Upper Body", exercises: [] },
-          { id: 2, name: "Lower Body", exercises: [] }
-        ])
-        setDataLoaded(true)
-        setLoading(false)
-      }, 1200)
+      // No more mock data - workout plans come from AI generation and application
+      setDataLoaded(true)
+      setLoading(false)
     }
   }, [clientId, isActive, dataLoaded])
 
@@ -3312,91 +3340,320 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
   const [loading, setLoading] = useState(false)
   const [nutritionData, setNutritionData] = useState<any>(null)
   const [dataLoaded, setDataLoaded] = useState(false)
-  const [mealPlan, setMealPlan] = useState<Record<string, MealItem[]>>({
-  breakfast: [
-    { name: "Greek Yogurt with Berries", calories: 150, protein: 15, carbs: 20, fats: 2 },
-    { name: "Whole Grain Toast", calories: 80, protein: 3, carbs: 15, fats: 1 },
-  ],
-  lunch: [
-    { name: "Grilled Chicken Salad", calories: 300, protein: 35, carbs: 10, fats: 12 },
-    { name: "Quinoa", calories: 120, protein: 4, carbs: 22, fats: 2 },
-  ],
-  dinner: [
-    { name: "Salmon Fillet", calories: 250, protein: 30, carbs: 0, fats: 14 },
-    { name: "Roasted Vegetables", calories: 100, protein: 3, carbs: 20, fats: 2 },
-  ],
-  snacks: [
-    { name: "Apple with Almond Butter", calories: 190, protein: 4, carbs: 25, fats: 8 },
-    { name: "Protein Shake", calories: 120, protein: 25, carbs: 3, fats: 1 },
-  ],
-})
-
-  const [showAddMeal, setShowAddMeal] = useState(false)
-  const [selectedMealType, setSelectedMealType] = useState<string>("breakfast")
-  const [newMeal, setNewMeal] = useState<MealItem>({
-    name: "",
-    calories: 0,
-    protein: 0,
-    carbs: 0,
-    fats: 0,
+  const [selectedDay, setSelectedDay] = useState("monday")
+  const [editingItem, setEditingItem] = useState<string | null>(null)
+  const [newItemDialog, setNewItemDialog] = useState<string | null>(null)
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiNutritionResponse, setAiNutritionResponse] = useState<any>(null)
+  const [showAiResponsePopup, setShowAiResponsePopup] = useState(false)
+  const { toast } = useToast()
+  
+  // Sample meal items data structure
+  const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({
+    monday: {
+      breakfast: [
+        { meal: "Greek Yogurt with Berries", calories: 150, protein: 15, fats: 2, icon: "🥣", coach_tip: "Great source of probiotics!" }
+      ],
+      lunch: [
+        { meal: "Grilled Chicken Salad", calories: 300, protein: 35, fats: 12, icon: "🥗", coach_tip: "Perfect post-workout meal" }
+      ],
+      dinner: [
+        { meal: "Salmon Fillet", calories: 250, protein: 30, fats: 14, icon: "🐟", coach_tip: "Rich in omega-3 fatty acids" }
+      ],
+      snacks: [
+        { meal: "Apple with Almond Butter", calories: 190, protein: 4, fats: 8, icon: "🍎", coach_tip: "Great pre-workout snack" }
+      ]
+    },
+    tuesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    wednesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    thursday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    friday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    saturday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    sunday: { breakfast: [], lunch: [], dinner: [], snacks: [] }
   })
 
-  const mealTypes = [
-    { key: "breakfast", label: "Breakfast", icon: "🌅", color: "from-yellow-400 to-orange-500" },
-    { key: "lunch", label: "Lunch", icon: "☀️", color: "from-green-400 to-emerald-500" },
-    { key: "dinner", label: "Dinner", icon: "🌙", color: "from-blue-400 to-indigo-500" },
-    { key: "snacks", label: "Snacks", icon: "🍎", color: "from-purple-400 to-pink-500" },
-  ]
+  const [newItem, setNewItem] = useState({
+    meal: "",
+    calories: 0,
+    protein: 0,
+    fats: 0,
+    icon: "",
+    coach_tip: "",
+    meal_info: ""
+  })
 
-  const getTotalNutrition = () => {
-    const totals = { calories: 0, protein: 0, carbs: 0, fats: 0 }
-    Object.values(mealPlan).forEach((meals) => {
-      meals.forEach((meal) => {
-        totals.calories += meal.calories
-        totals.protein += meal.protein
-        totals.carbs += meal.carbs
-        totals.fats += meal.fats
+  // Daily targets state
+  const [dailyTargets, setDailyTargets] = useState([
+    { name: "Calories", current: 1420, target: 2000, unit: "kcal", icon: "🔥", color: "from-red-500 to-pink-600" },
+    { name: "Protein", current: 95, target: 150, unit: "g", icon: "💪", color: "from-blue-500 to-indigo-600" },
+    { name: "Carbs", current: 165, target: 200, unit: "g", icon: "🌾", color: "from-green-500 to-emerald-600" },
+    { name: "Fats", current: 48, target: 70, unit: "g", icon: "🥑", color: "from-yellow-500 to-orange-600" }
+  ])
+
+  // Calculate daily totals from meal items
+  const calculateDailyTotals = () => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    
+    return days.map((day, index) => {
+      const dayMeals = mealItems[day] || { breakfast: [], lunch: [], dinner: [], snacks: [] }
+      let calories = 0, protein = 0, carbs = 0, fats = 0
+      
+      // Sum up all meals for the day
+      Object.values(dayMeals).forEach((mealType: any[]) => {
+        mealType.forEach((meal) => {
+          calories += meal.calories || 0
+          protein += meal.protein || 0
+          carbs += meal.carbs || 0
+          fats += meal.fats || 0
+        })
       })
+      
+      return {
+        day: dayNames[index],
+        calories: Math.round(calories),
+        protein: Math.round(protein),
+        carbs: Math.round(carbs),
+        fats: Math.round(fats),
+        completed: calories > 0
+      }
     })
-    return totals
   }
 
-  const handleAddMeal = () => {
-    if (newMeal.name.trim()) {
-      setMealPlan((prev) => ({
-        ...prev,
-        [selectedMealType]: [...(prev[selectedMealType] || []), newMeal],
+  // Get daily totals
+  const dailyTotals = calculateDailyTotals()
+
+  // Update current daily targets based on selected day
+  const updateCurrentDayTargets = () => {
+    const selectedDayData = dailyTotals.find(d => d.day.toLowerCase() === selectedDay)
+    if (selectedDayData) {
+      setDailyTargets(prev => prev.map(target => {
+        switch(target.name) {
+          case "Calories":
+            return { ...target, current: selectedDayData.calories }
+          case "Protein":
+            return { ...target, current: selectedDayData.protein }
+          case "Carbs":
+            return { ...target, current: selectedDayData.carbs }
+          case "Fats":
+            return { ...target, current: selectedDayData.fats }
+          default:
+            return target
+        }
       }))
-      setNewMeal({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
-      setShowAddMeal(false)
     }
   }
 
-  const handleRemoveMeal = (mealType: string, index: number) => {
-    setMealPlan((prev) => ({
+  // Update targets when selected day or meal items change
+  useEffect(() => {
+    updateCurrentDayTargets()
+  }, [selectedDay, mealItems])
+
+  // Meal types
+  const mealTypes = [
+    { key: "breakfast", label: "Breakfast", icon: "🌅", emoji: "🥞" },
+    { key: "lunch", label: "Lunch", icon: "☀️", emoji: "🥗" },
+    { key: "dinner", label: "Dinner", icon: "🌙", emoji: "🍽️" },
+    { key: "snacks", label: "Snacks", icon: "🍎", emoji: "🥨" }
+  ]
+
+  // Get current day meals
+  const getCurrentDayMeals = () => {
+    return mealItems[selectedDay] || { breakfast: [], lunch: [], dinner: [], snacks: [] }
+  }
+
+  // Add meal item
+  const addMealItem = (mealType: string) => {
+    if (newItem.meal.trim()) {
+      setMealItems(prev => ({
+        ...prev,
+        [selectedDay]: {
+          ...prev[selectedDay],
+          [mealType]: [...(prev[selectedDay]?.[mealType] || []), { ...newItem }]
+        }
+      }))
+      setNewItem({ meal: "", calories: 0, protein: 0, fats: 0, icon: "", coach_tip: "", meal_info: "" })
+      setNewItemDialog(null)
+    }
+  }
+
+  // Update meal item
+  const updateMealItem = (mealType: string, index: number, field: string, value: any) => {
+    setMealItems(prev => ({
       ...prev,
-      [mealType]: prev[mealType].filter((_, i) => i !== index),
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [mealType]: prev[selectedDay][mealType].map((item, i) => 
+          i === index ? { ...item, [field]: value } : item
+        )
+      }
     }))
   }
 
-  // Data loading effect - placed after all hooks
+  // Delete meal item
+  const deleteMealItem = (mealType: string, index: number) => {
+    setMealItems(prev => ({
+      ...prev,
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [mealType]: prev[selectedDay][mealType].filter((_, i) => i !== index)
+      }
+    }))
+  }
+
+  // AI Nutrition Plan Generation
+  const handleGenerateAINutritionPlan = async () => {
+    if (!clientId) {
+      toast({
+        title: "Error",
+        description: "No client selected. Please select a client first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setAiGenerating(true)
+    
+    try {
+      console.log('🚀 Starting AI nutrition plan generation for client:', clientId)
+      const result = await generateAINutritionPlan(clientId)
+      
+      if (result.success) {
+        console.log('✅ AI nutrition plan generated successfully:', result)
+        setAiNutritionResponse(result)
+        setShowAiResponsePopup(true)
+        
+        toast({
+          title: "Success",
+          description: "AI nutrition plan generated successfully!",
+        })
+      } else {
+        console.error('❌ AI nutrition plan generation failed:', result.message)
+        toast({
+          title: "Error",
+          description: result.message || "Failed to generate AI nutrition plan",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('💥 Error generating AI nutrition plan:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while generating the nutrition plan",
+        variant: "destructive",
+      })
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  // Parse AI Response and Apply to Nutrition Plan
+  const parseAndApplyAINutritionPlan = (aiResponseText: string) => {
+    try {
+      console.log('🔍 Parsing AI nutrition response:', aiResponseText)
+      
+      // Extract JSON from the response
+      let jsonMatch = aiResponseText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('No JSON found in AI response')
+      }
+      
+      const nutritionData = JSON.parse(jsonMatch[0])
+      console.log('📊 Parsed nutrition data:', nutritionData)
+      
+      // Update daily targets
+      if (nutritionData.daily_targets) {
+        setDailyTargets([
+          { name: "Calories", current: 0, target: nutritionData.daily_targets.calories || 2000, unit: "kcal", icon: "🔥", color: "from-red-500 to-pink-600" },
+          { name: "Protein", current: 0, target: nutritionData.daily_targets.protein || 150, unit: "g", icon: "💪", color: "from-blue-500 to-indigo-600" },
+          { name: "Carbs", current: 0, target: nutritionData.daily_targets.carbs || 200, unit: "g", icon: "🌾", color: "from-green-500 to-emerald-600" },
+          { name: "Fats", current: 0, target: nutritionData.daily_targets.fats || 70, unit: "g", icon: "🥑", color: "from-yellow-500 to-orange-600" }
+        ])
+      }
+      
+      // Process nutrition plan and populate meal items
+      if (nutritionData.nutrition_plan && Array.isArray(nutritionData.nutrition_plan)) {
+        const newMealItems: Record<string, Record<string, any[]>> = {
+          monday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          tuesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          wednesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          thursday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          friday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          saturday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          sunday: { breakfast: [], lunch: [], dinner: [], snacks: [] }
+        }
+        
+        // Distribute meals across the week (repeat pattern for 7 days)
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        
+        // If we have fewer meals than 7 days, repeat the pattern
+        days.forEach((day, dayIndex) => {
+          nutritionData.nutrition_plan.forEach((meal: any) => {
+            const mealItem = {
+              meal: meal.food_name,
+              calories: meal.calories || 0,
+              protein: meal.protein || 0,
+              carbs: meal.carbs || 0,
+              fats: meal.fats || 0,
+              fiber: meal.fiber || 0,
+              icon: meal.icon || "🍽️",
+              coach_tip: meal.coach_tip || "",
+              meal_info: `${meal.portion_size || "1 serving"} - ${meal.category || meal.meal_type}`,
+              dietary_tags: meal.dietary_tags || []
+            }
+            
+            const mealType = meal.meal_type === 'snack' ? 'snacks' : meal.meal_type
+            if (newMealItems[day] && newMealItems[day][mealType]) {
+              newMealItems[day][mealType].push(mealItem)
+            }
+          })
+        })
+        
+        setMealItems(newMealItems)
+        console.log('✅ Meal items updated:', newMealItems)
+      }
+      
+      return true
+    } catch (error) {
+      console.error('❌ Error parsing AI nutrition response:', error)
+      toast({
+        title: "Error",
+        description: "Failed to parse AI nutrition plan. Please try again.",
+        variant: "destructive",
+      })
+      return false
+    }
+  }
+
+  // Data loading effect
   useEffect(() => {
     if (clientId && isActive && !dataLoaded) {
       setLoading(true)
-      // Simulate API call - replace with actual nutrition data fetching
       setTimeout(() => {
-        setNutritionData({
-          // Mock data - replace with actual nutrition data
-          dailyCalories: 2200,
-          meals: {}
-        })
+        setNutritionData({ loaded: true })
         setDataLoaded(true)
         setLoading(false)
       }, 900)
     }
   }, [clientId, isActive, dataLoaded])
 
-  // Early return for loading state
+  const MacroChart = ({ protein, carbs, fats }: { protein: number; carbs: number; fats: number }) => {
+    const total = protein + carbs + fats
+    if (total === 0) return null
+
+    const proteinPercent = (protein / total) * 100
+    const carbsPercent = (carbs / total) * 100
+    const fatsPercent = (fats / total) * 100
+
+    return (
+      <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+        <div className="bg-green-400" style={{ width: `${proteinPercent}%` }} title={`Protein: ${protein}g`} />
+        <div className="bg-blue-400" style={{ width: `${carbsPercent}%` }} title={`Carbs: ${carbs}g`} />
+        <div className="bg-yellow-400" style={{ width: `${fatsPercent}%` }} title={`Fats: ${fats}g`} />
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -3421,235 +3678,556 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
     )
   }
 
-  const totals = getTotalNutrition()
+  const currentDayMeals = getCurrentDayMeals()
 
   return (
     <div className="space-y-8">
-      {/* Enhanced Nutrition Overview */}
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Calendar className="w-8 h-8 text-green-500" />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Daily Nutrition Plan</h1>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              Viewing {selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}'s plan
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleGenerateAINutritionPlan}
+            disabled={aiGenerating}
+            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold shadow-lg disabled:opacity-50"
+          >
+            {aiGenerating ? (
+              <>
+                <LoadingSpinner size="small" />
+                <span className="ml-2">Generating...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 mr-2" />
+                Generate Plan
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={() => {
+              const sampleResponse = `{
+                "overview": "This nutrition plan is designed for Vikas Malik, 52, who is active and primarily aims to improve his health by losing 10 kgs of weight. As a vegetarian and vegan, his diet will include high protein, moderate carbohydrates, and low fats. Given his inconsistent eating habits, acid reflux, and high-stress levels, this plan will emphasize regular meals, increased fiber, and hydration for better health and stress management. His workouts will be fueled with appropriate meals and protein supplementations.",
+                "daily_targets": {
+                  "calories": 1800,
+                  "protein": 125,
+                  "carbs": 200,
+                  "fats": 60,
+                  "fiber": 35,
+                  "water_liters": 3
+                },
+                "meal_timing": {
+                  "breakfast": "13:00",
+                  "lunch": "17:00",
+                  "dinner": "00:00",
+                  "snacks": ["15:30", "21:30"]
+                },
+                "nutrition_plan": [
+                  {
+                    "food_name": "Quinoa Porridge with Berries and Nuts",
+                    "meal_type": "breakfast",
+                    "portion_size": "1 bowl",
+                    "calories": 400,
+                    "protein": 12,
+                    "carbs": 60,
+                    "fats": 12,
+                    "fiber": 8,
+                    "for_date": "Day 1",
+                    "for_time": "13:00",
+                    "coach_tip": "Quinoa is a complete protein, providing all essential amino acids. It's also a great source of fiber which can help manage your acid reflux.",
+                    "icon": "🥣",
+                    "category": "Breakfast",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Mixed Salad with Chickpeas, Avocado, and Olive Oil Dressing",
+                    "meal_type": "lunch",
+                    "portion_size": "1 large plate",
+                    "calories": 500,
+                    "protein": 18,
+                    "carbs": 40,
+                    "fats": 28,
+                    "fiber": 12,
+                    "for_date": "Day 1",
+                    "for_time": "17:00",
+                    "coach_tip": "Chickpeas provide plant-based protein, while avocado adds healthy fats. Olive oil dressing can help with the absorption of fat-soluble vitamins.",
+                    "icon": "🥗",
+                    "category": "Lunch",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Lentil Soup with Whole Grain Bread",
+                    "meal_type": "dinner",
+                    "portion_size": "1 bowl of soup, 2 slices of bread",
+                    "calories": 600,
+                    "protein": 32,
+                    "carbs": 70,
+                    "fats": 15,
+                    "fiber": 15,
+                    "for_date": "Day 1",
+                    "for_time": "00:00",
+                    "coach_tip": "Lentils are high in protein and fiber. Whole grain bread adds complex carbs for a balanced meal. This meal is timed after your workout for optimal recovery.",
+                    "icon": "🍲",
+                    "category": "Dinner",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Apple with Almond Butter",
+                    "meal_type": "snack",
+                    "portion_size": "1 medium apple + 2 tbsp almond butter",
+                    "calories": 300,
+                    "protein": 8,
+                    "carbs": 30,
+                    "fats": 18,
+                    "fiber": 6,
+                    "for_date": "Day 1",
+                    "for_time": "15:30",
+                    "coach_tip": "Perfect pre-workout snack providing quick energy and healthy fats.",
+                    "icon": "🍎",
+                    "category": "Snack",
+                    "dietary_tags": ["vegan", "vegetarian"]
+                  }
+                ],
+                "hydration_plan": "Aim to drink 3 liters of water per day. Start your day with a 500ml glass of water upon waking. Drink 250ml of water 30 minutes before each meal and snack to aid digestion and manage acid reflux. Refill your water bottle during your workout to stay hydrated.",
+                "supplement_recommendations": "Continue with your prenatal vitamins and protein powder. For your workouts, aim for a protein intake of 20-30g post-workout to support muscle recovery and growth. This could be a scoop of your protein powder mixed with water or a plant-based milk.",
+                "meal_prep_tips": "Prepare your meals in advance to maintain consistency. Cook quinoa, chickpeas, and lentils in bulk and store them in the refrigerator. Wash and chop vegetables for your salads and store them in airtight containers. Prepare your dressing in advance and add it just before eating.",
+                "progress_tracking": "Track your weight weekly and adjust your caloric intake if necessary. Monitor your energy levels, sleep quality, and stress management as these factors can affect your weight loss. Adjust your protein powder dosage based on your workout intensity and recovery."
+              }`
+              const success = parseAndApplyAINutritionPlan(sampleResponse)
+              if (success) {
+                toast({
+                  title: "Sample Applied",
+                  description: "Sample nutrition plan has been applied successfully!",
+                })
+              }
+            }}
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Test Sample
+          </Button>
+        </div>
+      </div>
+
+      {/* Enhanced Daily Targets */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: "Calories", value: totals.calories, unit: "kcal", color: "from-red-500 to-pink-600", icon: "🔥" },
-          { label: "Protein", value: totals.protein, unit: "g", color: "from-blue-500 to-indigo-600", icon: "💪" },
-          { label: "Carbs", value: totals.carbs, unit: "g", color: "from-green-500 to-emerald-600", icon: "🌾" },
-          { label: "Fats", value: totals.fats, unit: "g", color: "from-yellow-500 to-orange-600", icon: "🥑" },
-        ].map((stat, index) => (
+        {dailyTargets.map((target, index) => (
           <Card
             key={index}
             className="group relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 hover:scale-105"
           >
             <div
-              className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-5 group-hover:opacity-10 transition-opacity duration-500`}
+              className={`absolute inset-0 bg-gradient-to-br ${target.color} opacity-5 group-hover:opacity-10 transition-opacity duration-500`}
             />
             <CardContent className="relative p-6 text-center">
-              <div className="text-4xl mb-3">{stat.icon}</div>
+              <div className="text-4xl mb-3">{target.icon}</div>
               <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                {stat.value}
-                <span className="text-lg text-gray-500 dark:text-gray-400 ml-1">{stat.unit}</span>
+                {target.current}
+                <span className="text-lg text-gray-500 dark:text-gray-400 ml-1">{target.unit}</span>
               </div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{stat.label}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{target.name}</p>
+              <div className="text-xs text-gray-500 dark:text-gray-500 mb-2">
+                Target: {target.target}
+                {target.unit}
+              </div>
+              <Progress value={(target.current / target.target) * 100} className="h-2 bg-gray-200 dark:bg-gray-700" />
+              <div className="text-xs text-green-500 font-medium mt-1">
+                {Math.round((target.current / target.target) * 100)}% Complete
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Enhanced Meal Plan Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {mealTypes.map((mealType) => (
-          <Card
-            key={mealType.key}
-            className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90"
-          >
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl bg-gradient-to-br ${mealType.color} shadow-lg text-2xl`}>
-                    {mealType.icon}
-                  </div>
-                  <div>
-                    <span className="text-lg font-bold text-gray-900 dark:text-white">{mealType.label}</span>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {mealPlan[mealType.key]?.length || 0} items
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedMealType(mealType.key)
-                    setShowAddMeal(true)
-                  }}
-                  className="h-9 px-3 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-gray-100 hover:to-blue-100 dark:from-gray-800 dark:to-blue-950/50 dark:hover:from-gray-700 dark:hover:to-blue-900/50 border border-gray-200 dark:border-gray-700 transition-all duration-300"
-                >
-                  <Plus className="h-4 w-4 mr-2 text-blue-600" />
-                  <span className="text-blue-600 font-medium">Add</span>
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mealPlan[mealType.key]?.length > 0 ? (
-                  mealPlan[mealType.key].map((meal, index) => (
-                    <div
-                      key={index}
-                      className="group/item p-4 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <h5 className="font-semibold text-gray-900 dark:text-white text-sm">{meal.name}</h5>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveMeal(mealType.key, index)}
-                          className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+      {/* Main Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left Column - Daily Totals - Same size as meal cards */}
+        <div className="lg:col-span-1 space-y-4">
+          <h2 className="text-lg font-semibold text-green-500 mb-4">Weekly Overview</h2>
+          {dailyTotals.map((day, index) => (
+            <Card
+              key={day.day}
+              className={`bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl cursor-pointer transition-all duration-500 dark:bg-gray-900/90 h-[400px] flex flex-col ${
+                selectedDay === day.day.toLowerCase()
+                  ? "ring-2 ring-green-500 bg-green-50/50 dark:bg-green-950/20"
+                  : "hover:bg-gray-50 dark:hover:bg-gray-800"
+              }`}
+              onClick={() => setSelectedDay(day.day.toLowerCase())}
+            >
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{day.day}</span>
+                  <div className={`w-3 h-3 rounded-full ${day.completed ? "bg-green-500" : "bg-gray-400"}`} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col justify-center p-6">
+                {day.completed ? (
+                  <div className="space-y-6">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-green-500 mb-1">{day.calories}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">calories</div>
+                    </div>
+                    <MacroChart protein={day.protein} carbs={day.carbs} fats={day.fats} />
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Protein:</span>
+                        <span className="text-green-500 font-bold">{day.protein}g</span>
                       </div>
-                      <div className="grid grid-cols-4 gap-3 text-xs">
-                        <div className="text-center">
-                          <div className="font-bold text-red-600 dark:text-red-400">{meal.calories}</div>
-                          <div className="text-gray-500 dark:text-gray-400">cal</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-bold text-blue-600 dark:text-blue-400">{meal.protein}g</div>
-                          <div className="text-gray-500 dark:text-gray-400">protein</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-bold text-green-600 dark:text-green-400">{meal.carbs}g</div>
-                          <div className="text-gray-500 dark:text-gray-400">carbs</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-bold text-yellow-600 dark:text-yellow-400">{meal.fats}g</div>
-                          <div className="text-gray-500 dark:text-gray-400">fats</div>
-                        </div>
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Carbs:</span>
+                        <span className="text-blue-500 font-bold">{day.carbs}g</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Fats:</span>
+                        <span className="text-yellow-500 font-bold">{day.fats}g</span>
                       </div>
                     </div>
-                  ))
+                  </div>
                 ) : (
-                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-8 flex-1 flex flex-col justify-center">
                     <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
-                      {mealType.icon}
+                      📅
                     </div>
-                    <p className="text-sm mb-2">No {mealType.label.toLowerCase()} items yet</p>
-                    <p className="text-xs">Add your first meal to get started</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">No meals planned</p>
+                    <p className="text-xs text-gray-400">Click to start planning</p>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Right Column - Meal Columns */}
+        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {mealTypes.map((mealType) => (
+            <Card
+              key={mealType.key}
+              className="bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 h-[400px] flex flex-col"
+            >
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-r from-green-400/20 to-emerald-500/20 text-green-500">
+                      {mealType.icon}
+                    </div>
+                    <div>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{mealType.label}</span>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {currentDayMeals[mealType.key]?.length || 0} items
+                      </p>
+                    </div>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col">
+                <div className="space-y-3 flex-1">
+                  {currentDayMeals[mealType.key]?.length > 0 ? (
+                    currentDayMeals[mealType.key].map((item, index) => (
+                      <div
+                        key={index}
+                        className="group/item p-3 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          {editingItem === `${mealType.key}-${index}` ? (
+                            <Input
+                              value={item.meal}
+                              onChange={(e) => updateMealItem(mealType.key, index, "meal", e.target.value)}
+                              className="text-sm font-medium bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white h-6 p-1"
+                              onBlur={() => setEditingItem(null)}
+                              onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
+                              autoFocus
+                            />
+                          ) : (
+                            <div
+                              className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1 flex items-center gap-2"
+                              onClick={() => setEditingItem(`${mealType.key}-${index}`)}
+                            >
+                              <span>{item.icon}</span>
+                              <span>{item.meal}</span>
+                            </div>
+                          )}
+                          <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-gray-400 hover:text-green-500"
+                              onClick={() => setEditingItem(`${mealType.key}-${index}`)}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                              onClick={() => deleteMealItem(mealType.key, index)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div className="text-center">
+                            <div className="font-bold text-red-600 dark:text-red-400">{item.calories}</div>
+                            <div className="text-gray-500 dark:text-gray-400">cal</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-bold text-blue-600 dark:text-blue-400">{item.protein}g</div>
+                            <div className="text-gray-500 dark:text-gray-400">protein</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-bold text-yellow-600 dark:text-yellow-400">{item.fats}g</div>
+                            <div className="text-gray-500 dark:text-gray-400">fats</div>
+                          </div>
+                        </div>
+                        {item.coach_tip && (
+                          <div className="mt-2 text-xs text-green-600 dark:text-green-400 italic">
+                            💡 {item.coach_tip}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                      <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                        {mealType.emoji}
+                      </div>
+                      <p className="text-sm mb-2 text-gray-500 dark:text-gray-400">
+                        No {mealType.label.toLowerCase()} items yet
+                      </p>
+                      <p className="text-xs text-gray-400">Add your first meal to get started</p>
+                    </div>
+                  )}
+                </div>
+
+                <Dialog open={newItemDialog === mealType.key} onOpenChange={(open) => !open && setNewItemDialog(null)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-4 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-green-500 hover:text-green-500 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-gray-100 hover:to-blue-100 dark:from-gray-800 dark:to-blue-950/50 dark:hover:from-gray-700 dark:hover:to-blue-900/50"
+                    onClick={() => setNewItemDialog(mealType.key)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Item
+                  </Button>
+                  <DialogContent className="max-w-md bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
+                    <DialogHeader className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                      <DialogTitle className="flex items-center gap-3 text-xl">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
+                          {mealType.icon}
+                        </div>
+                        <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent font-bold">
+                          Add {mealType.label} Item
+                        </span>
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="meal-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Meal Name
+                        </Label>
+                        <Input
+                          id="meal-name"
+                          value={newItem.meal}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, meal: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="e.g., Grilled Chicken Breast"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="icon" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Icon (emoji)
+                        </Label>
+                        <Input
+                          id="icon"
+                          value={newItem.icon || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, icon: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="🍗"
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="calories" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Calories
+                          </Label>
+                          <Input
+                            id="calories"
+                            type="number"
+                            value={newItem.calories || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, calories: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="protein" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Protein (g)
+                          </Label>
+                          <Input
+                            id="protein"
+                            type="number"
+                            value={newItem.protein || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, protein: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="fats" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Fats (g)
+                          </Label>
+                          <Input
+                            id="fats"
+                            type="number"
+                            value={newItem.fats || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, fats: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="coach-tip" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Coach Tip (optional)
+                        </Label>
+                        <Textarea
+                          id="coach-tip"
+                          value={newItem.coach_tip || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, coach_tip: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="Nutritional advice or tips..."
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="meal-info" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Meal Info (optional)
+                        </Label>
+                        <Input
+                          id="meal-info"
+                          value={newItem.meal_info || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, meal_info: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="Additional meal information"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <Button
+                          variant="outline"
+                          onClick={() => setNewItemDialog(null)}
+                          className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() => addMealItem(mealType.key)}
+                          className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Meal
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
-      {/* Enhanced Add Meal Modal */}
-      <Dialog open={showAddMeal} onOpenChange={setShowAddMeal}>
-        <DialogContent className="max-w-md bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
-          <DialogHeader className="border-b border-gradient-to-r from-blue-200 to-purple-200 dark:from-blue-800 dark:to-purple-800 pb-6">
-            <DialogTitle className="flex items-center gap-3 text-xl">
-              <div className="p-3 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
-                <Utensils className="h-5 w-5 text-white" />
-              </div>
-              <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent font-bold">
-                Add New Meal
-              </span>
+      {/* AI Nutrition Response Popup */}
+      <Dialog open={showAiResponsePopup} onOpenChange={setShowAiResponsePopup}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Zap className="w-6 h-6 text-green-500" />
+              AI Generated Nutrition Plan
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
-            <div>
-              <Label htmlFor="meal-type" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Meal Type
-              </Label>
-              <Select value={selectedMealType} onValueChange={setSelectedMealType}>
-                <SelectTrigger className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {mealTypes.map((type) => (
-                    <SelectItem key={type.key} value={type.key}>
-                      {type.icon} {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="meal-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Meal Name
-              </Label>
-              <Input
-                id="meal-name"
-                value={newMeal.name}
-                onChange={(e) => setNewMeal({ ...newMeal, name: e.target.value })}
-                placeholder="e.g., Grilled Chicken Breast"
-                className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="calories" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Calories
-                </Label>
-                <Input
-                  id="calories"
-                  type="number"
-                  value={newMeal.calories}
-                  onChange={(e) => setNewMeal({ ...newMeal, calories: Number.parseInt(e.target.value) || 0 })}
-                  className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl"
-                />
+          
+          {aiNutritionResponse && (
+            <div className="space-y-6">
+              {/* Raw AI Response */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">AI Response:</h3>
+                <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                  {aiNutritionResponse.aiResponse?.response || 'No response available'}
+                </pre>
               </div>
-              <div>
-                <Label htmlFor="protein" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Protein (g)
-                </Label>
-                <Input
-                  id="protein"
-                  type="number"
-                  value={newMeal.protein}
-                  onChange={(e) => setNewMeal({ ...newMeal, protein: Number.parseInt(e.target.value) || 0 })}
-                  className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl"
-                />
+
+              {/* Client Info Used */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Client Information Used:</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p><strong>Name:</strong> {aiNutritionResponse.clientInfo?.name || 'N/A'}</p>
+                    <p><strong>Age:</strong> {aiNutritionResponse.clientInfo?.age || 'N/A'}</p>
+                    <p><strong>Weight:</strong> {aiNutritionResponse.clientInfo?.weight || 'N/A'} kg</p>
+                    <p><strong>Height:</strong> {aiNutritionResponse.clientInfo?.height || 'N/A'} cm</p>
+                  </div>
+                  <div>
+                    <p><strong>Goal:</strong> {aiNutritionResponse.clientInfo?.primaryGoal || 'N/A'}</p>
+                    <p><strong>Activity Level:</strong> {aiNutritionResponse.clientInfo?.activityLevel || 'N/A'}</p>
+                    <p><strong>Diet Preferences:</strong> {aiNutritionResponse.clientInfo?.dietPreferences || 'N/A'}</p>
+                    <p><strong>Allergies:</strong> {aiNutritionResponse.clientInfo?.foodAllergies || 'None'}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="carbs" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Carbs (g)
-                </Label>
-                <Input
-                  id="carbs"
-                  type="number"
-                  value={newMeal.carbs}
-                  onChange={(e) => setNewMeal({ ...newMeal, carbs: Number.parseInt(e.target.value) || 0 })}
-                  className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl"
-                />
-              </div>
-              <div>
-                <Label htmlFor="fats" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Fats (g)
-                </Label>
-                <Input
-                  id="fats"
-                  type="number"
-                  value={newMeal.fats}
-                  onChange={(e) => setNewMeal({ ...newMeal, fats: Number.parseInt(e.target.value) || 0 })}
-                  className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl"
-                />
+
+              {/* Usage Metrics */}
+              {aiNutritionResponse.aiResponse?.usage && (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">API Usage:</h3>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <p><strong>Input Tokens:</strong> {aiNutritionResponse.aiResponse.usage.prompt_tokens}</p>
+                    <p><strong>Output Tokens:</strong> {aiNutritionResponse.aiResponse.usage.completion_tokens}</p>
+                    <p><strong>Total Tokens:</strong> {aiNutritionResponse.aiResponse.usage.total_tokens}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAiResponsePopup(false)}>
+                  Close
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (aiNutritionResponse?.aiResponse?.response) {
+                      const success = parseAndApplyAINutritionPlan(aiNutritionResponse.aiResponse.response)
+                      if (success) {
+                        setShowAiResponsePopup(false)
+                        toast({
+                          title: "Success",
+                          description: "Nutrition plan applied successfully! Your meal plan has been updated.",
+                        })
+                      }
+                    } else {
+                      toast({
+                        title: "Error",
+                        description: "No AI response available to apply.",
+                        variant: "destructive",
+                      })
+                    }
+                  }}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Apply Nutrition Plan
+                </Button>
               </div>
             </div>
-            <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                variant="outline"
-                onClick={() => setShowAddMeal(false)}
-                className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddMeal}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Meal
-              </Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -4445,6 +5023,7 @@ export default function ClientDashboard() {
                           className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           value={notesDraft}
                           onChange={e => setNotesDraft(e.target.value)}
+                          placeholder="Enter trainer notes..."
                           disabled={isSavingNotes}
                         />
                         {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
