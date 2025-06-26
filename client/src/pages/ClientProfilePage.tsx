@@ -56,9 +56,36 @@ import {
   PieChart as RechartsPieChart,
   Cell,
 } from "recharts"
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core"
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useNavigate, useParams } from "react-router-dom"
+import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { HeaderBar } from "@/components/header-bar"
+import { DescriptionInput } from "@/components/description-input"
+import { ViewTabs } from "@/components/view-tabs"
+import { ProgramCardsContainer } from "@/components/program-cards-container"
+import { SaveButton } from "@/components/save-button"
+import { AddTaskDropdown } from "@/components/add-task-dropdown"
+import WorkoutPlanSection from "@/components/WorkoutPlanSection"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -69,9 +96,13 @@ import { supabase } from "@/lib/supabase"
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 // Import the AI nutrition plan generator
 import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
+
+import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
+
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useParams, useNavigate } from "react-router-dom"
 import { Progress } from "@/components/ui/progress"
+
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
@@ -910,6 +941,252 @@ const AIMetricsPopup = ({
     </Dialog>
   )
 }
+
+// AI Notes Summary Popup Component
+const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
+  isOpen: boolean;
+  onClose: () => void;
+  summaryResponse: any | null;
+  clientName?: string;
+}) => {
+  const [activeTab, setActiveTab] = useState<'summary' | 'actions' | 'insights' | 'raw'>('summary');
+  const [parsedSummary, setParsedSummary] = useState<any>(null);
+
+  // Parse summary from AI response
+  useEffect(() => {
+    if (summaryResponse?.aiResponse?.response) {
+      try {
+        const jsonMatch = summaryResponse.aiResponse.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsedData = JSON.parse(jsonMatch[0]);
+          setParsedSummary(parsedData);
+        }
+      } catch (error) {
+        console.error('Error parsing summary:', error);
+      }
+    }
+  }, [summaryResponse]);
+
+  if (!isOpen || !summaryResponse) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
+              📋
+            </div>
+            AI Notes Summary & Action Items{clientName ? ` for ${clientName}` : ''}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <p className="text-sm text-purple-700 dark:text-purple-300">
+              Your trainer notes have been analyzed using AI to generate insights, action items, and recommendations.
+            </p>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+            {['summary', 'actions', 'insights', 'raw'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors capitalize ${
+                  activeTab === tab
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {tab === 'summary' ? 'Summary' : tab === 'actions' ? 'Action Items' : tab === 'insights' ? 'Insights' : 'Raw Data'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'summary' && parsedSummary?.summary && (
+            <div className="space-y-6">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Key Points</h3>
+                <ul className="space-y-2">
+                  {parsedSummary.summary.key_points?.map((point: string, index: number) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-blue-500 mt-1">•</span>
+                      <span className="text-gray-700 dark:text-gray-300">{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Client Progress</h4>
+                  <p className="text-sm text-green-700 dark:text-green-400">{parsedSummary.summary.client_progress}</p>
+                </div>
+                
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <h4 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-2">Challenges Identified</h4>
+                  <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
+                    {parsedSummary.summary.challenges_identified?.map((challenge: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{challenge}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {parsedSummary.summary.successes_highlighted?.length > 0 && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Successes Highlighted</h4>
+                  <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                    {parsedSummary.summary.successes_highlighted.map((success: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{success}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'actions' && parsedSummary?.action_items && (
+            <div className="space-y-6">
+              <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg border border-red-200 dark:border-red-800">
+                <h3 className="text-lg font-semibold mb-4 text-red-800 dark:text-red-300">Immediate Actions</h3>
+                <div className="space-y-3">
+                  {parsedSummary.action_items.immediate_actions?.map((action: any, index: number) => (
+                    <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                      <div className={`px-2 py-1 rounded text-xs font-medium ${
+                        action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                        action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {action.priority}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{action.action}</p>
+                        <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          <span>⏰ {action.timeframe}</span>
+                          <span>📂 {action.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800 dark:text-blue-300">Follow-up Items</h3>
+                <div className="space-y-3">
+                  {parsedSummary.action_items.follow_up_items?.map((action: any, index: number) => (
+                    <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
+                      <div className={`px-2 py-1 rounded text-xs font-medium ${
+                        action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                        action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      }`}>
+                        {action.priority}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white">{action.action}</p>
+                        <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          <span>⏰ {action.timeframe}</span>
+                          <span>📂 {action.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'insights' && parsedSummary?.insights && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">Patterns Observed</h4>
+                  <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
+                    {parsedSummary.insights.patterns_observed?.map((pattern: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{pattern}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2">Areas for Improvement</h4>
+                  <ul className="text-sm text-orange-700 dark:text-orange-400 space-y-1">
+                    {parsedSummary.insights.areas_for_improvement?.map((area: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{area}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Positive Trends</h4>
+                  <ul className="text-sm text-green-700 dark:text-green-400 space-y-1">
+                    {parsedSummary.insights.positive_trends?.map((trend: string, index: number) => (
+                      <li key={index} className="flex items-start gap-1">
+                        <span>•</span>
+                        <span>{trend}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {parsedSummary.next_session_focus && (
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border">
+                    <h4 className="font-semibold text-indigo-800 dark:text-indigo-300 mb-2">Next Session Focus</h4>
+                    <div className="space-y-2 text-sm text-indigo-700 dark:text-indigo-400">
+                      {parsedSummary.next_session_focus.primary_objectives && (
+                        <div>
+                          <span className="font-medium">Objectives:</span>
+                          <ul className="ml-4 mt-1">
+                            {parsedSummary.next_session_focus.primary_objectives.map((obj: string, index: number) => (
+                              <li key={index}>• {obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'raw' && (
+            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                {summaryResponse.aiResponse?.response || 'No response data available'}
+              </pre>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button onClick={onClose} variant="outline">
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+};
 
 interface EditableSectionProps {
   title: string
@@ -1856,1484 +2133,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
     </div>
   )
 }
-
-// Enhanced Workout Plan Section
-const WorkoutPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [workoutPlans, setWorkoutPlans] = useState<any[]>([])
-  const [dataLoaded, setDataLoaded] = useState(false)
-  const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
-  const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() =>
-    Array(7)
-      .fill(null)
-      .map(() => []),
-  )
-  const [showAddExercise, setShowAddExercise] = useState(false)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [showClientDataPopup, setShowClientDataPopup] = useState(false)
-  const [clientInfo, setClientInfo] = useState<any>(null)
-  const [showAIResponsePopup, setShowAIResponsePopup] = useState(false)
-  const [aiResponse, setAiResponse] = useState<any>(null)
-  const [aiGeneratedPlans, setAiGeneratedPlans] = useState<WorkoutPlan[]>([])
-  const [showAIMetricsPopup, setShowAIMetricsPopup] = useState(false)
-  const [aiMetrics, setAiMetrics] = useState<{
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    model: string
-    timestamp: string
-    responseTime?: number
-  } | null>(null)
-  const [weeklyBreakdown, setWeeklyBreakdown] = useState<Record<string, string> | null>(null)
-  const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
-  const [showEditPlanModal, setShowEditPlanModal] = useState(false)
-  const [editedPlan, setEditedPlan] = useState<WorkoutPlan | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStartTime, setDragStartTime] = useState(0)
-  const [mouseDownTime, setMouseDownTime] = useState(0)
-  const [mouseDownPosition, setMouseDownPosition] = useState({ x: 0, y: 0 })
-
-  const [newExercise, setNewExercise] = useState<Omit<Exercise, "id" | "createdAt">>({
-    name: "",
-    instructions: "",
-    sets: "",
-    reps: "",
-    duration: "",
-    equipment: "",
-    difficulty: "Beginner",
-  })
-  const [showProfileCard, setShowProfileCard] = useState(false)
-
-  // Load data from localStorage on component mount
-  useEffect(() => {
-    const savedWeeklyPlan = localStorage.getItem("weekly-plan")
-    const savedAiPlans = localStorage.getItem("ai-generated-plans")
-
-    if (savedWeeklyPlan) {
-      setWeeklyPlan(JSON.parse(savedWeeklyPlan))
-    }
-    
-    if (savedAiPlans) {
-      try {
-        const parsedPlans = JSON.parse(savedAiPlans)
-        setAiGeneratedPlans(parsedPlans)
-        console.log("📚 Loaded", parsedPlans.length, "AI plans from localStorage")
-      } catch (error) {
-        console.error("Error parsing saved AI plans:", error)
-        localStorage.removeItem("ai-generated-plans") // Clear corrupted data
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
-  }, [weeklyPlan])
-
-  // Save AI generated plans to localStorage whenever they change
-  useEffect(() => {
-    if (aiGeneratedPlans.length > 0) {
-      localStorage.setItem("ai-generated-plans", JSON.stringify(aiGeneratedPlans))
-      console.log("💾 Saved", aiGeneratedPlans.length, "AI plans to localStorage")
-    }
-  }, [aiGeneratedPlans])
-
-  // New editable table state for workout plans
-  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
-  const [editValue, setEditValue] = useState<string | number>("")
-  const [allWorkoutPlans, setAllWorkoutPlans] = useState<any[]>([])
-
-  // Initialize workout plans from recommended and AI generated
-  useEffect(() => {
-    const initialPlans = [
-      // Convert AI generated plans to flat exercises
-      ...aiGeneratedPlans.flatMap((plan) =>
-        plan.exercises.map((exercise: any, index: number) => ({
-          id: `${plan.id}-${index}`,
-          day: exercise.day || "Monday", // Use the day from AI response or default to Monday
-          exercise: exercise.workout,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          duration: exercise.duration,
-          weight: exercise.weights,
-          coach_tip: exercise.coach_tip,
-          category: exercise.category,
-          body_part: exercise.body_part,
-          icon: exercise.icon,
-          source: "ai",
-        })),
-      ),
-    ]
-    setAllWorkoutPlans(initialPlans)
-  }, [aiGeneratedPlans])
-
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-  const weightOptions = [
-    "bodyweight",
-    "5kg",
-    "10kg",
-    "15kg",
-    "20kg",
-    "25kg",
-    "30kg",
-    "Dumbbells",
-    "Barbell",
-    "Kettlebell",
-    "Resistance Bands",
-  ]
-
-  const getDayColor = (day: string) => {
-    const colors = {
-      Monday: "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg",
-      Tuesday: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg",
-      Wednesday: "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg",
-      Thursday: "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg",
-      Friday: "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg",
-      Saturday: "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg",
-      Sunday: "bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-lg",
-    }
-    return colors[day as keyof typeof colors] || "bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-lg"
-  }
-
-  const handleCellClick = (workout: any, field: string) => {
-    setEditingCell({ id: workout.id, field })
-    setEditValue(workout[field])
-  }
-
-  const handleSave = () => {
-    if (editingCell) {
-      setAllWorkoutPlans((prev) =>
-        prev.map((w) =>
-          w.id === editingCell.id
-            ? {
-                ...w,
-                [editingCell.field]:
-                  editingCell.field === "sets" || editingCell.field === "duration" ? Number(editValue) : editValue,
-              }
-            : w,
-        ),
-      )
-      setEditingCell(null)
-      setEditValue("")
-    }
-  }
-
-  const handleCancel = () => {
-    setEditingCell(null)
-    setEditValue("")
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave()
-    } else if (e.key === "Escape") {
-      handleCancel()
-    }
-  }
-
-  const handleDeleteWorkout = (id: string) => {
-    setAllWorkoutPlans((prev) => prev.filter((w) => w.id !== id))
-  }
-
-  const handleAddNewWorkout = () => {
-    const newWorkout = {
-      id: Date.now().toString(),
-      day: "Monday",
-      exercise: "New Exercise",
-      sets: 3,
-      reps: "10",
-      duration: 30,
-      weight: "bodyweight",
-      coach_tip: "Focus on proper form",
-      category: "strength",
-      body_part: "full_body",
-      icon: "💪",
-      source: "custom",
-    }
-    setAllWorkoutPlans((prev) => [...prev, newWorkout])
-  }
-
-  const renderEditableCell = (
-    workout: any,
-    field: string,
-    type: "text" | "number" | "select" | "textarea" = "text",
-  ) => {
-    const isEditing = editingCell?.id === workout.id && editingCell?.field === field
-    const value = workout[field]
-
-    if (isEditing) {
-      if (type === "select") {
-        const options = field === "day" ? days : weightOptions
-        return (
-          <div className="flex items-center gap-1">
-            <Select
-              value={String(editValue)}
-              onValueChange={setEditValue}
-              onOpenChange={(open) => !open && handleSave()}
-            >
-              <SelectTrigger className="h-8 min-w-[100px] text-sm border-2 border-blue-300 focus:border-blue-500">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option) => (
-                  <SelectItem key={option} value={option} className="text-sm">
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
-      }
-
-      if (type === "textarea") {
-        return (
-          <div className="flex items-start gap-2">
-            <Textarea
-              value={String(editValue)}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="min-h-[80px] text-sm resize-none border-2 border-blue-300 focus:border-blue-500 rounded-xl"
-              rows={3}
-              autoFocus
-            />
-            <div className="flex flex-col gap-1 flex-shrink-0">
-              <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0 bg-green-500 hover:bg-green-600">
-                <Save className="h-3 w-3" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCancel}
-                className="h-6 w-6 p-0 border-red-300 hover:bg-red-50"
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-        )
-      }
-
-      return (
-        <div className="flex items-center gap-2">
-          <Input
-            type={type}
-            value={editValue}
-            onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="h-8 text-sm border-2 border-blue-300 focus:border-blue-500 rounded-lg"
-            autoFocus
-          />
-          <div className="flex gap-1">
-            <Button size="sm" onClick={handleSave} className="h-6 w-6 p-0 bg-green-500 hover:bg-green-600">
-              <Save className="h-3 w-3" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleCancel}
-              className="h-6 w-6 p-0 border-red-300 hover:bg-red-50"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    const cellContent = () => {
-      if (field === "day") {
-        return (
-          <Badge
-            className={`${getDayColor(String(value))} font-semibold cursor-pointer text-sm px-3 py-1 border-0 hover:scale-105 transition-transform`}
-          >
-            {String(value).slice(0, 3)}
-          </Badge>
-        )
-      }
-      if (field === "duration") {
-        return (
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-500" />
-            <span className="font-bold text-blue-600 dark:text-blue-400">{value}min</span>
-          </div>
-        )
-      }
-      if (field === "sets") {
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 font-bold text-sm"
-          >
-            {value}
-          </Badge>
-        )
-      }
-      if (field === "coach_tip") {
-        return (
-          <div className="w-full">
-            <p
-              className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-800 dark:hover:text-gray-200 leading-relaxed break-words p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200"
-              style={{
-                lineHeight: "1.4",
-                minHeight: "4em",
-                display: "block",
-              }}
-              title={String(value)}
-            >
-              {String(value)}
-            </p>
-          </div>
-        )
-      }
-      if (field === "exercise") {
-        return (
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{workout.icon || "💪"}</span>
-            <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 font-semibold text-gray-900 dark:text-white transition-colors">
-              {String(value)}
-            </span>
-          </div>
-        )
-      }
-      return (
-        <span className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 text-sm text-gray-700 dark:text-gray-300 transition-colors">
-          {String(value)}
-        </span>
-      )
-    }
-
-    return (
-      <div
-        onClick={() => handleCellClick(workout, field)}
-        className="cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg transition-all duration-200 hover:shadow-sm w-full p-2"
-        title="Click to edit"
-        draggable
-        onDragStart={(e) => {
-          // Enable dragging for workout rows
-          const workoutData = {
-            id: workout.id,
-            name: workout.exercise,
-            type: workout.category,
-            duration: workout.duration,
-            difficulty: "Custom",
-            color: "bg-gray-500",
-            category: workout.category,
-            body_part: workout.body_part,
-            exercises: [
-              {
-                workout: workout.exercise,
-                duration: workout.duration,
-                sets: workout.sets,
-                reps: workout.reps,
-                weights: workout.weight,
-                coach_tip: workout.coach_tip,
-                icon: workout.icon,
-                category: workout.category,
-                body_part: workout.body_part,
-                workout_yt_link: "",
-              },
-            ],
-          }
-          e.dataTransfer.setData("text/plain", JSON.stringify(workoutData))
-        }}
-      >
-        {cellContent()}
-      </div>
-    )
-  }
-
-  // Sort workouts by day
-  const sortedWorkouts = [...allWorkoutPlans].sort((a, b) => {
-    const dayOrder = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 }
-    return (dayOrder[a.day as keyof typeof dayOrder] || 8) - (dayOrder[b.day as keyof typeof dayOrder] || 8)
-  })
-
-  const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-  const handleAddExercise = () => {
-    // This function is now handled by handleAddNewWorkout in the table
-    handleAddNewWorkout()
-  }
-
-  const handleDragStart = (e: any, plan: any) => {
-    setIsDragging(true)
-    setDragStartTime(Date.now())
-    e.dataTransfer.setData("application/json", JSON.stringify(plan))
-  }
-
-  const handleDragEnd = () => {
-    // Reset dragging state after a short delay to allow click detection
-    setTimeout(() => {
-      setIsDragging(false)
-      setDragStartTime(0)
-    }, 100)
-  }
-
-  const handleMouseDown = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    console.log("Mouse down on plan:", plan.name)
-    setMouseDownTime(Date.now())
-    setMouseDownPosition({ x: e.clientX, y: e.clientY })
-  }
-
-  const handleMouseUp = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    const timeDiff = Date.now() - mouseDownTime
-    const positionDiff = Math.abs(e.clientX - mouseDownPosition.x) + Math.abs(e.clientY - mouseDownPosition.y)
-
-    console.log("Mouse up on plan:", plan.name, { timeDiff, positionDiff, isDragging })
-
-    // Consider it a click if:
-    // 1. Mouse was down for less than 300ms
-    // 2. Mouse didn't move more than 5 pixels
-    // 3. Not currently dragging
-    if (timeDiff < 300 && positionDiff < 5 && !isDragging) {
-      console.log("✅ Plan clicked - opening edit modal:", plan.name)
-      handleEditPlan(plan)
-    } else {
-      console.log("❌ Click ignored - conditions not met")
-    }
-  }
-
-  const handlePlanClick = (e: React.MouseEvent, plan: WorkoutPlan) => {
-    // Fallback click handler
-    e.preventDefault()
-    e.stopPropagation()
-  }
-
-  const handleDragOver = (e: any) => {
-    e.preventDefault()
-  }
-
-  const handleDrop = (e: any, day: any) => {
-    e.preventDefault()
-    const planData = JSON.parse(e.dataTransfer.getData("application/json"))
-    setWeeklyPlan((prev) => ({
-      ...prev,
-      [day]: planData,
-    }))
-  }
-
-  const removeFromCalendar = (day: any) => {
-    setWeeklyPlan((prev) => {
-      const newPlan = { ...prev }
-      delete newPlan[day]
-      return newPlan
-    })
-  }
-
-  // Handle plan editing
-  const handleEditPlan = (plan: WorkoutPlan) => {
-    console.log("🎯 handleEditPlan called for:", plan.name)
-    setEditingPlan(plan)
-    setEditedPlan(JSON.parse(JSON.stringify(plan))) // Deep copy
-    setShowEditPlanModal(true)
-    console.log("📱 Edit modal should now be open")
-  }
-
-  const handleSavePlan = () => {
-    if (!editedPlan || !editingPlan) return
-
-    // Update the plan in the appropriate array
-    if (editingPlan.category === "ai_generated") {
-      setAiGeneratedPlans((prev) => prev.map((plan) => (plan.id === editingPlan.id ? editedPlan : plan)))
-    } else {
-      // For custom plans, we'll update them in allWorkoutPlans
-      setAllWorkoutPlans((prev) => prev.map((plan) => (plan.id === editingPlan.id ? editedPlan : plan)))
-    }
-
-    setShowEditPlanModal(false)
-    setEditingPlan(null)
-    setEditedPlan(null)
-
-    toast({
-      title: "Plan Updated",
-      description: "Your workout plan has been successfully updated.",
-    })
-  }
-
-  const handleAddExerciseToPlan = () => {
-    if (!editedPlan) return
-
-    const newExercise: WorkoutExercise = {
-      workout: "New Exercise",
-      duration: 2,
-      sets: 3,
-      reps: "10",
-      weights: "bodyweight",
-      coach_tip: "Focus on proper form",
-      icon: "💪",
-      category: "strength",
-      body_part: "full_body",
-      workout_yt_link: "",
-    }
-
-    setEditedPlan({
-      ...editedPlan,
-      exercises: [...editedPlan.exercises, newExercise],
-    })
-  }
-
-  const handleRemoveExerciseFromPlan = (index: number) => {
-    if (!editedPlan) return
-
-    setEditedPlan({
-      ...editedPlan,
-      exercises: editedPlan.exercises.filter((_, i) => i !== index),
-    })
-  }
-
-  const handleUpdateExercise = (index: number, field: keyof WorkoutExercise, value: any) => {
-    if (!editedPlan) return
-
-    const updatedExercises = [...editedPlan.exercises]
-    updatedExercises[index] = {
-      ...updatedExercises[index],
-      [field]: value,
-    }
-
-    setEditedPlan({
-      ...editedPlan,
-      exercises: updatedExercises,
-    })
-  }
-
-  // Function to parse AI response and convert to recommended plans format
-  // Clear all saved AI plans
-  const handleClearAIPlans = () => {
-    setAiGeneratedPlans([])
-    localStorage.removeItem("ai-generated-plans")
-    toast({
-      title: "Exercise Library Cleared",
-      description: "All AI generated plans have been removed",
-    })
-  }
-
-  // Apply AI weekly breakdown to workout schedule
-  const handleApplyWeeklyBreakdown = async () => {
-    if (aiGeneratedPlans.length === 0) {
-      toast({
-        title: "No AI Plans Available",
-        description: "Generate an AI plan first to apply weekly breakdown",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!clientId) {
-      toast({
-        title: "No Client Selected",
-        description: "Client ID is required to save workout plans",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Use all available AI plans from the exercise library
-    const allAvailablePlans = aiGeneratedPlans
-
-    // Convert all AI generated plans to individual workout items with correct days
-    const appliedWorkouts = allAvailablePlans.flatMap((plan) =>
-      plan.exercises.map((exercise: any, index: number) => {
-        // Find the correct day from the AI response data
-        const exerciseDay = exercise.day || "Monday" // Use the day from AI response or default
-        
-        return {
-          id: `applied-${plan.id}-${index}-${Date.now()}`, // Add timestamp to ensure uniqueness
-          day: exerciseDay,
-          exercise: exercise.workout,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          duration: exercise.duration,
-          weight: exercise.weights,
-          coach_tip: exercise.coach_tip,
-          category: exercise.category,
-          body_part: exercise.body_part,
-          icon: exercise.icon,
-          source: "ai-applied",
-          planName: plan.name, // Track which plan this exercise came from
-        }
-      })
-    )
-
-    // Update the workout table with applied exercises
-    setAllWorkoutPlans(appliedWorkouts)
-
-    // Also populate the weekly schedule calendar
-    const newScheduledWorkouts: any[][] = Array(7).fill(null).map(() => [])
-    const dayOrder = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6 }
-
-    // Group all AI plans by day for the weekly calendar
-    allAvailablePlans.forEach((plan) => {
-      plan.exercises.forEach((exercise: any) => {
-        const exerciseDay = exercise.day || "Monday"
-        const dayIndex = dayOrder[exerciseDay as keyof typeof dayOrder] ?? 0
-        
-        // Create a calendar-friendly workout object
-        const calendarWorkout = {
-          id: `calendar-${plan.id}-${exercise.workout}-${Date.now()}`,
-          name: exercise.workout,
-          duration: exercise.duration || 30,
-          difficulty: plan.difficulty || "Moderate",
-          type: exercise.category || "Strength",
-          sets: exercise.sets,
-          reps: exercise.reps,
-          weights: exercise.weights,
-          coach_tip: exercise.coach_tip,
-          icon: exercise.icon,
-          planName: plan.name, // Track source plan
-        }
-        
-        newScheduledWorkouts[dayIndex].push(calendarWorkout)
-      })
-    })
-
-    // Update the scheduled workouts for the calendar
-    setScheduledWorkouts(newScheduledWorkouts)
-
-    // Save to Supabase database
-    try {
-      console.log("💾 Saving workout plans to Supabase...")
-      
-      // Prepare data for Supabase insertion
-      const workoutPlansForDB = allAvailablePlans.flatMap((plan) =>
-        plan.exercises.map((exercise: any) => {
-          // Calculate the date based on the day
-          const today = new Date()
-          const currentDay = today.getDay() // 0 = Sunday, 1 = Monday, etc.
-          const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-          const targetDayName = exercise.day || "Monday"
-          const targetDayIndex = dayNames.indexOf(targetDayName)
-          
-          // Calculate days to add to get to the target day
-          let daysToAdd = targetDayIndex - currentDay
-          if (daysToAdd < 0) daysToAdd += 7 // If target day is in the past this week, schedule for next week
-          
-          const targetDate = new Date(today)
-          targetDate.setDate(today.getDate() + daysToAdd)
-          
-          // Helper function to convert to numeric or null
-          const toNumericOrNull = (value: any) => {
-            if (value === null || value === undefined || value === "" || value === "N/A") {
-              return null
-            }
-            
-            // If it's already a number, return it
-            if (typeof value === 'number') {
-              return value
-            }
-            
-            // If it's a string, try to extract the first number
-            if (typeof value === 'string') {
-              // Extract first number from strings like "30 seconds work, 30 seconds rest" or "45 minutes"
-              const match = value.match(/(\d+(?:\.\d+)?)/)
-              if (match) {
-                const num = Number(match[1])
-                return isNaN(num) ? null : num
-              }
-              return null
-            }
-            
-            const num = Number(value)
-            return isNaN(num) ? null : num
-          }
-
-          // Helper function to convert reps to numeric (extracts first number from text like "10-12")
-          const parseReps = (value: any) => {
-            if (value === null || value === undefined || value === "" || value === "N/A") {
-              return null
-            }
-            
-            // If it's already a number, return it
-            if (typeof value === 'number') {
-              return value
-            }
-            
-            // If it's a string, try to extract the first number
-            if (typeof value === 'string') {
-              // Extract first number from strings like "10-12", "8-10", "15 reps", etc.
-              const match = value.match(/(\d+(?:\.\d+)?)/)
-              if (match) {
-                const num = Number(match[1])
-                return isNaN(num) ? null : num
-              }
-              return null
-            }
-            
-            const num = Number(value)
-            return isNaN(num) ? null : num
-          }
-
-          return {
-            client_id: clientId,
-            workout: exercise.workout,
-            duration: toNumericOrNull(exercise.duration),
-            sets: toNumericOrNull(exercise.sets),
-            reps: parseReps(exercise.reps),
-            weights: exercise.weights || null,
-            for_date: targetDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
-            for_time: exercise.for_time || "08:00:00", // Default to 8 AM if no time specified
-            workout_yt_link: exercise.workout_yt_link || null,
-            coach_tip: exercise.coach_tip || null,
-            icon: exercise.icon || null,
-            category: exercise.category || null,
-            body_part: exercise.body_part || null,
-            workout_id: crypto.randomUUID(), // Generate unique UUID
-          }
-        })
-      )
-
-      // Insert into Supabase
-      const { data, error } = await supabase
-        .from('workout_plan')
-        .insert(workoutPlansForDB)
-        .select()
-
-      if (error) {
-        console.error("❌ Error saving to Supabase:", error)
-        toast({
-          title: "Database Error",
-          description: `Failed to save workout plans: ${error.message}`,
-          variant: "destructive",
-        })
-        return
-      }
-
-      console.log("✅ Successfully saved to Supabase:", data)
-
-      // Create a summary of applied plans
-      const planNames = allAvailablePlans.map(plan => plan.name).join(", ")
-      const totalExercises = appliedWorkouts.length
-      const totalPlans = allAvailablePlans.length
-
-      toast({
-        title: "Exercise Library Applied & Saved",
-        description: `Applied ${totalExercises} exercises from ${totalPlans} AI plans to your schedule and database`,
-      })
-
-      console.log("📅 Applied workout plans:", {
-        totalPlans,
-        totalExercises,
-        planNames,
-        savedToDatabase: data?.length || 0,
-        exercisesByDay: newScheduledWorkouts.map((day, index) => ({
-          day: Object.keys(dayOrder)[index],
-          exerciseCount: day.length
-        }))
-      })
-
-    } catch (error) {
-      console.error("💥 Exception saving to Supabase:", error)
-      toast({
-        title: "Save Error",
-        description: "Failed to save workout plans to database",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const parseAIResponseToPlans = (aiResponseText: string) => {
-    try {
-      // Extract JSON from the AI response
-      const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error("No JSON found in AI response")
-      }
-
-      const aiData = JSON.parse(jsonMatch[0])
-
-      if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
-        throw new Error("Invalid workout plan format in AI response")
-      }
-
-      // Store the weekly breakdown if available
-      if (aiData.weekly_breakdown) {
-        setWeeklyBreakdown(aiData.weekly_breakdown)
-      }
-
-      // Convert AI workout plan to recommended plans format
-      const timestamp = new Date().toLocaleString()
-      const aiPlan: WorkoutPlan = {
-        id: `ai-plan-${Date.now()}`,
-        name: `AI Plan - ${timestamp}`,
-        type: "AI Generated",
-        duration: aiData.workout_plan.reduce((total: number, exercise: any) => total + (exercise.duration || 0), 0),
-        difficulty: "AI Recommended",
-        color: "bg-gradient-to-r from-purple-500 to-pink-500",
-        category: "ai_generated",
-        body_part: "full_body",
-        exercises: aiData.workout_plan.map((exercise: any) => ({
-          workout: exercise.workout,
-          day: exercise.day || "Monday", // Preserve the day from AI response
-          duration: exercise.duration || 0,
-          sets: exercise.sets || 1,
-          reps: exercise.reps ? exercise.reps.toString() : "1",
-          weights: exercise.weights || "bodyweight",
-          coach_tip: exercise.coach_tip || "Follow proper form",
-          icon: exercise.icon || "💪",
-          category: exercise.category || "strength",
-          body_part: exercise.body_part || "full_body",
-          workout_yt_link: "",
-        })),
-      }
-
-      return [aiPlan]
-    } catch (error) {
-      console.error("Error parsing AI response:", error)
-      throw new Error("Failed to parse AI response")
-    }
-  }
-
-  // Handle AI fitness plan generation
-  const handleGenerateAIPlans = async () => {
-    console.log("🚀 Button clicked - Starting AI generation process")
-    console.log("⏰ Timestamp:", new Date().toISOString())
-
-    setIsGeneratingAI(true)
-    const startTime = Date.now() // Track response time
-
-    try {
-      const clientId = 34 // Hardcoded for now as requested
-      console.log("🎯 Using hardcoded client ID:", clientId)
-
-      const result = await generateAIWorkoutPlan(clientId)
-      const responseTime = Date.now() - startTime // Calculate response time
-
-      console.log("📬 Function Response:")
-      console.log("  - Success:", result.success)
-      console.log("  - Message:", result.message)
-      console.log("  - Has Client Data:", !!result.clientData)
-
-      if (result.success) {
-        console.log("✅ SUCCESS - Data retrieval completed")
-
-        // Log the client data to console for inspection
-        if (result.clientData && result.clientInfo) {
-          console.log("🎉 CLIENT DATA SUCCESSFULLY RETRIEVED:")
-          console.log("📋 Data Format: JavaScript Object")
-          console.log("🔢 Number of Properties:", Object.keys(result.clientData).length)
-          console.log("🏷️ Property Names:", Object.keys(result.clientData))
-          console.log("📊 Full Client Data Object:")
-          console.table(result.clientData) // Display as table for better readability
-          console.log("📄 JSON Format:")
-          console.log(JSON.stringify(result.clientData, null, 2))
-          console.log("💾 Organized Client Info:")
-          console.log(result.clientInfo)
-
-          // Set client info
-          setClientInfo(result.clientInfo)
-
-                      // If AI response is available, parse and add to recommended plans
-            if (result.aiResponse && result.aiResponse.response) {
-              try {
-                const newAiPlans = parseAIResponseToPlans(result.aiResponse.response)
-                // Accumulate plans instead of replacing them
-                setAiGeneratedPlans(prev => [...prev, ...newAiPlans])
-              setAiResponse(result.aiResponse)
-
-              // Always show the complete AI response first
-              setShowAIResponsePopup(true)
-
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || "gpt-4",
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime,
-                }
-                setAiMetrics(metrics)
-              }
-
-              const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
-              toast({
-                title: "AI Workout Plan Generated",
-                description: `Personalized plan created for ${clientName}. Click to view full response.`,
-              })
-            } catch (parseError) {
-              console.error("Error parsing AI response:", parseError)
-              // Show the raw response in popup (parsing failed)
-              setAiResponse(result.aiResponse)
-              setShowAIResponsePopup(true)
-
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || "gpt-4",
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime,
-                }
-                setAiMetrics(metrics)
-              }
-
-              toast({
-                title: "AI Response Generated",
-                description: "View the complete AI response. Plans may need manual parsing.",
-              })
-            }
-          } else {
-            setShowClientDataPopup(true)
-            const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
-            toast({
-              title: "Client Data Retrieved",
-              description: `Showing data for ${clientName}`,
-            })
-          }
-        } else {
-          console.warn("⚠️ Success reported but no client data in response")
-          toast({
-            title: "Client Data Retrieved",
-            description: result.message,
-          })
-        }
-      } else {
-        console.log("❌ FAILURE - Data retrieval failed")
-        console.log("💬 Error Message:", result.message)
-
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (err) {
-      console.error("💥 EXCEPTION CAUGHT in handleGenerateAIPlans:")
-      console.error("  - Error Type:", typeof err)
-      console.error("  - Error:", err)
-      console.error("  - Stack:", err instanceof Error ? err.stack : "No stack")
-
-      toast({
-        title: "Error",
-        description: "Something went wrong while fetching client data.",
-        variant: "destructive",
-      })
-    } finally {
-      console.log("🏁 Process completed - Resetting loading state")
-      setIsGeneratingAI(false)
-    }
-  }
-
-  // Data loading effect - removed mock data, using real AI-generated plans instead
-  useEffect(() => {
-    if (clientId && isActive && !dataLoaded) {
-      // No more mock data - workout plans come from AI generation and application
-      setDataLoaded(true)
-      setLoading(false)
-    }
-  }, [clientId, isActive, dataLoaded])
-
-  // Early return for loading state
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
-          <CardContent className="flex items-center justify-center py-16">
-            <div className="text-center space-y-4">
-              <LoadingSpinner />
-              <p className="text-gray-600 dark:text-gray-400">Loading workout plans...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-7 gap-8 h-full">
-      {/* Enhanced Left Column - Weekly Calendar */}
-      <div className="col-span-5 flex flex-col">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-                <Calendar className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Weekly Schedule</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Drag exercises to schedule your week</p>
-              </div>
-            </div>
-            <Button
-              onClick={() => setShowAddExercise(true)}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Exercise
-            </Button>
-          </div>
-        </div>
-        <div className="grid grid-cols-7 gap-3 flex-1 overflow-y-auto">
-          {daysOfWeek.map((day, index) => (
-            <div key={day} className="min-h-0">
-              <div className="sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-20 pb-3 mb-3">
-                <h4 className="text-sm font-bold text-center text-gray-700 dark:text-gray-300 uppercase tracking-wide py-2 px-3 rounded-xl bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
-                  {day}
-                </h4>
-              </div>
-              <div
-                className="space-y-3 min-h-[300px] p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl transition-all duration-300 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/30 dark:hover:bg-blue-950/30"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                {scheduledWorkouts[index]?.map((workout, workoutIndex) => (
-                  <div
-                    key={workoutIndex}
-                    className="group relative p-4 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border-2 border-emerald-200 dark:border-emerald-700 text-sm shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                  >
-                    <div className="font-semibold text-emerald-800 dark:text-emerald-200 mb-2 text-sm">
-                      {workout.name}
-                    </div>
-                    <div className="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
-                      <Clock className="h-3 w-3" />
-                      {workout.duration}m
-                      <Badge
-                        variant="secondary"
-                        className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs"
-                      >
-                        {workout.difficulty}
-                      </Badge>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="absolute -top-2 -right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-800/30 rounded-full shadow-lg"
-                      onClick={() => removeFromCalendar(index)}
-                    >
-                      <X className="h-3 w-3 text-red-600 dark:text-red-400" />
-                    </Button>
-                  </div>
-                ))}
-                {(!scheduledWorkouts[index] || scheduledWorkouts[index].length === 0) && (
-                  <div className="text-center py-12 text-gray-400 dark:text-gray-600">
-                    <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <Calendar className="w-6 h-6" />
-                    </div>
-                    <p className="text-xs">Drop exercises here</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Enhanced Right Column - Exercise Library */}
-      <div className="col-span-2 flex flex-col">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg">
-              <Dumbbell className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Exercise Library</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Drag to schedule</p>
-            </div>
-          </div>
-
-          {/* Enhanced AI Generation Button */}
-          <Button
-            onClick={handleGenerateAIPlans}
-            disabled={isGeneratingAI}
-            className="w-full mb-6 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none h-14 text-base font-semibold"
-          >
-            {isGeneratingAI ? (
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>Generating AI Plan...</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5" />
-                <span>Generate AI Workout Plan</span>
-                <Zap className="h-5 w-5" />
-              </div>
-            )}
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto space-y-6">
-          {/* Enhanced AI Generated Plans Section */}
-          {aiGeneratedPlans.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-                    <Sparkles className="h-4 w-4 text-white" />
-                  </div>
-                  <h4 className="font-bold text-gray-900 dark:text-gray-100">Exercise Library</h4>
-                  <Badge className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 dark:from-purple-900 dark:to-pink-900 dark:text-purple-300 border-0">
-                    {aiGeneratedPlans.length} plans
-                  </Badge>
-                </div>
-                {aiGeneratedPlans.length > 0 && (
-                  <Button
-                    onClick={handleClearAIPlans}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 text-xs"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    Clear All
-                  </Button>
-                )}
-              </div>
-              {aiGeneratedPlans.map((plan) => (
-                <div
-                  key={plan.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, plan)}
-                  onDragEnd={handleDragEnd}
-                  onMouseDown={(e) => handleMouseDown(e, plan)}
-                  onMouseUp={(e) => handleMouseUp(e, plan)}
-                  onClick={(e) => handlePlanClick(e, plan)}
-                  className="group relative p-4 bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-blue-900/20 rounded-2xl border-2 border-purple-200 dark:border-purple-700 cursor-grab active:cursor-grabbing shadow-lg hover:shadow-2xl transition-all duration-500 hover:scale-105 hover:border-purple-300 dark:hover:border-purple-600"
-                >
-                  <div className="absolute top-2 right-2">
-                    <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs border-0 shadow-lg">
-                      AI
-                    </Badge>
-                  </div>
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-                      <Sparkles className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h5 className="font-bold text-gray-900 dark:text-gray-100 text-sm mb-1">{plan.name}</h5>
-                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                        <Clock className="h-3 w-3" />
-                        <span>{plan.duration}m</span>
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-purple-300 text-purple-700 dark:border-purple-700 dark:text-purple-300"
-                        >
-                          {plan.exercises.length} exercises
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {plan.exercises.slice(0, 3).map((exercise, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                        <span className="text-sm">{exercise.icon}</span>
-                        <span className="truncate flex-1">{exercise.workout}</span>
-                        <Badge
-                          variant="secondary"
-                          className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 text-xs"
-                        >
-                          {exercise.sets}x{exercise.reps}
-                        </Badge>
-                      </div>
-                    ))}
-                    {plan.exercises.length > 3 && (
-                      <div className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                        +{plan.exercises.length - 3} more exercises
-                      </div>
-                    )}
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                </div>
-              ))}
-              
-              {/* Apply Weekly Schedule Button */}
-              <Button
-                onClick={handleApplyWeeklyBreakdown}
-                disabled={aiGeneratedPlans.length === 0}
-                className="w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Apply All Plans to Schedule
-              </Button>
-            </div>
-          )}
-
-
-        </div>
-      </div>
-
-      {/* Enhanced Workout Plan Table */}
-      <div className="col-span-7 mt-8">
-        <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-2xl dark:bg-gray-900/90">
-          <CardHeader className="pb-6">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
-                  <BarChart3 className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <span className="text-gray-900 dark:text-white">Workout Plan Overview</span>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 font-normal mt-1">
-                    Click any cell to edit • {sortedWorkouts.length} total exercises
-                  </p>
-                </div>
-              </CardTitle>
-              <Button
-                onClick={handleAddNewWorkout}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Exercise
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {sortedWorkouts.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <BarChart3 className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="text-gray-500 dark:text-gray-400 mb-2">No workout plans created yet</p>
-                <p className="text-sm text-gray-400">Generate an AI plan or add custom exercises to get started</p>
-              </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-50 to-green-50 dark:from-gray-800 dark:to-green-950/50">
-                      <tr>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Day</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Exercise</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Sets</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Reps</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Duration</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Weight</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Coach Tip</th>
-                        <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {sortedWorkouts.map((workout) => (
-                        <tr
-                          key={workout.id}
-                          className="hover:bg-gradient-to-r hover:from-green-50/50 hover:to-emerald-50/50 dark:hover:from-green-950/30 dark:hover:to-emerald-950/30 transition-all duration-200"
-                        >
-                          <td className="px-6 py-4">{renderEditableCell(workout, "day", "select")}</td>
-                          <td className="px-6 py-4 min-w-[200px]">{renderEditableCell(workout, "exercise")}</td>
-                          <td className="px-6 py-4">{renderEditableCell(workout, "sets", "number")}</td>
-                          <td className="px-6 py-4">{renderEditableCell(workout, "reps")}</td>
-                          <td className="px-6 py-4">{renderEditableCell(workout, "duration", "number")}</td>
-                          <td className="px-6 py-4">{renderEditableCell(workout, "weight", "select")}</td>
-                          <td className="px-6 py-4 min-w-[300px] max-w-[400px]">
-                            {renderEditableCell(workout, "coach_tip", "textarea")}
-                          </td>
-                          <td className="px-6 py-4">
-                            <Button
-                              onClick={() => handleDeleteWorkout(workout.id)}
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 transition-all duration-200"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Enhanced Popups */}
-      <AIResponsePopup
-        isOpen={showAIResponsePopup}
-        onClose={() => setShowAIResponsePopup(false)}
-        aiResponse={aiResponse}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-        onShowMetrics={() => {
-          setShowAIResponsePopup(false)
-          setShowAIMetricsPopup(true)
-        }}
-      />
-
-      <ClientDataPopup
-        isOpen={showClientDataPopup}
-        onClose={() => setShowClientDataPopup(false)}
-        clientInfo={clientInfo}
-      />
-
-      <AIMetricsPopup
-        isOpen={showAIMetricsPopup}
-        onClose={() => setShowAIMetricsPopup(false)}
-        metrics={aiMetrics}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-      />
-
-      {/* Enhanced Plan Edit Modal */}
-      <Dialog open={showEditPlanModal} onOpenChange={setShowEditPlanModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
-          <DialogHeader className="border-b border-gradient-to-r from-blue-200 to-purple-200 dark:from-blue-800 dark:to-purple-800 pb-6">
-            <DialogTitle className="flex items-center gap-3 text-2xl">
-              <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-                <Edit className="h-6 w-6 text-white" />
-              </div>
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
-                Edit Workout Plan
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-
-          {editedPlan && (
-            <div className="space-y-6">
-              {/* Plan Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="plan-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Plan Name
-                  </Label>
-                  <Input
-                    id="plan-name"
-                    value={editedPlan.name}
-                    onChange={(e) => setEditedPlan({ ...editedPlan, name: e.target.value })}
-                    className="mt-1 border-2 border-blue-200 focus:border-blue-400 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="plan-type" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Plan Type
-                  </Label>
-                  <Input
-                    id="plan-type"
-                    value={editedPlan.type}
-                    onChange={(e) => setEditedPlan({ ...editedPlan, type: e.target.value })}
-                    className="mt-1 border-2 border-blue-200 focus:border-blue-400 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              {/* Exercises */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Exercises</h4>
-                  <Button
-                    onClick={handleAddExerciseToPlan}
-                    variant="outline"
-                    size="sm"
-                    className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Exercise
-                  </Button>
-                </div>
-
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {editedPlan.exercises.map((exercise, index) => (
-                    <div
-                      key={index}
-                      className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Exercise Name</Label>
-                          <Input
-                            value={exercise.workout}
-                            onChange={(e) => handleUpdateExercise(index, "workout", e.target.value)}
-                            className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Sets</Label>
-                          <Input
-                            type="number"
-                            value={exercise.sets}
-                            onChange={(e) => handleUpdateExercise(index, "sets", Number.parseInt(e.target.value) || 0)}
-                            className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Reps</Label>
-                          <Input
-                            value={exercise.reps}
-                            onChange={(e) => handleUpdateExercise(index, "reps", e.target.value)}
-                            className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Duration (min)</Label>
-                          <Input
-                            type="number"
-                            value={exercise.duration}
-                            onChange={(e) =>
-                              handleUpdateExercise(index, "duration", Number.parseInt(e.target.value) || 0)
-                            }
-                            className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                            Weight/Equipment
-                          </Label>
-                          <Select
-                            value={exercise.weights}
-                            onValueChange={(value) => handleUpdateExercise(index, "weights", value)}
-                          >
-                            <SelectTrigger className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {weightOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex items-end">
-                          <Button
-                            onClick={() => handleRemoveExerciseFromPlan(index)}
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <Label className="text-xs font-medium text-gray-600 dark:text-gray-400">Coach Tip</Label>
-                        <Textarea
-                          value={exercise.coach_tip}
-                          onChange={(e) => handleUpdateExercise(index, "coach_tip", e.target.value)}
-                          className="mt-1 text-sm border-2 border-gray-200 focus:border-blue-400 rounded-lg resize-none"
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowEditPlanModal(false)}
-                  className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSavePlan}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+// 
 
 // Enhanced Nutrition Plan Section
 const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
@@ -4624,15 +3424,21 @@ export default function ClientDashboard() {
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [allClientGoals, setAllClientGoals] = useState<string[]>([]);
-  const [trainerNotes, setTrainerNotes] = useState<string>("");
-  const navigate=useNavigate();
 
-  // Editable Trainer Notes state
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
-  const [notesDraft, setNotesDraft] = useState(trainerNotes);
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
-  const [notesError, setNotesError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeTab, setActiveTab] = useState("metrics")
+  const [showProfileCard, setShowProfileCard] = useState(false)
+  const [notes, setNotes] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editableNotes, setEditableNotes] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const [showClientFilter, setShowClientFilter] = useState(false)
+  const [activeClientFilter, setActiveClientFilter] = useState<string | null>(null)
+  const [showNotesSummaryPopup, setShowNotesSummaryPopup] = useState(false)
+  const [notesSummaryResponse, setNotesSummaryResponse] = useState<any>(null)
+  const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
+  const navigate = useNavigate()
+
 
   useEffect(() => {
     setNotesDraft(trainerNotes);
@@ -4664,7 +3470,45 @@ export default function ClientDashboard() {
     } finally {
       setIsSavingNotes(false);
     }
+
+  }
+
+  const handleSummarizeNotes = async () => {
+    if (!notes || notes.trim().length === 0) {
+      console.log("No notes to summarize");
+      return;
+    }
+
+    try {
+      setIsSummarizingNotes(true);
+      console.log('🔄 Starting notes summarization...');
+      
+      // Call the AI notes summary service (notes is guaranteed to be non-null here)
+      const result = await summarizeTrainerNotes(notes as string, client?.id);
+      
+      console.log('📊 Summary Result:', result);
+      
+      if (result.success) {
+        setNotesSummaryResponse(result);
+        setShowNotesSummaryPopup(true);
+        console.log('✅ Notes summary generated successfully');
+      } else {
+        console.error('❌ Failed to generate notes summary:', result.message);
+        // You could show a toast notification here
+      }
+    } catch (error) {
+      console.error('💥 Error summarizing notes:', error);
+      // You could show an error toast notification here
+    } finally {
+      setIsSummarizingNotes(false);
+    }
   };
+
+  const filteredClients = sampleClients.filter(
+    (client) =>
+      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
 
   // State for all clients of the trainer
   const [trainerClients, setTrainerClients] = useState<any[]>([]);
@@ -5094,17 +3938,140 @@ export default function ClientDashboard() {
                         <span className="text-gray-900 dark:text-white">{client.goal_timeline}</span>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
-              </div>
+
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Edit className="h-5 w-5 text-rose-500" />
+                      Trainer Notes
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      {!isEditing && notes && notes.trim().length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSummarizeNotes}
+                          className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20"
+                          disabled={isSummarizingNotes}
+                        >
+                          {isSummarizingNotes ? (
+                            <>
+                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              📋
+                              <span className="ml-1">Summarize</span>
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
+                        className="h-8 px-2"
+                        disabled={isEditing && isSaving}
+                      >
+                        {isEditing ? (
+                          isSaving ? (
+                            <>
+                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4 mr-1" />
+                              Save
+                            </>
+                          )
+                        ) : (
+                          <>
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Edit
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isEditing ? (
+                    <Textarea
+                      value={editableNotes}
+                      onChange={(e) => setEditableNotes(e.target.value)}
+                      className="min-h-[200px] focus:border-rose-300 focus:ring-rose-200/50"
+                      placeholder="Add your notes about the client here..."
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      {notes ? (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                          {notes}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No notes added yet.</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          )}
-          {activeTab === "metrics" && <MetricsSection clientId={clientId} isActive={activeTab === "metrics"} />}
-          {activeTab === "workout" && <WorkoutPlanSection clientId={clientId} isActive={activeTab === "workout"} />}
-          {activeTab === "nutrition" && <NutritionPlanSection clientId={clientId} isActive={activeTab === "nutrition"} />}
-          {activeTab === "programs" && <ProgramManagementSection clientId={clientId} isActive={activeTab === "programs"} />}
+
+            {/* Tabbed Content */}
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+              <CardHeader className="pb-0">
+                <Tabs defaultValue="metrics" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid grid-cols-4 mb-4">
+                    <TabsTrigger value="metrics" className="flex items-center gap-2">
+                      <LineChart className="h-4 w-4" />
+                      <span>Metrics</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="workout" className="flex items-center gap-2">
+                      <Dumbbell className="h-4 w-4" />
+                      <span>Workout Plan</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="nutrition" className="flex items-center gap-2">
+                      <Utensils className="h-4 w-4" />
+                      <span>Nutrition Plan</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="programs" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Programs</span>
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="metrics">
+                    <MetricsSection />
+                  </TabsContent>
+                  <TabsContent value="workout">
+                    <WorkoutPlanSection clientId={client?.id} />
+                  </TabsContent>
+                  <TabsContent value="nutrition">
+                    <NutritionPlanSection />
+                  </TabsContent>
+                  <TabsContent value="programs">
+                    <ProgramsSection />
+                  </TabsContent>
+                </Tabs>
+              </CardHeader>
+            </Card>
+          </div>
         </div>
-      </div>
+      </main>
+
+      {/* AI Notes Summary Popup */}
+      <AINotesSummaryPopup
+        isOpen={showNotesSummaryPopup}
+        onClose={() => setShowNotesSummaryPopup(false)}
+        summaryResponse={notesSummaryResponse}
+        clientName={client?.name || client?.preferredName}
+      />
+
     </div>
   )
 }
