@@ -1,3 +1,4 @@
+
 // AI Fitness Plan Generation with OpenAI Integration
 import { supabase } from './supabase'
 import OpenAI from 'openai'
@@ -323,3 +324,4 @@ export async function generateAIWorkoutPlan(clientId: number) {
     };
   }
 } 
+

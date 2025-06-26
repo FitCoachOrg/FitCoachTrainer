@@ -1,3 +1,4 @@
+
 // Workout Plans JSON Structure Compatible with Supabase workout_plan table
 // 
 // Table Structure:
