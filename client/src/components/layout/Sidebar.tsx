@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import * as Icons from "@/lib/icons"
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { useSidebar } from "@/context/sidebar-context"
 import { supabase } from "@/lib/supabase"
 
@@ -75,6 +75,34 @@ const secondaryNavItems: NavItem[] = [
 const Sidebar: React.FC = () => {
   const { isExpanded, setIsExpanded } = useSidebar()
   const navigate = useNavigate()
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [trainerEmail, setTrainerEmail] = useState<string | null>(null)
+  const [trainerName, setTrainerName] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchTrainerData = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session && session.user.email) {
+        const { data: trainerData, error } = await supabase
+          .from("trainer")
+          .select("avatar_url, trainer_email, trainer_name")
+          .eq("trainer_email", session.user.email)
+          .single()
+
+        if (error) {
+          console.error("Error fetching trainer data:", error)
+        } else if (trainerData) {
+          setAvatarUrl(trainerData.avatar_url)
+          setTrainerEmail(trainerData.trainer_email)
+          setTrainerName(trainerData.trainer_name)
+        }
+      }
+    }
+
+    fetchTrainerData()
+  }, [])
 
   const handleSmartAlertsClick = () => {
     navigate("/dashboard")
@@ -82,9 +110,6 @@ const Sidebar: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      // Clear localStorage
-      localStorage.removeItem("isAuthenticated")
-      
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
       if (error) throw error
@@ -95,8 +120,6 @@ const Sidebar: React.FC = () => {
       navigate("/login")
     } catch (error) {
       console.error("Error logging out:", error)
-      // Even if there's an error, clear localStorage and redirect to login
-      localStorage.removeItem("isAuthenticated")
       navigate("/login")
     }
   }
@@ -115,7 +138,9 @@ const Sidebar: React.FC = () => {
         <div className="flex items-center px-4 py-5 border-b border-gray-200 dark:border-slate-700">
           <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
             <img
-              src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b"
+              src={
+                avatarUrl || "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b"
+              }
               alt="Trainer profile"
               className="object-cover w-full h-full"
             />
@@ -126,8 +151,10 @@ const Sidebar: React.FC = () => {
               isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"
             )}
           >
-            <h1 className="font-semibold text-lg whitespace-nowrap">FitProDash</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">info@fitprodash.com</p>
+            <h1 className="font-semibold text-lg whitespace-nowrap">{trainerName || "Trainer"}</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              {trainerEmail || ""}
+            </p>
           </div>
         </div>
 

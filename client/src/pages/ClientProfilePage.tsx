@@ -1,41 +1,47 @@
+"use client"
+
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  Search,
   User,
-  Mail,
-  Phone,
   Calendar,
-  Ruler,
   Weight,
-  MapPin,
   Edit,
-  MoreHorizontal,
   Activity,
   Target,
   TrendingUp,
   Clock,
-  ArrowLeft,
   Save,
   Dumbbell,
   Utensils,
-  LineChart,
   Heart,
   Footprints,
   Pencil,
   Plus,
-  Filter,
-  Copy,
   Trash2,
   X,
+  Sparkles,
+  Zap,
+  Edit3,
+  Trophy,
+  BarChart3,
+  PieChart,
+  Search,
+  Filter,
+  Grid,
+  List,
+  Star,
+  Play,
+  Download,
+  Share,
+  Settings,
+
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -47,6 +53,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  PieChart as RechartsPieChart,
+  Cell,
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useNavigate, useParams } from "react-router-dom"
@@ -77,70 +85,83 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import type { ViewMode, Difficulty, StartDay, TaskType, Task, ProgramData } from "@/types/program"
 import { supabase } from "@/lib/supabase"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
+// Import the AI nutrition plan generator
 import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
+
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
+
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useParams, useNavigate } from "react-router-dom"
+import { Progress } from "@/components/ui/progress"
+
 
 // Define types for AI response (matching the actual implementation)
 interface AIResponse {
-  response: string;
+  response: string
   usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  model?: string;
-  timestamp: string;
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+  model?: string
+  timestamp: string
 }
 
 interface ClientInfo {
-  name?: string;
-  preferredName?: string;
-  [key: string]: any;
+  name?: string
+  preferredName?: string
+  [key: string]: any
 }
 
 // AI Response Popup Component
-const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetrics }: {
-  isOpen: boolean;
-  onClose: () => void;
-  aiResponse: AIResponse | null;
-  clientName?: string;
-  onShowMetrics?: () => void;
+const AIResponsePopup = ({
+  isOpen,
+  onClose,
+  aiResponse,
+  clientName,
+  onShowMetrics,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  aiResponse: AIResponse | null
+  clientName?: string
+  onShowMetrics?: () => void
 }) => {
-  const [activeTab, setActiveTab] = useState<'table' | 'raw'>('table');
-  const [workoutPlan, setWorkoutPlan] = useState<any[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"table" | "raw">("table")
+  const [workoutPlan, setWorkoutPlan] = useState<any[]>([])
+  const [isEditing, setIsEditing] = useState(false)
 
   // Parse workout plan from AI response
   useEffect(() => {
     if (aiResponse?.response) {
       try {
-        const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/);
+        const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-          const parsedData = JSON.parse(jsonMatch[0]);
+          const parsedData = JSON.parse(jsonMatch[0])
           if (parsedData.workout_plan && Array.isArray(parsedData.workout_plan)) {
-            setWorkoutPlan(parsedData.workout_plan);
+            setWorkoutPlan(parsedData.workout_plan)
           }
         }
       } catch (error) {
-        console.error('Error parsing workout plan:', error);
+        console.error("Error parsing workout plan:", error)
       }
     }
-  }, [aiResponse]);
+  }, [aiResponse])
 
   const handleWorkoutChange = (index: number, field: string, value: any) => {
-    const updatedPlan = [...workoutPlan];
-    updatedPlan[index] = { ...updatedPlan[index], [field]: value };
-    setWorkoutPlan(updatedPlan);
-  };
+    const updatedPlan = [...workoutPlan]
+    updatedPlan[index] = { ...updatedPlan[index], [field]: value }
+    setWorkoutPlan(updatedPlan)
+  }
 
   const addNewWorkout = () => {
     const newWorkout = {
@@ -149,176 +170,235 @@ const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetric
       reps: "10",
       duration: 15,
       weights: "bodyweight",
-      for_date: new Date().toISOString().split('T')[0],
+      for_date: new Date().toISOString().split("T")[0],
       for_time: "08:00:00",
       body_part: "Full Body",
       category: "Strength",
       coach_tip: "Focus on proper form",
       icon: "💪",
-      progression_notes: "Increase intensity when RPE ≤ 8"
-    };
-    setWorkoutPlan([...workoutPlan, newWorkout]);
-  };
+      progression_notes: "Increase intensity when RPE ≤ 8",
+    }
+    setWorkoutPlan([...workoutPlan, newWorkout])
+  }
 
   const removeWorkout = (index: number) => {
-    const updatedPlan = workoutPlan.filter((_, i) => i !== index);
-    setWorkoutPlan(updatedPlan);
-  };
+    const updatedPlan = workoutPlan.filter((_, i) => i !== index)
+    setWorkoutPlan(updatedPlan)
+  }
 
   const saveChanges = () => {
-    setIsEditing(false);
-    // Here you could save the changes to your backend or state management
-    console.log('Saved workout plan:', workoutPlan);
-  };
+    setIsEditing(false)
+    console.log("Saved workout plan:", workoutPlan)
+  }
 
-  if (!isOpen || !aiResponse) return null;
+  if (!isOpen || !aiResponse) return null
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
-              🤖
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
+        <DialogHeader className="border-b border-gradient-to-r from-blue-200 to-purple-200 dark:from-blue-800 dark:to-purple-800 pb-6">
+          <DialogTitle className="flex items-center gap-3 text-2xl">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+              <Sparkles className="h-6 w-6 text-white" />
             </div>
-            AI Fitness Plan Generated{clientName ? ` for ${clientName}` : ''}
+            <div>
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
+                AI Fitness Plan Generated
+              </span>
+              {clientName && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 font-normal mt-1">
+                  Personalized plan for {clientName}
+                </p>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
-        
-        <div className="space-y-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Your personalized fitness plan has been generated using AI. You can view and edit the workout plan in the table below.
+
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/50 dark:to-purple-950/50 p-6 rounded-2xl border border-blue-200/50 dark:border-blue-800/50">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
+                <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100">AI-Powered Personalization</h3>
+            </div>
+            <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+              Your personalized fitness plan has been generated using advanced AI. You can view and edit the workout
+              plan in the interactive table below.
             </p>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+          {/* Enhanced Tab Navigation */}
+          <div className="flex space-x-2 bg-gray-100/80 dark:bg-gray-800/80 p-2 rounded-2xl backdrop-blur-sm">
             <button
-              onClick={() => setActiveTab('table')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'table'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              onClick={() => setActiveTab("table")}
+              className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
+                activeTab === "table"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-lg shadow-blue-500/20 scale-105"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50"
               }`}
             >
-              📊 Workout Table
+              <BarChart3 className="w-4 h-4" />
+              Workout Table
             </button>
             <button
-              onClick={() => setActiveTab('raw')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'raw'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              onClick={() => setActiveTab("raw")}
+              className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
+                activeTab === "raw"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-lg shadow-blue-500/20 scale-105"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50"
               }`}
             >
-              📄 Raw Response
+              <Edit className="w-4 h-4" />
+              Raw Response
             </button>
           </div>
 
-          {/* Workout Plan Table */}
-          {activeTab === 'table' && (
-            <div className="space-y-4">
+          {/* Enhanced Workout Plan Table */}
+          {activeTab === "table" && (
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h4 className="font-semibold text-gray-900 dark:text-white">Workout Plan</h4>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
+                    <Dumbbell className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xl text-gray-900 dark:text-white">Workout Plan</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {workoutPlan.length} exercises • Personalized for your goals
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
                   {isEditing ? (
                     <>
-                      <Button onClick={saveChanges} size="sm" className="bg-green-600 hover:bg-green-700">
-                        💾 Save Changes
+                      <Button
+                        onClick={saveChanges}
+                        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        Save Changes
                       </Button>
-                      <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
+                      <Button
+                        onClick={() => setIsEditing(false)}
+                        variant="outline"
+                        className="border-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
                         Cancel
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-                      ✏️ Edit Plan
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      variant="outline"
+                      className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Plan
                     </Button>
                   )}
                 </div>
               </div>
 
               {workoutPlan.length > 0 ? (
-                <div className="border rounded-lg overflow-hidden">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
+                    <table className="w-full">
+                      <thead className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium">Exercise</th>
-                          <th className="px-3 py-2 text-left font-medium">Sets</th>
-                          <th className="px-3 py-2 text-left font-medium">Reps</th>
-                          <th className="px-3 py-2 text-left font-medium">Duration</th>
-                          <th className="px-3 py-2 text-left font-medium">Equipment</th>
-                          <th className="px-3 py-2 text-left font-medium">Body Part</th>
-                          <th className="px-3 py-2 text-left font-medium">Category</th>
-                          <th className="px-3 py-2 text-left font-medium">Date</th>
-                          <th className="px-3 py-2 text-left font-medium">Coach Tip</th>
-                          {isEditing && <th className="px-3 py-2 text-left font-medium">Actions</th>}
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Exercise</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Sets</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Reps</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Duration</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Equipment</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Body Part</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Category</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Date</th>
+                          <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Coach Tip</th>
+                          {isEditing && (
+                            <th className="px-6 py-4 text-left font-semibold text-gray-900 dark:text-white">Actions</th>
+                          )}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                         {workoutPlan.map((workout, index) => (
-                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg">{workout.icon}</span>
+                          <tr
+                            key={index}
+                            className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-purple-50/50 dark:hover:from-blue-950/30 dark:hover:to-purple-950/30 transition-all duration-200"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <span className="text-2xl">{workout.icon}</span>
                                 {isEditing ? (
                                   <Input
                                     value={workout.workout}
-                                    onChange={(e) => handleWorkoutChange(index, 'workout', e.target.value)}
-                                    className="w-full"
+                                    onChange={(e) => handleWorkoutChange(index, "workout", e.target.value)}
+                                    className="font-medium border-2 focus:border-blue-400"
                                   />
                                 ) : (
-                                  <span className="font-medium">{workout.workout}</span>
+                                  <span className="font-semibold text-gray-900 dark:text-white">{workout.workout}</span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Input
                                   type="number"
                                   value={workout.sets}
-                                  onChange={(e) => handleWorkoutChange(index, 'sets', parseInt(e.target.value) || 0)}
-                                  className="w-16"
+                                  onChange={(e) =>
+                                    handleWorkoutChange(index, "sets", Number.parseInt(e.target.value) || 0)
+                                  }
+                                  className="w-20 text-center border-2 focus:border-blue-400"
                                 />
                               ) : (
-                                workout.sets
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-bold"
+                                >
+                                  {workout.sets}
+                                </Badge>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Input
                                   value={workout.reps}
-                                  onChange={(e) => handleWorkoutChange(index, 'reps', e.target.value)}
-                                  className="w-24"
+                                  onChange={(e) => handleWorkoutChange(index, "reps", e.target.value)}
+                                  className="w-24 border-2 focus:border-blue-400"
                                 />
                               ) : (
-                                workout.reps
+                                <span className="font-medium text-gray-700 dark:text-gray-300">{workout.reps}</span>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-2">
                                   <Input
                                     type="number"
                                     value={workout.duration}
-                                    onChange={(e) => handleWorkoutChange(index, 'duration', parseInt(e.target.value) || 0)}
-                                    className="w-16"
+                                    onChange={(e) =>
+                                      handleWorkoutChange(index, "duration", Number.parseInt(e.target.value) || 0)
+                                    }
+                                    className="w-20 text-center border-2 focus:border-blue-400"
                                   />
-                                  <span className="text-xs text-gray-500">min</span>
+                                  <span className="text-sm text-gray-500">min</span>
                                 </div>
                               ) : (
-                                `${workout.duration} min`
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-orange-500" />
+                                  <span className="font-medium text-orange-600 dark:text-orange-400">
+                                    {workout.duration} min
+                                  </span>
+                                </div>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Select
                                   value={workout.weights}
-                                  onValueChange={(value) => handleWorkoutChange(index, 'weights', value)}
+                                  onValueChange={(value) => handleWorkoutChange(index, "weights", value)}
                                 >
-                                  <SelectTrigger className="w-32">
+                                  <SelectTrigger className="w-36 border-2 focus:border-blue-400">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -331,16 +411,21 @@ const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetric
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                workout.weights
+                                <Badge
+                                  variant="outline"
+                                  className="border-purple-200 text-purple-700 dark:border-purple-800 dark:text-purple-300"
+                                >
+                                  {workout.weights}
+                                </Badge>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Select
                                   value={workout.body_part}
-                                  onValueChange={(value) => handleWorkoutChange(index, 'body_part', value)}
+                                  onValueChange={(value) => handleWorkoutChange(index, "body_part", value)}
                                 >
-                                  <SelectTrigger className="w-32">
+                                  <SelectTrigger className="w-36 border-2 focus:border-blue-400">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -356,16 +441,18 @@ const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetric
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                workout.body_part
+                                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                                  {workout.body_part}
+                                </span>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Select
                                   value={workout.category}
-                                  onValueChange={(value) => handleWorkoutChange(index, 'category', value)}
+                                  onValueChange={(value) => handleWorkoutChange(index, "category", value)}
                                 >
-                                  <SelectTrigger className="w-28">
+                                  <SelectTrigger className="w-32 border-2 focus:border-blue-400">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -377,51 +464,59 @@ const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetric
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  workout.category === 'Strength' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                                  workout.category === 'Cardio' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                  workout.category === 'Flexibility' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                                }`}>
+                                <Badge
+                                  className={`font-medium ${
+                                    workout.category === "Strength"
+                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                      : workout.category === "Cardio"
+                                        ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                        : workout.category === "Flexibility"
+                                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                          : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                                  }`}
+                                >
                                   {workout.category}
-                                </span>
+                                </Badge>
                               )}
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="px-6 py-4">
                               {isEditing ? (
                                 <Input
                                   type="date"
                                   value={workout.for_date}
-                                  onChange={(e) => handleWorkoutChange(index, 'for_date', e.target.value)}
-                                  className="w-32"
+                                  onChange={(e) => handleWorkoutChange(index, "for_date", e.target.value)}
+                                  className="w-36 border-2 focus:border-blue-400"
                                 />
                               ) : (
-                                new Date(workout.for_date).toLocaleDateString()
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                  {new Date(workout.for_date).toLocaleDateString()}
+                                </span>
                               )}
                             </td>
-                            <td className="px-3 py-2 max-w-48">
+                            <td className="px-6 py-4 max-w-64">
                               {isEditing ? (
                                 <textarea
                                   value={workout.coach_tip}
-                                  onChange={(e) => handleWorkoutChange(index, 'coach_tip', e.target.value)}
-                                  className="w-full p-2 text-xs border rounded resize-none"
-                                  rows={2}
+                                  onChange={(e) => handleWorkoutChange(index, "coach_tip", e.target.value)}
+                                  className="w-full p-3 text-sm border-2 border-gray-200 dark:border-gray-700 rounded-lg resize-none focus:border-blue-400 dark:bg-gray-800"
+                                  rows={3}
+                                  placeholder="Enter coach tip..."
                                 />
                               ) : (
-                                <div className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
+                                <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                                   {workout.coach_tip}
                                 </div>
                               )}
                             </td>
                             {isEditing && (
-                              <td className="px-3 py-2">
+                              <td className="px-6 py-4">
                                 <Button
                                   onClick={() => removeWorkout(index)}
                                   variant="outline"
                                   size="sm"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
                                 >
-                                  🗑️
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </td>
                             )}
@@ -430,220 +525,422 @@ const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetric
                       </tbody>
                     </table>
                   </div>
-                  
+
                   {isEditing && (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 border-t">
-                      <Button onClick={addNewWorkout} variant="outline" size="sm">
-                        ➕ Add New Exercise
+                    <div className="p-6 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50 border-t border-gray-200 dark:border-gray-700">
+                      <Button
+                        onClick={addNewWorkout}
+                        variant="outline"
+                        className="border-2 border-dashed border-blue-300 hover:border-blue-400 hover:bg-blue-50 dark:border-blue-700 dark:hover:border-blue-600 dark:hover:bg-blue-950/50"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add New Exercise
                       </Button>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No workout plan found in the AI response
+                <div className="text-center py-16 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Dumbbell className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 dark:text-gray-400">No workout plan found in the AI response</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Raw Response Tab */}
-          {activeTab === 'raw' && (
-            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">AI Response:</h4>
-              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96">
-                {aiResponse.response}
-              </pre>
+          {/* Enhanced Raw Response Tab */}
+          {activeTab === "raw" && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50 p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
+                    <Edit className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h4 className="font-bold text-xl text-gray-900 dark:text-white">AI Response</h4>
+                </div>
+              </div>
+              <div className="p-6">
+                <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                  {aiResponse.response}
+                </pre>
+              </div>
             </div>
           )}
 
-          {/* Usage Statistics */}
+          {/* Enhanced Usage Statistics */}
           {aiResponse.usage && (
-            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2 text-green-900 dark:text-green-100">Usage Statistics:</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-green-700 dark:text-green-300">Model:</span> {aiResponse.model || 'gpt-4'}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 p-6 rounded-2xl border border-green-200/50 dark:border-green-800/50">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-green-500/10 dark:bg-green-400/10">
+                  <BarChart3 className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                <div>
-                  <span className="text-green-700 dark:text-green-300">Total Tokens:</span> {aiResponse.usage.total_tokens}
+                <h4 className="font-bold text-xl text-green-900 dark:text-green-100">Usage Statistics</h4>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.model || "gpt-4"}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Model</div>
                 </div>
-                <div>
-                  <span className="text-green-700 dark:text-green-300">Input Tokens:</span> {aiResponse.usage.prompt_tokens}
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.total_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Total Tokens</div>
                 </div>
-                <div>
-                  <span className="text-green-700 dark:text-green-300">Output Tokens:</span> {aiResponse.usage.completion_tokens}
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.prompt_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Input Tokens</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.completion_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Output Tokens</div>
                 </div>
               </div>
             </div>
           )}
-          
-          <div className="flex justify-between">
+
+          <div className="flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700">
             {onShowMetrics && aiResponse.usage && (
-              <Button variant="outline" onClick={onShowMetrics}>
+              <Button
+                variant="outline"
+                onClick={onShowMetrics}
+                className="border-2 border-purple-200 hover:border-purple-300 hover:bg-purple-50 dark:border-purple-800 dark:hover:border-purple-700 dark:hover:bg-purple-950/50"
+              >
+                <PieChart className="w-4 h-4 mr-2" />
                 View Detailed Metrics
               </Button>
             )}
-            <Button onClick={onClose} className="ml-auto">
+            <Button
+              onClick={onClose}
+              className="ml-auto bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
               Close
             </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}
 
-// Client Data Popup Component
-const ClientDataPopup = ({ isOpen, onClose, clientInfo }: {
-  isOpen: boolean;
-  onClose: () => void;
-  clientInfo: any;
+// Enhanced Client Data Popup Component
+const ClientDataPopup = ({
+  isOpen,
+  onClose,
+  clientInfo,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  clientInfo: any
 }) => {
-  if (!isOpen || !clientInfo) return null;
+  if (!isOpen || !clientInfo) return null
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Client Data Retrieved</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Successfully retrieved client data from the database. This information will be used to generate personalized AI plans.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <h4 className="font-semibold mb-2">Basic Information</h4>
-              <div className="space-y-1">
-                <div><span className="font-medium">Name:</span> {clientInfo.name || 'N/A'}</div>
-                <div><span className="font-medium">Preferred Name:</span> {clientInfo.preferredName || 'N/A'}</div>
-                <div><span className="font-medium">Age:</span> {clientInfo.age || 'N/A'}</div>
-                <div><span className="font-medium">Sex:</span> {clientInfo.sex || 'N/A'}</div>
-                <div><span className="font-medium">Height:</span> {clientInfo.height ? `${clientInfo.height} cm` : 'N/A'}</div>
-                <div><span className="font-medium">Weight:</span> {clientInfo.weight ? `${clientInfo.weight} kg` : 'N/A'}</div>
-              </div>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
+        <DialogHeader className="border-b border-gradient-to-r from-blue-200 to-purple-200 dark:from-blue-800 dark:to-purple-800 pb-6">
+          <DialogTitle className="flex items-center gap-3 text-2xl">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+              <User className="h-6 w-6 text-white" />
             </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Goals & Training</h4>
-              <div className="space-y-1">
-                <div><span className="font-medium">Primary Goal:</span> {clientInfo.primaryGoal || 'N/A'}</div>
-                <div><span className="font-medium">Activity Level:</span> {clientInfo.activityLevel || 'N/A'}</div>
-                <div><span className="font-medium">Training Experience:</span> {clientInfo.trainingExperience || 'N/A'}</div>
-                <div><span className="font-medium">Training Days/Week:</span> {clientInfo.trainingDaysPerWeek || 'N/A'}</div>
-                <div><span className="font-medium">Available Equipment:</span> {clientInfo.availableEquipment || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end">
-            <Button onClick={onClose}>Close</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-// AI Metrics Popup Component
-const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: {
-  isOpen: boolean;
-  onClose: () => void;
-  metrics: {
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    model: string;
-    timestamp: string;
-    responseTime?: number;
-  } | null;
-  clientName?: string;
-}) => {
-  if (!isOpen || !metrics) return null;
-
-  const formatTime = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
-
-  const estimatedCost = (metrics.totalTokens * 0.00003).toFixed(4); // Rough GPT-4 estimate
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900">
-              📊
-            </div>
-            AI Generation Metrics{clientName ? ` - ${clientName}` : ''}
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
+              Client Data Retrieved
+            </span>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {metrics.inputTokens.toLocaleString()}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/50 dark:to-purple-950/50 p-6 rounded-2xl border border-blue-200/50 dark:border-blue-800/50">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-xl bg-blue-500/10 dark:bg-blue-400/10">
+                <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div className="text-sm text-blue-700 dark:text-blue-300">Input Tokens</div>
-              <div className="text-xs text-gray-500 mt-1">Prompt & Context</div>
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100">Data Successfully Retrieved</h3>
             </div>
-            
-            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {metrics.outputTokens.toLocaleString()}
-              </div>
-              <div className="text-sm text-green-700 dark:text-green-300">Output Tokens</div>
-              <div className="text-xs text-gray-500 mt-1">Generated Content</div>
-            </div>
-            
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                {metrics.totalTokens.toLocaleString()}
-              </div>
-              <div className="text-sm text-purple-700 dark:text-purple-300">Total Tokens</div>
-              <div className="text-xs text-gray-500 mt-1">Combined Usage</div>
-            </div>
-            
-            <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                ${estimatedCost}
-              </div>
-              <div className="text-sm text-orange-700 dark:text-orange-300">Est. Cost</div>
-              <div className="text-xs text-gray-500 mt-1">Approximate</div>
-            </div>
+            <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+              Successfully retrieved client data from the database. This information will be used to generate
+              personalized AI plans.
+            </p>
           </div>
-          
-          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-            <h4 className="font-semibold mb-3">Generation Details</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="font-medium">Model:</span> {metrics.model}
-              </div>
-              <div>
-                <span className="font-medium">Response Time:</span> {metrics.responseTime ? formatTime(metrics.responseTime) : 'N/A'}
-              </div>
-              <div>
-                <span className="font-medium">Generated:</span> {new Date(metrics.timestamp).toLocaleString()}
-              </div>
-              <div>
-                <span className="font-medium">Token Ratio:</span> {((metrics.outputTokens / metrics.inputTokens) * 100).toFixed(1)}%
-              </div>
-            </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-white/80 dark:bg-gray-900/80 border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <User className="h-5 w-5 text-blue-500" />
+                  Basic Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Name:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{clientInfo.name || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Preferred Name:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.preferredName || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Age:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{clientInfo.age || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Sex:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{clientInfo.sex || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Height:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.height ? `${clientInfo.height} cm` : "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Weight:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.weight ? `${clientInfo.weight} kg` : "N/A"}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 dark:bg-gray-900/80 border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Target className="h-5 w-5 text-green-500" />
+                  Goals & Training
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Primary Goal:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{clientInfo.primaryGoal || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Activity Level:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.activityLevel || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Training Experience:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.trainingExperience || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Training Days/Week:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.trainingDaysPerWeek || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Available Equipment:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {clientInfo.availableEquipment || "N/A"}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-          
-          <div className="flex justify-end">
-            <Button onClick={onClose}>Close</Button>
+
+          <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              onClick={onClose}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              Close
+            </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}
+
+// Enhanced AI Metrics Popup Component
+const AIMetricsPopup = ({
+  isOpen,
+  onClose,
+  metrics,
+  clientName,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  metrics: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    model: string
+    timestamp: string
+    responseTime?: number
+  } | null
+  clientName?: string
+}) => {
+  if (!isOpen || !metrics) return null
+
+  const formatTime = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+  }
+
+  const estimatedCost = (metrics.totalTokens * 0.00003).toFixed(4) // Rough GPT-4 estimate
+
+  const pieData = [
+    { name: "Input Tokens", value: metrics.inputTokens, color: "#3b82f6" },
+    { name: "Output Tokens", value: metrics.outputTokens, color: "#10b981" },
+  ]
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl bg-gradient-to-br from-white via-purple-50/30 to-blue-50/30 dark:from-gray-900 dark:via-purple-950/30 dark:to-blue-950/30 border-0 shadow-2xl">
+        <DialogHeader className="border-b border-gradient-to-r from-purple-200 to-blue-200 dark:from-purple-800 dark:to-blue-800 pb-6">
+          <DialogTitle className="flex items-center gap-3 text-2xl">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg">
+              <BarChart3 className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent font-bold">
+                AI Generation Metrics
+              </span>
+              {clientName && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 font-normal mt-1">Analysis for {clientName}</p>
+              )}
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/50 border-0 shadow-lg">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+                  {metrics.inputTokens.toLocaleString()}
+                </div>
+                <div className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">Input Tokens</div>
+                <div className="text-xs text-blue-600/70 dark:text-blue-400/70">Prompt & Context</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/50 border-0 shadow-lg">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
+                  {metrics.outputTokens.toLocaleString()}
+                </div>
+                <div className="text-sm font-medium text-green-700 dark:text-green-300 mb-1">Output Tokens</div>
+                <div className="text-xs text-green-600/70 dark:text-green-400/70">Generated Content</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/50 dark:to-purple-900/50 border-0 shadow-lg">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+                  {metrics.totalTokens.toLocaleString()}
+                </div>
+                <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-1">Total Tokens</div>
+                <div className="text-xs text-purple-600/70 dark:text-purple-400/70">Combined Usage</div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950/50 dark:to-orange-900/50 border-0 shadow-lg">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-2">${estimatedCost}</div>
+                <div className="text-sm font-medium text-orange-700 dark:text-orange-300 mb-1">Est. Cost</div>
+                <div className="text-xs text-orange-600/70 dark:text-orange-400/70">Approximate</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="bg-white/80 dark:bg-gray-900/80 border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-purple-500" />
+                  Token Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsPieChart>
+                      <Tooltip />
+                      <RechartsPieChart data={pieData} cx="50%" cy="50%" outerRadius={60}>
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </RechartsPieChart>
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex justify-center gap-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Input</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Output</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 dark:bg-gray-900/80 border-0 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-blue-500" />
+                  Generation Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Model:</span>
+                  <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    {metrics.model}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Response Time:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {metrics.responseTime ? formatTime(metrics.responseTime) : "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Generated:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {new Date(metrics.timestamp).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-3">
+                  <span className="font-medium text-gray-600 dark:text-gray-400">Token Ratio:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {((metrics.outputTokens / metrics.inputTokens) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">
+            <Button
+              onClick={onClose}
+              className="bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // AI Notes Summary Popup Component
 const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
@@ -911,6 +1208,7 @@ interface Exercise {
 
 interface WorkoutExercise {
   workout: string
+  day?: string
   duration: number
   sets: number
   reps: string
@@ -933,57 +1231,14 @@ interface WorkoutPlan {
   body_part: string
   exercises: WorkoutExercise[]
 }
-// Sample client data
-const sampleClient = {
-  id: "1",
-  trainerId: 1,
-  name: "Ben Andrew",
-  email: "ben.andrew@example.com",
-  avatarUrl: "/placeholder.svg?height=120&width=120",
-  phone: "+1 (555) 123-4567",
-  username: "ben_a",
-  height: 178,
-  weight: 74.4,
-  dob: "1990-05-15",
-  genderName: "Male",
-  isActive: true,
-  createdAt: "2023-01-15T10:00:00Z",
-  updatedAt: "2024-05-15T10:00:00Z",
-  location: "Los Angeles, CA",
-  goals: ["Run a marathon without stopping", "Lose 5kg", "Improve endurance"],
-  membershipType: "Premium",
-}
 
-const sampleClients = [
-  {
-    client_id: "1",
-    name: "Ben Andrew",
-    email: "ben.andrew@example.com",
-    avatarUrl: "/placeholder.svg?height=40&width=40",
-    status: "active",
-  },
-  {
-    client_id: "2",
-    name: "Kristina Wilson",
-    email: "kristina.wilson@example.com",
-    avatarUrl: "/placeholder.svg?height=40&width=40",
-    status: "active",
-  },
-  {
-    client_id: "3",
-    name: "Emma Johnson",
-    email: "emma.johnson@example.com",
-    avatarUrl: "/placeholder.svg?height=40&width=40",
-    status: "pending",
-  },
-  {
-    client_id: "4",
-    name: "David Brown",
-    email: "david.brown@example.com",
-    avatarUrl: "/placeholder.svg?height=40&width=40",
-    status: "active",
-  },
-]
+interface MealItem {
+  name: string
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+}
 
 // Mock data for programs
 const mockPrograms = [
@@ -995,7 +1250,8 @@ const mockPrograms = [
     startDay: "Monday",
     color: "#39FF14",
     lastEdited: "2 days ago",
-    description: "A comprehensive strength training program designed to build muscle and improve overall fitness through progressive overload techniques.",
+    description:
+      "A comprehensive strength training program designed to build muscle and improve overall fitness through progressive overload techniques.",
     created: "2024-01-15",
   },
   {
@@ -1006,7 +1262,8 @@ const mockPrograms = [
     startDay: "Tuesday",
     color: "#FF6B35",
     lastEdited: "1 week ago",
-    description: "High-intensity interval training program that maximizes calorie burn and improves cardiovascular endurance in minimal time.",
+    description:
+      "High-intensity interval training program that maximizes calorie burn and improves cardiovascular endurance in minimal time.",
     created: "2024-01-10",
   },
   {
@@ -1017,7 +1274,8 @@ const mockPrograms = [
     startDay: "Wednesday",
     color: "#4ECDC4",
     lastEdited: "3 days ago",
-    description: "Gentle yoga sequences perfect for beginners looking to improve flexibility, balance, and mindfulness.",
+    description:
+      "Gentle yoga sequences perfect for beginners looking to improve flexibility, balance, and mindfulness.",
     created: "2024-01-20",
   },
   {
@@ -1056,491 +1314,377 @@ const mockPrograms = [
 ]
 
 const difficultyColors = {
-  Easy: "#39FF14",
-  Medium: "#FFD93D",
-  Hard: "#FF6B35",
+  Easy: "#10b981",
+  Medium: "#f59e0b",
+  Hard: "#ef4444",
 }
 
 const programTags = ["All", "Strength", "Cardio", "Flexibility", "Recovery", "Performance"]
 const sortOptions = ["Recently updated", "Alphabetically", "Difficulty"]
 
-// Sample metrics data
-const weightData = [
-  { date: "MAY 14", weight: 74.8 },
-  { date: "MAY 16", weight: 74.6 },
-  { date: "MAY 18", weight: 74.9 },
-  { date: "MAY 20", weight: 74.7 },
-  { date: "MAY 22", weight: 74.5 },
-  { date: "MAY 24", weight: 74.6 },
-  { date: "MAY 26", weight: 74.3 },
-  { date: "MAY 28", weight: 74.2 },
-  { date: "MAY 30", weight: 74.0 },
-  { date: "JUN 1", weight: 74.2 },
-  { date: "JUN 3", weight: 74.4 },
-]
-
-const sleepData = [
-  { date: "MAY 14", hours: 6.5 },
-  { date: "MAY 15", hours: 7.2 },
-  { date: "MAY 16", hours: 6.8 },
-  { date: "MAY 17", hours: 7.0 },
-  { date: "MAY 18", hours: 6.5 },
-  { date: "MAY 19", hours: 7.5 },
-  { date: "MAY 20", hours: 8.0 },
-  { date: "MAY 21", hours: 7.2 },
-  { date: "MAY 22", hours: 6.8 },
-  { date: "MAY 23", hours: 7.0 },
-  { date: "MAY 24", hours: 6.5 },
-  { date: "MAY 25", hours: 7.5 },
-  { date: "MAY 26", hours: 8.0 },
-  { date: "MAY 27", hours: 7.2 },
-  { date: "MAY 28", hours: 6.8 },
-  { date: "MAY 29", hours: 7.0 },
-  { date: "MAY 30", hours: 6.5 },
-  { date: "MAY 31", hours: 7.5 },
-  { date: "JUN 1", hours: 8.0 },
-  { date: "JUN 2", hours: 7.2 },
-  { date: "JUN 3", hours: 6.8 },
-]
-
-const heartRateData = [
-  { date: "MAY 14", rate: 62 },
-  { date: "MAY 16", rate: 64 },
-  { date: "MAY 18", rate: 63 },
-  { date: "MAY 20", rate: 65 },
-  { date: "MAY 22", rate: 62 },
-  { date: "MAY 24", rate: 61 },
-  { date: "MAY 26", rate: 63 },
-  { date: "MAY 28", rate: 62 },
-  { date: "MAY 30", rate: 64 },
-  { date: "JUN 1", rate: 63 },
-  { date: "JUN 3", rate: 62 },
-]
-
-const stepsData = [
-  { date: "MAY 14", steps: 8500 },
-  { date: "MAY 15", steps: 7200 },
-  { date: "MAY 16", steps: 9100 },
-  { date: "MAY 17", steps: 8300 },
-  { date: "MAY 18", steps: 7800 },
-  { date: "MAY 19", steps: 6500 },
-  { date: "MAY 20", steps: 9200 },
-  { date: "MAY 21", steps: 8700 },
-  { date: "MAY 22", steps: 8100 },
-  { date: "MAY 23", steps: 7600 },
-  { date: "MAY 24", steps: 8900 },
-  { date: "MAY 25", steps: 9300 },
-  { date: "MAY 26", steps: 8200 },
-  { date: "MAY 27", steps: 7500 },
-  { date: "MAY 28", steps: 8800 },
-  { date: "MAY 29", steps: 9000 },
-  { date: "MAY 30", steps: 8400 },
-  { date: "MAY 31", steps: 7900 },
-  { date: "JUN 1", steps: 8600 },
-  { date: "JUN 2", steps: 9100 },
-  { date: "JUN 3", steps: 8700 },
-]
-
-// Sample workout plan
-const workoutPlan = [
-  {
-    day: "Monday",
-    focus: "Upper Body",
-    exercises: [
-      { name: "Bench Press", sets: 4, reps: "8-10", weight: "70kg" },
-      { name: "Pull-ups", sets: 3, reps: "8-10", weight: "Bodyweight" },
-      { name: "Shoulder Press", sets: 3, reps: "10-12", weight: "20kg" },
-      { name: "Bicep Curls", sets: 3, reps: "12-15", weight: "15kg" },
-      { name: "Tricep Extensions", sets: 3, reps: "12-15", weight: "15kg" },
-    ],
-  },
-  {
-    day: "Tuesday",
-    focus: "Lower Body",
-    exercises: [
-      { name: "Squats", sets: 4, reps: "8-10", weight: "90kg" },
-      { name: "Deadlifts", sets: 3, reps: "8-10", weight: "100kg" },
-      { name: "Leg Press", sets: 3, reps: "10-12", weight: "120kg" },
-      { name: "Calf Raises", sets: 3, reps: "15-20", weight: "40kg" },
-    ],
-  },
-  {
-    day: "Wednesday",
-    focus: "Cardio",
-    exercises: [
-      { name: "Running", sets: 1, reps: "30 mins", weight: "N/A" },
-      { name: "HIIT", sets: 1, reps: "15 mins", weight: "N/A" },
-    ],
-  },
-  {
-    day: "Thursday",
-    focus: "Rest Day",
-    exercises: [],
-  },
-  {
-    day: "Friday",
-    focus: "Full Body",
-    exercises: [
-      { name: "Deadlifts", sets: 3, reps: "8-10", weight: "100kg" },
-      { name: "Bench Press", sets: 3, reps: "8-10", weight: "70kg" },
-      { name: "Squats", sets: 3, reps: "8-10", weight: "90kg" },
-      { name: "Pull-ups", sets: 3, reps: "8-10", weight: "Bodyweight" },
-    ],
-  },
-  {
-    day: "Saturday",
-    focus: "Cardio & Core",
-    exercises: [
-      { name: "Running", sets: 1, reps: "45 mins", weight: "N/A" },
-      { name: "Planks", sets: 3, reps: "60 secs", weight: "N/A" },
-      { name: "Russian Twists", sets: 3, reps: "20 each side", weight: "10kg" },
-    ],
-  },
-  {
-    day: "Sunday",
-    focus: "Rest Day",
-    exercises: [],
-  },
-]
-
-// Sample nutrition plan
-const nutritionPlan = [
-  {
-    meal: "Breakfast",
-    foods: [
-      { name: "Oatmeal", portion: "1 cup", calories: 300, protein: 10, carbs: 50, fat: 5 },
-      { name: "Banana", portion: "1 medium", calories: 105, protein: 1, carbs: 27, fat: 0 },
-      { name: "Protein Shake", portion: "1 scoop", calories: 120, protein: 25, carbs: 3, fat: 1 },
-    ],
-  },
-  {
-    meal: "Lunch",
-    foods: [
-      { name: "Grilled Chicken", portion: "150g", calories: 250, protein: 35, carbs: 0, fat: 10 },
-      { name: "Brown Rice", portion: "1 cup", calories: 215, protein: 5, carbs: 45, fat: 2 },
-      { name: "Mixed Vegetables", portion: "1 cup", calories: 80, protein: 4, carbs: 15, fat: 1 },
-    ],
-  },
-  {
-    meal: "Snack",
-    foods: [
-      { name: "Greek Yogurt", portion: "1 cup", calories: 150, protein: 20, carbs: 8, fat: 4 },
-      { name: "Almonds", portion: "1/4 cup", calories: 170, protein: 6, carbs: 6, fat: 15 },
-    ],
-  },
-  {
-    meal: "Dinner",
-    foods: [
-      { name: "Salmon", portion: "150g", calories: 280, protein: 30, carbs: 0, fat: 18 },
-      { name: "Quinoa", portion: "1 cup", calories: 220, protein: 8, carbs: 40, fat: 4 },
-      { name: "Steamed Broccoli", portion: "1 cup", calories: 55, protein: 4, carbs: 11, fat: 0 },
-    ],
-  },
-]
-
 const METRIC_LIBRARY = [
   {
-    key: 'weight',
-    label: 'Weight',
+    key: "weight",
+    label: "Weight",
     icon: Weight,
-    type: 'line',
-    color: '#3b82f6',
+    type: "line",
+    color: "#3b82f6",
     data: [
-      { date: 'Jan', weight: 82.5 },
-      { date: 'Feb', weight: 81.8 },
-      { date: 'Mar', weight: 80.5 },
-      { date: 'Apr', weight: 79.2 },
-      { date: 'May', weight: 78.4 },
-      { date: 'Jun', weight: 77.6 },
-      { date: 'Jul', weight: 76.8 },
-      { date: 'Aug', weight: 76.2 },
-      { date: 'Sep', weight: 75.8 },
-      { date: 'Oct', weight: 75.2 },
-      { date: 'Nov', weight: 74.8 },
-      { date: 'Dec', weight: 74.4 }
+      { date: "Jan", weight: 82.5 },
+      { date: "Feb", weight: 81.8 },
+      { date: "Mar", weight: 80.5 },
+      { date: "Apr", weight: 79.2 },
+      { date: "May", weight: 78.4 },
+      { date: "Jun", weight: 77.6 },
+      { date: "Jul", weight: 76.8 },
+      { date: "Aug", weight: 76.2 },
+      { date: "Sep", weight: 75.8 },
+      { date: "Oct", weight: 75.2 },
+      { date: "Nov", weight: 74.8 },
+      { date: "Dec", weight: 74.4 },
     ],
-    dataKey: 'weight',
-    yLabel: 'kg',
+    dataKey: "weight",
+    yLabel: "kg",
   },
   {
-    key: 'sleep',
-    label: 'Sleep',
+    key: "sleep",
+    label: "Sleep",
     icon: Clock,
-    type: 'bar',
-    color: '#14b8a6',
+    type: "bar",
+    color: "#14b8a6",
     data: [
-      { date: 'Jan', hours: 5.8 },
-      { date: 'Feb', hours: 6.2 },
-      { date: 'Mar', hours: 6.5 },
-      { date: 'Apr', hours: 6.8 },
-      { date: 'May', hours: 7.0 },
-      { date: 'Jun', hours: 7.2 },
-      { date: 'Jul', hours: 7.0 },
-      { date: 'Aug', hours: 7.2 },
-      { date: 'Sep', hours: 7.4 },
-      { date: 'Oct', hours: 7.2 },
-      { date: 'Nov', hours: 7.0 },
-      { date: 'Dec', hours: 7.2 }
+      { date: "Jan", hours: 5.8 },
+      { date: "Feb", hours: 6.2 },
+      { date: "Mar", hours: 6.5 },
+      { date: "Apr", hours: 6.8 },
+      { date: "May", hours: 7.0 },
+      { date: "Jun", hours: 7.2 },
+      { date: "Jul", hours: 7.0 },
+      { date: "Aug", hours: 7.2 },
+      { date: "Sep", hours: 7.4 },
+      { date: "Oct", hours: 7.2 },
+      { date: "Nov", hours: 7.0 },
+      { date: "Dec", hours: 7.2 },
     ],
-    dataKey: 'hours',
-    yLabel: 'h',
+    dataKey: "hours",
+    yLabel: "h",
   },
   {
-    key: 'heartRate',
-    label: 'Resting Heart Rate',
+    key: "heartRate",
+    label: "Resting Heart Rate",
     icon: Heart,
-    type: 'line',
-    color: '#e11d48',
+    type: "line",
+    color: "#e11d48",
     data: [
-      { date: 'Jan', rate: 78 },
-      { date: 'Feb', rate: 76 },
-      { date: 'Mar', rate: 74 },
-      { date: 'Apr', rate: 72 },
-      { date: 'May', rate: 70 },
-      { date: 'Jun', rate: 68 },
-      { date: 'Jul', rate: 66 },
-      { date: 'Aug', rate: 64 },
-      { date: 'Sep', rate: 63 },
-      { date: 'Oct', rate: 62 },
-      { date: 'Nov', rate: 61 },
-      { date: 'Dec', rate: 60 }
+      { date: "Jan", rate: 78 },
+      { date: "Feb", rate: 76 },
+      { date: "Mar", rate: 74 },
+      { date: "Apr", rate: 72 },
+      { date: "May", rate: 70 },
+      { date: "Jun", rate: 68 },
+      { date: "Jul", rate: 66 },
+      { date: "Aug", rate: 64 },
+      { date: "Sep", rate: 63 },
+      { date: "Oct", rate: 62 },
+      { date: "Nov", rate: 61 },
+      { date: "Dec", rate: 60 },
     ],
-    dataKey: 'rate',
-    yLabel: 'bpm',
+    dataKey: "rate",
+    yLabel: "bpm",
   },
   {
-    key: 'steps',
-    label: 'Steps',
+    key: "steps",
+    label: "Steps",
     icon: Footprints,
-    type: 'bar',
-    color: '#d97706',
+    type: "bar",
+    color: "#d97706",
     data: [
-      { date: 'Jan', steps: 6500 },
-      { date: 'Feb', steps: 7200 },
-      { date: 'Mar', steps: 7800 },
-      { date: 'Apr', steps: 8200 },
-      { date: 'May', steps: 8800 },
-      { date: 'Jun', steps: 9200 },
-      { date: 'Jul', steps: 9000 },
-      { date: 'Aug', steps: 9400 },
-      { date: 'Sep', steps: 9600 },
-      { date: 'Oct', steps: 9800 },
-      { date: 'Nov', steps: 9500 },
-      { date: 'Dec', steps: 10000 }
+      { date: "Jan", steps: 6500 },
+      { date: "Feb", steps: 7200 },
+      { date: "Mar", steps: 7800 },
+      { date: "Apr", steps: 8200 },
+      { date: "May", steps: 8800 },
+      { date: "Jun", steps: 9200 },
+      { date: "Jul", steps: 9000 },
+      { date: "Aug", steps: 9400 },
+      { date: "Sep", steps: 9600 },
+      { date: "Oct", steps: 9800 },
+      { date: "Nov", steps: 9500 },
+      { date: "Dec", steps: 10000 },
     ],
-    dataKey: 'steps',
-    yLabel: 'steps',
+    dataKey: "steps",
+    yLabel: "steps",
   },
   {
-    key: 'workoutAdherence',
-    label: 'Workout Adherence',
+    key: "workoutAdherence",
+    label: "Workout Adherence",
     icon: Activity,
-    type: 'line',
-    color: '#6366f1',
+    type: "line",
+    color: "#6366f1",
     data: [
-      { date: 'Jan', value: 65 },
-      { date: 'Feb', value: 70 },
-      { date: 'Mar', value: 75 },
-      { date: 'Apr', value: 78 },
-      { date: 'May', value: 82 },
-      { date: 'Jun', value: 85 },
-      { date: 'Jul', value: 88 },
-      { date: 'Aug', value: 90 },
-      { date: 'Sep', value: 92 },
-      { date: 'Oct', value: 94 },
-      { date: 'Nov', value: 93 },
-      { date: 'Dec', value: 95 }
+      { date: "Jan", value: 65 },
+      { date: "Feb", value: 70 },
+      { date: "Mar", value: 75 },
+      { date: "Apr", value: 78 },
+      { date: "May", value: 82 },
+      { date: "Jun", value: 85 },
+      { date: "Jul", value: 88 },
+      { date: "Aug", value: 90 },
+      { date: "Sep", value: 92 },
+      { date: "Oct", value: 94 },
+      { date: "Nov", value: 93 },
+      { date: "Dec", value: 95 },
     ],
-    dataKey: 'value',
-    yLabel: '%',
+    dataKey: "value",
+    yLabel: "%",
   },
   {
-    key: 'revenue',
-    label: 'Revenue Analytics',
-    icon: LineChart,
-    type: 'line',
-    color: '#f59e42',
-    data: [
-      { date: 'Jan', value: 800 },
-      { date: 'Feb', value: 950 },
-      { date: 'Mar', value: 1100 },
-      { date: 'Apr', value: 1250 },
-      { date: 'May', value: 1400 },
-      { date: 'Jun', value: 1550 },
-      { date: 'Jul', value: 1700 },
-      { date: 'Aug', value: 1850 },
-      { date: 'Sep', value: 2000 },
-      { date: 'Oct', value: 2150 },
-      { date: 'Nov', value: 2300 },
-      { date: 'Dec', value: 2450 }
-    ],
-    dataKey: 'value',
-    yLabel: '$',
-  },
-  {
-    key: 'retention',
-    label: 'Client Retention Rate',
+    key: "retention",
+    label: "Client Retention Rate",
     icon: Target,
-    type: 'line',
-    color: '#10b981',
+    type: "line",
+    color: "#10b981",
     data: [
-      { date: 'Jan', value: 65 },
-      { date: 'Feb', value: 68 },
-      { date: 'Mar', value: 71 },
-      { date: 'Apr', value: 73 },
-      { date: 'May', value: 75 },
-      { date: 'Jun', value: 77 },
-      { date: 'Jul', value: 79 },
-      { date: 'Aug', value: 81 },
-      { date: 'Sep', value: 82 },
-      { date: 'Oct', value: 83 },
-      { date: 'Nov', value: 84 },
-      { date: 'Dec', value: 85 }
+      { date: "Jan", value: 65 },
+      { date: "Feb", value: 68 },
+      { date: "Mar", value: 71 },
+      { date: "Apr", value: 73 },
+      { date: "May", value: 75 },
+      { date: "Jun", value: 77 },
+      { date: "Jul", value: 79 },
+      { date: "Aug", value: 81 },
+      { date: "Sep", value: 82 },
+      { date: "Oct", value: 83 },
+      { date: "Nov", value: 84 },
+      { date: "Dec", value: 85 },
     ],
-    dataKey: 'value',
-    yLabel: '%',
+    dataKey: "value",
+    yLabel: "%",
   },
   {
-    key: 'progress',
-    label: 'Progress Improvement',
+    key: "progress",
+    label: "Progress Improvement",
     icon: TrendingUp,
-    type: 'line',
-    color: '#9333ea',
+    type: "line",
+    color: "#9333ea",
     data: [
-      { date: 'Jan', value: 45 },
-      { date: 'Feb', value: 50 },
-      { date: 'Mar', value: 55 },
-      { date: 'Apr', value: 58 },
-      { date: 'May', value: 62 },
-      { date: 'Jun', value: 65 },
-      { date: 'Jul', value: 68 },
-      { date: 'Aug', value: 70 },
-      { date: 'Sep', value: 72 },
-      { date: 'Oct', value: 74 },
-      { date: 'Nov', value: 76 },
-      { date: 'Dec', value: 78 }
+      { date: "Jan", value: 45 },
+      { date: "Feb", value: 50 },
+      { date: "Mar", value: 55 },
+      { date: "Apr", value: 58 },
+      { date: "May", value: 62 },
+      { date: "Jun", value: 65 },
+      { date: "Jul", value: 68 },
+      { date: "Aug", value: 70 },
+      { date: "Sep", value: 72 },
+      { date: "Oct", value: 74 },
+      { date: "Nov", value: 76 },
+      { date: "Dec", value: 78 },
     ],
-    dataKey: 'value',
-    yLabel: '%',
+    dataKey: "value",
+    yLabel: "%",
   },
-];
+]
 
-function SortableMetric({ metric, listeners, attributes, isDragging }: { metric: any, listeners: any, attributes: any, isDragging: boolean }) {
-  const { setNodeRef, transform, transition } = useSortable({ id: metric.key });
+function SortableMetric({
+  metric,
+  listeners,
+  attributes,
+  isDragging,
+}: { metric: any; listeners: any; attributes: any; isDragging: boolean }) {
+  const { setNodeRef, transform, transition } = useSortable({ id: metric.key })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    cursor: 'grab',
-  };
+    cursor: "grab",
+  }
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="flex items-center gap-2 p-2 bg-slate-100 rounded mb-2">
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex items-center gap-2 p-2 bg-slate-100 rounded mb-2"
+    >
       <metric.icon className="h-4 w-4" />
       <span>{metric.label}</span>
     </div>
-  );
+  )
 }
 
-const ClientStats = () => {
+// Enhanced Client Stats Component
+const ClientStats = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [statsData, setStatsData] = useState<any>(null)
+
+  useEffect(() => {
+    if (clientId && isActive) {
+      setLoading(true);
+      const fetchStats = async () => {
+        try {
+          // Workouts in last 30 days (existing)
+          const sinceDate = new Date();
+          sinceDate.setDate(sinceDate.getDate() - 30);
+          const sinceISOString = sinceDate.toISOString();
+
+          const { count: workoutCount, error: workoutError } = await supabase
+            .from("workout_info")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .gte("created_at", sinceISOString);
+
+          // Engagement Score
+          // 1. Total schedule rows for this client
+          const { count: totalSchedules, error: totalError } = await supabase
+            .from("schedule")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId);
+
+          // 2. Completed schedule rows for this client
+          const { count: completedSchedules, error: completedError } = await supabase
+            .from("schedule")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .eq("status", "completed");
+
+          let engagementScore = 0;
+          if (totalSchedules && totalSchedules > 0) {
+            engagementScore = Math.round((completedSchedules || 0) / totalSchedules * 100);
+          }
+
+          setStatsData({
+            totalSessions: workoutCount || 0,
+            weeklyProgress: 85, // (keep or update as needed)
+            monthlyGoals: 3,    // (keep or update as needed)
+            engagementScore: engagementScore
+          });
+        } catch (err) {
+          setStatsData({
+            totalSessions: 0,
+            weeklyProgress: 0,
+            monthlyGoals: 0,
+            engagementScore: 0
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchStats();
+    }
+  }, [clientId, isActive]);
+
+  if (loading) {
+    return (
+      <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6">
+        <CardContent className="flex items-center justify-center py-8">
+          <LoadingSpinner />
+        </CardContent>
+      </Card>
+    )
+  }
+
   const stats = [
-    { 
-      label: "Workouts Completed", 
-      value: "47", 
+    {
+      label: "Workouts Completed",
+      value: statsData?.totalSessions?.toString() || "0",
       subtitle: "in Last 30 Days",
-      icon: Activity, 
-      color: "text-green-600", 
-      data: [
-        { month: "Jan", value: 15 },
-        { month: "Feb", value: 18 },
-        { month: "Mar", value: 20 },
-        { month: "Apr", value: 22 },
-        { month: "May", value: 25 },
-        { month: "Jun", value: 28 },
-        { month: "Jul", value: 30 },
-        { month: "Aug", value: 32 },
-        { month: "Sep", value: 35 },
-        { month: "Oct", value: 38 },
-        { month: "Nov", value: 42 },
-        { month: "Dec", value: 47 }
-      ]
+      icon: Activity,
+      color: "text-emerald-600",
+      bgColor: "from-emerald-500 to-green-600",
     },
-    { label: "Goals Achieved", value: "3", icon: Target, color: "text-blue-600" },
-    { 
-      label: "Engagement Score", 
-      value: "85%", 
-      icon: TrendingUp, 
-      color: "text-purple-600", 
-      data: [
-        { month: "Jan", value: 65 },
-        { month: "Feb", value: 68 },
-        { month: "Mar", value: 70 },
-        { month: "Apr", value: 72 },
-        { month: "May", value: 75 },
-        { month: "Jun", value: 77 },
-        { month: "Jul", value: 79 },
-        { month: "Aug", value: 81 },
-        { month: "Sep", value: 82 },
-        { month: "Oct", value: 83 },
-        { month: "Nov", value: 84 },
-        { month: "Dec", value: 85 }
-      ]
+    {
+      label: "Goals Achieved",
+      value: "3",
+      icon: Target,
+      color: "text-blue-600",
+      bgColor: "from-blue-500 to-indigo-600",
     },
-    { label: "Days Active", value: "127", icon: Clock, color: "text-orange-600" },
+    {
+      label: "Engagement Score",
+      value: statsData?.engagementScore !== undefined ? `${statsData.engagementScore}%` : "0%",
+      icon: TrendingUp,
+      color: "text-purple-600",
+      bgColor: "from-purple-500 to-pink-600",
+    },
+    {
+      label: "Days Active",
+      value: "127",
+      icon: Clock,
+      color: "text-orange-600",
+      bgColor: "from-orange-500 to-red-600",
+    },
   ]
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {stats.map((stat, index) => {
         const Icon = stat.icon
         return (
           <Card
             key={index}
-            className="bg-white/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-black group"
+            className="group relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 hover:scale-105"
           >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{stat.label}</p>
-                  <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                  {stat.subtitle && (
-                    <p className="text-xs text-gray-400 mt-1">{stat.subtitle}</p>
-                  )}
+            {/* Gradient Background */}
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${stat.bgColor} opacity-5 group-hover:opacity-10 transition-opacity duration-500`}
+            />
+
+            <CardContent className="relative p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{stat.label}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className={`text-3xl font-bold ${stat.color} transition-colors duration-300`}>{stat.value}</p>
+                    {stat.subtitle && <p className="text-xs text-gray-500 dark:text-gray-400">{stat.subtitle}</p>}
+                  </div>
                 </div>
-                <div className={`p-3 rounded-full bg-gray-50 dark:bg-gray-800 ${stat.color}`}>
-                  <Icon className="h-6 w-6" />
+                <div
+                  className={`p-4 rounded-2xl bg-gradient-to-br ${stat.bgColor} shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110`}
+                >
+                  <Icon className="h-7 w-7 text-white" />
                 </div>
               </div>
-              {stat.data && (
-                <div className="h-0 group-hover:h-[100px] w-full mt-2 overflow-hidden transition-all duration-300">
-                  <ResponsiveContainer width="100%" height="100%">
+
+              {/* Mini Chart */}
+              <div className="h-0 group-hover:h-[120px] w-full overflow-hidden transition-all duration-500 ease-out">
+                <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                  {/* <ResponsiveContainer width="100%" height="100%">
                     <Chart data={stat.data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                       <CartesianGrid vertical={false} stroke="#f0f0f0" strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="month" 
-                        tick={{ fontSize: 12 }}
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fontSize: 10 }}
                         interval="preserveStartEnd"
                         tickLine={false}
+                        axisLine={false}
                       />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "white",
+                          border: "none",
+                          borderRadius: "12px",
+                          boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                          fontSize: "12px",
                         }}
                       />
-                      <Line 
-                        type="monotone" 
-                        dataKey="value" 
-                        stroke={stat.color.replace('text-', '#').replace('green-600', '22c55e').replace('purple-600', '9333ea')}
-                        strokeWidth={2}
-                        dot={{ r: 3, strokeWidth: 2, fill: 'white' }}
-                        activeDot={{ r: 4, strokeWidth: 2 }}
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={stat.color
+                          .replace("text-", "#")
+                          .replace("emerald-600", "059669")
+                          .replace("blue-600", "2563eb")
+                          .replace("purple-600", "9333ea")
+                          .replace("orange-600", "ea580c")}
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2, fill: "white" }}
+                        activeDot={{ r: 6, strokeWidth: 2 }}
                       />
                     </Chart>
-                  </ResponsiveContainer>
+                  </ResponsiveContainer> */}
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         )
@@ -1573,38 +1717,38 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
   }
 
   const handleToggleComplete = (index: number) => {
-    setCompletedItems(prev => {
-      const newCompleted = prev.includes(index)
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
+    setCompletedItems((prev) => {
+      const newCompleted = prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
       localStorage.setItem(`${storageKey}-completed`, JSON.stringify(newCompleted))
       return newCompleted
     })
   }
 
   return (
-    <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-      <CardHeader className="pb-2">
+    <Card className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 dark:bg-gray-900/90">
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Icon className="h-5 w-5 text-rose-500" />
-            {title}
+          <CardTitle className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 shadow-lg">
+              <Icon className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">{title}</span>
           </CardTitle>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
-            className="h-8 px-2"
+            className="h-9 px-3 bg-gradient-to-r from-rose-50 to-pink-50 hover:from-rose-100 hover:to-pink-100 dark:from-rose-950/50 dark:to-pink-950/50 dark:hover:from-rose-900/50 dark:hover:to-pink-900/50 border border-rose-200 dark:border-rose-800 transition-all duration-300"
           >
             {isEditing ? (
               <>
-                <Save className="h-4 w-4 mr-1" />
-                Save
+                <Save className="h-4 w-4 mr-2 text-rose-600" />
+                <span className="text-rose-600 font-medium">Save</span>
               </>
             ) : (
               <>
-                <Pencil className="h-4 w-4 mr-1" />
-                Edit
+                <Pencil className="h-4 w-4 mr-2 text-rose-600" />
+                <span className="text-rose-600 font-medium">Edit</span>
               </>
             )}
           </Button>
@@ -1615,36 +1759,46 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
           <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="min-h-[120px] focus:border-rose-300 focus:ring-rose-200/50"
+            className="min-h-[160px] border-2 border-rose-200 focus:border-rose-400 focus:ring-rose-200/50 rounded-xl resize-none"
             placeholder={`Add ${title.toLowerCase()} here...`}
           />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {content ? (
-              content.split(".").map((sentence, i) => (
-                sentence.trim() && (
-                  <div key={i} className="flex items-center justify-between group">
-                    <p 
-                      className={`text-sm text-gray-700 dark:text-gray-300 transition-all duration-200 ${
-                        completedItems.includes(i) ? 'line-through text-gray-400 dark:text-gray-600' : ''
-                      }`}
+              content.split(".").map(
+                (sentence, i) =>
+                  sentence.trim() && (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 group/item p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200"
                     >
-                      {sentence.trim()}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        className="ml-2 w-5 h-5 rounded border-gray-300 text-rose-500 focus:ring-rose-500 transition-all duration-200" 
+                      <input
+                        type="checkbox"
+                        className="mt-1 w-5 h-5 rounded-lg border-2 border-rose-300 text-rose-500 focus:ring-rose-500 focus:ring-2 transition-all duration-200"
                         checked={completedItems.includes(i)}
                         onChange={() => handleToggleComplete(i)}
-                        aria-label={`Mark ${sentence.trim()} as ${completedItems.includes(i) ? 'incomplete' : 'complete'}`}
+                        aria-label={`Mark ${sentence.trim()} as ${completedItems.includes(i) ? "incomplete" : "complete"}`}
                       />
+                      <p
+                        className={`text-sm leading-relaxed transition-all duration-300 flex-1 ${
+                          completedItems.includes(i)
+                            ? "line-through text-gray-400 dark:text-gray-600"
+                            : "text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {sentence.trim()}
+                      </p>
                     </div>
-                  </div>
-                )
-              ))
+                  ),
+              )
             ) : (
-              <p className="text-sm text-gray-500 italic">No {title.toLowerCase()} added yet.</p>
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Icon className="w-8 h-8 text-rose-400" />
+                </div>
+                <p className="text-sm text-gray-500 italic">No {title.toLowerCase()} added yet.</p>
+                <p className="text-xs text-gray-400 mt-1">Click Edit to get started</p>
+              </div>
             )}
           </div>
         )}
@@ -1653,262 +1807,635 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
   )
 }
 
-const MetricsSection = () => {
+// Enhanced Metrics Section
+const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
-    const saved = localStorage.getItem('selectedMetrics');
-    return saved ? JSON.parse(saved) : ['weight', 'sleep', 'heartRate', 'steps'];
-  });
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+    const saved = localStorage.getItem("selectedMetrics")
+    return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
+  })
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
+  const [loadingWorkout, setLoadingWorkout] = useState(false)
+  const [workoutError, setWorkoutError] = useState<string | null>(null)
+  const [workoutCount, setWorkoutCount] = useState<number>(0);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('selectedMetrics', JSON.stringify(selectedKeys));
-  }, [selectedKeys]);
+    localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
+  }, [selectedKeys])
 
-  const selectedMetrics = selectedKeys.map((key: string) => METRIC_LIBRARY.find(m => m.key === key)).filter(Boolean) as typeof METRIC_LIBRARY;
-  const availableMetrics = METRIC_LIBRARY.filter(m => !selectedKeys.includes(m.key));
+  useEffect(() => {
+    console.log("[MetricsSection] Effect running, clientId:", clientId, "isActive:", isActive);
+    if (!clientId || !isActive || dataLoaded) {
+      console.log("[MetricsSection] Not loading - clientId:", clientId, "isActive:", isActive, "dataLoaded:", dataLoaded);
+      return;
+    }
+    setLoadingWorkout(true)
+    setWorkoutError(null)
+    ;(async () => {
+      try {
+        console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
+        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
+        console.log("[MetricsSection] Query result:", data, error);
+        if (error) throw error;
+        setWorkoutInfo(data || []);
+
+        // Fetch count of workouts in last 30 days
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 30);
+        const sinceISOString = sinceDate.toISOString();
+        const { count, error: countError } = await supabase
+          .from("workout_info")
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", clientId)
+          .gte("created_at", sinceISOString);
+        console.log("[MetricsSection] 30-day count:", count, countError);
+        if (countError) throw countError;
+        setWorkoutCount(count || 0);
+        setDataLoaded(true);
+      } catch (err: any) {
+        setWorkoutError(err.message || "Failed to fetch workout info");
+        setWorkoutInfo([]);
+        setWorkoutCount(0);
+      } finally {
+        setLoadingWorkout(false);
+      }
+    })();
+  }, [clientId, isActive, dataLoaded]);
+
+  const selectedMetrics = selectedKeys
+    .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
+    .filter(Boolean) as typeof METRIC_LIBRARY
+  const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const value = e.target.value;
+    const value = e.target.value
     if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
-      setSelectedKeys([...selectedKeys, value]);
+      setSelectedKeys([...selectedKeys, value])
     }
   }
 
   function handleRemove(key: string) {
-    setSelectedKeys(selectedKeys.filter((k: string) => k !== key));
+    setSelectedKeys(selectedKeys.filter((k: string) => k !== key))
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
+    const { active, over } = event
     if (over && active.id !== over.id) {
-      const oldIndex = selectedKeys.indexOf(active.id as string);
-      const newIndex = selectedKeys.indexOf(over.id as string);
-      setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex));
+      const oldIndex = selectedKeys.indexOf(active.id as string)
+      const newIndex = selectedKeys.indexOf(over.id as string)
+      setSelectedKeys(arrayMove(selectedKeys, oldIndex, newIndex))
     }
-    setDraggingId(null);
+    setDraggingId(null)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Customization Panel */}
-      <div className="mb-4 p-4 bg-slate-50 rounded-lg border flex flex-col md:flex-row md:items-center gap-4">
-        <div className="flex-1 flex flex-wrap gap-2 items-center">
-          <span className="font-medium mr-2">Your Metrics:</span>
-          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={e => setDraggingId(String(e.active.id))}>
-            <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
-              {selectedMetrics.map((metric: any) => (
-                <div key={metric.key} className="flex items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm cursor-grab" tabIndex={0} aria-label={`Drag to reorder ${metric.label}`}>
-                  <span className="mr-1 cursor-grab" title="Drag to reorder">☰</span>
-                  <metric.icon className="h-4 w-4" />
-                  <span className="text-sm">{metric.label}</span>
-                  <button onClick={() => handleRemove(metric.key)} className="ml-1 text-xs text-red-500" aria-label={`Remove ${metric.label}`}>✕</button>
+    <div className="space-y-8">
+      {/* Enhanced Customization Panel */}
+      <Card className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-purple-950/50 border-0 shadow-xl">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+                  <BarChart3 className="h-5 w-5 text-white" />
                 </div>
-              ))}
-            </SortableContext>
-          </DndContext>
-        </div>
-        <div>
-          {/* Accessibility: label for select */}
-          <label htmlFor="metric-select" className="sr-only">Add Metric</label>
-          <select id="metric-select" className="border rounded px-2 py-1 text-sm" onChange={handleSelectChange} value="">
-            <option value="">Add Metric...</option>
-            {availableMetrics.map((m: any) => (
-              <option key={m.key} value={m.key}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      {/* Metrics Grid */}
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <DndContext
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                  onDragStart={(e) => setDraggingId(String(e.active.id))}
+                >
+                  <SortableContext
+                    items={selectedMetrics.map((m: any) => m.key)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {selectedMetrics.map((metric: any) => (
+                      <div
+                        key={metric.key}
+                        className="flex items-center gap-2 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2 shadow-lg cursor-grab hover:shadow-xl transition-all duration-300 group"
+                        tabIndex={0}
+                        aria-label={`Drag to reorder ${metric.label}`}
+                      >
+                        <span
+                          className="cursor-grab text-gray-400 group-hover:text-blue-500 transition-colors"
+                          title="Drag to reorder"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M3 4h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2z" />
+                          </svg>
+                        </span>
+                        <metric.icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{metric.label}</span>
+                        <button
+                          onClick={() => handleRemove(metric.key)}
+                          className="ml-2 text-red-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-950/50"
+                          aria-label={`Remove ${metric.label}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+            <div className="lg:w-64">
+              <label
+                htmlFor="metric-select"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Add New Metric
+              </label>
+              <select
+                id="metric-select"
+                className="w-full border-2 border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                onChange={handleSelectChange}
+                value=""
+              >
+                <option value="">Choose a metric...</option>
+                {availableMetrics.map((m: any) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Enhanced Metrics Grid */}
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {selectedMetrics.map((metric: any) => (
-              <div key={metric.key} className="cursor-grab">
-                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2">
-                      <metric.icon className="h-5 w-5" style={{ color: metric.color }} />
-                      {metric.label}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[200px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        {metric.type === 'line' ? (
-                          <Chart data={metric.data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                            <Tooltip />
-                            <Line type="monotone" dataKey={metric.dataKey} stroke={metric.color} strokeWidth={2} dot={{ r: 3 }} />
-                          </Chart>
-                        ) : (
-                          <BarChart data={metric.data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                            <Tooltip />
-                            <Bar dataKey={metric.dataKey} fill={metric.color} radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        )}
-                      </ResponsiveContainer>
+              <Card
+                key={metric.key}
+                className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 cursor-grab hover:scale-105"
+              >
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl shadow-lg" style={{ backgroundColor: `${metric.color}20` }}>
+                      <metric.icon className="h-6 w-6" style={{ color: metric.color }} />
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    <div>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{metric.label}</span>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Track your {metric.label.toLowerCase()} progress over time
+                      </p>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      {metric.type === "line" ? (
+                        <Chart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "white",
+                              border: "none",
+                              borderRadius: "12px",
+                              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey={metric.dataKey}
+                            stroke={metric.color}
+                            strokeWidth={3}
+                            dot={{ r: 5, strokeWidth: 2, fill: "white" }}
+                            activeDot={{ r: 7, strokeWidth: 2 }}
+                          />
+                        </Chart>
+                      ) : (
+                        <BarChart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "white",
+                              border: "none",
+                              borderRadius: "12px",
+                              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+                            }}
+                          />
+                          <Bar dataKey={metric.dataKey} fill={metric.color} radius={[8, 8, 0, 0]} />
+                        </BarChart>
+                      )}
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </SortableContext>
       </DndContext>
+
+      {/* Enhanced Workout Info Table */}
+      <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90 mb-6">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <Dumbbell className="h-5 w-5 text-orange-500" />
+            <span className="text-gray-900 dark:text-white">Workouts Completed (Last 30 Days):</span>
+            <span className="ml-2 text-2xl font-bold text-orange-600 dark:text-orange-400">{workoutCount}</span>
+          </CardTitle>
+        </CardHeader>
+      </Card>
+
+      <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90">
+        <CardHeader className="pb-6">
+          <CardTitle className="flex items-center gap-3 text-xl">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg">
+              <Dumbbell className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <span className="text-gray-900 dark:text-white">Workout History</span>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-normal mt-1">
+                Complete history of all workout sessions
+              </p>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingWorkout ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-gray-500 dark:text-gray-400">Loading workout history...</p>
+            </div>
+          ) : workoutError ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <X className="w-8 h-8 text-red-500" />
+              </div>
+              <p className="text-red-500 dark:text-red-400">{workoutError}</p>
+            </div>
+          ) : workoutInfo.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Dumbbell className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-500 dark:text-gray-400 mb-2">No workout history found</p>
+              <p className="text-sm text-gray-400">Start tracking workouts to see data here</p>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-x-auto">
+              <table className="min-w-full text-sm text-left">
+                <thead className="bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/40 dark:to-red-900/40">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Date</th>
+                    <th className="px-4 py-3 font-semibold">Exercise</th>
+                    <th className="px-4 py-3 font-semibold">Duration (min)</th>
+                    <th className="px-4 py-3 font-semibold">Intensity</th>
+                    <th className="px-4 py-3 font-semibold">Sets</th>
+                    <th className="px-4 py-3 font-semibold">Reps</th>
+                    <th className="px-4 py-3 font-semibold">Weight</th>
+                    <th className="px-4 py-3 font-semibold">Feedback</th>
+                    <th className="px-4 py-3 font-semibold">Rest (sec)</th>
+                    <th className="px-4 py-3 font-semibold">Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workoutInfo.map((w, idx) => (
+                    <tr
+                      key={w.id}
+                      className={
+                        idx % 2 === 0
+                          ? "bg-orange-50/40 dark:bg-orange-900/10"
+                          : "bg-white dark:bg-gray-900"
+                      }
+                    >
+                      <td className="px-4 py-3">{w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}</td>
+                      <td className="px-4 py-3 font-semibold">{w.exercise_name}</td>
+                      <td className="px-4 py-3">{w.duration ?? ""}</td>
+                      <td className="px-4 py-3">{w.intensity ?? ""}</td>
+                      <td className="px-4 py-3">{w.sets ?? ""}</td>
+                      <td className="px-4 py-3">{w.reps ?? ""}</td>
+                      <td className="px-4 py-3">{w.weight ?? ""}</td>
+                      <td className="px-4 py-3">{w.feedback ?? ""}</td>
+                      <td className="px-4 py-3">{w.rest ?? ""}</td>
+                      <td className="px-4 py-3">{w.distance ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-  );
-};
+  )
+}
+// 
 
-
-
-// WorkoutPlanSection is now imported from separate component file
-
-
-
-const NutritionPlanSection = () => {
-  const { toast } = useToast()
+// Enhanced Nutrition Plan Section
+const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [nutritionData, setNutritionData] = useState<any>(null)
+  const [dataLoaded, setDataLoaded] = useState(false)
   const [selectedDay, setSelectedDay] = useState("monday")
   const [editingItem, setEditingItem] = useState<string | null>(null)
   const [newItemDialog, setNewItemDialog] = useState<string | null>(null)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [showNutritionAIResponse, setShowNutritionAIResponse] = useState(false)
-  const [nutritionAiResponse, setNutritionAiResponse] = useState<any>(null)
-  const [mealItems, setMealItems] = useState({
-    breakfast: [
-      { name: "Oatmeal with berries", calories: 320, protein: 12, carbs: 58, fats: 6 },
-      { name: "Greek yogurt", calories: 150, protein: 20, carbs: 8, fats: 4 },
-      { name: "Banana", calories: 105, protein: 1, carbs: 27, fats: 0 },
-    ],
-    lunch: [
-      { name: "Grilled chicken breast", calories: 280, protein: 53, carbs: 0, fats: 6 },
-      { name: "Quinoa salad", calories: 220, protein: 8, carbs: 39, fats: 4 },
-      { name: "Mixed vegetables", calories: 80, protein: 3, carbs: 16, fats: 1 },
-    ],
-    snack: [
-      { name: "Mixed nuts", calories: 170, protein: 6, carbs: 6, fats: 15 },
-      { name: "Apple", calories: 95, protein: 0, carbs: 25, fats: 0 },
-      { name: "Protein shake", calories: 120, protein: 25, carbs: 3, fats: 1 },
-    ],
-    dinner: [
-      { name: "Salmon fillet", calories: 350, protein: 39, carbs: 0, fats: 20 },
-      { name: "Sweet potato", calories: 180, protein: 4, carbs: 41, fats: 0 },
-      { name: "Steamed broccoli", calories: 55, protein: 6, carbs: 11, fats: 1 },
-    ],
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiNutritionResponse, setAiNutritionResponse] = useState<any>(null)
+  const [showAiResponsePopup, setShowAiResponsePopup] = useState(false)
+  const { toast } = useToast()
+  
+  // Sample meal items data structure
+  const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({
+    monday: {
+      breakfast: [
+        { meal: "Greek Yogurt with Berries", calories: 150, protein: 15, fats: 2, icon: "🥣", coach_tip: "Great source of probiotics!" }
+      ],
+      lunch: [
+        { meal: "Grilled Chicken Salad", calories: 300, protein: 35, fats: 12, icon: "🥗", coach_tip: "Perfect post-workout meal" }
+      ],
+      dinner: [
+        { meal: "Salmon Fillet", calories: 250, protein: 30, fats: 14, icon: "🐟", coach_tip: "Rich in omega-3 fatty acids" }
+      ],
+      snacks: [
+        { meal: "Apple with Almond Butter", calories: 190, protein: 4, fats: 8, icon: "🍎", coach_tip: "Great pre-workout snack" }
+      ]
+    },
+    tuesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    wednesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    thursday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    friday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    saturday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+    sunday: { breakfast: [], lunch: [], dinner: [], snacks: [] }
   })
-  const [newItem, setNewItem] = useState({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
 
-  interface WeeklyTarget {
-    name: string
-    current: number
-    target: number
-    unit: string
-    icon: React.ReactNode
-    color: string
+  const [newItem, setNewItem] = useState({
+    meal: "",
+    calories: 0,
+    protein: 0,
+    fats: 0,
+    icon: "",
+    coach_tip: "",
+    meal_info: ""
+  })
+
+  // Daily targets state
+  const [dailyTargets, setDailyTargets] = useState([
+    { name: "Calories", current: 1420, target: 2000, unit: "kcal", icon: "🔥", color: "from-red-500 to-pink-600" },
+    { name: "Protein", current: 95, target: 150, unit: "g", icon: "💪", color: "from-blue-500 to-indigo-600" },
+    { name: "Carbs", current: 165, target: 200, unit: "g", icon: "🌾", color: "from-green-500 to-emerald-600" },
+    { name: "Fats", current: 48, target: 70, unit: "g", icon: "🥑", color: "from-yellow-500 to-orange-600" }
+  ])
+
+  // Calculate daily totals from meal items
+  const calculateDailyTotals = () => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    
+    return days.map((day, index) => {
+      const dayMeals = mealItems[day] || { breakfast: [], lunch: [], dinner: [], snacks: [] }
+      let calories = 0, protein = 0, carbs = 0, fats = 0
+      
+      // Sum up all meals for the day
+      Object.values(dayMeals).forEach((mealType: any[]) => {
+        mealType.forEach((meal) => {
+          calories += meal.calories || 0
+          protein += meal.protein || 0
+          carbs += meal.carbs || 0
+          fats += meal.fats || 0
+        })
+      })
+      
+      return {
+        day: dayNames[index],
+        calories: Math.round(calories),
+        protein: Math.round(protein),
+        carbs: Math.round(carbs),
+        fats: Math.round(fats),
+        completed: calories > 0
+      }
+    })
   }
 
-  interface DayTotal {
-    day: string
-    date: string
-    calories: number
-    protein: number
-    carbs: number
-    fats: number
-    completed: boolean
-  }
+  // Get daily totals
+  const dailyTotals = calculateDailyTotals()
 
-  interface MealItem {
-    name: string
-    calories: number
-    protein: number
-    carbs: number
-    fats: number
-  }
-
-  const weeklyTargets: WeeklyTarget[] = [
-    {
-      name: "Calories",
-      current: 9850,
-      target: 14000,
-      unit: "kcal",
-      icon: <Target className="w-5 h-5" />,
-      color: "from-green-400 to-emerald-500",
-    },
-    {
-      name: "Protein",
-      current: 420,
-      target: 840,
-      unit: "g",
-      icon: <Dumbbell className="w-5 h-5" />,
-      color: "from-green-400 to-emerald-500",
-    },
-    {
-      name: "Carbs",
-      current: 680,
-      target: 1260,
-      unit: "g",
-      icon: <Utensils className="w-5 h-5" />,
-      color: "from-green-400 to-emerald-500",
-    },
-    {
-      name: "Fats",
-      current: 245,
-      target: 490,
-      unit: "g",
-      icon: <Heart className="w-5 h-5" />,
-      color: "from-green-400 to-emerald-500",
-    },
-    {
-      name: "Vitamins",
-      current: 65,
-      target: 100,
-      unit: "%",
-      icon: <Activity className="w-5 h-5" />,
-      color: "from-green-400 to-emerald-500",
-    },
-  ]
-
-  const dailyTotals: DayTotal[] = [
-    { day: "Monday", date: "", calories: 1950, protein: 85, carbs: 180, fats: 65, completed: true },
-    { day: "Tuesday", date: "", calories: 2100, protein: 92, carbs: 195, fats: 70, completed: true },
-    { day: "Wednesday", date: "", calories: 1850, protein: 78, carbs: 165, fats: 58, completed: true },
-    { day: "Thursday", date: "", calories: 2050, protein: 88, carbs: 185, fats: 68, completed: true },
-    { day: "Friday", date: "", calories: 1900, protein: 82, carbs: 175, fats: 62, completed: true },
-    { day: "Saturday", date: "", calories: 0, protein: 0, carbs: 0, fats: 0, completed: false },
-    { day: "Sunday", date: "", calories: 0, protein: 0, carbs: 0, fats: 0, completed: false },
-  ]
-
-  const completedDays = dailyTotals.filter((day) => day.completed).length
-  const weekProgress = (completedDays / 7) * 100
-
-  const updateMealItem = (mealType: string, index: number, field: string, value: number | string) => {
-    setMealItems((prev) => ({
-      ...prev,
-      [mealType]: prev[mealType as keyof typeof prev].map((item, i) =>
-        i === index ? { ...item, [field]: value } : item,
-      ),
-    }))
-  }
-
-  const deleteMealItem = (mealType: string, index: number) => {
-    setMealItems((prev) => ({
-      ...prev,
-      [mealType]: prev[mealType as keyof typeof prev].filter((_, i) => i !== index),
-    }))
-  }
-
-  const addMealItem = (mealType: string) => {
-    if (newItem.name.trim()) {
-      setMealItems((prev) => ({
-        ...prev,
-        [mealType]: [...prev[mealType as keyof typeof prev], { ...newItem }],
+  // Update current daily targets based on selected day
+  const updateCurrentDayTargets = () => {
+    const selectedDayData = dailyTotals.find(d => d.day.toLowerCase() === selectedDay)
+    if (selectedDayData) {
+      setDailyTargets(prev => prev.map(target => {
+        switch(target.name) {
+          case "Calories":
+            return { ...target, current: selectedDayData.calories }
+          case "Protein":
+            return { ...target, current: selectedDayData.protein }
+          case "Carbs":
+            return { ...target, current: selectedDayData.carbs }
+          case "Fats":
+            return { ...target, current: selectedDayData.fats }
+          default:
+            return target
+        }
       }))
-      setNewItem({ name: "", calories: 0, protein: 0, carbs: 0, fats: 0 })
+    }
+  }
+
+  // Update targets when selected day or meal items change
+  useEffect(() => {
+    updateCurrentDayTargets()
+  }, [selectedDay, mealItems])
+
+  // Meal types
+  const mealTypes = [
+    { key: "breakfast", label: "Breakfast", icon: "🌅", emoji: "🥞" },
+    { key: "lunch", label: "Lunch", icon: "☀️", emoji: "🥗" },
+    { key: "dinner", label: "Dinner", icon: "🌙", emoji: "🍽️" },
+    { key: "snacks", label: "Snacks", icon: "🍎", emoji: "🥨" }
+  ]
+
+  // Get current day meals
+  const getCurrentDayMeals = () => {
+    return mealItems[selectedDay] || { breakfast: [], lunch: [], dinner: [], snacks: [] }
+  }
+
+  // Add meal item
+  const addMealItem = (mealType: string) => {
+    if (newItem.meal.trim()) {
+      setMealItems(prev => ({
+        ...prev,
+        [selectedDay]: {
+          ...prev[selectedDay],
+          [mealType]: [...(prev[selectedDay]?.[mealType] || []), { ...newItem }]
+        }
+      }))
+      setNewItem({ meal: "", calories: 0, protein: 0, fats: 0, icon: "", coach_tip: "", meal_info: "" })
       setNewItemDialog(null)
     }
   }
+
+  // Update meal item
+  const updateMealItem = (mealType: string, index: number, field: string, value: any) => {
+    setMealItems(prev => ({
+      ...prev,
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [mealType]: prev[selectedDay][mealType].map((item, i) => 
+          i === index ? { ...item, [field]: value } : item
+        )
+      }
+    }))
+  }
+
+  // Delete meal item
+  const deleteMealItem = (mealType: string, index: number) => {
+    setMealItems(prev => ({
+      ...prev,
+      [selectedDay]: {
+        ...prev[selectedDay],
+        [mealType]: prev[selectedDay][mealType].filter((_, i) => i !== index)
+      }
+    }))
+  }
+
+  // AI Nutrition Plan Generation
+  const handleGenerateAINutritionPlan = async () => {
+    if (!clientId) {
+      toast({
+        title: "Error",
+        description: "No client selected. Please select a client first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setAiGenerating(true)
+    
+    try {
+      console.log('🚀 Starting AI nutrition plan generation for client:', clientId)
+      const result = await generateAINutritionPlan(clientId)
+      
+      if (result.success) {
+        console.log('✅ AI nutrition plan generated successfully:', result)
+        setAiNutritionResponse(result)
+        setShowAiResponsePopup(true)
+        
+        toast({
+          title: "Success",
+          description: "AI nutrition plan generated successfully!",
+        })
+      } else {
+        console.error('❌ AI nutrition plan generation failed:', result.message)
+        toast({
+          title: "Error",
+          description: result.message || "Failed to generate AI nutrition plan",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('💥 Error generating AI nutrition plan:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while generating the nutrition plan",
+        variant: "destructive",
+      })
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  // Parse AI Response and Apply to Nutrition Plan
+  const parseAndApplyAINutritionPlan = (aiResponseText: string) => {
+    try {
+      console.log('🔍 Parsing AI nutrition response:', aiResponseText)
+      
+      // Extract JSON from the response
+      let jsonMatch = aiResponseText.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        throw new Error('No JSON found in AI response')
+      }
+      
+      const nutritionData = JSON.parse(jsonMatch[0])
+      console.log('📊 Parsed nutrition data:', nutritionData)
+      
+      // Update daily targets
+      if (nutritionData.daily_targets) {
+        setDailyTargets([
+          { name: "Calories", current: 0, target: nutritionData.daily_targets.calories || 2000, unit: "kcal", icon: "🔥", color: "from-red-500 to-pink-600" },
+          { name: "Protein", current: 0, target: nutritionData.daily_targets.protein || 150, unit: "g", icon: "💪", color: "from-blue-500 to-indigo-600" },
+          { name: "Carbs", current: 0, target: nutritionData.daily_targets.carbs || 200, unit: "g", icon: "🌾", color: "from-green-500 to-emerald-600" },
+          { name: "Fats", current: 0, target: nutritionData.daily_targets.fats || 70, unit: "g", icon: "🥑", color: "from-yellow-500 to-orange-600" }
+        ])
+      }
+      
+      // Process nutrition plan and populate meal items
+      if (nutritionData.nutrition_plan && Array.isArray(nutritionData.nutrition_plan)) {
+        const newMealItems: Record<string, Record<string, any[]>> = {
+          monday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          tuesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          wednesday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          thursday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          friday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          saturday: { breakfast: [], lunch: [], dinner: [], snacks: [] },
+          sunday: { breakfast: [], lunch: [], dinner: [], snacks: [] }
+        }
+        
+        // Distribute meals across the week (repeat pattern for 7 days)
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        
+        // If we have fewer meals than 7 days, repeat the pattern
+        days.forEach((day, dayIndex) => {
+          nutritionData.nutrition_plan.forEach((meal: any) => {
+            const mealItem = {
+              meal: meal.food_name,
+              calories: meal.calories || 0,
+              protein: meal.protein || 0,
+              carbs: meal.carbs || 0,
+              fats: meal.fats || 0,
+              fiber: meal.fiber || 0,
+              icon: meal.icon || "🍽️",
+              coach_tip: meal.coach_tip || "",
+              meal_info: `${meal.portion_size || "1 serving"} - ${meal.category || meal.meal_type}`,
+              dietary_tags: meal.dietary_tags || []
+            }
+            
+            const mealType = meal.meal_type === 'snack' ? 'snacks' : meal.meal_type
+            if (newMealItems[day] && newMealItems[day][mealType]) {
+              newMealItems[day][mealType].push(mealItem)
+            }
+          })
+        })
+        
+        setMealItems(newMealItems)
+        console.log('✅ Meal items updated:', newMealItems)
+      }
+      
+      return true
+    } catch (error) {
+      console.error('❌ Error parsing AI nutrition response:', error)
+      toast({
+        title: "Error",
+        description: "Failed to parse AI nutrition plan. Please try again.",
+        variant: "destructive",
+      })
+      return false
+    }
+  }
+
+  // Data loading effect
+  useEffect(() => {
+    if (clientId && isActive && !dataLoaded) {
+      setLoading(true)
+      setTimeout(() => {
+        setNutritionData({ loaded: true })
+        setDataLoaded(true)
+        setLoading(false)
+      }, 900)
+    }
+  }, [clientId, isActive, dataLoaded])
 
   const MacroChart = ({ protein, carbs, fats }: { protein: number; carbs: number; fats: number }) => {
     const total = protein + carbs + fats
@@ -1919,7 +2446,7 @@ const NutritionPlanSection = () => {
     const fatsPercent = (fats / total) * 100
 
     return (
-      <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-200 dark:bg-gray-800">
+      <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
         <div className="bg-green-400" style={{ width: `${proteinPercent}%` }} title={`Protein: ${protein}g`} />
         <div className="bg-blue-400" style={{ width: `${carbsPercent}%` }} title={`Carbs: ${carbs}g`} />
         <div className="bg-yellow-400" style={{ width: `${fatsPercent}%` }} title={`Fats: ${fats}g`} />
@@ -1927,293 +2454,251 @@ const NutritionPlanSection = () => {
     )
   }
 
-  const parseAINutritionResponse = (aiResponseText: string) => {
-    try {
-      console.log('🔍 Parsing AI nutrition response:', aiResponseText)
-      
-      // Remove any markdown code blocks
-      const cleanedResponse = aiResponseText.replace(/```json\n?/g, '').replace(/```\n?/g, '')
-      
-      // Parse the JSON
-      const parsedResponse = JSON.parse(cleanedResponse)
-      console.log('✅ Successfully parsed AI nutrition response:', parsedResponse)
-      
-      // Extract nutrition plan items
-      if (parsedResponse.nutrition_plan && Array.isArray(parsedResponse.nutrition_plan)) {
-        const nutritionItems = parsedResponse.nutrition_plan
-        
-        // Group by meal type
-        const groupedMeals: {
-          breakfast: MealItem[];
-          lunch: MealItem[];
-          snack: MealItem[];
-          dinner: MealItem[];
-        } = {
-          breakfast: [],
-          lunch: [],
-          snack: [],
-          dinner: []
-        }
-        
-        nutritionItems.forEach((item: any) => {
-          const mealType = item.meal_type?.toLowerCase()
-          if (groupedMeals[mealType as keyof typeof groupedMeals]) {
-            groupedMeals[mealType as keyof typeof groupedMeals].push({
-              name: item.food_name || item.name,
-              calories: item.calories || 0,
-              protein: item.protein || 0,
-              carbs: item.carbs || 0,
-              fats: item.fats || 0
-            })
-          }
-        })
-        
-        console.log('🍽️ Grouped meals:', groupedMeals)
-        return groupedMeals
-      }
-      
-      return null
-    } catch (error) {
-      console.error('❌ Error parsing AI nutrition response:', error)
-      return null
-    }
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+              <CardContent className="p-6 text-center">
+                <LoadingSpinner size="small" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="text-center space-y-4">
+              <LoadingSpinner />
+              <p className="text-gray-600 dark:text-gray-400">Loading nutrition plan...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
-  const handleGenerateAINutritionPlan = async () => {
-    console.log('🚀 Button clicked - Starting AI nutrition generation process');
-    console.log('⏰ Timestamp:', new Date().toISOString());
-    
-    setIsGeneratingAI(true)
-    const startTime = Date.now() // Track response time
-    
-    try {
-      const clientId = 34 // Hardcoded for now to match working fitness plan
-      console.log('🎯 Using hardcoded client ID:', clientId);
-      
-      toast({
-        title: "Generating AI Nutrition Plan",
-        description: "Please wait while we create a personalized nutrition plan...",
-      })
-      
-      const result = await generateAINutritionPlan(clientId)
-      const responseTime = Date.now() - startTime // Calculate response time
-      
-      console.log('📬 Function Response:');
-      console.log('  - Success:', result.success);
-      console.log('  - Message:', result.message);
-      console.log('  - Has Client Data:', !!result.clientData);
-      
-      if (result.success) {
-        console.log('✅ SUCCESS - Data retrieval completed');
-        
-        // Log the client data to console for inspection
-        if (result.clientData && result.clientInfo) {
-          console.log('🎉 CLIENT DATA SUCCESSFULLY RETRIEVED:');
-          console.log('📋 Data Format: JavaScript Object');
-          console.log('🔢 Number of Properties:', Object.keys(result.clientData).length);
-          console.log('🏷️ Property Names:', Object.keys(result.clientData));
-          console.log('📊 Full Client Data Object:');
-          console.table(result.clientData); // Display as table for better readability
-          console.log('📄 JSON Format:');
-          console.log(JSON.stringify(result.clientData, null, 2));
-          console.log('💾 Organized Client Info:');
-          console.log(result.clientInfo);
-          
-          // If AI response is available, parse and update meal items
-          if (result.aiResponse) {
-            try {
-              const parsedMeals = parseAINutritionResponse(result.aiResponse.response);
-              if (parsedMeals) {
-                setMealItems(parsedMeals);
-              }
-              
-              // Always show the complete AI response first
-              setNutritionAiResponse(result.aiResponse);
-              setShowNutritionAIResponse(true);
-              
-              const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
-              toast({
-                title: "AI Nutrition Plan Generated",
-                description: `Personalized nutrition plan created for ${clientName}. Click to view full response.`,
-              })
-            } catch (parseError) {
-              console.error('Error parsing AI nutrition response:', parseError);
-              // Show the raw response in popup (parsing failed)
-              setNutritionAiResponse(result.aiResponse);
-              setShowNutritionAIResponse(true);
-              
-              toast({
-                title: "AI Response Generated",
-                description: "View the complete AI response. Meals may need manual parsing.",
-              })
-            }
-          } else {
-            const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || 'Client';
-            toast({
-              title: "Client Data Retrieved",
-              description: `Showing data for ${clientName}`,
-            })
-          }
-        } else {
-          console.warn('⚠️ Success reported but no client data in response');
-          toast({
-            title: "Client Data Retrieved", 
-            description: result.message,
-          })
-        }
-      } else {
-        console.log('❌ FAILURE - Data retrieval failed');
-        console.log('💬 Error Message:', result.message);
-        
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive"
-        })
-      }
-    } catch (err) {
-      console.error('💥 EXCEPTION CAUGHT in handleGenerateAINutritionPlan:');
-      console.error('  - Error Type:', typeof err);
-      console.error('  - Error:', err);
-      console.error('  - Stack:', err instanceof Error ? err.stack : 'No stack');
-      
-      toast({
-        title: "Error",
-        description: "Something went wrong while fetching client data.",
-        variant: "destructive"
-      })
-    } finally {
-      console.log('🏁 Process completed - Resetting loading state');
-      setIsGeneratingAI(false)
-    }
-  }
+  const currentDayMeals = getCurrentDayMeals()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Calendar className="w-8 h-8 text-emerald-600" />
+          <Calendar className="w-8 h-8 text-green-500" />
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Weekly Nutrition Plan
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm">Week of December 18-24, 2023</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Daily Nutrition Plan</h1>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              Viewing {selectedDay.charAt(0).toUpperCase() + selectedDay.slice(1)}'s plan
+            </p>
           </div>
         </div>
-        <Button 
-          onClick={handleGenerateAINutritionPlan}
-          disabled={isGeneratingAI}
-          className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold shadow-lg disabled:opacity-50"
-        >
-          {isGeneratingAI ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Generating...
-            </>
-          ) : (
-            <>
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Generate AI Plan
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleGenerateAINutritionPlan}
+            disabled={aiGenerating}
+            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold shadow-lg disabled:opacity-50"
+          >
+            {aiGenerating ? (
+              <>
+                <LoadingSpinner size="small" />
+                <span className="ml-2">Generating...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 mr-2" />
+                Generate Plan
+              </>
+            )}
+          </Button>
+          <Button 
+            onClick={() => {
+              const sampleResponse = `{
+                "overview": "This nutrition plan is designed for Vikas Malik, 52, who is active and primarily aims to improve his health by losing 10 kgs of weight. As a vegetarian and vegan, his diet will include high protein, moderate carbohydrates, and low fats. Given his inconsistent eating habits, acid reflux, and high-stress levels, this plan will emphasize regular meals, increased fiber, and hydration for better health and stress management. His workouts will be fueled with appropriate meals and protein supplementations.",
+                "daily_targets": {
+                  "calories": 1800,
+                  "protein": 125,
+                  "carbs": 200,
+                  "fats": 60,
+                  "fiber": 35,
+                  "water_liters": 3
+                },
+                "meal_timing": {
+                  "breakfast": "13:00",
+                  "lunch": "17:00",
+                  "dinner": "00:00",
+                  "snacks": ["15:30", "21:30"]
+                },
+                "nutrition_plan": [
+                  {
+                    "food_name": "Quinoa Porridge with Berries and Nuts",
+                    "meal_type": "breakfast",
+                    "portion_size": "1 bowl",
+                    "calories": 400,
+                    "protein": 12,
+                    "carbs": 60,
+                    "fats": 12,
+                    "fiber": 8,
+                    "for_date": "Day 1",
+                    "for_time": "13:00",
+                    "coach_tip": "Quinoa is a complete protein, providing all essential amino acids. It's also a great source of fiber which can help manage your acid reflux.",
+                    "icon": "🥣",
+                    "category": "Breakfast",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Mixed Salad with Chickpeas, Avocado, and Olive Oil Dressing",
+                    "meal_type": "lunch",
+                    "portion_size": "1 large plate",
+                    "calories": 500,
+                    "protein": 18,
+                    "carbs": 40,
+                    "fats": 28,
+                    "fiber": 12,
+                    "for_date": "Day 1",
+                    "for_time": "17:00",
+                    "coach_tip": "Chickpeas provide plant-based protein, while avocado adds healthy fats. Olive oil dressing can help with the absorption of fat-soluble vitamins.",
+                    "icon": "🥗",
+                    "category": "Lunch",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Lentil Soup with Whole Grain Bread",
+                    "meal_type": "dinner",
+                    "portion_size": "1 bowl of soup, 2 slices of bread",
+                    "calories": 600,
+                    "protein": 32,
+                    "carbs": 70,
+                    "fats": 15,
+                    "fiber": 15,
+                    "for_date": "Day 1",
+                    "for_time": "00:00",
+                    "coach_tip": "Lentils are high in protein and fiber. Whole grain bread adds complex carbs for a balanced meal. This meal is timed after your workout for optimal recovery.",
+                    "icon": "🍲",
+                    "category": "Dinner",
+                    "dietary_tags": ["vegan", "vegetarian", "mediterranean"]
+                  },
+                  {
+                    "food_name": "Apple with Almond Butter",
+                    "meal_type": "snack",
+                    "portion_size": "1 medium apple + 2 tbsp almond butter",
+                    "calories": 300,
+                    "protein": 8,
+                    "carbs": 30,
+                    "fats": 18,
+                    "fiber": 6,
+                    "for_date": "Day 1",
+                    "for_time": "15:30",
+                    "coach_tip": "Perfect pre-workout snack providing quick energy and healthy fats.",
+                    "icon": "🍎",
+                    "category": "Snack",
+                    "dietary_tags": ["vegan", "vegetarian"]
+                  }
+                ],
+                "hydration_plan": "Aim to drink 3 liters of water per day. Start your day with a 500ml glass of water upon waking. Drink 250ml of water 30 minutes before each meal and snack to aid digestion and manage acid reflux. Refill your water bottle during your workout to stay hydrated.",
+                "supplement_recommendations": "Continue with your prenatal vitamins and protein powder. For your workouts, aim for a protein intake of 20-30g post-workout to support muscle recovery and growth. This could be a scoop of your protein powder mixed with water or a plant-based milk.",
+                "meal_prep_tips": "Prepare your meals in advance to maintain consistency. Cook quinoa, chickpeas, and lentils in bulk and store them in the refrigerator. Wash and chop vegetables for your salads and store them in airtight containers. Prepare your dressing in advance and add it just before eating.",
+                "progress_tracking": "Track your weight weekly and adjust your caloric intake if necessary. Monitor your energy levels, sleep quality, and stress management as these factors can affect your weight loss. Adjust your protein powder dosage based on your workout intensity and recovery."
+              }`
+              const success = parseAndApplyAINutritionPlan(sampleResponse)
+              if (success) {
+                toast({
+                  title: "Sample Applied",
+                  description: "Sample nutrition plan has been applied successfully!",
+                })
+              }
+            }}
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Test Sample
+          </Button>
+        </div>
       </div>
 
-      {/* Weekly Targets */}
-      <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="text-xl text-emerald-600">Weekly Targets</span>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{completedDays}/7 days completed</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-            {weeklyTargets.map((target) => (
-              <div key={target.name} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
-                    {target.icon}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{target.name}</span>
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-gray-900 dark:text-white">{target.current.toLocaleString()}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    / {target.target.toLocaleString()}
-                    {target.unit}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min((target.current / target.target) * 100, 100)}%` }}
-                  />
-                </div>
-                <div className="text-xs text-emerald-600 font-medium">
-                  {Math.round((target.current / target.target) * 100)}%
-                </div>
+      {/* Enhanced Daily Targets */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        {dailyTargets.map((target, index) => (
+          <Card
+            key={index}
+            className="group relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 hover:scale-105"
+          >
+            <div
+              className={`absolute inset-0 bg-gradient-to-br ${target.color} opacity-5 group-hover:opacity-10 transition-opacity duration-500`}
+            />
+            <CardContent className="relative p-6 text-center">
+              <div className="text-4xl mb-3">{target.icon}</div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {target.current}
+                <span className="text-lg text-gray-500 dark:text-gray-400 ml-1">{target.unit}</span>
               </div>
-            ))}
-          </div>
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Week Progress</span>
-              <span className="text-sm text-emerald-600 font-medium">{Math.round(weekProgress)}% Complete</span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-              <div 
-                className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-3 rounded-full transition-all duration-300"
-                style={{ width: `${weekProgress}%` }}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{target.name}</p>
+              <div className="text-xs text-gray-500 dark:text-gray-500 mb-2">
+                Target: {target.target}
+                {target.unit}
+              </div>
+              <Progress value={(target.current / target.target) * 100} className="h-2 bg-gray-200 dark:bg-gray-700" />
+              <div className="text-xs text-green-500 font-medium mt-1">
+                {Math.round((target.current / target.target) * 100)}% Complete
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Main Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left Column - Daily Totals */}
-        <div className="lg:col-span-1 space-y-3">
-          <h3 className="text-lg font-semibold text-emerald-600 mb-4">Daily Totals</h3>
+        {/* Left Column - Daily Totals - Same size as meal cards */}
+        <div className="lg:col-span-1 space-y-4">
+          <h2 className="text-lg font-semibold text-green-500 mb-4">Weekly Overview</h2>
           {dailyTotals.map((day, index) => (
             <Card
               key={day.day}
-              className={`bg-white/80 backdrop-blur-sm border shadow-lg cursor-pointer transition-all duration-200 dark:bg-black ${
-                selectedDay === day.day.toLowerCase() ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+              className={`bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl cursor-pointer transition-all duration-500 dark:bg-gray-900/90 h-[400px] flex flex-col ${
+                selectedDay === day.day.toLowerCase()
+                  ? "ring-2 ring-green-500 bg-green-50/50 dark:bg-green-950/20"
+                  : "hover:bg-gray-50 dark:hover:bg-gray-800"
               }`}
               onClick={() => setSelectedDay(day.day.toLowerCase())}
             >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">{day.day}</div>
-                  <div className={`w-3 h-3 rounded-full ${day.completed ? "bg-emerald-400" : "bg-gray-400"}`} />
-                </div>
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{day.day}</span>
+                  <div className={`w-3 h-3 rounded-full ${day.completed ? "bg-green-500" : "bg-gray-400"}`} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col justify-center p-6">
                 {day.completed ? (
-                  <div className="space-y-3">
+                  <div className="space-y-6">
                     <div className="text-center">
-                      <div className="text-lg font-bold text-emerald-600">{day.calories}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">calories</div>
+                      <div className="text-3xl font-bold text-green-500 mb-1">{day.calories}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">calories</div>
                     </div>
                     <MacroChart protein={day.protein} carbs={day.carbs} fats={day.fats} />
-                    <div className="grid grid-cols-3 gap-1 text-xs">
-                      <div className="text-center">
-                        <div className="text-green-500 font-medium">{day.protein}g</div>
-                        <div className="text-gray-500 dark:text-gray-400">Protein</div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Protein:</span>
+                        <span className="text-green-500 font-bold">{day.protein}g</span>
                       </div>
-                      <div className="text-center">
-                        <div className="text-blue-500 font-medium">{day.carbs}g</div>
-                        <div className="text-gray-500 dark:text-gray-400">Carbs</div>
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Carbs:</span>
+                        <span className="text-blue-500 font-bold">{day.carbs}g</span>
                       </div>
-                      <div className="text-center">
-                        <div className="text-yellow-500 font-medium">{day.fats}g</div>
-                        <div className="text-gray-500 dark:text-gray-400">Fats</div>
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50">
+                        <span className="text-gray-600 dark:text-gray-400 text-sm">Fats:</span>
+                        <span className="text-yellow-500 font-bold">{day.fats}g</span>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">Not planned yet</div>
+                  <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                      📅
+                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">No meals planned</p>
+                    <p className="text-xs text-gray-400">Click to start planning</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -2222,841 +2707,724 @@ const NutritionPlanSection = () => {
 
         {/* Right Column - Meal Columns */}
         <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Breakfast */}
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-lg">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
-                  <Utensils className="w-5 h-5" />
-                </div>
-                <span className="text-gray-900 dark:text-white">Breakfast</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {mealItems.breakfast.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-400 transition-all duration-200 group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    {editingItem === `breakfast-${index}` ? (
-                      <Input
-                        value={item.name}
-                        onChange={(e) => updateMealItem("breakfast", index, "name", e.target.value)}
-                        className="text-sm font-medium h-6 p-1"
-                        onBlur={() => setEditingItem(null)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
-                        autoFocus
-                      />
-                    ) : (
+          {mealTypes.map((mealType) => (
+            <Card
+              key={mealType.key}
+              className="bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 h-[400px] flex flex-col"
+            >
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-gradient-to-r from-green-400/20 to-emerald-500/20 text-green-500">
+                      {mealType.icon}
+                    </div>
+                    <div>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">{mealType.label}</span>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {currentDayMeals[mealType.key]?.length || 0} items
+                      </p>
+                    </div>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col">
+                <div className="space-y-3 flex-1">
+                  {currentDayMeals[mealType.key]?.length > 0 ? (
+                    currentDayMeals[mealType.key].map((item, index) => (
                       <div
-                        className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1"
-                        onClick={() => setEditingItem(`breakfast-${index}`)}
+                        key={index}
+                        className="group/item p-3 rounded-lg bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-950/50 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300"
                       >
-                        {item.name}
+                        <div className="flex items-start justify-between mb-2">
+                          {editingItem === `${mealType.key}-${index}` ? (
+                            <Input
+                              value={item.meal}
+                              onChange={(e) => updateMealItem(mealType.key, index, "meal", e.target.value)}
+                              className="text-sm font-medium bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white h-6 p-1"
+                              onBlur={() => setEditingItem(null)}
+                              onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
+                              autoFocus
+                            />
+                          ) : (
+                            <div
+                              className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1 flex items-center gap-2"
+                              onClick={() => setEditingItem(`${mealType.key}-${index}`)}
+                            >
+                              <span>{item.icon}</span>
+                              <span>{item.meal}</span>
+                            </div>
+                          )}
+                          <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-gray-400 hover:text-green-500"
+                              onClick={() => setEditingItem(`${mealType.key}-${index}`)}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+                              onClick={() => deleteMealItem(mealType.key, index)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div className="text-center">
+                            <div className="font-bold text-red-600 dark:text-red-400">{item.calories}</div>
+                            <div className="text-gray-500 dark:text-gray-400">cal</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-bold text-blue-600 dark:text-blue-400">{item.protein}g</div>
+                            <div className="text-gray-500 dark:text-gray-400">protein</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-bold text-yellow-600 dark:text-yellow-400">{item.fats}g</div>
+                            <div className="text-gray-500 dark:text-gray-400">fats</div>
+                          </div>
+                        </div>
+                        {item.coach_tip && (
+                          <div className="mt-2 text-xs text-green-600 dark:text-green-400 italic">
+                            💡 {item.coach_tip}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-600"
-                        onClick={() => setEditingItem(`breakfast-${index}`)}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                        onClick={() => deleteMealItem("breakfast", index)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 flex-1 flex flex-col justify-center">
+                      <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                        {mealType.emoji}
+                      </div>
+                      <p className="text-sm mb-2 text-gray-500 dark:text-gray-400">
+                        No {mealType.label.toLowerCase()} items yet
+                      </p>
+                      <p className="text-xs text-gray-400">Add your first meal to get started</p>
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="cursor-pointer hover:text-emerald-600">
-                        {item.calories} cal
-                      </span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="cursor-pointer hover:text-green-500">
-                        P: {item.protein}g
-                      </span>
-                      <span className="cursor-pointer hover:text-blue-500">
-                        C: {item.carbs}g
-                      </span>
-                      <span className="cursor-pointer hover:text-yellow-500">
-                        F: {item.fats}g
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-600"
-                onClick={() => setNewItemDialog("breakfast")}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </CardContent>
-          </Card>
 
-          {/* Lunch */}
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-lg">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
-                  <Utensils className="w-5 h-5" />
-                </div>
-                <span className="text-gray-900 dark:text-white">Lunch</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {mealItems.lunch.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-400 transition-all duration-200 group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    {editingItem === `lunch-${index}` ? (
-                      <Input
-                        value={item.name}
-                        onChange={(e) => updateMealItem("lunch", index, "name", e.target.value)}
-                        className="text-sm font-medium h-6 p-1"
-                        onBlur={() => setEditingItem(null)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
-                        autoFocus
-                      />
-                    ) : (
-                      <div
-                        className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1"
-                        onClick={() => setEditingItem(`lunch-${index}`)}
-                      >
-                        {item.name}
+                <Dialog open={newItemDialog === mealType.key} onOpenChange={(open) => !open && setNewItemDialog(null)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-4 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-green-500 hover:text-green-500 bg-gradient-to-r from-gray-50 to-blue-50 hover:from-gray-100 hover:to-blue-100 dark:from-gray-800 dark:to-blue-950/50 dark:hover:from-gray-700 dark:hover:to-blue-900/50"
+                    onClick={() => setNewItemDialog(mealType.key)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Item
+                  </Button>
+                  <DialogContent className="max-w-md bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 border-0 shadow-2xl">
+                    <DialogHeader className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                      <DialogTitle className="flex items-center gap-3 text-xl">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
+                          {mealType.icon}
+                        </div>
+                        <span className="bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent font-bold">
+                          Add {mealType.label} Item
+                        </span>
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="meal-name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Meal Name
+                        </Label>
+                        <Input
+                          id="meal-name"
+                          value={newItem.meal}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, meal: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="e.g., Grilled Chicken Breast"
+                        />
                       </div>
-                    )}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-600"
-                        onClick={() => setEditingItem(`lunch-${index}`)}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                        onClick={() => deleteMealItem("lunch", index)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="cursor-pointer hover:text-emerald-600">
-                        {item.calories} cal
-                      </span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="cursor-pointer hover:text-green-500">
-                        P: {item.protein}g
-                      </span>
-                      <span className="cursor-pointer hover:text-blue-500">
-                        C: {item.carbs}g
-                      </span>
-                      <span className="cursor-pointer hover:text-yellow-500">
-                        F: {item.fats}g
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-600"
-                onClick={() => setNewItemDialog("lunch")}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Snack */}
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-lg">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <span className="text-gray-900 dark:text-white">Snack</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {mealItems.snack.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-400 transition-all duration-200 group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    {editingItem === `snack-${index}` ? (
-                      <Input
-                        value={item.name}
-                        onChange={(e) => updateMealItem("snack", index, "name", e.target.value)}
-                        className="text-sm font-medium h-6 p-1"
-                        onBlur={() => setEditingItem(null)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
-                        autoFocus
-                      />
-                    ) : (
-                      <div
-                        className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1"
-                        onClick={() => setEditingItem(`snack-${index}`)}
-                      >
-                        {item.name}
+                      <div>
+                        <Label htmlFor="icon" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Icon (emoji)
+                        </Label>
+                        <Input
+                          id="icon"
+                          value={newItem.icon || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, icon: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="🍗"
+                        />
                       </div>
-                    )}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-600"
-                        onClick={() => setEditingItem(`snack-${index}`)}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                        onClick={() => deleteMealItem("snack", index)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="cursor-pointer hover:text-emerald-600">
-                        {item.calories} cal
-                      </span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="cursor-pointer hover:text-green-500">
-                        P: {item.protein}g
-                      </span>
-                      <span className="cursor-pointer hover:text-blue-500">
-                        C: {item.carbs}g
-                      </span>
-                      <span className="cursor-pointer hover:text-yellow-500">
-                        F: {item.fats}g
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-600"
-                onClick={() => setNewItemDialog("snack")}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Dinner */}
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-lg">
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600">
-                  <Utensils className="w-5 h-5" />
-                </div>
-                <span className="text-gray-900 dark:text-white">Dinner</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {mealItems.dinner.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-400 transition-all duration-200 group"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    {editingItem === `dinner-${index}` ? (
-                      <Input
-                        value={item.name}
-                        onChange={(e) => updateMealItem("dinner", index, "name", e.target.value)}
-                        className="text-sm font-medium h-6 p-1"
-                        onBlur={() => setEditingItem(null)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingItem(null)}
-                        autoFocus
-                      />
-                    ) : (
-                      <div
-                        className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer flex-1"
-                        onClick={() => setEditingItem(`dinner-${index}`)}
-                      >
-                        {item.name}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="calories" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Calories
+                          </Label>
+                          <Input
+                            id="calories"
+                            type="number"
+                            value={newItem.calories || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, calories: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="protein" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Protein (g)
+                          </Label>
+                          <Input
+                            id="protein"
+                            type="number"
+                            value={newItem.protein || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, protein: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="fats" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Fats (g)
+                          </Label>
+                          <Input
+                            id="fats"
+                            type="number"
+                            value={newItem.fats || ""}
+                            onChange={(e) =>
+                              setNewItem((prev) => ({ ...prev, fats: Number.parseInt(e.target.value) || 0 }))
+                            }
+                            className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          />
+                        </div>
                       </div>
-                    )}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-emerald-600"
-                        onClick={() => setEditingItem(`dinner-${index}`)}
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
-                        onClick={() => deleteMealItem("dinner", index)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+                      <div>
+                        <Label htmlFor="coach-tip" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Coach Tip (optional)
+                        </Label>
+                        <Textarea
+                          id="coach-tip"
+                          value={newItem.coach_tip || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, coach_tip: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="Nutritional advice or tips..."
+                          rows={2}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="meal-info" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Meal Info (optional)
+                        </Label>
+                        <Input
+                          id="meal-info"
+                          value={newItem.meal_info || ""}
+                          onChange={(e) => setNewItem((prev) => ({ ...prev, meal_info: e.target.value }))}
+                          className="mt-1 border-2 border-green-200 focus:border-green-400 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                          placeholder="Additional meal information"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <Button
+                          variant="outline"
+                          onClick={() => setNewItemDialog(null)}
+                          className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={() => addMealItem(mealType.key)}
+                          className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Meal
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="cursor-pointer hover:text-emerald-600">
-                        {item.calories} cal
-                      </span>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="cursor-pointer hover:text-green-500">
-                        P: {item.protein}g
-                      </span>
-                      <span className="cursor-pointer hover:text-blue-500">
-                        C: {item.carbs}g
-                      </span>
-                      <span className="cursor-pointer hover:text-yellow-500">
-                        F: {item.fats}g
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-emerald-400 hover:text-emerald-600"
-                onClick={() => setNewItemDialog("dinner")}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </CardContent>
-          </Card>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
 
-      {/* Add Item Dialog */}
-      {newItemDialog && (
-        <Dialog open={!!newItemDialog} onOpenChange={() => setNewItemDialog(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add New {newItemDialog?.charAt(0).toUpperCase() + newItemDialog?.slice(1)} Item</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Food Name</Label>
-                <Input
-                  id="name"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                  placeholder="Enter food name"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="calories">Calories</Label>
-                  <Input
-                    id="calories"
-                    type="number"
-                    value={newItem.calories}
-                    onChange={(e) => setNewItem({ ...newItem, calories: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="protein">Protein (g)</Label>
-                  <Input
-                    id="protein"
-                    type="number"
-                    value={newItem.protein}
-                    onChange={(e) => setNewItem({ ...newItem, protein: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="carbs">Carbs (g)</Label>
-                  <Input
-                    id="carbs"
-                    type="number"
-                    value={newItem.carbs}
-                    onChange={(e) => setNewItem({ ...newItem, carbs: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="fats">Fats (g)</Label>
-                  <Input
-                    id="fats"
-                    type="number"
-                    value={newItem.fats}
-                    onChange={(e) => setNewItem({ ...newItem, fats: parseInt(e.target.value) || 0 })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setNewItemDialog(null)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => newItemDialog && addMealItem(newItemDialog)}>
-                  Add Item
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* AI Response Dialog */}
-      {showNutritionAIResponse && nutritionAiResponse && (
-        <Dialog open={showNutritionAIResponse} onOpenChange={setShowNutritionAIResponse}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
-                  <Utensils className="h-5 w-5 text-emerald-600" />
-                </div>
-                AI Nutrition Plan Generated
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
-                <p className="text-sm text-emerald-700 dark:text-emerald-300">
-                  Your personalized nutrition plan has been generated using AI. The meal items have been automatically added to your plan above.
-                </p>
-              </div>
-              
-              <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-                <h4 className="font-semibold mb-2 text-gray-900 dark:text-white">AI Response:</h4>
-                <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
-                  {nutritionAiResponse.response}
+      {/* AI Nutrition Response Popup */}
+      <Dialog open={showAiResponsePopup} onOpenChange={setShowAiResponsePopup}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-white dark:bg-gray-900">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Zap className="w-6 h-6 text-green-500" />
+              AI Generated Nutrition Plan
+            </DialogTitle>
+          </DialogHeader>
+          
+          {aiNutritionResponse && (
+            <div className="space-y-6">
+              {/* Raw AI Response */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">AI Response:</h3>
+                <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
+                  {aiNutritionResponse.aiResponse?.response || 'No response available'}
                 </pre>
               </div>
-              
-              {nutritionAiResponse.usage && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                  <h4 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">Usage Statistics:</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Model:</span> {nutritionAiResponse.model || 'gpt-4'}
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Total Tokens:</span> {nutritionAiResponse.usage.total_tokens}
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Input Tokens:</span> {nutritionAiResponse.usage.prompt_tokens}
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Output Tokens:</span> {nutritionAiResponse.usage.completion_tokens}
-                    </div>
+
+              {/* Client Info Used */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Client Information Used:</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p><strong>Name:</strong> {aiNutritionResponse.clientInfo?.name || 'N/A'}</p>
+                    <p><strong>Age:</strong> {aiNutritionResponse.clientInfo?.age || 'N/A'}</p>
+                    <p><strong>Weight:</strong> {aiNutritionResponse.clientInfo?.weight || 'N/A'} kg</p>
+                    <p><strong>Height:</strong> {aiNutritionResponse.clientInfo?.height || 'N/A'} cm</p>
+                  </div>
+                  <div>
+                    <p><strong>Goal:</strong> {aiNutritionResponse.clientInfo?.primaryGoal || 'N/A'}</p>
+                    <p><strong>Activity Level:</strong> {aiNutritionResponse.clientInfo?.activityLevel || 'N/A'}</p>
+                    <p><strong>Diet Preferences:</strong> {aiNutritionResponse.clientInfo?.dietPreferences || 'N/A'}</p>
+                    <p><strong>Allergies:</strong> {aiNutritionResponse.clientInfo?.foodAllergies || 'None'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Metrics */}
+              {aiNutritionResponse.aiResponse?.usage && (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">API Usage:</h3>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <p><strong>Input Tokens:</strong> {aiNutritionResponse.aiResponse.usage.prompt_tokens}</p>
+                    <p><strong>Output Tokens:</strong> {aiNutritionResponse.aiResponse.usage.completion_tokens}</p>
+                    <p><strong>Total Tokens:</strong> {aiNutritionResponse.aiResponse.usage.total_tokens}</p>
                   </div>
                 </div>
               )}
-              
-              <div className="flex justify-end">
-                <Button onClick={() => setShowNutritionAIResponse(false)}>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAiResponsePopup(false)}>
                   Close
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (aiNutritionResponse?.aiResponse?.response) {
+                      const success = parseAndApplyAINutritionPlan(aiNutritionResponse.aiResponse.response)
+                      if (success) {
+                        setShowAiResponsePopup(false)
+                        toast({
+                          title: "Success",
+                          description: "Nutrition plan applied successfully! Your meal plan has been updated.",
+                        })
+                      }
+                    } else {
+                      toast({
+                        title: "Error",
+                        description: "No AI response available to apply.",
+                        variant: "destructive",
+                      })
+                    }
+                  }}
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Apply Nutrition Plan
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-const ProgramsSection = () => {
-  const [searchTerm, setSearchTerm] = useState("")
+// Enhanced Program Management Section
+const ProgramManagementSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
+  const [loading, setLoading] = useState(false)
+  const [programs, setPrograms] = useState<any[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [filteredPrograms, setFilteredPrograms] = useState(mockPrograms)
   const [selectedTag, setSelectedTag] = useState("All")
   const [sortBy, setSortBy] = useState("Recently updated")
-  const [programs, setPrograms] = useState(mockPrograms)
-  const [isCreating, setIsCreating] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [programData, setProgramData] = useState<ProgramData>({
-    title: "New Program",
-    tag: "",
-    description: "",
-    difficulty: "Medium",
-    startDay: "Monday",
-    assignedColor: "#39FF14",
-    assignedClient: "",
-    isEditable: true,
-    tasks: {},
-    viewMode: "day"
-  })
-  const [viewMode, setViewMode] = useState<ViewMode>("day")
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
-  const filteredPrograms = programs.filter((program) => {
-    const matchesSearch = program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         program.tag.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesTag = selectedTag === "All" || program.tag === selectedTag
-    return matchesSearch && matchesTag
-  })
+  // Filter and sort programs
+  useEffect(() => {
+    let filtered = mockPrograms
 
-  const sortedPrograms = [...filteredPrograms].sort((a, b) => {
+    // Filter by tag
+    if (selectedTag !== "All") {
+      filtered = filtered.filter((program) => program.tag === selectedTag)
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (program) =>
+          program.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          program.description.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    }
+
+    // Sort programs
     switch (sortBy) {
       case "Alphabetically":
-        return a.title.localeCompare(b.title)
+        filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title))
+        break
       case "Difficulty":
         const difficultyOrder = { Easy: 1, Medium: 2, Hard: 3 }
-        return difficultyOrder[a.difficulty as keyof typeof difficultyOrder] - difficultyOrder[b.difficulty as keyof typeof difficultyOrder]
-      default:
-        return new Date(b.created).getTime() - new Date(a.created).getTime()
+        filtered = [...filtered].sort(
+          (a, b) =>
+            (difficultyOrder[a.difficulty as keyof typeof difficultyOrder] || 4) -
+            (difficultyOrder[b.difficulty as keyof typeof difficultyOrder] || 4),
+        )
+        break
+      default: // Recently updated
+        filtered = [...filtered].sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
     }
-  })
 
-  const updateProgramData = (updates: Partial<ProgramData>) => {
-    setProgramData((prev) => ({ ...prev, ...updates }))
+    setFilteredPrograms(filtered)
+  }, [mockPrograms, selectedTag, sortBy, searchQuery])
+
+  const handleDeleteProgram = (id: number) => {
+    setPrograms(programs.filter((p) => p.id !== id))
   }
 
-  const addTask = (day: number, task: Task) => {
-    setProgramData((prev) => ({
-      ...prev,
-      tasks: {
-        ...prev.tasks,
-        [day]: [...(prev.tasks[day] || []), task],
-      },
-    }))
-  }
-
-  const removeTask = (day: number, taskId: string) => {
-    setProgramData((prev) => ({
-      ...prev,
-      tasks: {
-        ...prev.tasks,
-        [day]: (prev.tasks[day] || []).filter((task, index) => index.toString() !== taskId),
-      },
-    }))
-  }
-
-  const openAddTaskDropdown = (day: number) => {
-    setSelectedDay(day)
-    setDropdownOpen(true)
-  }
-
-  const handleSaveProgram = async () => {
-    setIsSaving(true)
-    try {
-      // Create new program from programData
-      const newProgram = {
-        id: Math.max(...programs.map((p) => p.id)) + 1,
-        title: programData.title,
-        tag: programData.tag,
-        difficulty: programData.difficulty,
-        startDay: programData.startDay,
-        color: programData.assignedColor,
-        lastEdited: "Just now",
-        description: programData.description,
-        created: new Date().toISOString().split("T")[0],
-      }
-      setPrograms([...programs, newProgram])
-      setIsCreating(false)
-      
-      // Reset program data
-      setProgramData({
-        title: "New Program",
-        tag: "",
-        description: "",
-        difficulty: "Medium",
-        startDay: "Monday",
-        assignedColor: "#39FF14",
-        assignedClient: "",
-        isEditable: true,
-        tasks: {},
-        viewMode: "day"
-      })
-    } catch (error) {
-      console.error("Error saving program:", error)
-    } finally {
-      setIsSaving(false)
+  const handleDuplicateProgram = (program: any) => {
+    const newProgram = {
+      ...program,
+      id: Math.max(...programs.map((p) => p.id)) + 1,
+      title: `${program.title} (Copy)`,
+      created: new Date().toISOString().split("T")[0],
+      lastEdited: "Just now",
     }
+    setPrograms([...programs, newProgram])
   }
 
-  const handleDuplicate = (programId: number) => {
-    const programToDuplicate = programs.find((p) => p.id === programId)
-    if (programToDuplicate) {
-      const newProgram = {
-        ...programToDuplicate,
-        id: Math.max(...programs.map((p) => p.id)) + 1,
-        title: `${programToDuplicate.title} (Copy)`,
-        lastEdited: "Just now",
-        created: new Date().toISOString().split("T")[0],
-      }
-      setPrograms([...programs, newProgram])
+  // Data loading effect - placed after all hooks
+  useEffect(() => {
+    if (clientId && isActive && !dataLoaded) {
+      setLoading(true)
+      // Simulate API call - replace with actual programs fetching
+      setTimeout(() => {
+        setPrograms([
+          // Mock data - replace with actual programs
+          { id: 1, name: "Weight Loss Program", status: "active" },
+          { id: 2, name: "Strength Building", status: "completed" }
+        ])
+        setDataLoaded(true)
+        setLoading(false)
+      }, 1100)
     }
-  }
+  }, [clientId, isActive, dataLoaded])
 
-  const handleDelete = (programId: number) => {
-    setPrograms(programs.filter((p) => p.id !== programId))
-  }
-
-  if (isCreating) {
+  // Early return for loading state
+  if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-lg p-6 dark:bg-slate-800">
-          <HeaderBar programData={programData} updateProgramData={updateProgramData} />
-
-          <div className="mt-8">
-            <DescriptionInput
-              description={programData.description}
-              onChange={(description) => updateProgramData({ description })}
-            />
+      <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+        <CardContent className="flex items-center justify-center py-16">
+          <div className="text-center space-y-4">
+            <LoadingSpinner />
+            <p className="text-gray-600 dark:text-gray-400">Loading programs...</p>
           </div>
-
-          <div className="mt-8">
-            <ViewTabs viewMode={viewMode} setViewMode={setViewMode} />
-          </div>
-
-          <div className="mt-8">
-            <ProgramCardsContainer
-              viewMode={viewMode}
-              tasks={programData.tasks}
-              onAddTask={openAddTaskDropdown}
-              onRemoveTask={removeTask}
-              startDay={programData.startDay}
-            />
-          </div>
-
-          <div className="flex justify-end gap-4 mt-8">
-            <Button
-              variant="outline"
-              onClick={() => setIsCreating(false)}
-            >
-              Cancel
-            </Button>
-            <SaveButton onSave={handleSaveProgram} disabled={isSaving} />
-          </div>
-
-          <AddTaskDropdown
-            isOpen={dropdownOpen}
-            onClose={() => setDropdownOpen(false)}
-            onAddTask={(task) => {
-              if (selectedDay !== null) {
-                addTask(selectedDay, task)
-              }
-              setDropdownOpen(false)
-            }}
-            selectedDay={selectedDay}
-          />
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with search and filters */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col md:flex-row gap-4 items-center flex-1">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+    <div className="space-y-8">
+      {/* Enhanced Header with Search and Filters */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg">
+            <Trophy className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Program Management</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {filteredPrograms.length} of {mockPrograms.length} programs
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search programs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-full sm:w-64 border-2 border-gray-200 focus:border-indigo-400 rounded-xl"
             />
           </div>
-          <Select value={selectedTag} onValueChange={setSelectedTag}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {programTags.map((tag) => (
-                <SelectItem key={tag} value={tag}>
-                  {tag}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sortOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button
-          onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Program
-        </Button>
-      </div>
 
-      {/* Programs Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sortedPrograms.map((program) => (
-          <Card key={program.id} className="group hover:shadow-lg transition-shadow duration-200">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: program.color }}
-                    />
-                    <Badge variant="secondary" className="text-xs">
-                      {program.tag}
-                    </Badge>
-                    <Badge
-                      variant="outline"
-                      style={{ 
-                        backgroundColor: difficultyColors[program.difficulty as keyof typeof difficultyColors] + '20',
-                        borderColor: difficultyColors[program.difficulty as keyof typeof difficultyColors],
-                        color: difficultyColors[program.difficulty as keyof typeof difficultyColors]
-                      }}
-                      className="text-xs"
-                    >
-                      {program.difficulty}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-lg font-semibold mb-1">{program.title}</CardTitle>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Starts {program.startDay} • {program.lastEdited}
-                  </p>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDuplicate(program.id)}>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Duplicate
-                    </DropdownMenuItem>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Program</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{program.title}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(program.id)}>
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
-                {program.description}
-              </p>
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                  <Calendar className="w-3 h-3 mr-1" />
-                  Created {new Date(program.created).toLocaleDateString()}
-                </div>
-                <Button variant="outline" size="sm">
-                  View Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          {/* Filters */}
+          <div className="flex gap-3">
+            <Select value={selectedTag} onValueChange={setSelectedTag}>
+              <SelectTrigger className="w-32 border-2 border-gray-200 focus:border-indigo-400 rounded-xl">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {programTags.map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-      {sortedPrograms.length === 0 && (
-        <div className="text-center py-12">
-          <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-            <Search className="w-8 h-8 text-gray-400" />
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-40 border-2 border-gray-200 focus:border-indigo-400 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {sortOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* View Mode Toggle */}
+            <div className="flex border-2 border-gray-200 rounded-xl overflow-hidden">
+              <Button
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className="rounded-none border-0"
+              >
+                <Grid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className="rounded-none border-0"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            {searchTerm || selectedTag !== "All" 
-              ? "No programs match your search criteria" 
-              : "No programs created yet"}
-          </p>
-          <Button
-            onClick={() => setIsCreating(true)}
-            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Your First Program
-          </Button>
+        </div>
+      </div>
+
+      {/* Enhanced Programs Display */}
+      {filteredPrograms.length === 0 ? (
+        <div className="text-center py-16">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trophy className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 mb-2">No programs found</p>
+          <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredPrograms.map((program) => (
+            <Card
+              key={program.id}
+              className="group relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 hover:scale-105"
+            >
+              {/* Color accent */}
+              <div className="absolute top-0 left-0 right-0 h-2" style={{ backgroundColor: program.color }} />
+
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge
+                        variant="secondary"
+                        className="text-xs font-medium"
+                        style={{
+                          backgroundColor: `${program.color}20`,
+                          color: program.color,
+                          border: `1px solid ${program.color}40`,
+                        }}
+                      >
+                        {program.tag}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-xs"
+                        style={{
+                          borderColor: difficultyColors[program.difficulty as keyof typeof difficultyColors],
+                          color: difficultyColors[program.difficulty as keyof typeof difficultyColors],
+                        }}
+                      >
+                        {program.difficulty}
+                      </Badge>
+                    </div>
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-white mb-2 line-clamp-2">
+                      {program.title}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 mb-4">{program.description}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Calendar className="h-4 w-4" />
+                    <span>Starts {program.startDay}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Clock className="h-4 w-4" />
+                    <span>Last edited {program.lastEdited}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    Start
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDuplicateProgram(program)}
+                    className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+                  >
+                    <Star className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteProgram(program.id)}
+                    className="border-2 border-red-200 hover:border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 dark:border-red-800 dark:hover:border-red-700 dark:hover:bg-red-950/50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        /* Enhanced List View */
+        <div className="space-y-4">
+          {filteredPrograms.map((program) => (
+            <Card
+              key={program.id}
+              className="group bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-300 dark:bg-gray-900/90"
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-4 h-16 rounded-full flex-shrink-0" style={{ backgroundColor: program.color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h4 className="font-bold text-lg text-gray-900 dark:text-white truncate">{program.title}</h4>
+                      <Badge
+                        variant="secondary"
+                        className="text-xs font-medium flex-shrink-0"
+                        style={{
+                          backgroundColor: `${program.color}20`,
+                          color: program.color,
+                          border: `1px solid ${program.color}40`,
+                        }}
+                      >
+                        {program.tag}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-xs flex-shrink-0"
+                        style={{
+                          borderColor: difficultyColors[program.difficulty as keyof typeof difficultyColors],
+                          color: difficultyColors[program.difficulty as keyof typeof difficultyColors],
+                        }}
+                      >
+                        {program.difficulty}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">{program.description}</p>
+                    <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>Starts {program.startDay}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        <span>Last edited {program.lastEdited}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      Start
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDuplicateProgram(program)}
+                      className="border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+                    >
+                      <Star className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDeleteProgram(program.id)}
+                      className="border-2 border-red-200 hover:border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700 dark:border-red-800 dark:hover:border-red-700 dark:hover:bg-red-950/50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-// Calculate age from DOB
-const getAge = (dob: string) => {
-  if (!dob) return "N/A"
-  const birthDate = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
+// Loading Spinner Component
+const LoadingSpinner = ({ size = "default" }: { size?: "small" | "default" | "large" }) => {
+  const sizeClasses = {
+    small: "h-4 w-4",
+    default: "h-8 w-8", 
+    large: "h-12 w-12"
   }
-  return age;
-};
+  
+  return (
+    <div className="flex items-center justify-center">
+      <div className={`${sizeClasses[size]} animate-spin rounded-full border-2 border-blue-500 border-t-transparent`} />
+    </div>
+  )
+}
 
+// Page Loading Component
+const PageLoading = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <LoadingSpinner size="large" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Loading Client Profile</h2>
+          <p className="text-gray-600 dark:text-gray-400">Please wait while we fetch the client data...</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Enhanced Main Component
 export default function ClientDashboard() {
-  const { id } = useParams<{ id: string }>()
+  const params = useParams();
+  const clientId = params.id && !isNaN(Number(params.id)) ? Number(params.id) : undefined;
+  console.log("params:", params, "clientId:", clientId);
+  const [activeTab, setActiveTab] = useState("overview")
+  const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("metrics")
   const [showProfileCard, setShowProfileCard] = useState(false)
@@ -3071,46 +3439,38 @@ export default function ClientDashboard() {
   const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    if (notes) {
-      setEditableNotes(notes)
-    }
-  }, [notes])
 
-  const handleSaveNotes = async () => {
+  useEffect(() => {
+    setNotesDraft(trainerNotes);
+  }, [trainerNotes]);
+
+  const handleSaveTrainerNotes = async () => {
+    setIsSavingNotes(true);
+    setNotesError(null);
     try {
-      setIsSaving(true)
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) throw sessionError
-      const authUserEmail = session?.user?.email
-      if (!authUserEmail) {
-        console.log("[DEBUG] No auth user email found")
-        return
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        setNotesError("Not logged in");
+        setIsSavingNotes(false);
+        return;
       }
-      const { data: trainerRows, error: trainerError } = await supabase
+      const trainerEmail = sessionData.session.user.email;
+      const { error } = await supabase
         .from("trainer")
-        .select("id")
-        .eq("trainer_email", authUserEmail)
-        .limit(1)
-      if (trainerError) throw trainerError
-      if (!trainerRows || trainerRows.length === 0) {
-        console.log("[DEBUG] No trainer found for email:", authUserEmail)
-        return
+        .update({ trainer_notes: notesDraft })
+        .eq("trainer_email", trainerEmail);
+      if (error) {
+        setNotesError(error.message);
+      } else {
+        setTrainerNotes(notesDraft);
+        setIsEditingNotes(false);
       }
-      const trainerId = trainerRows[0].id
-      console.log("[DEBUG] Saving notes for trainer:", trainerId)
-      const { error: updateError } = await supabase
-        .from("trainer")
-        .update({ trainer_notes: editableNotes })
-        .eq("id", trainerId)
-      if (updateError) throw updateError
-      setNotes(editableNotes)
-      setIsEditing(false)
-    } catch (err) {
-      console.error("Error saving trainer notes:", err)
+    } catch (err: any) {
+      setNotesError(err.message || "Failed to save notes");
     } finally {
-      setIsSaving(false)
+      setIsSavingNotes(false);
     }
+
   }
 
   const handleSummarizeNotes = async () => {
@@ -3150,401 +3510,435 @@ export default function ClientDashboard() {
       client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
-  const handleClientSelect = (clientId: string) => {
-    navigate(`/client/${clientId}`)
-  }
+  // State for all clients of the trainer
+  const [trainerClients, setTrainerClients] = useState<any[]>([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
 
-  const handleSmartAlertsClick = () => {
-    navigate("/dashboard")
-  }
+  // Fetch trainer id and clients for dropdown
   useEffect(() => {
-    const fetchNotes = async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        
-        const authUserEmail = session?.user?.email;
-        if (!authUserEmail) {
-          console.log("[DEBUG] No auth user email found");
-          return;
-        }
-        const { data: trainerRows, error: trainerError } = await supabase
-          .from("trainer")
-          .select("id")
-          .eq("trainer_email", authUserEmail)
-          .limit(1);
-
-        if (trainerError) throw trainerError;
-        if (!trainerRows || trainerRows.length === 0) {
-          console.log("[DEBUG] No trainer found for email:", authUserEmail);
-          return;
-        }
-
-        const trainerId = trainerRows[0].id;
-        console.log("[DEBUG] Trainer ID:", trainerId);
-        const { data, error } = await supabase
-          .from("trainer")
-          .select("trainer_notes")
-          .eq("id", trainerId)
-          .single();
-
-        if (error) throw error;
-        setNotes(data.trainer_notes);
-      } catch (err) {
-        console.error("Error fetching trainer notes:", err);
+    (async () => {
+      setClientsLoading(true);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        setClientsLoading(false);
+        return;
       }
-    };
-    fetchNotes();
+      const trainerEmail = sessionData.session.user.email;
+      // Fetch trainer id
+      const { data: trainerData, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      if (trainerError || !trainerData?.id) {
+        setClientsLoading(false);
+        return;
+      }
+      // Fetch all client_ids for this trainer from the linking table
+      const { data: linkRows, error: linkError } = await supabase
+        .from("trainer_client_web")
+        .select("client_id")
+        .eq("trainer_id", trainerData.id);
+      if (linkError || !linkRows || linkRows.length === 0) {
+        setTrainerClients([]);
+        setClientsLoading(false);
+        return;
+      }
+      const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
+      if (clientIds.length === 0) {
+        setTrainerClients([]);
+        setClientsLoading(false);
+        return;
+      }
+      // Fetch client names for these client_ids
+      const { data: clientsData, error: clientsError } = await supabase
+        .from("client")
+        .select("client_id, cl_name")
+        .in("client_id", clientIds);
+      if (!clientsError && clientsData) {
+        setTrainerClients(clientsData);
+      } else {
+        setTrainerClients([]);
+      }
+      setClientsLoading(false);
+    })();
   }, []);
+
   useEffect(() => {
-    if (!id) {
-      setError("No client ID provided in URL.")
-      setClient(null)
-      return
+    (async () => {
+      const { data, error } = await supabase
+        .from("client")
+        .select("cl_primary_goal")
+        .not("cl_primary_goal", "is", null);
+      if (!error && data) {
+        setAllClientGoals(data.map((c: any) => c.cl_primary_goal));
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      // 1. Get the current session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        setTrainerNotes("");
+        return;
+      }
+      const trainerEmail = sessionData.session.user.email;
+      console.log(trainerEmail,"himanshu");
+      // 2. Fetch the trainer by email
+      const { data, error } = await supabase
+        .from("trainer")
+        .select("trainer_notes")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      if (!error && data && data.trainer_notes) {
+        setTrainerNotes(data.trainer_notes);
+        console
+      } else {
+        setTrainerNotes("");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!clientId) {
+      setLoading(false);
+      setError("No client ID provided");
+      return;
     }
-    async function fetchClient() {
-      setLoading(true)
-      setError(null)
+
+    setLoading(true);
+    setError(null);
+    (async () => {
       try {
         const { data, error } = await supabase
           .from("client")
           .select("*")
-          .eq("client_id", id)
-          .single()
-        if (error) throw error
-        setClient({
-          id: data.client_id,
-          trainerId: data.trainer_id,
-          name: data.cl_name,
-          preferredName: data.cl_prefer_name,
-          email: data.cl_email,
-          avatarUrl: data.cl_pic || "/placeholder.svg?height=120&width=120",
-          phone: data.cl_phone,
-          username: data.cl_username,
-          height: data.cl_height,
-          weight: data.cl_weight,
-          age: data.cl_age,
-          sex: data.cl_sex,
-          dob: data.cl_dob,
-          primaryGoal: data.cl_primary_goal,
-          targetWeight: data.cl_target_weight,
-          activityLevel: data.cl_activity_level,
-          specificOutcome: data.specific_outcome,
-          goalTimeline: data.goal_timeline,
-          obstacles: data.obstacles,
-          confidenceLevel: data.confidence_level,
-          trainingExperience: data.training_experience,
-          previousTraining: data.previous_training,
-          trainingDaysPerWeek: data.training_days_per_week,
-          trainingTimePerSession: data.training_time_per_session,
-          trainingLocation: data.training_location,
-          availableEquipment: data.available_equipment || [],
-          injuriesLimitations: data.injuries_limitations,
-          focusAreas: data.focus_areas || [],
-          eatingHabits: data.eating_habits,
-          dietPreferences: data.diet_preferences || [],
-          foodAllergies: data.food_allergies,
-          preferredMealsPerDay: data.preferred_meals_per_day,
-          sleepHours: data.sleep_hours,
-          stress: data.cl_stress,
-          alcohol: data.cl_alcohol,
-          supplements: data.cl_supplements,
-          gastricIssues: data.cl_gastric_issues,
-          motivationStyle: data.motivation_style,
-          wakeTime: data.wake_time,
-          bedTime: data.bed_time,
-          workoutTime: data.workout_time,
-          workoutDays: data.workout_days,
-          mealtimes: {
-            breakfast: data.bf_time,
-            lunch: data.lunch_time,
-            dinner: data.dinner_time,
-            snack: data.snack_time
-          },
-          onboardingCompleted: data.onboarding_completed || false,
-          onboardingProgress: data.onboarding_progress,
-          lastLogin: data.last_login,
-          lastLogout: data.last_logout,
-          lastActive: data.last_active,
-          lastCheckIn: data.last_checkIn,
-          streaks: {
-            current: data.current_streak || 0,
-            longest: data.longest_streak || 0
-          },
-          isActive: data.active_session || false,
-          createdAt: data.created_at
-        })
+          .eq("client_id", clientId)
+          .single();
+        
+        if (error) {
+          setError(error.message);
+        } else if (!data) {
+          setError("Client not found");
+        } else {
+          setClient(data);
+        }
       } catch (err: any) {
-        setError(err.message || "Failed to fetch client")
-        setClient(null)
+        setError(err.message || "Failed to fetch client data");
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchClient()
-  }, [id])
+    })();
+  }, [clientId]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading client profile...</p>
-        </div>
-      </div>
-    )
-  }
-
+  // Show page loading while fetching main client data
+  if (loading) return <PageLoading />;
+  
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="h-8 w-8 text-red-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Client</h3>
-          <p className="text-red-600 mb-6">{error}</p>
-          <Button className="bg-gradient-to-r from-blue-500 to-indigo-600">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Clients
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-red-500 text-6xl">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Error Loading Client</h2>
+          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+          <Button onClick={() => window.location.reload()} className="mt-4">
+            Try Again
           </Button>
         </div>
       </div>
-    )
+    );
   }
-
+  
   if (!client) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-600 font-medium">No client data found.</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-gray-400 text-6xl">👤</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">No Client Found</h2>
+          <p className="text-gray-600 dark:text-gray-400">The requested client could not be found.</p>
         </div>
       </div>
-    )
+    );
   }
 
+  const tabs = [
+    { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "metrics", label: "Metrics", icon: TrendingUp },
+    { id: "workout", label: "Workout Plans", icon: Dumbbell },
+    { id: "nutrition", label: "Nutrition", icon: Utensils },
+    { id: "programs", label: "Programs", icon: Trophy },
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800">
-      {/* Main Content */}
-      <main className="flex flex-col p-8">
-        {/* Gradient Top Bar with profile icon dropdown */}
-        <div className="w-full flex items-center gap-6 px-8 h-24 rounded-xl mb-6 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 shadow-lg">
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="text-sm font-semibold text-white/80 hover:text-white transition-colors duration-200 flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm hover:bg-white/20">
-                ALL CLIENTS
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="p-0 w-80 bg-white text-slate-900 rounded-lg shadow-xl border">
-              <div className="p-4 border-b border-gray-200">
-                <h3 className="font-semibold text-sm text-slate-700 mb-3">All Clients</h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search clients..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 text-sm"
-                  />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50">
+      {/* Enhanced Header */}
+      <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
+                <div className="relative cursor-pointer group" onClick={() => setShowProfileCard(!showProfileCard)}>
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl group-hover:shadow-2xl transition-all duration-300 group-hover:scale-105">
+                    <img
+                      src={client.cl_pic || "/placeholder.svg"}
+                      alt={client.cl_name}
+                      className="w-full h-full rounded-2xl object-cover"
+                    />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full shadow-lg"></div>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                    {client.cl_name}
+                  </h1>
+                  <div className="flex items-center gap-3 mt-1">
+                    <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-lg">
+                      {client.membershipType || "Premium"}
+                    </Badge>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Member since {new Date(client.created_at).getFullYear()}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="max-h-64 overflow-y-auto p-2">
-                {filteredClients
-                  .filter(c => {
-                    if (activeClientFilter === 'low-engagement') {
-                      return c.name.toLowerCase().includes('low engagement')
-                    }
-                    if (activeClientFilter === 'low-outcome') {
-                      return c.name.toLowerCase().includes('low outcome')
-                    }
-                    return true;
-                  })
-                  .map((c) => (
-                  <button
-                    key={c.client_id}
-                    onClick={() => handleClientSelect(c.client_id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200 ${
-                      c.client_id === id
-                        ? "bg-blue-50 text-blue-700 border border-blue-200"
-                        : "hover:bg-gray-50"
-                    }`}
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50 transition-all duration-300"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Data
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-2 border-purple-200 hover:border-purple-300 hover:bg-purple-50 dark:border-purple-800 dark:hover:border-purple-700 dark:hover:bg-purple-950/50 transition-all duration-300"
+              >
+                <Share className="h-4 w-4 mr-2" />
+                Share Progress
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50 transition-all duration-300"
                   >
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={c.avatarUrl || "/placeholder.svg"} alt={c.name} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold text-xs">
-                        {c.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="font-medium truncate text-sm">{c.name}</div>
-                      {c.email && <div className="text-xs text-gray-500 truncate">{c.email}</div>}
-                    </div>
-                    <div
-                      className={`w-2 h-2 rounded-full ${c.status === "active" ? "bg-green-500" : "bg-yellow-500"}`}
+                    {clientsLoading ? (
+                      <LoadingSpinner size="small" />
+                    ) : (
+                      "All Clients"
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {trainerClients.length === 0 ? (
+                    <DropdownMenuItem disabled>No clients found</DropdownMenuItem>
+                  ) : (
+                    trainerClients.map((c: any) => (
+                      <DropdownMenuItem key={c.client_id} onClick={() => navigate(`/client/${c.client_id}`)}>
+                        {c.cl_name}
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* Enhanced Profile Card */}
+          {showProfileCard && (
+            <Card className="absolute top-20 left-6 w-80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-0 shadow-2xl z-50 animate-in slide-in-from-top-2 duration-300">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl">
+                    <img
+                      src={client.cl_pic || "/placeholder.svg"}
+                      alt={client.cl_name}
+                      className="w-full h-full rounded-2xl object-cover"
                     />
-                  </button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-          <span className="text-2xl font-bold text-white flex-1">{client.name}</span>
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-1 text-white/80 text-base">
-              <MapPin className="h-4 w-4" />
-              {client.trainingLocation || "Location not set"}
-            </span>
-            <span className="flex items-center gap-1 text-white/80 text-base">
-              <Calendar className="h-4 w-4" />
-              Age: {client.age || getAge(client.dob)}
-            </span>
-            <span className="flex items-center gap-1 text-white/80 text-base">
-              <Weight className="h-4 w-4" />
-              {client.weight || "N/A"} kg
-            </span>
-            <Popover open={showProfileCard} onOpenChange={setShowProfileCard}>
-              <PopoverTrigger asChild>
-                <button className="ml-4 focus:outline-none">
-                  <Avatar className="h-10 w-10 ring-2 ring-white shadow-md">
-                    <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-xl">
-                      {client.name.split(" ").map((n: string) => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="p-0 border-0 bg-transparent shadow-none">
-                <Card className="w-[350px] bg-white/90 backdrop-blur-sm border-0 shadow-xl overflow-hidden dark:bg-black">
-                  <div className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 h-24 relative flex items-center px-6">
-                    <Avatar className="h-16 w-16 ring-2 ring-white shadow-md">
-                      <AvatarImage src={client.avatarUrl || "/placeholder.svg"} alt={client.name} />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-2xl">
-                        {client.name.split(" ").map((n: string) => n[0]).join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="ml-4">
-                      <h1 className="text-2xl font-bold text-white mb-1">{client.name}</h1>
-                      {client.username && <p className="text-white/80 mb-1">@{client.username}</p>}
-                      <Badge className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-                        {client.onboardingCompleted ? "Active Client" : "Onboarding"}
-                      </Badge>
-                    </div>
                   </div>
-                  <CardContent className="pt-4 pb-6">
-                    <div className="grid grid-cols-1 gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.email || "No email"}</span>
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.cl_name}</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{client.cl_email}</p>
+                    <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 text-xs mt-1">
+                      {client.membershipType || "Premium"}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 rounded-xl">
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{client.cl_weight}</div>
+                    <div className="text-xs text-blue-700 dark:text-blue-300">Weight (kg)</div>
+                  </div>
+                  <div className="text-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-xl">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{client.cl_height}</div>
+                    <div className="text-xs text-green-700 dark:text-green-300">Height (cm)</div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-600 dark:text-gray-400">Age:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {client.cl_dob ? new Date().getFullYear() - new Date(client.cl_dob).getFullYear() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-600 dark:text-gray-400">Joined:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {new Date(client.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Current Goals</h4>
+                  <div className="space-y-2">
+                    {client.cl_primary_goal ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+                        <span className="text-gray-600 dark:text-gray-400">{client.cl_primary_goal}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.phone || "No phone"}</span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No goals set yet.</span>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* Enhanced Navigation Tabs */}
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="flex space-x-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-2 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 mb-8">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-300 flex-1 justify-center ${
+                  activeTab === tab.id
+                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25 scale-105"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Enhanced Content Area */}
+        <div className="space-y-8">
+          {activeTab === "overview" && (
+            <div className="space-y-8">
+              <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-3">
+                      <Dumbbell className="h-5 w-5 text-red-400" />
+                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Trainer Notes</span>
+                    </CardTitle>
+                    {!isEditingNotes && (
+                      <Button size="icon" variant="ghost" onClick={() => setIsEditingNotes(true)}>
+                        <span className="sr-only">Edit</span>
+                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6-6m2 2l-6 6m-2 2h6" /></svg>
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {isEditingNotes ? (
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={notesDraft}
+                          onChange={e => setNotesDraft(e.target.value)}
+                          placeholder="Enter trainer notes..."
+                          disabled={isSavingNotes}
+                        />
+                        {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
+                        <div className="flex gap-2 mt-2">
+                          <Button size="sm" onClick={handleSaveTrainerNotes} disabled={isSavingNotes}>
+                            {isSavingNotes ? (
+                              <div className="flex items-center gap-2">
+                                <LoadingSpinner size="small" />
+                                Saving...
+                              </div>
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => { setIsEditingNotes(false); setNotesError(null); setNotesDraft(trainerNotes); }} disabled={isSavingNotes}>
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">Born {client.dob ? new Date(client.dob).toLocaleDateString() : 'N/A'}</span>
+                    ) : (
+                      <div className="text-gray-800 dark:text-gray-200 whitespace-pre-line">
+                        {trainerNotes ? trainerNotes : <span className="text-gray-400 italic">No notes from trainer yet.</span>}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Ruler className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.height || "N/A"} cm</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Weight className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.weight || "N/A"} kg</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{client.trainingLocation || "No location"}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 text-xs text-gray-400">
-                      Member since {new Date(client.createdAt).toLocaleDateString()}
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Enhanced Main Content */}
-          <div className="flex-1 space-y-6">
-            {/* Client Stats */}
-            <ClientStats />
-
-            {/* Editable Sections */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-rose-500" />
-                      Goals & Limitations
+                <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-3">
+                      <Target className="h-5 w-5 text-blue-600" />
+                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Client Goals & Key Info</span>
                     </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {client.primaryGoal && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Primary Goal</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.primaryGoal}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {client.cl_primary_goal && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Primary Goal:</span>
+                        <span className="text-gray-900 dark:text-white">{client.cl_primary_goal}</span>
                       </div>
                     )}
-                    {client.specificOutcome && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Specific Outcome</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.specificOutcome}</p>
+                    {client.cl_target_weight && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Target Weight:</span>
+                        <span className="text-gray-900 dark:text-white">{client.cl_target_weight} kg</span>
                       </div>
                     )}
-                    {client.goalTimeline && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Timeline</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.goalTimeline}</p>
+                    {client.confidence_level && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Confidence Level:</span>
+                        <span className="text-gray-900 dark:text-white">{client.confidence_level}/10</span>
                       </div>
                     )}
-                    {client.obstacles && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Potential Obstacles</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.obstacles}</p>
+                    {client.cl_activity_level && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Activity Level:</span>
+                        <span className="text-gray-900 dark:text-white">{client.cl_activity_level}</span>
                       </div>
                     )}
-                    {client.injuriesLimitations && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Injuries & Limitations</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{client.injuriesLimitations}</p>
+                    {client.specific_outcome && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Specific Outcome:</span>
+                        <span className="text-gray-900 dark:text-white">{client.specific_outcome}</span>
                       </div>
                     )}
-                    {client.focusAreas && client.focusAreas.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Focus Areas</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {client.focusAreas.map((area: string, index: number) => (
-                            <Badge key={index} variant="secondary" className="bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
-                              {area}
-                            </Badge>
-                          ))}
-                        </div>
+                    {client.goal_timeline && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Goal Timeline:</span>
+                        <span className="text-gray-900 dark:text-white">{client.goal_timeline}</span>
                       </div>
                     )}
-                    {client.confidenceLevel && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Confidence Level</h3>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                          <div 
-                            className="bg-rose-500 h-2.5 rounded-full" 
-                            style={{ width: `${client.confidenceLevel}%` }}
-                          ></div>
-                        </div>
-                        <p className="text-xs text-gray-500 text-right">{client.confidenceLevel}%</p>
-                      </div>
-                    )}
+
                   </div>
                 </CardContent>
               </Card>
@@ -3677,6 +4071,8 @@ export default function ClientDashboard() {
         summaryResponse={notesSummaryResponse}
         clientName={client?.name || client?.preferredName}
       />
+
     </div>
   )
 }
+

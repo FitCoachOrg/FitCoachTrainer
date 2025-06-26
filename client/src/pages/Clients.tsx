@@ -280,29 +280,6 @@ const Clients: React.FC = () => {
     return 'bg-red-500';
   }
 
-  // Add state for invite method and input
-  const [inviteMethod, setInviteMethod] = useState<'email' | 'sms' | null>(null);
-  const [inviteValue, setInviteValue] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteSent, setInviteSent] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-
-  // Placeholder: Replace with your backend/email service
-  const handleSendInvite = async () => {
-    setInviteLoading(true);
-    setInviteError(null);
-    try {
-      // Replace this with your actual email/SMS sending logic
-      // For now, just simulate a delay
-      await new Promise((res) => setTimeout(res, 1200));
-      setInviteSent(true);
-    } catch (err: any) {
-      setInviteError('Failed to send invite.');
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="text-center py-12">
@@ -595,66 +572,14 @@ const Clients: React.FC = () => {
 
             {/* Client Profile Modal */}
             <ClientProfileModal
-              client={selectedClient}
               open={isProfileModalOpen}
               onClose={() => setIsProfileModalOpen(false)}
             />
             {/* Client Form Modal */}
-            <Dialog open={isFormModalOpen} onOpenChange={setIsFormModalOpen}>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add New Client</DialogTitle>
-                </DialogHeader>
-                <div className="p-4">
-                  {/* Invite method selection */}
-                  {!inviteMethod && !inviteSent && (
-                    <div className="flex flex-col gap-4 items-center">
-                      <Button onClick={() => setInviteMethod('email')} className="w-full max-w-xs">Invite via Email</Button>
-                      <Button onClick={() => setInviteMethod('sms')} className="w-full max-w-xs" variant="outline">Invite via SMS</Button>
-                    </div>
-                  )}
-                  {/* Email invite */}
-                  {inviteMethod === 'email' && !inviteSent && (
-                    <form onSubmit={e => { e.preventDefault(); handleSendInvite(); }} className="flex flex-col gap-4 items-center mt-4">
-                      <input
-                        type="email"
-                        required
-                        placeholder="Client's Email"
-                        value={inviteValue}
-                        onChange={e => setInviteValue(e.target.value)}
-                        className="border rounded px-4 py-2 w-full max-w-xs"
-                      />
-                      <Button type="submit" className="w-full max-w-xs" disabled={inviteLoading}>{inviteLoading ? 'Sending...' : 'Send Invite'}</Button>
-                      <Button type="button" variant="ghost" onClick={() => { setInviteMethod(null); setInviteValue(''); }}>Back</Button>
-                      {inviteError && <div className="text-red-500 text-sm">{inviteError}</div>}
-                    </form>
-                  )}
-                  {/* SMS invite */}
-                  {inviteMethod === 'sms' && !inviteSent && (
-                    <form onSubmit={e => { e.preventDefault(); handleSendInvite(); }} className="flex flex-col gap-4 items-center mt-4">
-                      <input
-                        type="tel"
-                        required
-                        placeholder="Client's Phone Number"
-                        value={inviteValue}
-                        onChange={e => setInviteValue(e.target.value)}
-                        className="border rounded px-4 py-2 w-full max-w-xs"
-                      />
-                      <Button type="submit" className="w-full max-w-xs" disabled={inviteLoading}>{inviteLoading ? 'Sending...' : 'Send Invite'}</Button>
-                      <Button type="button" variant="ghost" onClick={() => { setInviteMethod(null); setInviteValue(''); }}>Back</Button>
-                      {inviteError && <div className="text-red-500 text-sm">{inviteError}</div>}
-                    </form>
-                  )}
-                  {/* Success message */}
-                  {inviteSent && (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="text-green-600 font-semibold text-lg">Invite sent successfully!</div>
-                      <Button onClick={() => { setIsFormModalOpen(false); setInviteMethod(null); setInviteValue(''); setInviteSent(false); }}>Close</Button>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <ClientProfileModal
+              open={isFormModalOpen}
+              onClose={() => setIsFormModalOpen(false)}
+            />
           </div>
         </SidebarContent>
       </div>

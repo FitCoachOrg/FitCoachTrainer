@@ -150,9 +150,6 @@ const SignupPage = () => {
           return;
         }
 
-        // Set localStorage authentication if session exists
-        localStorage.setItem("isAuthenticated", "true");
-        
         console.log('Signup successful:', { authData, trainerData });
         
         // Redirect to dashboard

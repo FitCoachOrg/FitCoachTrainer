@@ -1,0 +1,6 @@
+.env
+.env.local
+/client/.env    
+/client/.env.local
+/client/pages/.env
+/client/pages/.env.local

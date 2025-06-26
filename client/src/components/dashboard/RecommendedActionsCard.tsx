@@ -1,10 +1,22 @@
 "use client"
 
-import * as React from "react"
+import type * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BellIcon, CheckIcon } from "lucide-react"
-import ChatPopup from "./ChatPopup"
+import { Badge } from "@/components/ui/badge"
+import {
+  Sparkles,
+  ArrowRight,
+  RotateCcw,
+  User,
+  Clock,
+  MessageSquare,
+  TrendingUp,
+  TrendingDown,
+  CheckCircle,
+  AlertCircle,
+  Info,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -15,12 +27,12 @@ interface Action {
   description: string
   actionLabel: string
   onAction: () => void
-  priority: 'high' | 'medium' | 'low'
+  priority: "high" | "medium" | "low"
   detailData: {
     clients?: Array<{ name: string; progress?: number; status?: string }>
-    messages?: Array<{ from: string; preview: string }>
-    plans?: Array<{ client: string; type: string }>
-    scores?: Array<{ client: string; score: number }>
+    messages?: Array<{ from: string; preview: string; timestamp?: string; unread?: boolean }>
+    plans?: Array<{ client: string; type: string; status?: string }>
+    scores?: Array<{ client: string; score: number; trend?: string }>
   }
 }
 
@@ -29,122 +41,307 @@ interface RecommendedActionsCardProps {
 }
 
 const RecommendedActionsCard: React.FC<RecommendedActionsCardProps> = ({ actions }) => {
-  const [flippedCard, setFlippedCard] = useState<number | null>(null)
+  const [flippedCards, setFlippedCards] = useState<Set<number>>(new Set())
 
-  const getPriorityColor = (priority: Action['priority']) => {
+  const toggleCardFlip = (actionId: number) => {
+    setFlippedCards((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(actionId)) {
+        newSet.delete(actionId)
+      } else {
+        newSet.add(actionId)
+      }
+      return newSet
+    })
+  }
+
+  const getPriorityConfig = (priority: Action["priority"]) => {
     switch (priority) {
-      case 'high':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-      case 'low':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      case "high":
+        return {
+          badge: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+          cardBg:
+            "bg-gradient-to-br from-red-50 via-rose-50 to-pink-50 dark:from-red-950/20 dark:via-rose-950/20 dark:to-pink-950/20",
+          iconBg: "bg-red-100 dark:bg-red-900/30",
+          iconColor: "text-red-600 dark:text-red-400",
+          border: "border-red-200/60 dark:border-red-800/60",
+          accent: "bg-red-500",
+        }
+      case "medium":
+        return {
+          badge:
+            "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+          cardBg:
+            "bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950/20 dark:via-yellow-950/20 dark:to-orange-950/20",
+          iconBg: "bg-amber-100 dark:bg-amber-900/30",
+          iconColor: "text-amber-600 dark:text-amber-400",
+          border: "border-amber-200/60 dark:border-amber-800/60",
+          accent: "bg-amber-500",
+        }
+      case "low":
+        return {
+          badge: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+          cardBg:
+            "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20",
+          iconBg: "bg-blue-100 dark:bg-blue-900/30",
+          iconColor: "text-blue-600 dark:text-blue-400",
+          border: "border-blue-200/60 dark:border-blue-800/60",
+          accent: "bg-blue-500",
+        }
+    }
+  }
+
+  const getStatusIcon = (status?: string) => {
+    switch (status?.toLowerCase()) {
+      case "excellent":
+      case "active":
+      case "updated":
+        return <CheckCircle className="h-3 w-3 text-green-500" />
+      case "needs attention":
+      case "pending":
+      case "due for review":
+        return <AlertCircle className="h-3 w-3 text-amber-500" />
+      default:
+        return <Info className="h-3 w-3 text-gray-400" />
+    }
+  }
+
+  const getTrendIcon = (trend?: string) => {
+    switch (trend) {
+      case "up":
+        return <TrendingUp className="h-3 w-3 text-green-500" />
+      case "down":
+        return <TrendingDown className="h-3 w-3 text-red-500" />
+      default:
+        return null
     }
   }
 
   return (
-    <Card className="bg-white dark:bg-black shadow-sm">
-      <CardHeader>
-        <CardTitle>Recommended Actions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {actions.map((action) => (
-            <div
-              key={action.id}
-              className={cn(
-                "relative h-[200px] transition-all duration-500 transform-style-3d",
-                flippedCard === action.id ? "rotate-y-180" : ""
-              )}
-              onMouseEnter={() => setFlippedCard(action.id)}
-              onMouseLeave={() => setFlippedCard(null)}
-            >
-              {/* Front of card */}
-              <div
-                className={cn(
-                  "absolute inset-0 bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-slate-700 backface-hidden",
-                  flippedCard === action.id ? "hidden" : "block"
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={cn("p-2 rounded-lg", getPriorityColor(action.priority))}>
-                    {action.icon}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-1">{action.title}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      {action.description}
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        action.onAction()
-                      }}
-                    >
-                      {action.actionLabel}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl shadow-lg">
+          <Sparkles className="h-6 w-6 text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Recommended Actions</h2>
+          <p className="text-gray-600 dark:text-gray-400">Priority tasks to keep your coaching on track</p>
+        </div>
+      </div>
 
-              {/* Back of card */}
+      {/* Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {actions.map((action) => {
+          const priorityConfig = getPriorityConfig(action.priority)
+          const isFlipped = flippedCards.has(action.id)
+
+          return (
+            <div key={action.id} className="group relative h-[320px]" style={{ perspective: "1000px" }}>
               <div
                 className={cn(
-                  "absolute inset-0 bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-slate-700 backface-hidden rotate-y-180",
-                  flippedCard === action.id ? "block" : "hidden"
+                  "relative w-full h-full transition-transform duration-700 ease-in-out",
+                  isFlipped ? "[transform:rotateY(180deg)]" : "[transform:rotateY(0deg)]",
                 )}
+                style={{ transformStyle: "preserve-3d" }}
               >
-                <div className="space-y-2">
-                  {action.detailData.clients?.map((client, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <span>{client.name}</span>
-                      {client.progress && (
-                        <span className="text-gray-500">{client.progress}%</span>
-                      )}
-                      {client.status && (
-                        <span className="text-gray-500">{client.status}</span>
-                      )}
+                {/* Front Side */}
+                <Card
+                  className={cn(
+                    "absolute inset-0 w-full h-full border-2 shadow-lg hover:shadow-xl transition-all duration-300",
+                    priorityConfig.cardBg,
+                    priorityConfig.border,
+                    "[backface-visibility:hidden]",
+                  )}
+                >
+                  <CardContent className="p-6 h-full flex flex-col">
+                    {/* Priority Badge */}
+                    <div className="flex justify-between items-start mb-4">
+                      <Badge variant="outline" className={cn("text-xs font-semibold px-3 py-1", priorityConfig.badge)}>
+                        {action.priority.toUpperCase()} PRIORITY
+                      </Badge>
+                      <div className={cn("w-3 h-3 rounded-full", priorityConfig.accent)} />
                     </div>
-                  ))}
-                  {action.detailData.messages?.map((message, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <span>{message.from}</span>
-                      <span className="text-gray-500">{message.preview}</span>
+
+                    {/* Icon and Title */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div
+                        className={cn(
+                          "flex items-center justify-center w-12 h-12 rounded-xl shadow-sm",
+                          priorityConfig.iconBg,
+                          priorityConfig.iconColor,
+                        )}
+                      >
+                        {action.icon}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">{action.title}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{action.description}</p>
+                      </div>
                     </div>
-                  ))}
-                  {action.detailData.plans?.map((plan, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <span>{plan.client}</span>
-                      <span className="text-gray-500">{plan.type}</span>
+
+                    {/* Action Buttons */}
+                    <div className="mt-auto space-y-3">
+                      <Button
+                        onClick={() => {
+                          action.onAction()
+                          toggleCardFlip(action.id)
+                        }}
+                        className="w-full bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200"
+                      >
+                        {action.actionLabel}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleCardFlip(action.id)}
+                        className="w-full text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        View Details
+                      </Button>
                     </div>
-                  ))}
-                  {action.detailData.scores?.map((score, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <span>{score.client}</span>
-                      <span className="text-gray-500">{score.score}%</span>
+                  </CardContent>
+                </Card>
+
+                {/* Back Side */}
+                <Card
+                  className={cn(
+                    "absolute inset-0 w-full h-full border-2 shadow-lg",
+                    "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700",
+                    "[backface-visibility:hidden] [transform:rotateY(180deg)]",
+                  )}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            "flex items-center justify-center w-8 h-8 rounded-lg",
+                            priorityConfig.iconBg,
+                            priorityConfig.iconColor,
+                          )}
+                        >
+                          {action.icon}
+                        </div>
+                        <CardTitle className="text-lg text-gray-900 dark:text-gray-100">
+                          {action.title} Details
+                        </CardTitle>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleCardFlip(action.id)}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
+                  </CardHeader>
+
+                  <CardContent className="pt-0">
+                    <div className="space-y-3 max-h-[200px] overflow-y-auto">
+                      {/* Clients */}
+                      {action.detailData.clients?.map((client, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <User className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{client.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {client.progress && (
+                              <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-medium">
+                                {client.progress}%
+                              </span>
+                            )}
+                            {client.status && (
+                              <div className="flex items-center gap-1">
+                                {getStatusIcon(client.status)}
+                                <span className="text-xs text-gray-600 dark:text-gray-400">{client.status}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Messages */}
+                      {action.detailData.messages?.map((message, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <MessageSquare className="h-4 w-4 text-gray-500 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                                {message.from}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {message.unread && <div className="w-2 h-2 bg-blue-500 rounded-full"></div>}
+                                <span className="text-xs text-gray-500">{message.timestamp}</span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{message.preview}</p>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Plans */}
+                      {action.detailData.plans?.map((plan, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Clock className="h-4 w-4 text-gray-500" />
+                            <div>
+                              <span className="font-medium text-sm text-gray-900 dark:text-gray-100 block">
+                                {plan.client}
+                              </span>
+                              <span className="text-xs text-gray-600 dark:text-gray-400">{plan.type}</span>
+                            </div>
+                          </div>
+                          {plan.status && (
+                            <div className="flex items-center gap-1">
+                              {getStatusIcon(plan.status)}
+                              <span className="text-xs text-gray-600 dark:text-gray-400">{plan.status}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* Scores */}
+                      {action.detailData.scores?.map((score, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <User className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{score.client}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {getTrendIcon(score.trend)}
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {score.score}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

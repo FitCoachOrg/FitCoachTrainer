@@ -3,6 +3,7 @@ import { useClients } from "@/hooks/use-clients";
 import { useLocation } from "wouter";
 import * as Icons from "@/lib/icons";
 import { useState } from "react";
+import type { MappedClient } from "@/hooks/use-clients";
 
 interface ClientManagementCardProps {
   currentClientId: number;
@@ -15,7 +16,7 @@ const ClientManagementCard: React.FC<ClientManagementCardProps> = ({ currentClie
 
   // Only show other clients
   const otherClients = (clients || []).filter(
-    (c) => c.client_id !== currentClientId && c.isActive && c.name.toLowerCase().includes(search.toLowerCase())
+    (c: MappedClient) => c.client_id !== currentClientId && c.isActive && c.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -35,7 +36,7 @@ const ClientManagementCard: React.FC<ClientManagementCardProps> = ({ currentClie
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
           </button>
         </div>
-          </div>
+      </div>
       <div className="flex flex-col gap-3 overflow-y-auto pb-2">
         {isLoading ? (
           <div className="space-y-2">
@@ -44,7 +45,7 @@ const ClientManagementCard: React.FC<ClientManagementCardProps> = ({ currentClie
             ))}
           </div>
         ) : otherClients.length > 0 ? (
-          otherClients.map((client) => (
+          otherClients.map((client: MappedClient) => (
             <button
               key={client.client_id}
               className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white shadow-sm hover:shadow-md transition border border-transparent hover:border-blue-200 focus:outline-none"
