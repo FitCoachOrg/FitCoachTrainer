@@ -1,135 +1,106 @@
-import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import React, { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import * as Icons from "@/lib/icons";
-
-import { useLocation } from "wouter";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 interface ClientProfileModalProps {
-  client: { client_id: number; cl_name: string } | null;
   open: boolean;
   onClose: () => void;
 }
 
-const ClientProfileModal: React.FC<ClientProfileModalProps> = ({
-  client,
-  open,
-  onClose,
-}) => {
-  const [activeTab, setActiveTab] = useState("details");
-  const [, navigate] = useLocation();
+const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ open, onClose }) => {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
-  if (!client) return null;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const handleDelete = async () => {
-    // TODO: Implement delete functionality with direct Supabase call
-    console.log("Delete client:", client.client_id);
-    onClose();
+    try {
+      // Send invitation email
+      const response = await fetch('http://localhost:3001/api/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: email,
+          subject: "Welcome to FitCoachTrainer!",
+          html: `
+            <h2>Welcome to FitCoachTrainer!</h2>
+            <p>You've been invited to join FitCoachTrainer as a client.</p>
+            <p>To get started:</p>
+            <ol>
+              <li>Click the link below to set up your account</li>
+              <li>Complete your profile information</li>
+              <li>Start your fitness journey!</li>
+            </ol>
+            <a href="http://localhost:5173/signup?email=${encodeURIComponent(email)}" 
+               style="display: inline-block; background-color: #3B82F6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px;">
+              Set Up Your Account
+            </a>
+            <p style="margin-top: 20px; color: #666;">
+              If you didn't expect this invitation, please ignore this email.
+            </p>
+          `
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send invitation email');
+      }
+
+      toast({
+        title: "Success",
+        description: "Invitation email sent successfully",
+      });
+
+      onClose();
+    } catch (error: any) {
+      console.error('Error sending invitation:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send invitation",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Client profile</DialogTitle>
-          <DialogDescription>
-            View and manage client information
-          </DialogDescription>
+          <DialogTitle>Invite New Client</DialogTitle>
         </DialogHeader>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid grid-cols-3 mb-6">
-            <TabsTrigger value="details">Client details</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="plans">Plans</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="details" className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0">
-                <div className="w-full h-full flex items-center justify-center bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300">
-                  <Icons.UserIcon className="h-8 w-8" />
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold">{client.cl_name}</h3>
-                <p className="text-gray-500 dark:text-gray-400">Client ID: {client.client_id}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="default">
-                    Active
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Goals
-              </h4>
-              <p className="text-sm">No goals specified</p>
-            </div>
-
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-                Training Experience
-              </h4>
-              <p className="text-sm">No experience specified</p>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="documents">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-lg mb-4">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                No documents attached
-              </span>
-              <Button variant="outline" size="sm">
-                <Icons.PaperclipIcon className="mr-2 h-4 w-4" />
-                Attach
-              </Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="plans">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-lg mb-4">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                No plans assigned yet
-              </span>
-              <Button variant="outline" size="sm">
-                <Icons.PlusIcon className="mr-2 h-4 w-4" />
-                Assign Plan
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <DialogFooter className="flex justify-between gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex space-x-2">
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              Delete client
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium mb-1">
+              Client's Email
+            </label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@example.com"
+              required
+              className="w-full"
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Sending Invitation..." : "Send Invitation"}
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => navigate(`/client/${client.client_id}`)}>
-              View Full Profile
-            </Button>
-            <Button variant="default" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -287,10 +287,7 @@ const handleExerciseUpdate = (
                 <ChevronRight className="w-5 h-5 text-gray-600" />
               </Button>
             </div>
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Add Week
-            </Button>
+
           </div>
 
           <div className="flex items-center gap-4">

@@ -1,117 +1,157 @@
-import type React from "react"
+"use client"
+
+import type * as React from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { TrendingUp } from "lucide-react"
-
-type StatCardVariant = "default" | "success" | "warning" | "danger" | "info"
 
 interface StatCardProps {
   title: string
   value: string | number
   icon: React.ReactNode
-  variant?: StatCardVariant
+  variant: "info" | "success" | "warning" | "danger"
+  subtitle?: string
+  trend?: {
+    value: number
+    isPositive: boolean
+  }
+  className?: string
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, variant = "default" }) => {
-  const getVariantStyles = (): {
-    bg: string
-    text: string
-    iconBg: string
-    iconText: string
-    gradientFrom: string
-    gradientTo: string
-  } => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, variant, subtitle, trend, className }) => {
+  const getVariantStyles = (variant: StatCardProps["variant"]) => {
     switch (variant) {
+      case "info":
+        return {
+          gradient: "from-blue-500 via-blue-600 to-indigo-600",
+          bg: "from-blue-50 via-blue-50 to-indigo-50 dark:from-blue-950/50 dark:via-blue-900/50 dark:to-indigo-950/50",
+          border: "border-blue-200/50 dark:border-blue-800/50",
+          iconBg: "bg-blue-500/10 dark:bg-blue-400/10",
+          iconColor: "text-blue-600 dark:text-blue-400",
+          valueColor: "text-blue-700 dark:text-blue-300",
+          ring: "ring-blue-500/20",
+          shadow: "shadow-blue-500/25",
+        }
       case "success":
         return {
-          bg: "bg-green-100 dark:bg-green-900/30",
-          text: "text-green-600 dark:text-green-400",
-          iconBg: "bg-green-500 dark:bg-green-600",
-          iconText: "text-white",
-          gradientFrom: "from-green-500/5",
-          gradientTo: "to-green-600/10",
+          gradient: "from-emerald-500 via-green-600 to-teal-600",
+          bg: "from-emerald-50 via-green-50 to-teal-50 dark:from-emerald-950/50 dark:via-green-900/50 dark:to-teal-950/50",
+          border: "border-emerald-200/50 dark:border-emerald-800/50",
+          iconBg: "bg-emerald-500/10 dark:bg-emerald-400/10",
+          iconColor: "text-emerald-600 dark:text-emerald-400",
+          valueColor: "text-emerald-700 dark:text-emerald-300",
+          ring: "ring-emerald-500/20",
+          shadow: "shadow-emerald-500/25",
         }
       case "warning":
         return {
-          bg: "bg-amber-100 dark:bg-amber-900/30",
-          text: "text-amber-600 dark:text-amber-400",
-          iconBg: "bg-amber-500 dark:bg-amber-600",
-          iconText: "text-white",
-          gradientFrom: "from-amber-500/5",
-          gradientTo: "to-amber-600/10",
+          gradient: "from-amber-500 via-orange-500 to-red-500",
+          bg: "from-amber-50 via-orange-50 to-red-50 dark:from-amber-950/50 dark:via-orange-900/50 dark:to-red-950/50",
+          border: "border-amber-200/50 dark:border-amber-800/50",
+          iconBg: "bg-amber-500/10 dark:bg-amber-400/10",
+          iconColor: "text-amber-600 dark:text-amber-400",
+          valueColor: "text-amber-700 dark:text-amber-300",
+          ring: "ring-amber-500/20",
+          shadow: "shadow-amber-500/25",
         }
       case "danger":
         return {
-          bg: "bg-rose-100 dark:bg-rose-900/30",
-          text: "text-rose-600 dark:text-rose-400",
-          iconBg: "bg-rose-500 dark:bg-rose-600",
-          iconText: "text-white",
-          gradientFrom: "from-rose-500/5",
-          gradientTo: "to-rose-600/10",
-        }
-      case "info":
-        return {
-          bg: "bg-blue-100 dark:bg-blue-900/30",
-          text: "text-blue-600 dark:text-blue-400",
-          iconBg: "bg-blue-500 dark:bg-blue-600",
-          iconText: "text-white",
-          gradientFrom: "from-blue-500/5",
-          gradientTo: "to-blue-600/10",
-        }
-      default:
-        return {
-          bg: "bg-gray-100 dark:bg-slate-700/50",
-          text: "text-gray-700 dark:text-gray-300",
-          iconBg: "bg-gray-500 dark:bg-gray-600",
-          iconText: "text-white",
-          gradientFrom: "from-gray-500/5",
-          gradientTo: "to-gray-600/10",
+          gradient: "from-red-500 via-rose-600 to-pink-600",
+          bg: "from-red-50 via-rose-50 to-pink-50 dark:from-red-950/50 dark:via-rose-900/50 dark:to-pink-950/50",
+          border: "border-red-200/50 dark:border-red-800/50",
+          iconBg: "bg-red-500/10 dark:bg-red-400/10",
+          iconColor: "text-red-600 dark:text-red-400",
+          valueColor: "text-red-700 dark:text-red-300",
+          ring: "ring-red-500/20",
+          shadow: "shadow-red-500/25",
         }
     }
   }
 
-  const variantStyles = getVariantStyles()
+  const styles = getVariantStyles(variant)
 
   return (
-    <Card className="shadow-md h-full bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-700 transition-all duration-300 hover:shadow-lg group overflow-hidden">
-      <CardContent className="p-0 h-full">
-        <div className="relative h-full">
-          {/* Background gradient */}
-          <div
-            className={cn(
-              "absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity duration-300",
-              variantStyles.gradientFrom,
-              variantStyles.gradientTo,
-            )}
-          />
+    <Card
+      className={cn(
+        "relative overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-xl",
+        "bg-gradient-to-br",
+        styles.bg,
+        "border-2",
+        styles.border,
+        "ring-1",
+        styles.ring,
+        "shadow-lg hover:" + styles.shadow,
+        "backdrop-blur-sm",
+        className,
+      )}
+    >
+      {/* Decorative gradient overlay */}
+      <div
+        className={cn(
+          "absolute top-0 right-0 w-32 h-32 opacity-10",
+          "bg-gradient-to-br",
+          styles.gradient,
+          "rounded-full blur-2xl transform translate-x-16 -translate-y-16",
+        )}
+      />
 
-          <div className="relative p-6 flex flex-col h-full">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400">{title}</h3>
-              <div className={cn("w-10 h-10 flex items-center justify-center rounded-full", variantStyles.iconBg)}>
-                <div className={variantStyles.iconText}>{icon}</div>
+      {/* Subtle pattern overlay */}
+      <div className="absolute inset-0 opacity-5">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+            backgroundSize: "20px 20px",
+          }}
+        />
+      </div>
+
+      <CardContent className="relative p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={cn("p-3 rounded-xl shadow-sm ring-1 ring-white/20", styles.iconBg, styles.iconColor)}>
+                {icon}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                  {title}
+                </p>
+                {subtitle && <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">{subtitle}</p>}
               </div>
             </div>
 
-            <div className="flex-1 flex flex-col justify-end">
-              <div className="flex items-baseline space-x-2">
-                <p className={cn("text-4xl font-bold", variantStyles.text)}>{value}</p>
-                <div className={cn("flex items-center text-xs font-medium", variantStyles.text)}>
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  <span>+12%</span>
-                </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <p className={cn("text-3xl font-bold tracking-tight", styles.valueColor)}>{value}</p>
+                {trend && (
+                  <div className="flex items-center gap-1 mt-2">
+                    <div
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",
+                        trend.isPositive
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "text-xs",
+                          trend.isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",
+                        )}
+                      >
+                        {trend.isPositive ? "↗" : "↘"}
+                      </span>
+                      {Math.abs(trend.value)}%
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Decorative element */}
-            <div
-              className={cn(
-                "absolute bottom-0 right-0 w-32 h-32 rounded-full opacity-5 translate-x-16 translate-y-16",
-                variantStyles.iconBg,
-              )}
-            />
           </div>
         </div>
+
+        {/* Bottom accent line */}
+        <div className={cn("absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r", styles.gradient)} />
       </CardContent>
     </Card>
   )

@@ -44,19 +44,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const localAuth = localStorage.getItem("isAuthenticated") === "true"
-        
-        if (session && localAuth) {
+        if (session) {
           setIsAuthenticated(true)
         } else {
           setIsAuthenticated(false)
-          // Clear localStorage if no session
-          localStorage.removeItem("isAuthenticated")
         }
       } catch (error) {
         console.error('Error checking auth:', error)
         setIsAuthenticated(false)
-        localStorage.removeItem("isAuthenticated")
       } finally {
         setIsLoading(false)
       }
@@ -68,10 +63,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true)
-        localStorage.setItem("isAuthenticated", "true")
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false)
-        localStorage.removeItem("isAuthenticated")
       }
     })
 

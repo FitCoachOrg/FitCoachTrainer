@@ -60,10 +60,10 @@ const LoginPage = () => {
   const location = useLocation();
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -73,8 +73,6 @@ const LoginPage = () => {
         console.log('Checking session on mount:', session);
         
         if (session) {
-          // Set localStorage authentication
-          localStorage.setItem("isAuthenticated", "true");
           navigate("/dashboard", { replace: true });
         }
       } catch (err) {
@@ -82,6 +80,14 @@ const LoginPage = () => {
       }
     };
     checkUser();
+
+    // Listen for auth state changes (e.g., after magic link)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        navigate("/dashboard", { replace: true });
+      }
+    });
+    return () => subscription.unsubscribe();
   }, [navigate, location]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,56 +101,32 @@ const LoginPage = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setEmailSent(false);
     
-    if (!formData.email || !formData.password) {
-      setError("Please enter both email and password");
+    if (!formData.email) {
+      setError("Please enter your email");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // Sign in with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Sign in with Supabase OTP (magic link)
+      const { error } = await supabase.auth.signInWithOtp({
         email: formData.email.trim().toLowerCase(),
-        password: formData.password,
+        options: {
+          emailRedirectTo: window.location.origin + '/dashboard',
+        },
       });
 
       if (error) {
         throw error;
       }
 
-      if (data.session) {
-        // Set localStorage authentication
-        localStorage.setItem("isAuthenticated", "true");
-        
-        // Optionally fetch trainer data from custom table for additional info
-        try {
-          const { data: trainerData } = await supabase
-            .from('trainer')
-            .select('id, trainer_name, trainer_email')
-            .eq('id', data.user.id)
-            .single();
-          
-          if (trainerData) {
-            console.log('Trainer data loaded:', trainerData);
-          }
-        } catch (trainerError) {
-          console.log('No trainer data found in custom table:', trainerError);
-        }
-        
-        console.log('Login successful:', data.session);
-        navigate("/dashboard");
-      }
+      setEmailSent(true);
     } catch (err: any) {
       console.error('Login error:', err);
-      if (err.message.includes('Invalid login credentials')) {
-        setError('Invalid email or password. Please try again.');
-      } else if (err.message.includes('Email not confirmed')) {
-        setError('Please check your email and click the confirmation link first.');
-      } else {
-        setError(err.message || 'An error occurred during login');
-      }
+      setError(err.message || 'An error occurred during login');
     } finally {
       setIsLoading(false);
     }
@@ -164,66 +146,41 @@ const LoginPage = () => {
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
-                  required
-                  disabled={isLoading}
-                  autoComplete="email"
-                />
+            {emailSent ? (
+              <div className="p-3 rounded-md bg-green-900/20 border border-green-400/20">
+                <p className="text-sm text-green-400 text-center">
+                  A magic login link has been sent to your email. Please check your inbox.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
-                  required
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
-              </div>
-
-              {error && (
-                <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
-                  <p className="text-sm text-red-400 text-center">{error}</p>
+            ) : (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Input
+                    type="email"
+                    placeholder="Email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                    required
+                    disabled={isLoading}
+                    autoComplete="email"
+                  />
                 </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <div className="flex items-center gap-2">
-                    <Icons.Loader2Icon className="h-4 w-4 animate-spin" />
-                    Logging In...
+                {error && (
+                  <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
+                    <p className="text-sm text-red-400 text-center">{error}</p>
                   </div>
-                ) : (
-                  "Login"
                 )}
-              </Button>
-
-              <p className="text-sm text-center text-slate-400">
-                Don't have an account?{" "}
-                <button
-                  type="button"
-                  onClick={() => navigate("/signup")}
-                  className="text-green-400 hover:text-green-300"
+                <Button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                  disabled={isLoading}
                 >
-                  Sign Up
-                </button>
-              </p>
-            </form>
+                  {isLoading ? "Sending..." : "Send Magic Link"}
+                </Button>
+              </form>
+            )}
           </CardContent>
         </Card>
       </div>
