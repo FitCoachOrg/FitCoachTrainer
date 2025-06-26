@@ -4,6 +4,171 @@ import { supabase } from './supabase'
 import OpenAI from 'openai'
 
 /**
+ * Helper function to get the next occurrence of a specific day of the week
+ * @param dayName - Name of the day (e.g., 'Monday', 'Tuesday', etc.)
+ * @param startDate - Starting date (defaults to today)
+ * @returns Date object for the next occurrence of that day
+ */
+function getNextDayOfWeek(dayName: string, startDate: Date = new Date()): Date {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const targetDayIndex = dayNames.indexOf(dayName);
+  
+  if (targetDayIndex === -1) {
+    throw new Error(`Invalid day name: ${dayName}`);
+  }
+  
+  const currentDate = new Date(startDate);
+  const currentDayIndex = currentDate.getDay();
+  
+  // Calculate days until the target day
+  let daysUntilTarget = targetDayIndex - currentDayIndex;
+  
+  // If the target day is today or has passed this week, move to next week
+  if (daysUntilTarget <= 0) {
+    daysUntilTarget += 7;
+  }
+  
+  // Create new date with the calculated offset
+  const targetDate = new Date(currentDate);
+  targetDate.setDate(currentDate.getDate() + daysUntilTarget);
+  
+  return targetDate;
+}
+
+/**
+ * Helper function to format date as YYYY-MM-DD
+ * @param date - Date object to format
+ * @returns Formatted date string
+ */
+function formatDateToYYYYMMDD(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Function to process AI response and update workout plan dates
+ * @param aiResponseText - Raw AI response text
+ * @param clientId - Client ID for the workout plan
+ * @returns Processed workout plan with updated dates
+ */
+function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
+  try {
+    console.log('📅 Processing workout plan dates...');
+    
+    // Parse the AI response JSON
+    const aiData = JSON.parse(aiResponseText);
+    
+    if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
+      throw new Error('Invalid workout plan format: missing workout_plan array');
+    }
+    
+    console.log('📋 Found workout plan with', aiData.workout_plan.length, 'exercises');
+    
+    // Process each workout and update dates
+    const processedWorkoutPlan = aiData.workout_plan.map((workout: any) => {
+      const dayName = workout.day;
+      
+      if (!dayName) {
+        console.warn('⚠️ Workout missing day information:', workout);
+        return workout;
+      }
+      
+      try {
+        // Get the next occurrence of this day
+        const workoutDate = getNextDayOfWeek(dayName);
+        const formattedDate = formatDateToYYYYMMDD(workoutDate);
+        
+        console.log(`📅 ${dayName} workout scheduled for: ${formattedDate}`);
+        
+        // Update the workout with the calculated date and client ID
+        return {
+          ...workout,
+          for_date: formattedDate,
+          client_id: clientId
+        };
+      } catch (error) {
+        console.error(`❌ Error processing date for ${dayName}:`, error);
+        return workout;
+      }
+    });
+    
+    console.log('✅ Successfully processed workout plan dates');
+    
+    return {
+      ...aiData,
+      workout_plan: processedWorkoutPlan
+    };
+    
+  } catch (error) {
+    console.error('❌ Error processing workout plan dates:', error);
+    throw new Error(`Failed to process workout plan dates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Function to save workout plan to database
+ * @param workoutPlan - Array of workout exercises with dates
+ * @param clientId - Client ID
+ * @returns Success status and details
+ */
+async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
+  try {
+    console.log('💾 Saving workout plan to database...');
+    console.log('📊 Workout plan items to save:', workoutPlan.length);
+    
+    // Prepare data for database insertion
+    const workoutData = workoutPlan.map((workout) => ({
+      client_id: clientId,
+      workout_name: workout.workout || workout.name,
+      day: workout.day,
+      sets: workout.sets,
+      reps: workout.reps,
+      duration: workout.duration,
+      weights: workout.weights,
+      for_date: workout.for_date,
+      for_time: workout.for_time || '08:00:00',
+      body_part: workout.body_part,
+      category: workout.category,
+      coach_tip: workout.coach_tip,
+      icon: workout.icon,
+      progression_notes: workout.progression_notes,
+      created_at: new Date().toISOString()
+    }));
+    
+    console.log('📝 Prepared workout data for database:', workoutData);
+    
+    // Insert workout plan into database
+    const { data, error } = await supabase
+      .from('workout_plan')
+      .insert(workoutData)
+      .select();
+    
+    if (error) {
+      console.error('❌ Database insertion error:', error);
+      throw new Error(`Failed to save workout plan: ${error.message}`);
+    }
+    
+    console.log('✅ Successfully saved workout plan to database');
+    console.log('📊 Inserted records:', data?.length || 0);
+    
+    return {
+      success: true,
+      message: `Successfully saved ${data?.length || 0} workout exercises to database`,
+      data: data
+    };
+    
+  } catch (error) {
+    console.error('❌ Error saving workout plan to database:', error);
+    return {
+      success: false,
+      message: `Failed to save workout plan: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+/**
  * Function to generate AI response using OpenAI ChatGPT
  * @param clientInfo - Organized client information
  */
@@ -89,7 +254,6 @@ Output Format (in JSON):
       "reps": 15,
       "duration": 30,
       "weights": "bodyweight",
-      "for_date": "2025-06-21",
       "for_time": "08:00:00",
       "body_part": "Glutes",
       "category": "Strength",
@@ -299,13 +463,45 @@ export async function generateAIWorkoutPlan(clientId: number) {
       console.log('✅ AI Response generated successfully');
       console.log('🎯 AI Response:', aiResponse);
       
-      return {
-        success: true,
-        message: `Successfully generated AI workout plan for client: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
-        clientData: clientData,
-        clientInfo: clientInfo,
-        aiResponse: aiResponse
-      };
+      // Process workout plan dates
+      if (!aiResponse.response) {
+        throw new Error('AI response is empty or null');
+      }
+      const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
+      
+      // Save workout plan to database
+      if (!processedWorkoutPlan.workout_plan || processedWorkoutPlan.workout_plan.length === 0) {
+        console.warn('⚠️ No workout exercises found in AI response');
+        return {
+          success: false,
+          message: 'No workout exercises found in AI response',
+          clientData: clientData,
+          clientInfo: clientInfo,
+          aiResponse: aiResponse,
+          workoutPlan: processedWorkoutPlan
+        };
+      }
+      
+      const saveResult = await saveWorkoutPlanToDatabase(processedWorkoutPlan.workout_plan, clientId);
+      
+      if (saveResult.success) {
+        return {
+          success: true,
+          message: `Successfully generated and saved AI workout plan for client: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
+          clientData: clientData,
+          clientInfo: clientInfo,
+          aiResponse: aiResponse,
+          workoutPlan: processedWorkoutPlan
+        };
+      } else {
+        console.error('❌ Error saving workout plan to database:', saveResult.message);
+        return {
+          success: false,
+          message: `Failed to save workout plan: ${saveResult.message}`,
+          clientData: clientData,
+          clientInfo: clientInfo
+        };
+      }
     } catch (aiError) {
       console.error('❌ Error generating AI response:', aiError);
       return {
@@ -323,5 +519,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
       message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
-} 
+}
 
+// Export utility functions for testing and external use
+export { getNextDayOfWeek, formatDateToYYYYMMDD, processWorkoutPlanDates, saveWorkoutPlanToDatabase };

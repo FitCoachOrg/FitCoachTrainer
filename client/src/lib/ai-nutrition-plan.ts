@@ -26,7 +26,7 @@ async function generateAIResponse(clientInfo: any) {
   console.log('📋 Preparing comprehensive nutrition coach prompt...');
   
   // Use the comprehensive world-class nutrition coach prompt template
-const nutritionCoachPrompt = `You are a world-class nutrition coach and registered dietitian. Based on the inputs below, create a personalized, evidence-based nutrition plan tailored to the client's goals, preferences, dietary restrictions, and lifestyle. Make sure you provide with meals for atleastr
+const nutritionCoachPrompt = `You are a world-class nutrition coach and registered dietitian. Based on the inputs below, create a personalized, evidence-based nutrition plan tailored to the client's goals, preferences, dietary restrictions, and lifestyle. Make sure you provide with meal details for atleast a week. That means atleast 21 meals with details.
 
 Inputs:
 Primary Goal: ${clientInfo.primaryGoal || 'N/A'}
@@ -38,7 +38,7 @@ Height: ${clientInfo.height || 'N/A'} cm
 Age: ${clientInfo.age || 'N/A'}
 Sex: ${clientInfo.sex || 'N/A'}
 Activity Level: ${clientInfo.activityLevel || 'Moderate'}
-Training Days/Week: ${clientInfo.trainingDaysPerWeek || '3'}
+
 
 Dietary Information:
 Eating Habits: ${clientInfo.eatingHabits || 'N/A'}
@@ -48,27 +48,12 @@ Preferred Meals Per Day: ${clientInfo.preferredMealsPerDay || '3 meals + 2 snack
 Gastric Issues: ${clientInfo.gastricIssues || 'None'}
 Supplements: ${clientInfo.supplements || 'None'}
 
-Schedule Information:
-Wake Time: ${clientInfo.wakeTime || 'N/A'}
-Bed Time: ${clientInfo.bedTime || 'N/A'}
-Breakfast Time: ${clientInfo.breakfastTime || 'N/A'}
-Lunch Time: ${clientInfo.lunchTime || 'N/A'}
-Dinner Time: ${clientInfo.dinnerTime || 'N/A'}
-Snack Time: ${clientInfo.snackTime || 'N/A'}
-Workout Time: ${clientInfo.workoutTime || 'N/A'}
 
-Lifestyle Information:
-Sleep Hours: ${clientInfo.sleepHours || 'N/A'}
-Stress Level: ${clientInfo.stress || 'N/A'}
-Alcohol Consumption: ${clientInfo.alcohol || 'N/A'}
 
-Additional Client Information:
-Name: ${clientInfo.name || clientInfo.preferredName || 'N/A'}
-Motivation Style: ${clientInfo.motivationStyle || 'N/A'}
-Obstacles: ${clientInfo.obstacles || 'N/A'}
-Confidence Level (1–10): ${clientInfo.confidenceLevel || 'N/A'}
 
 Guidelines:
+Make sure the plan is atleast 7 days long.
+Make sure the plan is atleast 3 meals per day(Breakfast, Lunch, Dinner, Snacks).
 Calculate appropriate caloric intake based on BMR, activity level, and goals (weight loss, maintenance, or gain).
 Determine optimal macronutrient ratios (protein, carbs, fats) based on goals and activity level.
 Consider meal timing around workouts for optimal performance and recovery.
@@ -109,7 +94,7 @@ Output Format (in JSON):
       "carbs": int,
       "fats": int,
       "fiber": int,
-      "for_date": "",
+      "for_day": "day1/day2/day3/day4/day5/day6/day7",
       "for_time": "",
       "coach_tip": "",
       "icon": "🥣",
@@ -118,10 +103,10 @@ Output Format (in JSON):
       ..........
     }.....
   ],
-  "hydration_plan": "Drink 500ml upon waking, 250ml before each meal...",
-  "supplement_recommendations": "Based on your goals and dietary intake...",
-  "meal_prep_tips": "Practical suggestions for meal preparation...",
-  "progress_tracking": "How to monitor and adjust the plan..."
+  "hydration_plan": "",
+  "supplement_recommendations": "",
+  "meal_prep_tips": "",
+  "progress_tracking": ""
 }`;
   
   console.log('📝 Nutrition coach prompt prepared with client data');
