@@ -41,7 +41,7 @@ import {
   Download,
   Share,
   Settings,
-
+  LineChart,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -89,6 +89,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 
@@ -98,9 +99,6 @@ import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
-
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { useParams, useNavigate } from "react-router-dom"
 import { Progress } from "@/components/ui/progress"
 
 
@@ -3419,15 +3417,13 @@ export default function ClientDashboard() {
   const params = useParams();
   const clientId = params.id && !isNaN(Number(params.id)) ? Number(params.id) : undefined;
   console.log("params:", params, "clientId:", clientId);
-  const [activeTab, setActiveTab] = useState("overview")
+  const [activeTab, setActiveTab] = useState("metrics")
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState("metrics")
-  const [showProfileCard, setShowProfileCard] = useState(false)
   const [notes, setNotes] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editableNotes, setEditableNotes] = useState("")
@@ -3437,8 +3433,38 @@ export default function ClientDashboard() {
   const [showNotesSummaryPopup, setShowNotesSummaryPopup] = useState(false)
   const [notesSummaryResponse, setNotesSummaryResponse] = useState<any>(null)
   const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
+  const [trainerNotes, setTrainerNotes] = useState("")
+  const [notesDraft, setNotesDraft] = useState("")
+  const [isEditingNotes, setIsEditingNotes] = useState(false)
+  const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [notesError, setNotesError] = useState<string | null>(null)
+  const [allClientGoals, setAllClientGoals] = useState<string[]>([])
   const navigate = useNavigate()
 
+  // Sample clients data (placeholder)
+  const sampleClients = [
+    { id: 1, name: "John Doe", email: "john@example.com" },
+    { id: 2, name: "Jane Smith", email: "jane@example.com" }
+  ]
+
+  // Placeholder handler functions
+  const handleSaveNotes = () => {
+    if (editableNotes.trim() !== notes) {
+      setIsSaving(true)
+      // Simulate API call
+      setTimeout(() => {
+        setNotes(editableNotes)
+        setIsEditing(false)
+        setIsSaving(false)
+      }, 1000)
+    } else {
+      setIsEditing(false)
+    }
+  }
+
+  const ProgramsSection = () => {
+    return <div>Programs section to be implemented</div>
+  }
 
   useEffect(() => {
     setNotesDraft(trainerNotes);
@@ -3470,7 +3496,6 @@ export default function ClientDashboard() {
     } finally {
       setIsSavingNotes(false);
     }
-
   }
 
   const handleSummarizeNotes = async () => {
@@ -3505,7 +3530,7 @@ export default function ClientDashboard() {
   };
 
   const filteredClients = sampleClients.filter(
-    (client) =>
+    (client: any) =>
       client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
   )
@@ -3594,7 +3619,6 @@ export default function ClientDashboard() {
         .single();
       if (!error && data && data.trainer_notes) {
         setTrainerNotes(data.trainer_notes);
-        console
       } else {
         setTrainerNotes("");
       }
@@ -3617,25 +3641,33 @@ export default function ClientDashboard() {
           .select("*")
           .eq("client_id", clientId)
           .single();
-        
+
         if (error) {
-          setError(error.message);
-        } else if (!data) {
-          setError("Client not found");
-        } else {
+          console.error("Error fetching client:", error);
+          setError("Failed to fetch client data");
+          setClient(null);
+        } else if (data) {
+          console.log("Fetched client:", data);
           setClient(data);
+          setError(null);
+        } else {
+          setError("Client not found");
+          setClient(null);
         }
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch client data");
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        setError("An unexpected error occurred");
+        setClient(null);
       } finally {
         setLoading(false);
       }
     })();
   }, [clientId]);
 
-  // Show page loading while fetching main client data
-  if (loading) return <PageLoading />;
-  
+  if (loading) {
+    return <PageLoading />;
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex items-center justify-center">
@@ -3844,8 +3876,8 @@ export default function ClientDashboard() {
         {/* Enhanced Content Area */}
         <div className="space-y-8">
           {activeTab === "overview" && (
-            <div className="space-y-8">
-              <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
+              <div className="space-y-8">
+                <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
                   <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -3938,131 +3970,130 @@ export default function ClientDashboard() {
                         <span className="text-gray-900 dark:text-white">{client.goal_timeline}</span>
                       </div>
                     )}
-
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <Edit className="h-5 w-5 text-rose-500" />
-                      Trainer Notes
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      {!isEditing && notes && notes.trim().length > 0 && (
+                  </CardContent>
+                </Card>
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <Edit className="h-5 w-5 text-rose-500" />
+                        Trainer Notes
+                      </CardTitle>
+                      <div className="flex items-center gap-2">
+                        {!isEditing && notes && notes.trim().length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleSummarizeNotes}
+                            className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20"
+                            disabled={isSummarizingNotes}
+                          >
+                            {isSummarizingNotes ? (
+                              <>
+                                <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                📋
+                                <span className="ml-1">Summarize</span>
+                              </>
+                            )}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={handleSummarizeNotes}
-                          className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20"
-                          disabled={isSummarizingNotes}
+                          onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
+                          className="h-8 px-2"
+                          disabled={isEditing && isSaving}
                         >
-                          {isSummarizingNotes ? (
-                            <>
-                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-                              Analyzing...
-                            </>
+                          {isEditing ? (
+                            isSaving ? (
+                              <>
+                                <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-4 w-4 mr-1" />
+                                Save
+                              </>
+                            )
                           ) : (
                             <>
-                              📋
-                              <span className="ml-1">Summarize</span>
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
                             </>
                           )}
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
-                        className="h-8 px-2"
-                        disabled={isEditing && isSaving}
-                      >
-                        {isEditing ? (
-                          isSaving ? (
-                            <>
-                              <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4 mr-1" />
-                              Save
-                            </>
-                          )
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {isEditing ? (
+                      <Textarea
+                        value={editableNotes}
+                        onChange={(e) => setEditableNotes(e.target.value)}
+                        className="min-h-[200px] focus:border-rose-300 focus:ring-rose-200/50"
+                        placeholder="Add your notes about the client here..."
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        {notes ? (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                            {notes}
+                          </p>
                         ) : (
-                          <>
-                            <Pencil className="h-4 w-4 mr-1" />
-                            Edit
-                          </>
+                          <p className="text-sm text-gray-500 italic">No notes added yet.</p>
                         )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {isEditing ? (
-                    <Textarea
-                      value={editableNotes}
-                      onChange={(e) => setEditableNotes(e.target.value)}
-                      className="min-h-[200px] focus:border-rose-300 focus:ring-rose-200/50"
-                      placeholder="Add your notes about the client here..."
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      {notes ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                          {notes}
-                        </p>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">No notes added yet.</p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
+          )}
 
-            {/* Tabbed Content */}
-            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-              <CardHeader className="pb-0">
-                <Tabs defaultValue="metrics" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid grid-cols-4 mb-4">
-                    <TabsTrigger value="metrics" className="flex items-center gap-2">
-                      <LineChart className="h-4 w-4" />
-                      <span>Metrics</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="workout" className="flex items-center gap-2">
-                      <Dumbbell className="h-4 w-4" />
-                      <span>Workout Plan</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="nutrition" className="flex items-center gap-2">
-                      <Utensils className="h-4 w-4" />
-                      <span>Nutrition Plan</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="programs" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      <span>Programs</span>
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="metrics">
-                    <MetricsSection />
-                  </TabsContent>
-                  <TabsContent value="workout">
-                    <WorkoutPlanSection clientId={client?.id} />
-                  </TabsContent>
-                  <TabsContent value="nutrition">
-                    <NutritionPlanSection />
-                  </TabsContent>
-                  <TabsContent value="programs">
-                    <ProgramsSection />
-                  </TabsContent>
-                </Tabs>
-              </CardHeader>
-            </Card>
-          </div>
+          {/* Tabbed Content */}
+          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+            <CardHeader className="pb-0">
+              <Tabs defaultValue="metrics" value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid grid-cols-4 mb-4">
+                  <TabsTrigger value="metrics" className="flex items-center gap-2">
+                    <LineChart className="h-4 w-4" />
+                    <span>Metrics</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="workout" className="flex items-center gap-2">
+                    <Dumbbell className="h-4 w-4" />
+                    <span>Workout Plan</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="nutrition" className="flex items-center gap-2">
+                    <Utensils className="h-4 w-4" />
+                    <span>Nutrition Plan</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="programs" className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    <span>Programs</span>
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="metrics">
+                  <MetricsSection clientId={clientId} isActive={activeTab === "metrics"} />
+                </TabsContent>
+                <TabsContent value="workout">
+                  <WorkoutPlanSection clientId={client?.id} />
+                </TabsContent>
+                <TabsContent value="nutrition">
+                  <NutritionPlanSection clientId={clientId} isActive={activeTab === "nutrition"} />
+                </TabsContent>
+                <TabsContent value="programs">
+                  <ProgramManagementSection clientId={clientId} isActive={activeTab === "programs"} />
+                </TabsContent>
+              </Tabs>
+            </CardHeader>
+          </Card>
         </div>
-      </main>
+      </div>
 
       {/* AI Notes Summary Popup */}
       <AINotesSummaryPopup
@@ -4071,7 +4102,6 @@ export default function ClientDashboard() {
         summaryResponse={notesSummaryResponse}
         clientName={client?.name || client?.preferredName}
       />
-
     </div>
   )
 }
