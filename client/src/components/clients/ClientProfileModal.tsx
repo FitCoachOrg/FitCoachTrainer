@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 interface ClientProfileModalProps {
   open: boolean;
@@ -11,59 +13,104 @@ interface ClientProfileModalProps {
 
 const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ open, onClose }) => {
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [customMessage, setCustomMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [trainerId, setTrainerId] = useState<string | null>(null);
+  const [trainerName, setTrainerName] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Fetch trainer information on component mount
+  useEffect(() => {
+    async function fetchTrainerInfo() {
+      try {
+        // Get current user session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.user?.email) {
+          console.error("Error fetching session:", sessionError);
+          return;
+        }
+
+        // Get trainer ID from trainer table
+        const { data: trainerData, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id, trainer_name")
+          .eq("trainer_email", session.user.email)
+          .single();
+
+        if (trainerError) {
+          console.error("Error fetching trainer info:", trainerError);
+          return;
+        }
+
+        if (trainerData) {
+          setTrainerId(trainerData.id);
+          setTrainerName(trainerData.trainer_name);
+        }
+      } catch (error) {
+        console.error("Unexpected error:", error);
+      }
+    }
+
+    if (open) {
+      fetchTrainerInfo();
+    }
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Send invitation email
-      const response = await fetch('http://localhost:3001/api/email/send', {
+      if (!trainerId) {
+        throw new Error("Trainer information not available");
+      }
+
+      // Get the JWT token from the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error("Authentication token not available");
+      }
+
+      // Call the Supabase Edge Function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send_client_invitation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          to: email,
-          subject: "Welcome to FitCoachTrainer!",
-          html: `
-            <h2>Welcome to FitCoachTrainer!</h2>
-            <p>You've been invited to join FitCoachTrainer as a client.</p>
-            <p>To get started:</p>
-            <ol>
-              <li>Click the link below to set up your account</li>
-              <li>Complete your profile information</li>
-              <li>Start your fitness journey!</li>
-            </ol>
-            <a href="http://localhost:5173/signup?email=${encodeURIComponent(email)}" 
-               style="display: inline-block; background-color: #3B82F6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px;">
-              Set Up Your Account
-            </a>
-            <p style="margin-top: 20px; color: #666;">
-              If you didn't expect this invitation, please ignore this email.
-            </p>
-          `
+          clientEmail: email,
+          clientName: name,
+          trainerName: trainerName,
+          trainerId: trainerId,
+          customMessage: customMessage || undefined
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send invitation email');
+        throw new Error(data.error || "Failed to send invitation");
       }
 
       toast({
-        title: "Success",
-        description: "Invitation email sent successfully",
+        title: "Invitation Sent",
+        description: "Client invitation has been sent successfully.",
       });
 
+      // Reset form and close modal
+      setEmail("");
+      setName("");
+      setCustomMessage("");
       onClose();
-    } catch (error: any) {
-      console.error('Error sending invitation:', error);
+    } catch (error) {
+      console.error("Error sending invitation:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to send invitation",
+        description: error instanceof Error ? error.message : "Failed to send invitation. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -80,24 +127,52 @@ const ClientProfileModal: React.FC<ClientProfileModalProps> = ({ open, onClose }
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Client's Email
+              Client's Email Address
             </label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="client@example.com"
+              placeholder="Enter client's email"
               required
               className="w-full"
             />
           </div>
+          
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-1">
+              Client's Name (Optional)
+            </label>
+            <Input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter client's name"
+              className="w-full"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="message" className="block text-sm font-medium mb-1">
+              Custom Message (Optional)
+            </label>
+            <Textarea
+              id="message"
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+              placeholder="Add a personal message to your invitation"
+              className="w-full min-h-[80px]"
+            />
+          </div>
+          
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Sending Invitation..." : "Send Invitation"}
+            <Button type="submit" disabled={loading || !trainerId}>
+              {loading ? "Sending..." : "Send Invitation"}
             </Button>
           </div>
         </form>

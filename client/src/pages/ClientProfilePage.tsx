@@ -3421,6 +3421,7 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState("metrics")
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
+  const [clientImageUrl, setClientImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -3637,6 +3638,7 @@ export default function ClientDashboard() {
     setError(null);
     (async () => {
       try {
+        // Fetch client data
         const { data, error } = await supabase
           .from("client")
           .select("*")
@@ -3651,14 +3653,30 @@ export default function ClientDashboard() {
           console.log("Fetched client:", data);
           setClient(data);
           setError(null);
+
+          // Fetch client image URL
+          const filePath = `${data.client_id}.jpg`;
+          const { data: imageData, error: imageError } = await supabase.storage
+            .from('client-images')
+            .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+
+          if (imageData && imageData.signedUrl) {
+            setClientImageUrl(imageData.signedUrl);
+          } else {
+            console.warn(`No image found or error fetching signed URL for client ${data.client_id}:`, imageError);
+            setClientImageUrl(null);
+          }
+
         } else {
           setError("Client not found");
           setClient(null);
+          setClientImageUrl(null);
         }
       } catch (err) {
         console.error("Unexpected error:", err);
         setError("An unexpected error occurred");
         setClient(null);
+        setClientImageUrl(null);
       } finally {
         setLoading(false);
       }
@@ -3714,11 +3732,21 @@ export default function ClientDashboard() {
               <div className="flex items-center gap-4">
                 <div className="relative cursor-pointer group" onClick={() => setShowProfileCard(!showProfileCard)}>
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl group-hover:shadow-2xl transition-all duration-300 group-hover:scale-105">
-                    <img
-                      src={client.cl_pic || "/placeholder.svg"}
-                      alt={client.cl_name}
-                      className="w-full h-full rounded-2xl object-cover"
-                    />
+                    {clientImageUrl ? (
+                      <img
+                        src={clientImageUrl}
+                        alt={client.cl_name}
+                        className="w-full h-full rounded-2xl object-cover"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-2xl flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg">
+                        {client.cl_name
+                          .split(" ")
+                          .map((n: string) => n[0])
+                          .join("")}
+                      </div>
+                    )}
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full shadow-lg"></div>
                 </div>
@@ -3790,11 +3818,21 @@ export default function ClientDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl">
-                    <img
-                      src={client.cl_pic || "/placeholder.svg"}
-                      alt={client.cl_name}
-                      className="w-full h-full rounded-2xl object-cover"
-                    />
+                    {clientImageUrl ? (
+                      <img
+                        src={clientImageUrl}
+                        alt={client.cl_name}
+                        className="w-full h-full rounded-2xl object-cover"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-2xl flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg">
+                        {client.cl_name
+                          .split(" ")
+                          .map((n: string) => n[0])
+                          .join("")}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.cl_name}</h3>

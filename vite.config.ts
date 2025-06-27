@@ -17,14 +17,14 @@ export default defineConfig({
       : []),
   ],
   server: {
-    port: 3000,
+    port: 8080,
     strictPort: true,
   },
   clearScreen: false,
   envPrefix: ['VITE_'],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "client/src"),
+      "@": path.resolve(__dirname, "./client/src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },

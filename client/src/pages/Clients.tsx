@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { formatUtcToLocal, getDaysSince, getShortAgo } from "@/lib/utils";
 import { getOrCreateEngagementScore } from "@/lib/client-engagement";
 import { format } from "date-fns";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
@@ -19,15 +20,16 @@ const STATUS_FILTERS = [
   { label: "Outcome Score", value: "outcome_low" }
 ];
 
-const ACTIVITY_TYPES = [
-  "hydration",
-  "Sleep Duration",
-  "Sleep Quality",
-  "Energy Level"
-];
-
 const Clients: React.FC = () => {
-  const [clients, setClients] = useState<{ client_id: number; cl_name: string }[]>([]);
+  const [clients, setClients] = useState<{
+    client_id: number;
+    cl_name: string;
+    last_checkIn?: string;
+    last_active?: string;
+    current_streak?: number | null;
+    longest_streak?: number | null;
+    active_session?: boolean | null;
+  }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,19 +39,12 @@ const Clients: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [engagementFilter, setEngagementFilter] = useState("all");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [activityFilter, setActivityFilter] = useState("all");
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [activityBreakdown, setActivityBreakdown] = useState<{
-    [clientId: number]: {
-      [activityType: string]: number | null;
-    };
-  }>({});
-  
   let clientIds: number[] = [];
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -117,14 +112,23 @@ const Clients: React.FC = () => {
           setLoading(false);
           return;
         }
-        clientIds = relationshipData.map((rel) => rel.client_id);
+        clientIds = relationshipData.map((rel) => rel.client_id).filter(Boolean);
+        
+        // Only proceed if we have valid client IDs
+        if (clientIds.length === 0) {
+          setClients([]);
+          setLoading(false);
+          return;
+        }
+        
         // Get client names
         const { data: clientData, error: clientError } = await supabase
           .from("client")
-          .select("client_id, cl_name,last_checkIn,last_active")
+          .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
           .in("client_id", clientIds);
         if (clientError) throw clientError;
         setClients(clientData || []);
+        
         // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
         const { data: allActivity, error: allActivityError } = await supabase
           .from("activity_info")
@@ -133,68 +137,40 @@ const Clients: React.FC = () => {
           .from("meal_info")
           .select("client_id,calories,protein,carbs,fat,meal_type");
         // --- END DEBUG ---
-        // --- Fetch and process activity info for the 4 types ---
-        const { data: activityRows, error: activityRowsError } = await supabase
-          .from("activity_info")
-          .select("client_id,activity,created_at")
-          .in("client_id", clientIds)
-          .in("activity", ACTIVITY_TYPES);
-        if (activityRowsError) {
-          console.error("[DEBUG] Error fetching filtered activity_info:", activityRowsError);
-        }
-        // Process: for each client, for each activity type, get the latest created_at
-        const summary: { [clientId: number]: { [activityType: string]: { created_at: string | null } } } = {};
-        if (activityRows) {
-          for (const row of activityRows) {
-            const cid = row.client_id;
-            const atype = row.activity;
-            const created = row.created_at;
-            if (!summary[cid]) summary[cid] = {};
-            if (!summary[cid][atype] || (created && summary[cid][atype].created_at && new Date(created) > new Date(summary[cid][atype].created_at!))) {
-              summary[cid][atype] = { created_at: created };
-            }
-          }
-        }
-        // Convert summary to days-since breakdown
-        const now = new Date();
-        const breakdown: { [clientId: number]: { [activityType: string]: number | null } & { hydration_last?: string } } = {};
-        for (const cid in summary) {
-          breakdown[cid] = {};
-          for (const atype of ACTIVITY_TYPES) {
-            const createdAt = summary[cid][atype]?.created_at;
-            if (createdAt) {
-              breakdown[cid][atype] = Math.ceil((now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
-              // Store the actual timestamp for hydration
-              if (atype === 'hydration') {
-                (breakdown[cid] as any)['hydration_last'] = createdAt;
-              }
-            } else {
-              breakdown[cid][atype] = null;
-            }
-          }
-        }
-        setActivityBreakdown(breakdown);
-        // --- END activity summary ---
       } catch (err: any) {
         setError(err.message || "Unknown error");
         console.error("[DEBUG] Error in fetchClients:", err);
       } finally {
         setLoading(false);
       }
-      // Use the clientIds from the try block for the queries below
-      const { data: activityInfo, error: activityError } = await supabase
-        .from("activity_info")
-        .select("client_id, last_weight_time, last_excercise_input, last_sleep_info")
-        .in("client_id", clientIds);
-      if (activityError) {
-        console.error("[DEBUG] Error fetching activity info:", activityError);
-      }
-      const { data: mealInfo, error: mealError } = await supabase
-        .from("meal_info")
-        .select("client_id,calories,protein,carbs,fat,meal_type")
-        .in("client_id", clientIds);
-      if (mealError) {
-        console.error("[DEBUG] Error fetching meal info:", mealError);
+      
+      // Only query additional tables if we have valid client IDs
+      if (clientIds.length > 0) {
+        // Try to fetch activity info - handle gracefully if table doesn't exist
+        try {
+          const { data: activityInfo, error: activityError } = await supabase
+            .from("activity_info")
+            .select("client_id, last_weight_time, last_excercise_input, last_sleep_info")
+            .in("client_id", clientIds);
+          if (activityError) {
+            console.error("[DEBUG] Error fetching activity info:", activityError);
+          }
+        } catch (activityErr) {
+          console.log("[DEBUG] activity_info table might not exist or have different structure");
+        }
+        
+        // Try to fetch meal info - handle gracefully if table doesn't exist
+        try {
+          const { data: mealInfo, error: mealError } = await supabase
+            .from("meal_info")
+            .select("client_id,calories,protein,carbs,fat,meal_type")
+            .in("client_id", clientIds);
+          if (mealError) {
+            console.error("[DEBUG] Error fetching meal info:", mealError);
+          }
+        } catch (mealErr) {
+          console.log("[DEBUG] meal_info table might not exist or have different structure");
+        }
       }
     };
 
@@ -396,10 +372,6 @@ const Clients: React.FC = () => {
       comparisonResult = daysA - daysB;
     } else if (sortColumn === 'cl_name') {
       comparisonResult = (a as any).cl_name.localeCompare((b as any).cl_name);
-    } else if (sortColumn === 'status') {
-      const statusA = getDaysSince((a as any).last_active) || Infinity; // Treat N/A or future as very inactive for sorting
-      const statusB = getDaysSince((b as any).last_active) || Infinity;
-      comparisonResult = statusA - statusB; // Lower days (more active) first
     } else if (sortColumn === 'engagement_score') {
       // Assuming 100% currently, but if there's actual data, use it.
       // For now, treat all as equal for sorting.
@@ -408,7 +380,7 @@ const Clients: React.FC = () => {
       // Assuming 100% currently, but if there's actual data, use it.
       // For now, treat all as equal for sorting.
       comparisonResult = 0;
-    } else if (ACTIVITY_TYPES.includes(sortColumn as string)) {
+    } else if (sortColumn === 'activity') {
       const activityA = (a as any).activityBreakdown?.[sortColumn as string] || Infinity; // Treat N/A as largest for sorting
       const activityB = (b as any).activityBreakdown?.[sortColumn as string] || Infinity;
       comparisonResult = activityA - activityB;
@@ -452,13 +424,6 @@ const Clients: React.FC = () => {
     });
     window.location.reload();
   };
-
-  // Helper to get color class for activity status
-  function getActivityStatusColor(days: number) {
-    if (days <= 3) return 'bg-green-500';
-    if (days <= 5) return 'bg-yellow-500';
-    return 'bg-red-500';
-  }
 
   if (loading) {
     return (
@@ -529,16 +494,6 @@ const Clients: React.FC = () => {
                 </h1>
                 <div className="flex gap-3 flex-wrap">
                   <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Category"
-                  >
-                    <option value="all">Category: All</option>
-                    <option value="premium">Premium</option>
-                    <option value="basic">Basic</option>
-                  </select>
-                  <select
                     value={engagementFilter}
                     onChange={(e) => setEngagementFilter(e.target.value)}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
@@ -573,7 +528,6 @@ const Clients: React.FC = () => {
                   </select>
                   <button 
                     onClick={() => {
-                      setCategoryFilter("all");
                       setEngagementFilter("all");
                       setOutcomeFilter("all");
                       setActivityFilter("all");
@@ -616,23 +570,18 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active_days')}>
                       Last Active (D ago) {sortColumn === 'last_active_days' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active')}>
-                      Last Active (Local, Ago) {sortColumn === 'last_active' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Engagement for yesterday (UTC). Calculated as (completed tasks / total tasks) * 100 for that day.">
+                      Client Engagement (1d)
                     </th>
-                    {/* Dynamically add a column for each activity type */}
-                    {ACTIVITY_TYPES.map((type) => (
-                      <th key={type} className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort(type)}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)} {sortColumn === type && (sortDirection === 'asc' ? '▲' : '▼')}
-                      </th>
-                    ))}
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
-                      Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Average engagement for the last 7 days (yesterday and previous 6 days). Calculated as the mean of daily engagement scores.">
+                      Client Engagement (7d)
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_score')}>
-                      Client Engagement (1d) {sortColumn === 'engagement_score' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Average engagement for the last 30 days (yesterday and previous 29 days). Calculated as the mean of daily engagement scores.">
+                      Client Engagement (30d)
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer">Client Engagement (7d)</th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer">Client Engagement (30d)</th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Current Streak</th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Longest Streak</th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Active Session</th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
                       Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
@@ -642,11 +591,6 @@ const Clients: React.FC = () => {
                   {sortedClients.length > 0 ? (
                     sortedClients.map((client, index) => {
                       const daysSinceActivity = getDaysSince((client as any).last_active);
-                      const activityColorClass = getActivityStatusColor(daysSinceActivity ?? 999);
-                      const breakdown = activityBreakdown[client.client_id] || {};
-                      console.log("Sorted Client Data for Row:", client);
-                      console.log("Breakdown for row:", breakdown);
-                      console.log("Days Since Activity for row:", daysSinceActivity);
                       return (
                         <tr
                           key={client.client_id}
@@ -683,53 +627,41 @@ const Clients: React.FC = () => {
                               {client.cl_name}
                             </span>
                           </td>
-                          {/* Last Active (D ago) column */}
                           <td className="px-6 py-5">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">
-                              {getShortAgo((client as any).last_active) || 'N/A'}
-                            </span>
-                          </td>
-                          {/* Last Active (Local, Ago) column */}
-                          <td className="px-6 py-5 whitespace-nowrap">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">
-                              {formatUtcToLocal((client as any).last_active)}
-                              {(() => {
-                                const ago = getShortAgo((client as any).last_active);
-                                return ago ? ` (${ago})` : '';
-                              })()}
-                            </span>
-                          </td>
-                          {/* Render a cell for each activity type */}
-                          {ACTIVITY_TYPES.map((type) => (
-                            <td key={type} className="px-6 py-5">
-                              <span className="font-medium flex items-center gap-2">
-                                {type === 'hydration' ? (
-                                  (() => {
-                                    const hydrationTimestamp = (breakdown['hydration_last'] || breakdown['hydration'] || null);
-                                    if (!hydrationTimestamp) return 'N/A';
-                                    if (typeof hydrationTimestamp === 'string') {
-                                      const localTime = formatUtcToLocal(hydrationTimestamp);
-                                      const ago = getShortAgo(hydrationTimestamp);
-                                      return `${localTime}${ago ? ` (${ago})` : ''}`;
-                                    }
-                                    if (typeof hydrationTimestamp === 'number') {
-                                      return `${hydrationTimestamp}d ago`;
-                                    }
-                                    return 'N/A';
-                                  })()
-                                ) : (
-                                  breakdown[type] !== undefined && breakdown[type] !== null ? `${breakdown[type]}d ago` : 'N/A'
-                                )}
-                              </span>
-                            </td>
-                          ))}
-                          <td className="px-6 py-5">
-                            <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
-                              {daysSinceActivity !== null && daysSinceActivity <= 3 ? 'Active' : daysSinceActivity !== null && daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
-                            </span>
+                            {(() => {
+                              const lastActive = (client as any).last_active;
+                              const ago = getShortAgo(lastActive) || 'N/A';
+                              let tooltip = '';
+                              if (lastActive) {
+                                const date = new Date(lastActive);
+                                // Use user's local time zone for formatting
+                                const options: Intl.DateTimeFormatOptions = {
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                                };
+                                let localString = date.toLocaleString(undefined, options);
+                                // Add ordinal suffix to day
+                                const day = date.getDate();
+                                const ordinal = (n: number) => n + (['st','nd','rd'][((n+90)%100-10)%10-1]||'th');
+                                localString = localString.replace(String(day), ordinal(day));
+                                tooltip = localString;
+                              }
+                              return (
+                                <span
+                                  className="font-medium text-gray-700 dark:text-gray-300"
+                                  title={tooltip}
+                                >
+                                  {ago}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3" title="Engagement for yesterday (UTC). Calculated as (completed tasks / total tasks) * 100 for that day.">
                               <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600" style={{ width: `${engagementScores[client.client_id] !== undefined && engagementScores[client.client_id] !== null ? engagementScores[client.client_id] : 0}%` }}></div>
                               </div>
@@ -741,7 +673,7 @@ const Clients: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3" title="Average engagement for the last 7 days (yesterday and previous 6 days). Calculated as the mean of daily engagement scores.">
                               <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600" style={{ width: `${engagementScores7d[client.client_id] !== undefined && engagementScores7d[client.client_id] !== null ? engagementScores7d[client.client_id] : 0}%` }}></div>
                               </div>
@@ -753,7 +685,7 @@ const Clients: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3" title="Average engagement for the last 30 days (yesterday and previous 29 days). Calculated as the mean of daily engagement scores.">
                               <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600" style={{ width: `${engagementScores30d[client.client_id] !== undefined && engagementScores30d[client.client_id] !== null ? engagementScores30d[client.client_id] : 0}%` }}></div>
                               </div>
@@ -763,6 +695,28 @@ const Clients: React.FC = () => {
                                   : 'N/A'}
                               </span>
                             </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            {client.current_streak !== undefined && client.current_streak !== null ? (
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">{client.current_streak}</span>
+                            ) : (
+                              <span className="text-sm text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-5">
+                            {client.longest_streak !== undefined && client.longest_streak !== null ? (
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">{client.longest_streak}</span>
+                            ) : (
+                              <span className="text-sm text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-5">
+                            <span className="flex items-center justify-center">
+                              <span
+                                className={`inline-block w-3 h-3 rounded-full ${client.active_session ? 'bg-green-500' : 'bg-red-500'}`}
+                                title={client.active_session ? 'Active' : 'Inactive'}
+                              ></span>
+                            </span>
                           </td>
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
