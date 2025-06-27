@@ -8,6 +8,7 @@ import * as Icons from "@/lib/icons";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, SidebarContent } from "@/components/ui/sidebar";
 import { useNavigate } from "react-router-dom";
+import { formatUtcToLocal, getDaysSince, getShortAgo } from "@/lib/utils";
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
@@ -48,6 +49,18 @@ const Clients: React.FC = () => {
   }>({});
   
   let clientIds: number[] = [];
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
   useEffect(() => {
     const fetchClients = async () => {
       setLoading(true);
@@ -211,22 +224,13 @@ const Clients: React.FC = () => {
     navigate(`?${params.toString()}`, { replace: true });
   }, [statusFilter, engagementFilter, navigate]);
 
-  // Helper function to calculate days since last check-in
-  const getDaysSinceLastCheckIn = (lastCheckIn: string | null | undefined) => {
-    if (!lastCheckIn) return null;
-    const now = new Date();
-    const last = new Date(lastCheckIn);
-    const diffTime = Math.abs(now.getTime() - last.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
   // Enhanced filtering logic that works with the existing data structure
   const filteredClients = clients.filter((client) => {
     // Search filter - use cl_name since that's what we have from Supabase
     const matchesSearch = client.cl_name.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Use actual last_checkIn for activity calculation
-    const daysSinceActivity = getDaysSinceLastCheckIn((client as any).last_checkIn || (client as any).lastCheckIn || (client as any).last_checkin);
+    // Use actual last_active for activity calculation
+    const daysSinceActivity = getDaysSince((client as any).last_active);
 
     // Status filter
     const matchesStatus = 
@@ -245,6 +249,64 @@ const Clients: React.FC = () => {
       (activityFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
     return matchesSearch && matchesStatus && matchesEngagement && matchesOutcome && matchesActivity;
+  });
+
+  const sortedClients = [...filteredClients].sort((a, b) => {
+    if (!sortColumn) return 0;
+    let comparisonResult = 0;
+    
+    if (sortColumn === 'last_active') {
+      const aValue = (a as any).last_active;
+      const bValue = (b as any).last_active;
+      // Move N/A values to the end
+      if (!aValue && !bValue) return 0; // Both N/A, keep relative order
+      if (!aValue) return sortDirection === 'asc' ? 1 : -1; // a is N/A, send to end
+      if (!bValue) return sortDirection === 'asc' ? -1 : 1; // b is N/A, send to end
+
+      const dateA = new Date(aValue);
+      const dateB = new Date(bValue);
+      comparisonResult = dateA.getTime() - dateB.getTime();
+    } else if (sortColumn === 'last_active_days') {
+      const daysA = getDaysSince((a as any).last_active) || 0;
+      const daysB = getDaysSince((b as any).last_active) || 0;
+      // Move N/A values (which would result in 0 days from getDaysSince for future dates)
+      // or explicitly null days to the end. Assuming 0 is not a desired sort value for N/A.
+      if (getDaysSince((a as any).last_active) === null && getDaysSince((b as any).last_active) === null) return 0;
+      if (getDaysSince((a as any).last_active) === null) return sortDirection === 'asc' ? 1 : -1;
+      if (getDaysSince((b as any).last_active) === null) return sortDirection === 'asc' ? -1 : 1;
+      
+      comparisonResult = daysA - daysB;
+    } else if (sortColumn === 'cl_name') {
+      comparisonResult = (a as any).cl_name.localeCompare((b as any).cl_name);
+    } else if (sortColumn === 'status') {
+      const statusA = getDaysSince((a as any).last_active) || Infinity; // Treat N/A or future as very inactive for sorting
+      const statusB = getDaysSince((b as any).last_active) || Infinity;
+      comparisonResult = statusA - statusB; // Lower days (more active) first
+    } else if (sortColumn === 'engagement_score') {
+      // Assuming 100% currently, but if there's actual data, use it.
+      // For now, treat all as equal for sorting.
+      comparisonResult = 0; 
+    } else if (sortColumn === 'outcome_score') {
+      // Assuming 100% currently, but if there's actual data, use it.
+      // For now, treat all as equal for sorting.
+      comparisonResult = 0;
+    } else if (ACTIVITY_TYPES.includes(sortColumn as string)) {
+      const activityA = (a as any).activityBreakdown?.[sortColumn as string] || Infinity; // Treat N/A as largest for sorting
+      const activityB = (b as any).activityBreakdown?.[sortColumn as string] || Infinity;
+      comparisonResult = activityA - activityB;
+    } else {
+      // Fallback for other columns using implicit any type (though ideally types would be more specific)
+      let aValue: any = (a as any)[sortColumn];
+      let bValue: any = (b as any)[sortColumn];
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparisonResult = aValue - bValue;
+      } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparisonResult = aValue.localeCompare(bValue);
+      }
+    }
+
+    console.log(`Final comparison (${sortDirection}): ${comparisonResult}`);
+    return sortDirection === 'asc' ? comparisonResult : -comparisonResult;
   });
 
   const handleViewProfile = (client: { client_id: number; cl_name: string }) => {
@@ -430,35 +492,41 @@ const Clients: React.FC = () => {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200/60 dark:border-gray-700/60 bg-gradient-to-r from-gray-50/80 to-blue-50/30 dark:from-slate-800/80 dark:to-slate-700/30">
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Name
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('cl_name')}>
+                      Name {sortColumn === 'cl_name' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active_days')}>
+                      Last Active (D ago) {sortColumn === 'last_active_days' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active')}>
+                      Last Active (Local, Ago) {sortColumn === 'last_active' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
                     {/* Dynamically add a column for each activity type */}
                     {ACTIVITY_TYPES.map((type) => (
-                      <th key={type} className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      <th key={type} className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort(type)}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)} {sortColumn === type && (sortDirection === 'asc' ? '▲' : '▼')}
                       </th>
                     ))}
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Last Activity
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
+                      Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Status
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_score')}>
+                      Engagement Score {sortColumn === 'engagement_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Engagement Score
-                    </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
-                      Outcome Score
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
+                      Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredClients.length > 0 ? (
-                    filteredClients.map((client, index) => {
-                      const daysSinceActivity = getDaysSinceLastCheckIn((client as any).last_checkIn || (client as any).lastCheckIn || (client as any).last_checkin);
+                  {sortedClients.length > 0 ? (
+                    sortedClients.map((client, index) => {
+                      const daysSinceActivity = getDaysSince((client as any).last_active);
                       const activityColorClass = getActivityStatusColor(daysSinceActivity ?? 999);
                       const breakdown = activityBreakdown[client.client_id] || {};
+                      console.log("Sorted Client Data for Row:", client);
+                      console.log("Breakdown for row:", breakdown);
+                      console.log("Days Since Activity for row:", daysSinceActivity);
                       return (
                         <tr
                           key={client.client_id}
@@ -486,17 +554,29 @@ const Clients: React.FC = () => {
                               {client.cl_name}
                             </span>
                           </td>
+                          {/* Last Active (D ago) column */}
+                          <td className="px-6 py-5">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">
+                              {getShortAgo((client as any).last_active) || 'N/A'}
+                            </span>
+                          </td>
+                          {/* Last Active (Local, Ago) column */}
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">
+                              {formatUtcToLocal((client as any).last_active)}
+                              {(() => {
+                                const ago = getShortAgo((client as any).last_active);
+                                return ago ? ` (${ago})` : '';
+                              })()}
+                            </span>
+                          </td>
                           {/* Render a cell for each activity type */}
                           {ACTIVITY_TYPES.map((type) => (
                             <td key={type} className="px-6 py-5">
                               <span className="font-medium flex items-center gap-2">
                                 {/* Color dot logic: green (≤1), yellow (≤5), red (>5), gray for N/A */}
                                 {breakdown[type] !== undefined && breakdown[type] !== null ? (
-                                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${
-                                    breakdown[type] <= 1 ? 'bg-green-500' :
-                                    breakdown[type] <= 5 ? 'bg-yellow-500' :
-                                    'bg-red-500'
-                                  }`}></span>
+                                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${ breakdown[type] <= 1 ? 'bg-green-500' : breakdown[type] <= 5 ? 'bg-yellow-500' : 'bg-red-500' }`}></span>
                                 ) : (
                                   <span className="w-2.5 h-2.5 rounded-full inline-block bg-gray-300"></span>
                                 )}
@@ -504,18 +584,6 @@ const Clients: React.FC = () => {
                               </span>
                             </td>
                           ))}
-                          {/* Last Activity column: show days since lastCheckIn from client */}
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full ${activityColorClass}`}></div>
-                              <span className={`font-medium ${
-                                daysSinceActivity !== null && daysSinceActivity <= 3 ? 'text-green-700 dark:text-green-400' : 
-                                daysSinceActivity !== null && daysSinceActivity <= 5 ? 'text-yellow-700 dark:text-yellow-400' : 'text-red-700 dark:text-red-400'
-                              }`}>
-                                {daysSinceActivity !== null ? `${daysSinceActivity}d ago` : 'N/A'}
-                              </span>
-                            </div>
-                          </td>
                           <td className="px-6 py-5">
                             <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${activityColorClass}`}>
                               {daysSinceActivity !== null && daysSinceActivity <= 3 ? 'Active' : daysSinceActivity !== null && daysSinceActivity <= 5 ? 'Moderate' : 'Inactive'}
