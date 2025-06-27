@@ -100,6 +100,7 @@ import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 import { Progress } from "@/components/ui/progress"
+import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 
 
 // Define types for AI response (matching the actual implementation)

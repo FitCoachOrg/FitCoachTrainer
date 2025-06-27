@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, SidebarContent } from "@/components/ui/sidebar";
 import { useNavigate } from "react-router-dom";
 import { formatUtcToLocal, getDaysSince, getShortAgo } from "@/lib/utils";
+import { getOrCreateEngagementScore } from "@/lib/client-engagement";
+import { format } from "date-fns";
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
@@ -51,6 +53,12 @@ const Clients: React.FC = () => {
   let clientIds: number[] = [];
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [engagementScores, setEngagementScores] = useState<{ [clientId: number]: number | null }>({});
+  const [engagementScores7d, setEngagementScores7d] = useState<{ [clientId: number]: number | null }>({});
+  const [engagementScores30d, setEngagementScores30d] = useState<{ [clientId: number]: number | null }>({});
+
+  const [clientImageUrls, setClientImageUrls] = useState<{ [clientId: number]: string | null }>({});
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -149,15 +157,17 @@ const Clients: React.FC = () => {
         }
         // Convert summary to days-since breakdown
         const now = new Date();
-        const breakdown: { [clientId: number]: { [activityType: string]: number | null } } = {};
+        const breakdown: { [clientId: number]: { [activityType: string]: number | null } & { hydration_last?: string } } = {};
         for (const cid in summary) {
           breakdown[cid] = {};
           for (const atype of ACTIVITY_TYPES) {
             const createdAt = summary[cid][atype]?.created_at;
             if (createdAt) {
-              const last = new Date(createdAt);
-              const diffTime = Math.abs(now.getTime() - last.getTime());
-              breakdown[cid][atype] = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              breakdown[cid][atype] = Math.ceil((now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+              // Store the actual timestamp for hydration
+              if (atype === 'hydration') {
+                (breakdown[cid] as any)['hydration_last'] = createdAt;
+              }
             } else {
               breakdown[cid][atype] = null;
             }
@@ -190,6 +200,114 @@ const Clients: React.FC = () => {
 
     fetchClients();
   }, []);
+
+  useEffect(() => {
+    async function fetchEngagementScoresFromTable() {
+      // Get yesterday's date in YYYY-MM-DD
+      const now = new Date();
+      const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+      const forDate = format(yesterday, "yyyy-MM-dd");
+      // For 7d: get 7 days ago to yesterday
+      const sevenDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 7));
+      const forDate7d = format(sevenDaysAgo, "yyyy-MM-dd");
+      // For 30d: get 30 days ago to yesterday
+      const thirtyDaysAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 30));
+      const forDate30d = format(thirtyDaysAgo, "yyyy-MM-dd");
+      if (clients.length === 0) return;
+      // 1d fetch
+      const { data, error } = await supabase
+        .from("client_engagement_score")
+        .select("client_id, eng_score, for_date")
+        .in("client_id", clients.map(c => c.client_id))
+        .eq("for_date", forDate);
+      if (error) {
+        console.error("Error fetching engagement scores from table:", error);
+        return;
+      }
+      const scores: { [clientId: number]: number | null } = {};
+      (data || []).forEach((row: any) => {
+        scores[row.client_id] = row.eng_score;
+      });
+      setEngagementScores(scores);
+      // 7d fetch
+      const { data: data7d, error: error7d } = await supabase
+        .from("client_engagement_score")
+        .select("client_id, eng_score, for_date")
+        .in("client_id", clients.map(c => c.client_id))
+        .gte("for_date", forDate7d)
+        .lte("for_date", forDate);
+      if (error7d) {
+        console.error("Error fetching 7d engagement scores from table:", error7d);
+        return;
+      }
+      // Group by client and average for 7d
+      const scores7d: { [clientId: number]: number | null } = {};
+      const grouped7d: { [clientId: number]: number[] } = {};
+      (data7d || []).forEach((row: any) => {
+        if (!grouped7d[row.client_id]) grouped7d[row.client_id] = [];
+        if (typeof row.eng_score === 'number') grouped7d[row.client_id].push(row.eng_score);
+      });
+      Object.keys(grouped7d).forEach(cid => {
+        const arr = grouped7d[Number(cid)];
+        if (arr.length > 0) {
+          scores7d[Number(cid)] = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+        } else {
+          scores7d[Number(cid)] = null;
+        }
+      });
+      setEngagementScores7d(scores7d);
+      // 30d fetch
+      const { data: data30d, error: error30d } = await supabase
+        .from("client_engagement_score")
+        .select("client_id, eng_score, for_date")
+        .in("client_id", clients.map(c => c.client_id))
+        .gte("for_date", forDate30d)
+        .lte("for_date", forDate);
+      if (error30d) {
+        console.error("Error fetching 30d engagement scores from table:", error30d);
+        return;
+      }
+      // Group by client and average for 30d
+      const scores30d: { [clientId: number]: number | null } = {};
+      const grouped30d: { [clientId: number]: number[] } = {};
+      (data30d || []).forEach((row: any) => {
+        if (!grouped30d[row.client_id]) grouped30d[row.client_id] = [];
+        if (typeof row.eng_score === 'number') grouped30d[row.client_id].push(row.eng_score);
+      });
+      Object.keys(grouped30d).forEach(cid => {
+        const arr = grouped30d[Number(cid)];
+        if (arr.length > 0) {
+          scores30d[Number(cid)] = Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+        } else {
+          scores30d[Number(cid)] = null;
+        }
+      });
+      setEngagementScores30d(scores30d);
+    }
+    if (clients.length > 0) {
+      fetchEngagementScoresFromTable();
+    }
+  }, [clients]);
+
+  useEffect(() => {
+    async function fetchClientImageUrls() {
+      if (!clients.length) return;
+      const urls: { [clientId: number]: string | null } = {};
+      await Promise.all(clients.map(async (client) => {
+        const filePath = `${client.client_id}.jpg`;
+        const { data, error } = await supabase.storage
+          .from('client-images')
+          .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+        if (data && data.signedUrl) {
+          urls[client.client_id] = data.signedUrl;
+        } else {
+          urls[client.client_id] = null;
+        }
+      }));
+      setClientImageUrls(urls);
+    }
+    fetchClientImageUrls();
+  }, [clients]);
 
   // Get filter from URL on component mount
   useEffect(() => {
@@ -511,8 +629,10 @@ const Clients: React.FC = () => {
                       Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_score')}>
-                      Engagement Score {sortColumn === 'engagement_score' && (sortDirection === 'asc' ? '▲' : '▼')}
+                      Client Engagement (1d) {sortColumn === 'engagement_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer">Client Engagement (7d)</th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer">Client Engagement (30d)</th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
                       Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
@@ -537,12 +657,21 @@ const Clients: React.FC = () => {
                         >
                           <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
                             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
-                              <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
-                                {client.cl_name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </div>
+                              {clientImageUrls[client.client_id] ? (
+                                <img
+                                  src={clientImageUrls[client.client_id] || undefined}
+                                  alt={client.cl_name}
+                                  className="w-full h-full object-cover rounded-full"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">
+                                  {client.cl_name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")}
+                                </div>
+                              )}
                             </div>
                             <span
                               className="font-semibold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer text-base"
@@ -574,13 +703,23 @@ const Clients: React.FC = () => {
                           {ACTIVITY_TYPES.map((type) => (
                             <td key={type} className="px-6 py-5">
                               <span className="font-medium flex items-center gap-2">
-                                {/* Color dot logic: green (≤1), yellow (≤5), red (>5), gray for N/A */}
-                                {breakdown[type] !== undefined && breakdown[type] !== null ? (
-                                  <span className={`w-2.5 h-2.5 rounded-full inline-block ${ breakdown[type] <= 1 ? 'bg-green-500' : breakdown[type] <= 5 ? 'bg-yellow-500' : 'bg-red-500' }`}></span>
+                                {type === 'hydration' ? (
+                                  (() => {
+                                    const hydrationTimestamp = (breakdown['hydration_last'] || breakdown['hydration'] || null);
+                                    if (!hydrationTimestamp) return 'N/A';
+                                    if (typeof hydrationTimestamp === 'string') {
+                                      const localTime = formatUtcToLocal(hydrationTimestamp);
+                                      const ago = getShortAgo(hydrationTimestamp);
+                                      return `${localTime}${ago ? ` (${ago})` : ''}`;
+                                    }
+                                    if (typeof hydrationTimestamp === 'number') {
+                                      return `${hydrationTimestamp}d ago`;
+                                    }
+                                    return 'N/A';
+                                  })()
                                 ) : (
-                                  <span className="w-2.5 h-2.5 rounded-full inline-block bg-gray-300"></span>
+                                  breakdown[type] !== undefined && breakdown[type] !== null ? `${breakdown[type]}d ago` : 'N/A'
                                 )}
-                                {breakdown[type] !== undefined && breakdown[type] !== null ? `${breakdown[type]}d ago` : 'N/A'}
                               </span>
                             </td>
                           ))}
@@ -592,10 +731,36 @@ const Clients: React.FC = () => {
                           <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
                               <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
+                                <div className="h-full bg-blue-600" style={{ width: `${engagementScores[client.client_id] !== undefined && engagementScores[client.client_id] !== null ? engagementScores[client.client_id] : 0}%` }}></div>
                               </div>
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                100%
+                                {engagementScores[client.client_id] !== undefined && engagementScores[client.client_id] !== null
+                                  ? `${engagementScores[client.client_id]}%`
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600" style={{ width: `${engagementScores7d[client.client_id] !== undefined && engagementScores7d[client.client_id] !== null ? engagementScores7d[client.client_id] : 0}%` }}></div>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
+                                {engagementScores7d[client.client_id] !== undefined && engagementScores7d[client.client_id] !== null
+                                  ? `${engagementScores7d[client.client_id]}%`
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-600" style={{ width: `${engagementScores30d[client.client_id] !== undefined && engagementScores30d[client.client_id] !== null ? engagementScores30d[client.client_id] : 0}%` }}></div>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
+                                {engagementScores30d[client.client_id] !== undefined && engagementScores30d[client.client_id] !== null
+                                  ? `${engagementScores30d[client.client_id]}%`
+                                  : 'N/A'}
                               </span>
                             </div>
                           </td>
