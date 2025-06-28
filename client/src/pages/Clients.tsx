@@ -15,9 +15,6 @@ import { Tooltip } from "@/components/ui/tooltip";
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
-  { label: "Activity Status", value: "inactive" },
-  { label: "Engagement Score", value: "engagement_low" },
-  { label: "Outcome Score", value: "outcome_low" }
 ];
 
 const Clients: React.FC = () => {
@@ -29,6 +26,7 @@ const Clients: React.FC = () => {
     current_streak?: number | null;
     longest_streak?: number | null;
     active_session?: boolean | null;
+    status?: string;
   }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -54,6 +52,7 @@ const Clients: React.FC = () => {
   const [engagementScores30d, setEngagementScores30d] = useState<{ [clientId: number]: number | null }>({});
 
   const [clientImageUrls, setClientImageUrls] = useState<{ [clientId: number]: string | null }>({});
+  const [clientStatuses, setClientStatuses] = useState<{ [clientId: number]: string }>({});
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -99,10 +98,10 @@ const Clients: React.FC = () => {
         }
         const trainerId = trainerRows[0].id;
 
-        // Get client ids
+        // Get client ids and status from trainer_client_web
         const { data: relationshipData, error: relationshipError } = await supabase
           .from("trainer_client_web")
-          .select("client_id")
+          .select("client_id, status")
           .eq("trainer_id", trainerId);
           
         
@@ -114,6 +113,15 @@ const Clients: React.FC = () => {
         }
         clientIds = relationshipData.map((rel) => rel.client_id).filter(Boolean);
         
+        // Create status mapping
+        const statusMap: { [clientId: number]: string } = {};
+        relationshipData.forEach((rel) => {
+          if (rel.client_id) {
+            statusMap[rel.client_id] = rel.status || 'pending';
+          }
+        });
+        setClientStatuses(statusMap);
+        
         // Only proceed if we have valid client IDs
         if (clientIds.length === 0) {
           setClients([]);
@@ -121,13 +129,19 @@ const Clients: React.FC = () => {
           return;
         }
         
-        // Get client names
+        // Get client names and merge with status
         const { data: clientData, error: clientError } = await supabase
           .from("client")
           .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
           .in("client_id", clientIds);
         if (clientError) throw clientError;
-        setClients(clientData || []);
+        
+        // Merge client data with status
+        const clientsWithStatus = (clientData || []).map(client => ({
+          ...client,
+          status: statusMap[client.client_id] || 'pending'
+        }));
+        setClients(clientsWithStatus);
         
         // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
         const { data: allActivity, error: allActivityError } = await supabase
@@ -347,45 +361,104 @@ const Clients: React.FC = () => {
 
   const sortedClients = [...filteredClients].sort((a, b) => {
     if (!sortColumn) return 0;
+    
     let comparisonResult = 0;
     
-    if (sortColumn === 'last_active') {
+    if (sortColumn === 'last_active_ago') {
       const aValue = (a as any).last_active;
       const bValue = (b as any).last_active;
-      // Move N/A values to the end
-      if (!aValue && !bValue) return 0; // Both N/A, keep relative order
-      if (!aValue) return sortDirection === 'asc' ? 1 : -1; // a is N/A, send to end
-      if (!bValue) return sortDirection === 'asc' ? -1 : 1; // b is N/A, send to end
-
-      const dateA = new Date(aValue);
-      const dateB = new Date(bValue);
-      comparisonResult = dateA.getTime() - dateB.getTime();
-    } else if (sortColumn === 'last_active_days') {
-      const daysA = getDaysSince((a as any).last_active) || 0;
-      const daysB = getDaysSince((b as any).last_active) || 0;
-      // Move N/A values (which would result in 0 days from getDaysSince for future dates)
-      // or explicitly null days to the end. Assuming 0 is not a desired sort value for N/A.
-      if (getDaysSince((a as any).last_active) === null && getDaysSince((b as any).last_active) === null) return 0;
-      if (getDaysSince((a as any).last_active) === null) return sortDirection === 'asc' ? 1 : -1;
-      if (getDaysSince((b as any).last_active) === null) return sortDirection === 'asc' ? -1 : 1;
       
-      comparisonResult = daysA - daysB;
+      // Handle N/A values - put them at the bottom regardless of sort direction
+      if (!aValue && !bValue) return 0;
+      if (!aValue) return 1; // a is N/A, send to end
+      if (!bValue) return -1; // b is N/A, send to end
+
+      // Convert timestamps to milliseconds for proper comparison
+      const nowMs = new Date().getTime();
+      const aMs = new Date(aValue.endsWith('Z') ? aValue : `${aValue}Z`).getTime();
+      const bMs = new Date(bValue.endsWith('Z') ? bValue : `${bValue}Z`).getTime();
+      
+      const aDiffMs = nowMs - aMs;
+      const bDiffMs = nowMs - bMs;
+      
+      // More recent activity should have smaller difference (smaller is "earlier" in ascending sort)
+      comparisonResult = aDiffMs - bDiffMs;
     } else if (sortColumn === 'cl_name') {
       comparisonResult = (a as any).cl_name.localeCompare((b as any).cl_name);
-    } else if (sortColumn === 'engagement_score') {
-      // Assuming 100% currently, but if there's actual data, use it.
-      // For now, treat all as equal for sorting.
-      comparisonResult = 0; 
+    } else if (sortColumn === 'engagement_1d') {
+      const aScore = engagementScores[a.client_id];
+      const bScore = engagementScores[b.client_id];
+      
+      // Handle N/A values - put them at the bottom
+      if ((aScore === null || aScore === undefined) && (bScore === null || bScore === undefined)) return 0;
+      if (aScore === null || aScore === undefined) return 1;
+      if (bScore === null || bScore === undefined) return -1;
+      
+      comparisonResult = aScore - bScore;
+    } else if (sortColumn === 'engagement_7d') {
+      const aScore = engagementScores7d[a.client_id];
+      const bScore = engagementScores7d[b.client_id];
+      
+      // Handle N/A values - put them at the bottom
+      if ((aScore === null || aScore === undefined) && (bScore === null || bScore === undefined)) return 0;
+      if (aScore === null || aScore === undefined) return 1;
+      if (bScore === null || bScore === undefined) return -1;
+      
+      comparisonResult = aScore - bScore;
+    } else if (sortColumn === 'engagement_30d') {
+      const aScore = engagementScores30d[a.client_id];
+      const bScore = engagementScores30d[b.client_id];
+      
+      // Handle N/A values - put them at the bottom
+      if ((aScore === null || aScore === undefined) && (bScore === null || bScore === undefined)) return 0;
+      if (aScore === null || aScore === undefined) return 1;
+      if (bScore === null || bScore === undefined) return -1;
+      
+      comparisonResult = aScore - bScore;
+    } else if (sortColumn === 'current_streak') {
+      const aStreak = a.current_streak;
+      const bStreak = b.current_streak;
+      
+      // Handle N/A values - put them at the bottom
+      if ((aStreak === null || aStreak === undefined) && (bStreak === null || bStreak === undefined)) return 0;
+      if (aStreak === null || aStreak === undefined) return 1;
+      if (bStreak === null || bStreak === undefined) return -1;
+      
+      comparisonResult = aStreak - bStreak;
+    } else if (sortColumn === 'longest_streak') {
+      const aStreak = a.longest_streak;
+      const bStreak = b.longest_streak;
+      
+      // Handle N/A values - put them at the bottom
+      if ((aStreak === null || aStreak === undefined) && (bStreak === null || bStreak === undefined)) return 0;
+      if (aStreak === null || aStreak === undefined) return 1;
+      if (bStreak === null || bStreak === undefined) return -1;
+      
+      comparisonResult = aStreak - bStreak;
+    } else if (sortColumn === 'active_session') {
+      const aSession = a.active_session;
+      const bSession = b.active_session;
+      
+      // Convert boolean to number for comparison (true = 1, false = 0)
+      const aValue = aSession ? 1 : 0;
+      const bValue = bSession ? 1 : 0;
+      
+      comparisonResult = aValue - bValue;
     } else if (sortColumn === 'outcome_score') {
-      // Assuming 100% currently, but if there's actual data, use it.
-      // For now, treat all as equal for sorting.
+      // Currently showing 100% for all - treat as equal
       comparisonResult = 0;
-    } else if (sortColumn === 'activity') {
-      const activityA = (a as any).activityBreakdown?.[sortColumn as string] || Infinity; // Treat N/A as largest for sorting
-      const activityB = (b as any).activityBreakdown?.[sortColumn as string] || Infinity;
-      comparisonResult = activityA - activityB;
+    } else if (sortColumn === 'status') {
+      const aStatus = a.status || 'pending';
+      const bStatus = b.status || 'pending';
+      
+      // Sort active first, then pending/others
+      if (aStatus === 'active' && bStatus !== 'active') return -1;
+      if (bStatus === 'active' && aStatus !== 'active') return 1;
+      
+      // If both are the same status or both are non-active, sort alphabetically
+      comparisonResult = aStatus.localeCompare(bStatus);
     } else {
-      // Fallback for other columns using implicit any type (though ideally types would be more specific)
+      // Fallback for other columns
       let aValue: any = (a as any)[sortColumn];
       let bValue: any = (b as any)[sortColumn];
       if (typeof aValue === 'number' && typeof bValue === 'number') {
@@ -395,7 +468,6 @@ const Clients: React.FC = () => {
       }
     }
 
-    console.log(`Final comparison (${sortDirection}): ${comparisonResult}`);
     return sortDirection === 'asc' ? comparisonResult : -comparisonResult;
   });
 
@@ -567,21 +639,30 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('cl_name')}>
                       Name {sortColumn === 'cl_name' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active_days')}>
-                      Last Active (D ago) {sortColumn === 'last_active_days' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active_ago')}>
+                      Last Active (ago) {sortColumn === 'last_active_ago' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Engagement for yesterday (UTC). Calculated as (completed tasks / total tasks) * 100 for that day.">
-                      Client Engagement (1d)
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_1d')} title="Engagement for yesterday (UTC). Calculated as (completed tasks / total tasks) * 100 for that day.">
+                      Client Engagement (1d) {sortColumn === 'engagement_1d' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Average engagement for the last 7 days (yesterday and previous 6 days). Calculated as the mean of daily engagement scores.">
-                      Client Engagement (7d)
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_7d')} title="Average engagement for the last 7 days (yesterday and previous 6 days). Calculated as the mean of daily engagement scores.">
+                      Client Engagement (7d) {sortColumn === 'engagement_7d' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" title="Average engagement for the last 30 days (yesterday and previous 29 days). Calculated as the mean of daily engagement scores.">
-                      Client Engagement (30d)
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_30d')} title="Average engagement for the last 30 days (yesterday and previous 29 days). Calculated as the mean of daily engagement scores.">
+                      Client Engagement (30d) {sortColumn === 'engagement_30d' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Current Streak</th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Longest Streak</th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide">Active Session</th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('current_streak')}>
+                      Current Streak {sortColumn === 'current_streak' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('longest_streak')}>
+                      Longest Streak {sortColumn === 'longest_streak' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('active_session')}>
+                      Active Session {sortColumn === 'active_session' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
+                      Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
                       Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
@@ -719,6 +800,18 @@ const Clients: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-6 py-5">
+                            <span 
+                              className={`inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium ${
+                                client.status === 'active' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                              }`}
+                              title={client.status === 'active' ? 'Client has accepted invitation and profile is set up' : 'Invitation is still pending'}
+                            >
+                              {client.status === 'active' ? 'Active' : 'Pending'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
                             <div className="flex items-center gap-3">
                               <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
@@ -733,7 +826,7 @@ const Clients: React.FC = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} className="text-center py-16">
+                      <td colSpan={10} className="text-center py-16">
                         <div className="flex flex-col items-center">
                           <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                             <Icons.SearchIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
