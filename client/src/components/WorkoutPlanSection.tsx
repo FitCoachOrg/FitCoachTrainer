@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target, Bug } from "lucide-react"
+import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart } from "lucide-react"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
@@ -84,161 +84,480 @@ const ClientDataPopup = ({ isOpen, onClose, clientInfo }: any) => (
   </Dialog>
 )
 
-const AIResponsePopup = ({ isOpen, onClose, aiResponse, clientName, onShowMetrics }: any) => {
-  const [activeTab, setActiveTab] = useState<'formatted' | 'raw'>('formatted');
-  const [parsedResponse, setParsedResponse] = useState<any>(null);
+const AIResponsePopup = ({
+  isOpen,
+  onClose,
+  aiResponse,
+  clientName,
+  onShowMetrics,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  aiResponse: any | null
+  clientName?: string
+  onShowMetrics?: () => void
+}) => {
+  const [activeTab, setActiveTab] = useState<"table" | "raw">("table")
+  const [workoutPlan, setWorkoutPlan] = useState<any[]>([])
+  const [isEditing, setIsEditing] = useState(false)
 
+  // Parse workout plan from AI response
   useEffect(() => {
     if (aiResponse?.response) {
       try {
-        const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/);
+        const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          setParsedResponse(parsed);
+          const parsedData = JSON.parse(jsonMatch[0])
+          if (parsedData.workout_plan && Array.isArray(parsedData.workout_plan)) {
+            // Clean and validate the workout plan data
+            const cleanedWorkoutPlan = parsedData.workout_plan.map((workout: any) => {
+              console.log('🧹 Cleaning workout in popup:', workout)
+              
+              // Helper function to extract numbers from strings
+              const extractNumber = (value: any, defaultValue: number = 0): number => {
+                if (typeof value === 'number') return value;
+                if (typeof value === 'string') {
+                  const match = value.match(/(\d+)/);
+                  return match ? parseInt(match[1]) : defaultValue;
+                }
+                return defaultValue;
+              };
+              
+              // Clean reps field - common issue where duration ends up in reps
+              let cleanReps = workout.reps;
+              if (typeof cleanReps === 'string' && (cleanReps.includes('minute') || cleanReps.includes('min'))) {
+                console.warn('⚠️ Found duration in reps field, fixing:', cleanReps);
+                // Extract number and set as default reps
+                const repsNumber = extractNumber(cleanReps, 10);
+                cleanReps = repsNumber.toString();
+                
+                // If duration is missing or 0, set it from the extracted value
+                if (!workout.duration || workout.duration === 0) {
+                  workout.duration = extractNumber(cleanReps, 15);
+                }
+              }
+              
+              return {
+                ...workout,
+                sets: extractNumber(workout.sets, 3),
+                reps: cleanReps?.toString() || '10',
+                duration: extractNumber(workout.duration, 15),
+                weights: workout.weights || 'bodyweight',
+                body_part: workout.body_part || 'Full Body',
+                category: workout.category || 'Strength',
+                coach_tip: workout.coach_tip || 'Focus on proper form',
+                icon: workout.icon || '💪',
+                for_date: workout.for_date || new Date().toISOString().split('T')[0],
+                for_time: workout.for_time || '08:00:00'
+              };
+            });
+            
+            console.log('✅ Cleaned workout plan for popup:', cleanedWorkoutPlan);
+            setWorkoutPlan(cleanedWorkoutPlan)
+          }
         }
       } catch (error) {
-        console.error('Error parsing AI response:', error);
+        console.error("Error parsing workout plan:", error)
       }
     }
-  }, [aiResponse]);
+  }, [aiResponse])
+
+  const handleWorkoutChange = (index: number, field: string, value: any) => {
+    const updatedPlan = [...workoutPlan]
+    
+    // Type validation and conversion
+    let processedValue = value;
+    
+    if (field === 'sets' || field === 'duration') {
+      // These should be numbers
+      processedValue = typeof value === 'string' ? parseInt(value) || 0 : value;
+    } else if (field === 'reps') {
+      // Reps should be string (can be "10-12", "10", etc.)
+      processedValue = String(value);
+      
+      // If reps contains "minute" or time references, it's probably wrong
+      if (processedValue.includes('minute') || processedValue.includes('min')) {
+        console.warn('⚠️ Reps field contains duration value, cleaning:', processedValue);
+        // Extract number and assume it was meant to be reps
+        const match = processedValue.match(/(\d+)/);
+        processedValue = match ? match[1] : '10';
+      }
+    }
+    
+    updatedPlan[index] = { ...updatedPlan[index], [field]: processedValue }
+    setWorkoutPlan(updatedPlan)
+  }
+
+  const addNewWorkout = () => {
+    const newWorkout = {
+      workout: "New Exercise",
+      sets: 3, // number
+      reps: "10", // string (can be range like "8-12")
+      duration: 15, // number (minutes)
+      weights: "bodyweight",
+      for_date: new Date().toISOString().split("T")[0],
+      for_time: "08:00:00",
+      body_part: "Full Body",
+      category: "Strength",
+      coach_tip: "Focus on proper form",
+      icon: "💪",
+      progression_notes: "Increase intensity when RPE ≤ 8",
+    }
+    console.log('➕ Adding new workout with correct types:', newWorkout)
+    setWorkoutPlan([...workoutPlan, newWorkout])
+  }
+
+  const removeWorkout = (index: number) => {
+    const updatedPlan = workoutPlan.filter((_, i) => i !== index)
+    setWorkoutPlan(updatedPlan)
+  }
+
+  const saveChanges = () => {
+    setIsEditing(false)
+    console.log("Saved workout plan:", workoutPlan)
+  }
+
+  if (!isOpen || !aiResponse) return null
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-900">
-              🤖
+          <DialogTitle className="flex items-center gap-3 text-2xl">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+              <Sparkles className="h-6 w-6 text-white" />
             </div>
-            AI Generated Workout Plan{clientName ? ` for ${clientName}` : ''}
+            <div>
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
+                AI Fitness Plan Generated
+              </span>
+              {clientName && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 font-normal mt-1">
+                  Personalized plan for {clientName}
+                </p>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
-        
-        <div className="space-y-4">
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
-            <p className="text-sm text-emerald-700 dark:text-emerald-300">
-              Your personalized workout plan has been generated using AI. The exercises have been added to your workout list and can be edited as needed.
-            </p>
-          </div>
-
+        <div className="space-y-6">
           {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+          <div className="flex space-x-2 bg-gray-100/80 dark:bg-gray-800/80 p-2 rounded-2xl">
             <button
-              onClick={() => setActiveTab('formatted')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'formatted'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              onClick={() => setActiveTab("table")}
+              className={`px-6 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${
+                activeTab === "table"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-lg scale-105"
+                  : "text-gray-600 dark:text-gray-400"
               }`}
             >
-              Formatted View
+              <BarChart3 className="w-4 h-4" />
+              Workout Table
             </button>
             <button
-              onClick={() => setActiveTab('raw')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'raw'
-                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              onClick={() => setActiveTab("raw")}
+              className={`px-6 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${
+                activeTab === "raw"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-lg scale-105"
+                  : "text-gray-600 dark:text-gray-400"
               }`}
             >
-              Raw JSON
+              <Edit className="w-4 h-4" />
+              Raw Response
             </button>
           </div>
-
-          {/* Tab Content */}
-          {activeTab === 'formatted' && parsedResponse && (
+          {/* Workout Plan Table */}
+          {activeTab === "table" && (
             <div className="space-y-6">
-              {/* Overview */}
-              {parsedResponse.overview && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border">
-                  <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Plan Overview</h3>
-                  <p className="text-gray-700 dark:text-gray-300">{parsedResponse.overview}</p>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
+                    <Dumbbell className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xl text-gray-900 dark:text-white">Workout Plan</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {workoutPlan.length} exercises • Personalized for your goals
+                    </p>
+                  </div>
                 </div>
-              )}
-
-              {/* Split and Progression */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {parsedResponse.split && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Training Split</h4>
-                    <p className="text-sm text-blue-700 dark:text-blue-400">{parsedResponse.split}</p>
-                  </div>
-                )}
-                
-                {parsedResponse.progression_model && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                    <h4 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">Progression Model</h4>
-                    <p className="text-sm text-purple-700 dark:text-purple-400">{parsedResponse.progression_model}</p>
-                  </div>
-                )}
+                <div className="flex gap-3">
+                  {isEditing ? (
+                    <>
+                      <Button onClick={saveChanges} className="bg-gradient-to-r from-green-500 to-emerald-600">
+                        <Save className="w-4 h-4 mr-2" />
+                        Save Changes
+                      </Button>
+                      <Button onClick={() => setIsEditing(false)} variant="outline">
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      variant="outline"
+                      className="border-2 border-blue-200"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Plan
+                    </Button>
+                  )}
+                </div>
               </div>
-
-              {/* Weekly Breakdown */}
-              {parsedResponse.weekly_breakdown && (
-                <div className="bg-gray-50 dark:bg-gray-900/50 p-6 rounded-lg border">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Weekly Breakdown</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {Object.entries(parsedResponse.weekly_breakdown).map(([day, description]: [string, any]) => (
-                      <div key={day} className="bg-white dark:bg-gray-800 p-3 rounded border">
-                        <h5 className="font-medium text-gray-900 dark:text-white text-sm">{day}</h5>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{description}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Workout Plan */}
-              {parsedResponse.workout_plan && (
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Exercise Details</h3>
+              {workoutPlan.length > 0 ? (
+                <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left p-2 font-medium text-gray-900 dark:text-white">Exercise</th>
-                          <th className="text-left p-2 font-medium text-gray-900 dark:text-white">Sets</th>
-                          <th className="text-left p-2 font-medium text-gray-900 dark:text-white">Reps</th>
-                          <th className="text-left p-2 font-medium text-gray-900 dark:text-white">Body Part</th>
-                          <th className="text-left p-2 font-medium text-gray-900 dark:text-white">Coach Tip</th>
+                        <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Exercise</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Sets</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Reps</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Duration</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Equipment</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Body Part</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Category</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Date</th>
+                          <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Coach Tip</th>
+                          {isEditing && <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Actions</th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {parsedResponse.workout_plan.map((exercise: any, index: number) => (
-                          <tr key={index} className="border-b border-gray-100 dark:border-gray-800">
-                            <td className="p-2">
-                              <div className="flex items-center gap-2">
-                                <span>{exercise.icon || '💪'}</span>
-                                <span className="font-medium text-gray-900 dark:text-white">{exercise.workout}</span>
+                        {workoutPlan.map((workout, index) => (
+                          <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <span className="text-2xl">{workout.icon}</span>
+                                {isEditing ? (
+                                  <Input
+                                    value={workout.workout}
+                                    onChange={(e) => handleWorkoutChange(index, "workout", e.target.value)}
+                                    className="font-semibold"
+                                  />
+                                ) : (
+                                  <span className="font-semibold">{workout.workout}</span>
+                                )}
                               </div>
                             </td>
-                            <td className="p-2 text-gray-700 dark:text-gray-300">{exercise.sets}</td>
-                            <td className="p-2 text-gray-700 dark:text-gray-300">{exercise.reps}</td>
-                            <td className="p-2 text-gray-700 dark:text-gray-300">{exercise.body_part}</td>
-                            <td className="p-2 text-gray-600 dark:text-gray-400 text-xs">{exercise.coach_tip}</td>
+                            <td className="p-4">
+                                                              {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    value={workout.sets}
+                                    onChange={(e) =>
+                                      handleWorkoutChange(index, "sets", Math.max(1, Number.parseInt(e.target.value) || 1))
+                                    }
+                                    className="w-20"
+                                  />
+                                ) : (
+                                  <Badge variant="secondary">{workout.sets}</Badge>
+                                )}
+                            </td>
+                            <td className="p-4">
+                                                              {isEditing ? (
+                                  <Input
+                                    value={workout.reps}
+                                    onChange={(e) => handleWorkoutChange(index, "reps", e.target.value)}
+                                    className="w-24"
+                                    placeholder="10"
+                                    pattern="[0-9-]+"
+                                    title="Enter number or range (e.g., 10 or 8-12)"
+                                  />
+                                ) : (
+                                  <span>{workout.reps}</span>
+                                )}
+                            </td>
+                            <td className="p-4">
+                                                              {isEditing ? (
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max="180"
+                                    value={workout.duration}
+                                    onChange={(e) =>
+                                      handleWorkoutChange(index, "duration", Math.max(1, Number.parseInt(e.target.value) || 15))
+                                    }
+                                    className="w-24"
+                                    placeholder="15"
+                                  />
+                                ) : (
+                                  <span>{workout.duration} min</span>
+                                )}
+                            </td>
+                            <td className="p-4">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.weights}
+                                  onValueChange={(value) => handleWorkoutChange(index, "weights", value)}
+                                >
+                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="bodyweight">Bodyweight</SelectItem>
+                                    <SelectItem value="Dumbbells">Dumbbells</SelectItem>
+                                    <SelectItem value="Barbell">Barbell</SelectItem>
+                                    <SelectItem value="Resistance Bands">Resistance Bands</SelectItem>
+                                    <SelectItem value="Machine">Machine</SelectItem>
+                                    <SelectItem value="Kettlebell">Kettlebell</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span>{workout.weights}</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.body_part}
+                                  onValueChange={(value) => handleWorkoutChange(index, "body_part", value)}
+                                >
+                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Full Body">Full Body</SelectItem>
+                                    <SelectItem value="Upper Body">Upper Body</SelectItem>
+                                    <SelectItem value="Lower Body">Lower Body</SelectItem>
+                                    <SelectItem value="Core">Core</SelectItem>
+                                    <SelectItem value="Arms">Arms</SelectItem>
+                                    <SelectItem value="Legs">Legs</SelectItem>
+                                    <SelectItem value="Chest">Chest</SelectItem>
+                                    <SelectItem value="Back">Back</SelectItem>
+                                    <SelectItem value="Shoulders">Shoulders</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge variant="outline">{workout.body_part}</Badge>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {isEditing ? (
+                                <Select
+                                  value={workout.category}
+                                  onValueChange={(value) => handleWorkoutChange(index, "category", value)}
+                                >
+                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Strength">Strength</SelectItem>
+                                    <SelectItem value="Cardio">Cardio</SelectItem>
+                                    <SelectItem value="Flexibility">Flexibility</SelectItem>
+                                    <SelectItem value="HIIT">HIIT</SelectItem>
+                                    <SelectItem value="Endurance">Endurance</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge>{workout.category}</Badge>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {isEditing ? (
+                                <Input
+                                  type="date"
+                                  value={workout.for_date}
+                                  onChange={(e) => handleWorkoutChange(index, "for_date", e.target.value)}
+                                  className="w-40"
+                                />
+                              ) : (
+                                <span className="text-sm">{new Date(workout.for_date).toLocaleDateString()}</span>
+                              )}
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              {isEditing ? (
+                                <Textarea
+                                  value={workout.coach_tip}
+                                  onChange={(e) => handleWorkoutChange(index, "coach_tip", e.target.value)}
+                                  className="text-sm"
+                                  rows={2}
+                                />
+                              ) : (
+                                <span className="text-sm text-gray-600 dark:text-gray-400">{workout.coach_tip}</span>
+                              )}
+                            </td>
+                            {isEditing && (
+                              <td className="p-4">
+                                <Button onClick={() => removeWorkout(index)} variant="destructive" size="sm">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  {isEditing && (
+                    <div className="p-6 border-t bg-gray-50 dark:bg-gray-800/50">
+                      <Button onClick={addNewWorkout} variant="outline" className="w-full">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add New Exercise
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-gray-50 dark:bg-gray-900 rounded-2xl">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Dumbbell className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500">No workout plan found in the AI response</p>
                 </div>
               )}
             </div>
           )}
-
-          {activeTab === 'raw' && (
-            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
-              <pre className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto">
-                {aiResponse?.response || 'No response data available'}
-              </pre>
+          {/* Raw Response Tab */}
+          {activeTab === "raw" && (
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border overflow-hidden">
+              <div className="p-6">
+                <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-96 overflow-y-auto">
+                  {aiResponse.response}
+                </pre>
+              </div>
+            </div>
+          )}
+          {/* Usage Statistics */}
+          {aiResponse.usage && (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 p-6 rounded-2xl border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-green-500/10 dark:bg-green-400/10">
+                  <BarChart3 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <h4 className="font-bold text-xl text-green-900 dark:text-green-100">Usage Statistics</h4>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.model || "gpt-4"}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Model</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.total_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Total Tokens</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.prompt_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Input Tokens</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {aiResponse.usage.completion_tokens.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-green-700 dark:text-green-300">Output Tokens</div>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button onClick={onShowMetrics} variant="outline">
-              View Metrics
-            </Button>
-            <Button onClick={onClose}>
+          <div className="flex justify-between items-center pt-6 border-t">
+            {onShowMetrics && aiResponse.usage && (
+              <Button variant="outline" onClick={onShowMetrics}>
+                <PieChart className="w-4 h-4 mr-2" />
+                View Detailed Metrics
+              </Button>
+            )}
+            <Button onClick={onClose} className="ml-auto bg-gradient-to-r from-blue-500 to-purple-600">
               Close
             </Button>
           </div>

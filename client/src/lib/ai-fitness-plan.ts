@@ -95,13 +95,83 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
     console.log('📋 Found workout plan with', aiData.workout_plan.length, 'exercises');
     console.log('📋 Sample exercise:', aiData.workout_plan[0]);
     
+    // Helper function to validate and clean workout data
+    const cleanWorkoutData = (workout: any) => {
+      console.log('🧹 Cleaning workout data:', workout);
+      
+      // Helper function to extract numbers from strings
+      const extractNumber = (value: any, defaultValue: number = 0): number => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          // Extract first number from string (e.g., "30 minutes" -> 30)
+          const match = value.match(/(\d+)/);
+          return match ? parseInt(match[1]) : defaultValue;
+        }
+        return defaultValue;
+      };
+      
+      // Helper function to ensure string values
+      const ensureString = (value: any, defaultValue: string = ''): string => {
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value.toString();
+        return defaultValue;
+      };
+      
+      // Clean and validate reps - should be numeric or numeric string
+      let cleanReps = workout.reps;
+      if (typeof cleanReps === 'string' && cleanReps.includes('minute')) {
+        // If reps contains "minute", it's probably duration that got mixed up
+        console.warn('⚠️ Found duration value in reps field, moving to duration:', cleanReps);
+        if (!workout.duration || workout.duration === 0) {
+          workout.duration = extractNumber(cleanReps, 15);
+        }
+        cleanReps = '10'; // Default reps
+      }
+      
+      // Ensure reps is a string representation of a number
+      const repsNumber = extractNumber(cleanReps, 10);
+      cleanReps = repsNumber.toString();
+      
+      // Clean duration - should be numeric
+      let cleanDuration = extractNumber(workout.duration, 15);
+      
+      // If duration is unreasonably large (like if it got confused with reps), fix it
+      if (cleanDuration > 180) { // More than 3 hours seems wrong for a single exercise
+        console.warn('⚠️ Duration seems too large, capping at 60 minutes:', cleanDuration);
+        cleanDuration = 60;
+      }
+      
+      const cleanedWorkout = {
+        ...workout,
+        sets: extractNumber(workout.sets, 3),
+        reps: cleanReps,
+        duration: cleanDuration,
+        weights: ensureString(workout.weights, 'bodyweight'),
+        body_part: ensureString(workout.body_part, 'Full Body'),
+        category: ensureString(workout.category, 'Strength'),
+        coach_tip: ensureString(workout.coach_tip, 'Focus on proper form'),
+        icon: ensureString(workout.icon, '💪'),
+        workout_yt_link: ensureString(workout.workout_yt_link, '')
+      };
+      
+      console.log('✅ Cleaned workout data:', cleanedWorkout);
+      return cleanedWorkout;
+    };
+
     // Process each workout and update dates
     const processedWorkoutPlan = aiData.workout_plan.map((workout: any) => {
-      const dayName = workout.day;
+      // First clean the workout data
+      const cleanedWorkout = cleanWorkoutData(workout);
+      
+      const dayName = cleanedWorkout.day;
       
       if (!dayName) {
-        console.warn('⚠️ Workout missing day information:', workout);
-        return workout;
+        console.warn('⚠️ Workout missing day information:', cleanedWorkout);
+        return {
+          ...cleanedWorkout,
+          for_date: new Date().toISOString().split('T')[0], // Default to today
+          client_id: clientId
+        };
       }
       
       try {
@@ -113,13 +183,17 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
         
         // Update the workout with the calculated date and client ID
         return {
-          ...workout,
+          ...cleanedWorkout,
           for_date: formattedDate,
           client_id: clientId
         };
       } catch (error) {
         console.error(`❌ Error processing date for ${dayName}:`, error);
-        return workout;
+        return {
+          ...cleanedWorkout,
+          for_date: new Date().toISOString().split('T')[0], // Default to today
+          client_id: clientId
+        };
       }
     });
     
@@ -181,20 +255,35 @@ async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
         console.log(`⚠️ Time validation changed: "${originalTime}" → "${validatedTime}"`);
       }
       
+      // Ensure proper types for database insertion
+      const ensureNumber = (value: any, defaultValue: number = 0): number => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const parsed = parseInt(value);
+          return isNaN(parsed) ? defaultValue : parsed;
+        }
+        return defaultValue;
+      };
+      
+      const ensureString = (value: any, defaultValue: string = ''): string => {
+        if (value === null || value === undefined) return defaultValue;
+        return String(value);
+      };
+      
       const dbRecord = {
         client_id: clientId,
-        workout: workout.workout || workout.name,
-        sets: workout.sets,
-        reps: workout.reps,
-        duration: workout.duration,
-        weights: workout.weights,
-        for_date: workout.for_date,
+        workout: ensureString(workout.workout || workout.name, 'Unknown Exercise'),
+        sets: ensureNumber(workout.sets, 3),
+        reps: ensureString(workout.reps, '10'), // reps can be "10-12" or "10", so keep as string
+        duration: ensureNumber(workout.duration, 15),
+        weights: ensureString(workout.weights, 'bodyweight'),
+        for_date: ensureString(workout.for_date, new Date().toISOString().split('T')[0]),
         for_time: validatedTime,
-        body_part: workout.body_part,
-        category: workout.category,
-        coach_tip: workout.coach_tip,
-        icon: workout.icon,
-        workout_yt_link: workout.workout_yt_link || ''
+        body_part: ensureString(workout.body_part, 'Full Body'),
+        category: ensureString(workout.category, 'Strength'),
+        coach_tip: ensureString(workout.coach_tip, 'Focus on proper form'),
+        icon: ensureString(workout.icon, '💪'),
+        workout_yt_link: ensureString(workout.workout_yt_link, '')
         // workout_id is optional and will be auto-generated by Supabase if needed
       };
       
