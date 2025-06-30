@@ -4094,43 +4094,38 @@ export default function ClientDashboard() {
             </div>
           )}
 
-          {/* Tabbed Content */}
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <Tabs defaultValue="metrics" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-4 mb-4">
-                  <TabsTrigger value="metrics" className="flex items-center gap-2">
-                    <LineChart className="h-4 w-4" />
-                    <span>Metrics</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="workout" className="flex items-center gap-2">
-                    <Dumbbell className="h-4 w-4" />
-                    <span>Workout Plan</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="nutrition" className="flex items-center gap-2">
-                    <Utensils className="h-4 w-4" />
-                    <span>Nutrition Plan</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="programs" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>Programs</span>
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="metrics">
-                  <MetricsSection clientId={clientId} isActive={activeTab === "metrics"} />
-                </TabsContent>
-                <TabsContent value="workout">
-                  <WorkoutPlanSection clientId={client?.id} />
-                </TabsContent>
-                <TabsContent value="nutrition">
-                  <NutritionPlanSection clientId={clientId} isActive={activeTab === "nutrition"} />
-                </TabsContent>
-                <TabsContent value="programs">
-                  <ProgramManagementSection clientId={clientId} isActive={activeTab === "programs"} />
-                </TabsContent>
-              </Tabs>
-            </CardHeader>
-          </Card>
+          {/* Tab Content Sections */}
+          {activeTab === "metrics" && (
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+              <CardHeader className="pb-0">
+                <MetricsSection clientId={clientId} isActive={activeTab === "metrics"} />
+              </CardHeader>
+            </Card>
+          )}
+
+          {activeTab === "workout" && (
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+              <CardHeader className="pb-0">
+                <WorkoutPlanSection clientId={client?.id} />
+              </CardHeader>
+            </Card>
+          )}
+
+          {activeTab === "nutrition" && (
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+              <CardHeader className="pb-0">
+                <NutritionPlanSection clientId={clientId} isActive={activeTab === "nutrition"} />
+              </CardHeader>
+            </Card>
+          )}
+
+          {activeTab === "programs" && (
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+              <CardHeader className="pb-0">
+                <ProgramManagementSection clientId={clientId} isActive={activeTab === "programs"} />
+              </CardHeader>
+            </Card>
+          )}
         </div>
       </div>
 
