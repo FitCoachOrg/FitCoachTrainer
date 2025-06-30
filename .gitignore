@@ -22,3 +22,9 @@ client/src/.env
 client/src/.env.local
 server/.env
 server/.env.local
+client/src/.env.local
+client/src/.env
+client/.env.local
+client/.env
+.env.local
+.env

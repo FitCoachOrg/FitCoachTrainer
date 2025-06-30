@@ -55,16 +55,45 @@ function formatDateToYYYYMMDD(date: Date): string {
  */
 function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
   try {
+    console.log('📅 === PROCESSING WORKOUT PLAN DATES ===');
     console.log('📅 Processing workout plan dates...');
+    console.log('📅 AI Response Text Length:', aiResponseText.length);
+    console.log('📅 AI Response Preview (first 500 chars):', aiResponseText.substring(0, 500));
+    
+    // Try to extract JSON from response
+    console.log('🔍 Attempting to extract JSON from AI response...');
+    let jsonText = aiResponseText;
+    
+    // Check if response contains JSON within larger text
+    const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+      console.log('🔍 Found JSON match in response');
+      console.log('🔍 Extracted JSON length:', jsonText.length);
+    } else {
+      console.log('🔍 No JSON brackets found, using full response');
+    }
     
     // Parse the AI response JSON
-    const aiData = JSON.parse(aiResponseText);
+    console.log('🔄 Parsing JSON...');
+    const aiData = JSON.parse(jsonText);
+    console.log('✅ JSON parsing successful');
+    console.log('📊 Parsed AI Data Keys:', Object.keys(aiData));
+    
+    console.log('🔍 Validating workout plan structure...');
+    console.log('🔍 Has workout_plan property:', !!aiData.workout_plan);
+    console.log('🔍 workout_plan type:', typeof aiData.workout_plan);
+    console.log('🔍 workout_plan is array:', Array.isArray(aiData.workout_plan));
     
     if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
+      console.error('❌ Invalid workout plan format: missing workout_plan array');
+      console.error('❌ AI Data structure:', aiData);
       throw new Error('Invalid workout plan format: missing workout_plan array');
     }
     
+    console.log('✅ Workout plan structure is valid');
     console.log('📋 Found workout plan with', aiData.workout_plan.length, 'exercises');
+    console.log('📋 Sample exercise:', aiData.workout_plan[0]);
     
     // Process each workout and update dates
     const processedWorkoutPlan = aiData.workout_plan.map((workout: any) => {
@@ -115,43 +144,99 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
  */
 async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
   try {
+    console.log('💾 === STARTING DATABASE SAVE OPERATION ===');
     console.log('💾 Saving workout plan to database...');
     console.log('📊 Workout plan items to save:', workoutPlan.length);
+    console.log('🆔 Client ID:', clientId);
+    console.log('📋 Input workout plan structure:', workoutPlan);
+    console.log('📋 First workout raw data:', workoutPlan[0]);
     
+    // Helper function to validate and format time
+    const validateTime = (timeValue: any): string | null => {
+      if (!timeValue) return '08:00:00'; // Default time
+      
+      // If it's already a valid time format (HH:MM:SS or HH:MM)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
+      if (typeof timeValue === 'string' && timeRegex.test(timeValue)) {
+        // Ensure HH:MM:SS format
+        return timeValue.includes(':') && timeValue.split(':').length === 2 
+          ? `${timeValue}:00` 
+          : timeValue;
+      }
+      
+      // If it's not a valid time or contains text like "not applicable", return default
+      return '08:00:00';
+    };
+
     // Prepare data for database insertion
-    const workoutData = workoutPlan.map((workout) => ({
-      client_id: clientId,
-      workout_name: workout.workout || workout.name,
-      day: workout.day,
-      sets: workout.sets,
-      reps: workout.reps,
-      duration: workout.duration,
-      weights: workout.weights,
-      for_date: workout.for_date,
-      for_time: workout.for_time || '08:00:00',
-      body_part: workout.body_part,
-      category: workout.category,
-      coach_tip: workout.coach_tip,
-      icon: workout.icon,
-      progression_notes: workout.progression_notes,
-      created_at: new Date().toISOString()
-    }));
+    console.log('🔄 Starting data transformation for database...');
     
+    const workoutData = workoutPlan.map((workout, index) => {
+      console.log(`🏋️ Processing workout ${index + 1}:`, workout);
+      
+      const originalTime = workout.for_time;
+      const validatedTime = validateTime(workout.for_time);
+      
+      if (originalTime !== validatedTime) {
+        console.log(`⚠️ Time validation changed: "${originalTime}" → "${validatedTime}"`);
+      }
+      
+      const dbRecord = {
+        client_id: clientId,
+        workout: workout.workout || workout.name,
+        sets: workout.sets,
+        reps: workout.reps,
+        duration: workout.duration,
+        weights: workout.weights,
+        for_date: workout.for_date,
+        for_time: validatedTime,
+        body_part: workout.body_part,
+        category: workout.category,
+        coach_tip: workout.coach_tip,
+        icon: workout.icon,
+        workout_yt_link: workout.workout_yt_link || ''
+        // workout_id is optional and will be auto-generated by Supabase if needed
+      };
+      
+      console.log(`✅ Transformed workout ${index + 1} for DB:`, dbRecord);
+      return dbRecord;
+    });
+    
+    console.log('📝 === FINAL DATABASE PAYLOAD ===');
     console.log('📝 Prepared workout data for database:', workoutData);
+    console.log('📝 Total records to insert:', workoutData.length);
     
     // Insert workout plan into database
+    console.log('🗄️ === STARTING SUPABASE DATABASE INSERTION ===');
+    console.log('🗄️ Table: workout_plan');
+    console.log('🗄️ Operation: INSERT');
+    console.log('🗄️ Data being inserted:', JSON.stringify(workoutData, null, 2));
+    
     const { data, error } = await supabase
       .from('workout_plan')
       .insert(workoutData)
       .select();
     
+    console.log('🗄️ === SUPABASE RESPONSE ===');
+    console.log('🗄️ Error:', error);
+    console.log('🗄️ Data:', data);
+    console.log('🗄️ Data type:', typeof data);
+    console.log('🗄️ Data length:', Array.isArray(data) ? data.length : 'Not an array');
+    
     if (error) {
+      console.error('❌ === DATABASE INSERTION FAILED ===');
       console.error('❌ Database insertion error:', error);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error details:', error.details);
+      console.error('❌ Error hint:', error.hint);
       throw new Error(`Failed to save workout plan: ${error.message}`);
     }
     
+    console.log('✅ === DATABASE INSERTION SUCCESSFUL ===');
     console.log('✅ Successfully saved workout plan to database');
     console.log('📊 Inserted records:', data?.length || 0);
+    console.log('📊 Inserted data:', data);
     
     return {
       success: true,
@@ -311,6 +396,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
   console.log('🤖 Starting AI workout plan generation for client:', clientId);
   console.log('📊 Target Table: client');
   console.log('🔍 Query Parameters:', { client_id: clientId });
+  console.log('⏰ Start Time:', new Date().toISOString());
   
   try {
     // Fetch client data from Supabase
@@ -457,21 +543,55 @@ export async function generateAIWorkoutPlan(clientId: number) {
     
     // Generate AI response using the comprehensive fitness coach prompt
     console.log('🤖 Starting OpenAI ChatGPT integration...');
+    console.log('👤 Client Info Being Sent to AI:', {
+      name: clientInfo.name,
+      age: clientInfo.age,
+      primaryGoal: clientInfo.primaryGoal,
+      trainingDaysPerWeek: clientInfo.trainingDaysPerWeek,
+      availableEquipment: clientInfo.availableEquipment
+    });
     
     try {
+      const startTime = Date.now();
       const aiResponse = await generateAIResponse(clientInfo);
+      const endTime = Date.now();
       console.log('✅ AI Response generated successfully');
+      console.log('⏱️ AI Generation took:', endTime - startTime, 'ms');
+      console.log('🎯 AI Response Type:', typeof aiResponse);
+      console.log('🎯 AI Response Keys:', Object.keys(aiResponse || {}));
       console.log('🎯 AI Response:', aiResponse);
       
+      // Check if response contains expected structure
+      if (aiResponse?.response) {
+        console.log('📝 AI Response Text Length:', aiResponse.response.length);
+        console.log('📝 AI Response Preview (first 200 chars):', aiResponse.response.substring(0, 200));
+        console.log('🔍 Contains JSON brackets:', aiResponse.response.includes('{') && aiResponse.response.includes('}'));
+      } else {
+        console.error('❌ AI Response missing response field:', aiResponse);
+      }
+      
       // Process workout plan dates
+      console.log('📅 Starting workout plan date processing...');
       if (!aiResponse.response) {
+        console.error('❌ AI response is empty or null');
         throw new Error('AI response is empty or null');
       }
+      
+      console.log('🔄 Processing workout plan dates...');
       const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
+      console.log('✅ Date processing completed');
+      console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
+      console.log('📊 Workout Plan Array Length:', processedWorkoutPlan?.workout_plan?.length || 0);
+      
+      if (processedWorkoutPlan?.workout_plan?.length > 0) {
+        console.log('📋 First Workout Sample:', processedWorkoutPlan.workout_plan[0]);
+      }
       
       // Save workout plan to database
+      console.log('💾 Checking if workout plan should be saved to database...');
       if (!processedWorkoutPlan.workout_plan || processedWorkoutPlan.workout_plan.length === 0) {
         console.warn('⚠️ No workout exercises found in AI response');
+        console.log('❌ WILL NOT SAVE TO DATABASE - No exercises found');
         return {
           success: false,
           message: 'No workout exercises found in AI response',
@@ -482,24 +602,92 @@ export async function generateAIWorkoutPlan(clientId: number) {
         };
       }
       
+      console.log('✅ Workout exercises found, PROCEEDING WITH DATABASE SAVE');
+      console.log('📊 Number of exercises to save:', processedWorkoutPlan.workout_plan.length);
+      
+      // Prepare the data that will be sent to database for debugging
+      const validateTime = (timeValue: any): string | null => {
+        if (!timeValue) return '08:00:00';
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/;
+        if (typeof timeValue === 'string' && timeRegex.test(timeValue)) {
+          return timeValue.includes(':') && timeValue.split(':').length === 2 
+            ? `${timeValue}:00` 
+            : timeValue;
+        }
+        return '08:00:00';
+      };
+
+      const debugParsedData = processedWorkoutPlan.workout_plan.map((workout: any) => ({
+        client_id: clientId,
+        workout: workout.workout || workout.name,
+        sets: workout.sets,
+        reps: workout.reps,
+        duration: workout.duration,
+        weights: workout.weights,
+        for_date: workout.for_date,
+        for_time: validateTime(workout.for_time),
+        body_part: workout.body_part,
+        category: workout.category,
+        coach_tip: workout.coach_tip,
+        icon: workout.icon,
+        workout_yt_link: workout.workout_yt_link || ''
+      }));
+
+      console.log('🚀 CALLING saveWorkoutPlanToDatabase function...');
+      console.log('📝 About to save workout plan with:', {
+        workoutPlanLength: processedWorkoutPlan.workout_plan.length,
+        clientId: clientId,
+        sampleWorkout: processedWorkoutPlan.workout_plan[0]
+      });
+      
       const saveResult = await saveWorkoutPlanToDatabase(processedWorkoutPlan.workout_plan, clientId);
       
+      console.log('📤 Database save operation completed');
+      console.log('✅ Save Result:', saveResult);
+      console.log('🎯 Save Success:', saveResult.success);
+      
       if (saveResult.success) {
+        console.log('🎉 DATABASE SAVE SUCCESSFUL!');
+        console.log('📊 Records saved:', saveResult.data?.length || 0);
+        console.log('🔍 === OPERATION SUMMARY (SUCCESS) ===');
+        console.log('🔍 1. ✅ Client data retrieved from database');
+        console.log('🔍 2. ✅ AI response generated successfully');
+        console.log('🔍 3. ✅ AI response parsed successfully');
+        console.log('🔍 4. ✅ Workout plan dates processed');
+        console.log('🔍 5. ✅ DATABASE SAVE COMPLETED');
+        console.log('🔍 FINAL RESULT: YES, THE CODE AUTOMATICALLY PUSHES TO DATABASE');
+        console.log('🔍 Records saved to workout_plan table:', saveResult.data?.length || 0);
         return {
           success: true,
           message: `Successfully generated and saved AI workout plan for client: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
           clientData: clientData,
           clientInfo: clientInfo,
           aiResponse: aiResponse,
-          workoutPlan: processedWorkoutPlan
+          workoutPlan: processedWorkoutPlan,
+          debugData: {
+            rawResponse: aiResponse,
+            parsedData: debugParsedData
+          }
         };
       } else {
         console.error('❌ Error saving workout plan to database:', saveResult.message);
+        console.log('🔍 === OPERATION SUMMARY (FAILED) ===');
+        console.log('🔍 1. ✅ Client data retrieved from database');
+        console.log('🔍 2. ✅ AI response generated successfully');
+        console.log('🔍 3. ✅ AI response parsed successfully');
+        console.log('🔍 4. ✅ Workout plan dates processed');
+        console.log('🔍 5. ❌ DATABASE SAVE FAILED');
+        console.log('🔍 ERROR DETAILS:', saveResult.message);
         return {
           success: false,
           message: `Failed to save workout plan: ${saveResult.message}`,
           clientData: clientData,
-          clientInfo: clientInfo
+          clientInfo: clientInfo,
+          debugData: {
+            rawResponse: aiResponse,
+            parsedData: debugParsedData,
+            error: saveResult.message
+          }
         };
       }
     } catch (aiError) {

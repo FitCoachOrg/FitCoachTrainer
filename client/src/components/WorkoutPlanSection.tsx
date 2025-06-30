@@ -12,10 +12,11 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target } from "lucide-react"
+import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target, Bug } from "lucide-react"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
+import AIDebugPopup from "@/components/AIDebugPopup"
 
 // Types
 interface Exercise {
@@ -311,6 +312,11 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
     timestamp: string
     responseTime?: number
   } | null>(null)
+  const [showDebugPopup, setShowDebugPopup] = useState(false)
+  const [debugData, setDebugData] = useState<{
+    rawResponse: any
+    parsedData: any[]
+  } | null>(null)
   const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
   const [showEditPlanModal, setShowEditPlanModal] = useState(false)
   const [editedPlan, setEditedPlan] = useState<WorkoutPlan | null>(null)
@@ -515,8 +521,10 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
 
   // Handle AI fitness plan generation
   const handleGenerateAIPlans = async () => {
+    console.log("🚀 === AI GENERATION BUTTON CLICKED ===")
     console.log("🚀 Button clicked - Starting AI generation process")
     console.log("⏰ Timestamp:", new Date().toISOString())
+    console.log("🔍 Component State - isGeneratingAI:", isGeneratingAI)
 
     setIsGeneratingAI(true)
     const startTime = Date.now() // Track response time
@@ -525,8 +533,12 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
       // Use the actual client ID passed as prop, fallback to hardcoded for testing
       const actualClientId = clientId ? Number(clientId) : 34
       console.log("🎯 Using client ID:", actualClientId, clientId ? "(from props)" : "(fallback)")
+      console.log("📞 CALLING generateAIWorkoutPlan function...")
+      console.log("📞 Function will automatically attempt to save to database if successful")
 
       const result = await generateAIWorkoutPlan(actualClientId)
+      console.log("📨 === FUNCTION CALL COMPLETED ===")
+      console.log("📨 Full result object:", result)
       const responseTime = Date.now() - startTime // Calculate response time
 
       console.log("📬 Function Response:")
@@ -596,6 +608,12 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
 
               const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
               
+              // Capture debug data for successful generation
+              if (result.debugData) {
+                setDebugData(result.debugData)
+                setShowDebugPopup(true)
+              }
+              
               // Log the complete AI response for debugging
               console.log("🎯 COMPLETE AI RESPONSE:")
               console.log("📄 Raw Response:", result.aiResponse.response)
@@ -611,6 +629,12 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
               // Show the raw response in popup (parsing failed)
               setAiResponse(result.aiResponse)
               setShowAIResponsePopup(true)
+
+              // Capture debug data for parsing errors
+              if (result.debugData) {
+                setDebugData(result.debugData)
+                setShowDebugPopup(true)
+              }
 
               // Capture metrics for later display
               if (result.aiResponse.usage) {
@@ -648,6 +672,12 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
       } else {
         console.log("❌ FAILURE - Data retrieval failed")
         console.log("💬 Error Message:", result.message)
+
+        // Capture debug data for failures
+        if (result.debugData) {
+          setDebugData(result.debugData)
+          setShowDebugPopup(true)
+        }
 
         toast({
           title: "Error",
@@ -839,7 +869,7 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Workout Plans</h3>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Button onClick={handleAddNewWorkout} size="sm" variant="outline" className="text-sm font-medium flex-1">
               <Plus className="h-4 w-4 mr-2" />
               Add Exercise
@@ -862,6 +892,17 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
                 </>
               )}
             </Button>
+            {debugData && (
+              <Button
+                onClick={() => setShowDebugPopup(true)}
+                size="sm"
+                variant="outline"
+                className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                title="View AI Debug Data"
+              >
+                <Bug className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -949,6 +990,14 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
         isOpen={showAIMetricsPopup}
         onClose={() => setShowAIMetricsPopup(false)}
         metrics={aiMetrics}
+        clientName={clientInfo?.name || clientInfo?.preferredName}
+      />
+
+      <AIDebugPopup
+        isOpen={showDebugPopup}
+        onClose={() => setShowDebugPopup(false)}
+        rawResponse={debugData?.rawResponse}
+        parsedData={debugData?.parsedData || []}
         clientName={clientInfo?.name || clientInfo?.preferredName}
       />
     </div>
