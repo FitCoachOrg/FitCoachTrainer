@@ -1,4 +1,3 @@
-
 // AI Fitness Plan Generation with OpenAI Integration
 import { supabase } from './supabase'
 import OpenAI from 'openai'
@@ -795,6 +794,228 @@ export async function generateAIWorkoutPlan(clientId: number) {
       success: false,
       message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
+  }
+}
+
+/**
+ * Function to retrieve client data and generate AI workout plan for REVIEW ONLY
+ * This version does NOT automatically save to Supabase - allows for review and editing first
+ * @param clientId - The ID of the client to fetch data for
+ */
+export async function generateAIWorkoutPlanForReview(clientId: number) {
+  console.log('🤖 Starting AI workout plan generation for REVIEW for client:', clientId);
+  console.log('📊 Target Table: client');
+  console.log('🔍 Query Parameters:', { client_id: clientId });
+  console.log('⏰ Start Time:', new Date().toISOString());
+  console.log('🔒 REVIEW MODE: Will NOT automatically save to Supabase');
+  
+  try {
+    // Fetch client data from Supabase
+    console.log('📋 Executing Supabase query...');
+    console.log('🔗 Query: SELECT * FROM client WHERE client_id = ?', clientId);
+    
+    const { data: clientData, error } = await supabase
+      .from('client')
+      .select('*')
+      .eq('client_id', clientId)
+      .single();
+
+    console.log('📡 Raw Supabase Response:');
+    console.log('  - Data:', clientData);
+    console.log('  - Error:', error);
+
+    if (error) {
+      console.error('❌ Database Error Details:');
+      console.error('  - Message:', error.message);
+      console.error('  - Details:', error.details);
+      console.error('  - Hint:', error.hint);
+      console.error('  - Code:', error.code);
+      return {
+        success: false,
+        message: `Failed to fetch client data: ${error.message}`
+      };
+    }
+
+    if (!clientData) {
+      console.error('❌ No client found with ID:', clientId);
+      return {
+        success: false,
+        message: `No client found with ID: ${clientId}`
+      };
+    }
+
+    console.log('✅ Successfully retrieved client data!');
+    
+    // Save client data in organized variables
+    const clientInfo = {
+      // Basic Information
+      id: clientData.client_id,
+      name: clientData.cl_name,
+      preferredName: clientData.cl_prefer_name,
+      email: clientData.cl_email,
+      username: clientData.cl_username,
+      phone: clientData.cl_phone,
+      age: clientData.cl_age,
+      sex: clientData.cl_sex,
+      
+      // Physical Information
+      height: clientData.cl_height,
+      weight: clientData.cl_weight,
+      targetWeight: clientData.cl_target_weight,
+      
+      // Goals & Preferences
+      primaryGoal: clientData.cl_primary_goal,
+      activityLevel: clientData.cl_activity_level,
+      specificOutcome: clientData.specific_outcome,
+      goalTimeline: clientData.goal_timeline,
+      obstacles: clientData.obstacles,
+      confidenceLevel: clientData.confidence_level,
+      
+      // Training Information
+      trainingExperience: clientData.training_experience,
+      previousTraining: clientData.previous_training,
+      trainingDaysPerWeek: clientData.training_days_per_week,
+      trainingTimePerSession: clientData.training_time_per_session,
+      trainingLocation: clientData.training_location,
+      availableEquipment: clientData.available_equipment,
+      focusAreas: clientData.focus_areas,
+      injuriesLimitations: clientData.injuries_limitations,
+      
+      // Nutrition Information
+      eatingHabits: clientData.eating_habits,
+      dietPreferences: clientData.diet_preferences,
+      foodAllergies: clientData.food_allergies,
+      preferredMealsPerDay: clientData.preferred_meals_per_day,
+      
+      // Lifestyle Information
+      sleepHours: clientData.sleep_hours,
+      stress: clientData.cl_stress,
+      alcohol: clientData.cl_alcohol,
+      supplements: clientData.cl_supplements,
+      gastricIssues: clientData.cl_gastric_issues,
+      motivationStyle: clientData.motivation_style,
+      
+      // Schedule Information
+      wakeTime: clientData.wake_time,
+      bedTime: clientData.bed_time,
+      workoutTime: clientData.workout_time,
+      workoutDays: clientData.workout_days,
+      breakfastTime: clientData.bf_time,
+      lunchTime: clientData.lunch_time,
+      dinnerTime: clientData.dinner_time,
+      snackTime: clientData.snack_time,
+      
+      // System Information
+      onboardingCompleted: clientData.onboarding_completed,
+      onboardingProgress: clientData.onboarding_progress,
+      trainerId: clientData.trainer_id,
+      createdAt: clientData.created_at,
+      lastLogin: clientData.last_login,
+      lastCheckIn: clientData.last_checkIn
+    };
+    
+    console.log('💾 Organized Client Variables:');
+    console.log(clientInfo);
+    
+    // Generate AI response using the comprehensive fitness coach prompt
+    console.log('🤖 Starting OpenAI ChatGPT integration...');
+    console.log('👤 Client Info Being Sent to AI:', {
+      name: clientInfo.name,
+      age: clientInfo.age,
+      primaryGoal: clientInfo.primaryGoal,
+      trainingDaysPerWeek: clientInfo.trainingDaysPerWeek,
+      availableEquipment: clientInfo.availableEquipment
+    });
+    
+    try {
+      const startTime = Date.now();
+      const aiResponse = await generateAIResponse(clientInfo);
+      const endTime = Date.now();
+      console.log('✅ AI Response generated successfully');
+      console.log('⏱️ AI Generation took:', endTime - startTime, 'ms');
+      
+      // Check if response contains expected structure
+      if (!aiResponse?.response) {
+        console.error('❌ AI Response missing response field:', aiResponse);
+        throw new Error('AI response is empty or null');
+      }
+      
+      // Process workout plan dates
+      console.log('🔄 Processing workout plan dates...');
+      const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
+      console.log('✅ Date processing completed');
+      console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
+      console.log('📊 Workout Plan Array Length:', processedWorkoutPlan?.workout_plan?.length || 0);
+      
+      if (processedWorkoutPlan?.workout_plan?.length > 0) {
+        console.log('📋 First Workout Sample:', processedWorkoutPlan.workout_plan[0]);
+      }
+      
+      // Check if workout plan exists
+      if (!processedWorkoutPlan.workout_plan || processedWorkoutPlan.workout_plan.length === 0) {
+        console.warn('⚠️ No workout exercises found in AI response');
+        return {
+          success: false,
+          message: 'No workout exercises found in AI response',
+          clientData: clientData,
+          clientInfo: clientInfo,
+          aiResponse: aiResponse
+        };
+      }
+      
+      console.log('✅ AI Workout Plan generated successfully for REVIEW');
+      console.log('🔒 REVIEW MODE: Plan returned for review, NOT saved to database');
+      console.log('📊 Number of exercises generated:', processedWorkoutPlan.workout_plan.length);
+      
+      return {
+        success: true,
+        message: `Successfully generated AI workout plan for review: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
+        clientData: clientData,
+        clientInfo: clientInfo,
+        aiResponse: aiResponse,
+        workoutPlan: processedWorkoutPlan,
+        generatedAt: new Date().toISOString(),
+        autoSaved: false // Important flag to indicate this was NOT auto-saved
+      };
+        
+    } catch (aiError) {
+      console.error('❌ Error generating AI response:', aiError);
+      return {
+        success: false,
+        message: `Failed to generate AI response: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`,
+        clientData: clientData,
+        clientInfo: clientInfo
+      };
+    }
+
+  } catch (error) {
+    console.error('💥 Unexpected Error:', error);
+    return {
+      success: false,
+      message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+/**
+ * Function to manually save a reviewed and approved workout plan to Supabase
+ * @param workoutPlan - Array of workout exercises with dates (already processed)
+ * @param clientId - Client ID
+ * @returns Success status and details
+ */
+export async function saveReviewedWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
+  console.log('💾 === SAVING REVIEWED WORKOUT PLAN TO DATABASE ===');
+  console.log('💾 This plan was reviewed and approved by the user');
+  console.log('📊 Workout plan items to save:', workoutPlan.length);
+  console.log('🆔 Client ID:', clientId);
+  
+  try {
+    const result = await saveWorkoutPlanToDatabase(workoutPlan, clientId);
+    console.log('✅ Reviewed workout plan saved successfully');
+    return result;
+  } catch (error) {
+    console.error('❌ Error saving reviewed workout plan:', error);
+    throw error;
   }
 }
 

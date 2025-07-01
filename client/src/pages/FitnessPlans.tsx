@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { usePlans } from "@/hooks/use-plans";
 import PlanCard from "@/components/plans/PlanCard";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import FitnessPlanOverview from "@/components/FitnessPlanOverview";
+import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan";
 
 // Mock exercise data for the library
 const EXERCISES = [
@@ -155,22 +157,63 @@ const FitnessPlans: React.FC = () => {
     limitations: "",
   });
 
+  // New state for FitnessPlanOverview integration
+  const [showFitnessPlanOverview, setShowFitnessPlanOverview] = useState(false);
+  const [planOverviewData, setPlanOverviewData] = useState<any>(null);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleGeneratePlan = (e: React.FormEvent) => {
+  const handleGeneratePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      setAIPlan(`# Personalized Fitness Plan for ${formData.clientName}\n\n...AI generated content...`);
+    
+    try {
+      // For demo purposes, using a hardcoded client ID (in a real app, this would come from selection)
+      const clientId = 34; // This should be selected from a client dropdown in a real implementation
+      
+      const result = await generateAIWorkoutPlanForReview(clientId);
+      
+      if (result.success && result.workoutPlan) {
+        const planData = {
+          overview: result.workoutPlan.overview,
+          split: result.workoutPlan.split,
+          progression_model: result.workoutPlan.progression_model,
+          weekly_breakdown: result.workoutPlan.weekly_breakdown,
+          workout_plan: result.workoutPlan.workout_plan,
+          clientInfo: result.clientInfo,
+          generatedAt: result.generatedAt
+        };
+        
+        setPlanOverviewData(planData);
+        setShowFitnessPlanOverview(true);
+        setShowAIGenerator(false); // Close the generator modal
+        
+        toast({
+          title: "AI Fitness Plan Generated",
+          description: "Your customized fitness plan is ready for review and editing.",
+        });
+      } else {
+        setAIPlan(`# Error generating plan\n\nMessage: ${result.message}`);
+        toast({
+          title: "Generation Failed",
+          description: result.message || "Failed to generate fitness plan.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error generating plan:', error);
+      setAIPlan(`# Error\n\nFailed to generate fitness plan. Please try again.`);
       toast({
-        title: "Fitness Plan Generated",
-        description: "Your customized fitness plan is ready to review.",
+        title: "Error",
+        description: "An unexpected error occurred while generating the plan.",
+        variant: "destructive",
       });
-    }, 2000);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const fitnessPlans = plans?.filter((plan) => plan.type === "fitness" && (plan.name.toLowerCase().includes(searchQuery.toLowerCase()) || (plan.description && plan.description.toLowerCase().includes(searchQuery.toLowerCase()))));
@@ -471,6 +514,31 @@ const FitnessPlans: React.FC = () => {
                     </form>
                   </DialogContent>
                 </Dialog>
+
+                {/* Fitness Plan Overview - Enhanced AI Review Component */}
+                <FitnessPlanOverview
+                  isOpen={showFitnessPlanOverview}
+                  onClose={() => {
+                    setShowFitnessPlanOverview(false);
+                    setPlanOverviewData(null);
+                  }}
+                  clientId={34} // In a real app, this would be selected from a client list
+                  initialPlanData={planOverviewData}
+                  onPlanSaved={(success, message) => {
+                    if (success) {
+                      toast({
+                        title: "Plan Saved Successfully",
+                        description: message,
+                      });
+                    } else {
+                      toast({
+                        title: "Failed to Save Plan", 
+                        description: message,
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                />
               </div>
             </TabsContent>
             <TabsContent value="builder">

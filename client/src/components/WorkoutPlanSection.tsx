@@ -15,8 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart } from "lucide-react"
 
 // Import the real AI workout plan generator
-import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
+import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
 import AIDebugPopup from "@/components/AIDebugPopup"
+import FitnessPlanOverview from "@/components/FitnessPlanOverview"
 
 // Types
 interface Exercise {
@@ -681,6 +682,10 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
   const [editValue, setEditValue] = useState<string | number>("")
   const [allWorkoutPlans, setAllWorkoutPlans] = useState<any[]>([])
+  
+  // Fitness Plan Overview state
+  const [showFitnessPlanOverview, setShowFitnessPlanOverview] = useState(false)
+  const [planOverviewData, setPlanOverviewData] = useState<any>(null)
 
   // Initialize workout plans from recommended and AI generated
   useEffect(() => {
@@ -844,6 +849,7 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
     console.log("🚀 Button clicked - Starting AI generation process")
     console.log("⏰ Timestamp:", new Date().toISOString())
     console.log("🔍 Component State - isGeneratingAI:", isGeneratingAI)
+    console.log("🔒 NEW WORKFLOW: Will generate plan for REVIEW, not auto-save")
 
     setIsGeneratingAI(true)
     const startTime = Date.now() // Track response time
@@ -852,10 +858,10 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
       // Use the actual client ID passed as prop, fallback to hardcoded for testing
       const actualClientId = clientId ? Number(clientId) : 34
       console.log("🎯 Using client ID:", actualClientId, clientId ? "(from props)" : "(fallback)")
-      console.log("📞 CALLING generateAIWorkoutPlan function...")
-      console.log("📞 Function will automatically attempt to save to database if successful")
+      console.log("📞 CALLING generateAIWorkoutPlanForReview function...")
+      console.log("📞 Function will generate plan for REVIEW, NOT auto-save to database")
 
-      const result = await generateAIWorkoutPlan(actualClientId)
+      const result = await generateAIWorkoutPlanForReview(actualClientId)
       console.log("📨 === FUNCTION CALL COMPLETED ===")
       console.log("📨 Full result object:", result)
       const responseTime = Date.now() - startTime // Calculate response time
@@ -866,126 +872,42 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
       console.log("  - Has Client Data:", !!result.clientData)
 
       if (result.success) {
-        console.log("✅ SUCCESS - Data retrieval completed")
+        console.log("✅ SUCCESS - AI Plan generated for REVIEW")
+        console.log("🔒 Plan is ready for review in FitnessPlanOverview component")
 
-        // Log the client data to console for inspection
-        if (result.clientData && result.clientInfo) {
-          console.log("🎉 CLIENT DATA SUCCESSFULLY RETRIEVED:")
-          console.log("📋 Data Format: JavaScript Object")
-          console.log("🔢 Number of Properties:", Object.keys(result.clientData).length)
-          console.log("🏷️ Property Names:", Object.keys(result.clientData))
-          console.log("📊 Full Client Data Object:")
-          console.table(result.clientData) // Display as table for better readability
-          console.log("📄 JSON Format:")
-          console.log(JSON.stringify(result.clientData, null, 2))
-          console.log("💾 Organized Client Info:")
-          console.log(result.clientInfo)
-
-          // Set client info
+        // Set client info
+        if (result.clientInfo) {
           setClientInfo(result.clientInfo)
+        }
 
-          // If AI response is available, parse and add to recommended plans
-          if (result.aiResponse) {
-            try {
-              const aiPlans = parseAIResponseToPlans(result.aiResponse.response)
-              setAiGeneratedPlans(aiPlans)
-              setAiResponse(result.aiResponse)
-
-              // Convert AI plan exercises to individual workout items and add to the main list
-              if (aiPlans.length > 0 && aiPlans[0].exercises) {
-                const aiWorkouts = aiPlans[0].exercises.map((exercise, index) => ({
-                  id: `ai-${Date.now()}-${index}`,
-                  day: "Monday", // Default day, user can edit
-                  exercise: exercise.workout,
-                  sets: exercise.sets,
-                  reps: exercise.reps,
-                  duration: exercise.duration,
-                  weights: exercise.weights,
-                  coach_tip: exercise.coach_tip,
-                  icon: exercise.icon,
-                  category: exercise.category,
-                  body_part: exercise.body_part,
-                }))
-                setAllWorkoutPlans(prev => [...prev, ...aiWorkouts])
-              }
-
-              // Always show the complete AI response first
-              setShowAIResponsePopup(true)
-
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || "gpt-4",
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime,
-                }
-                setAiMetrics(metrics)
-              }
-
-              const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
-              
-              // Capture debug data for successful generation
-              if (result.debugData) {
-                setDebugData(result.debugData)
-                setShowDebugPopup(true)
-              }
-              
-              // Log the complete AI response for debugging
-              console.log("🎯 COMPLETE AI RESPONSE:")
-              console.log("📄 Raw Response:", result.aiResponse.response)
-              console.log("📊 Parsed Plans:", aiPlans)
-              console.log("💪 Generated Workouts:", aiPlans[0]?.exercises)
-              
-              toast({
-                title: "AI Workout Plan Generated",
-                description: `Personalized plan created for ${clientName}. Click to view full response.`,
-              })
-            } catch (parseError) {
-              console.error("Error parsing AI response:", parseError)
-              // Show the raw response in popup (parsing failed)
-              setAiResponse(result.aiResponse)
-              setShowAIResponsePopup(true)
-
-              // Capture debug data for parsing errors
-              if (result.debugData) {
-                setDebugData(result.debugData)
-                setShowDebugPopup(true)
-              }
-
-              // Capture metrics for later display
-              if (result.aiResponse.usage) {
-                const metrics = {
-                  inputTokens: result.aiResponse.usage.prompt_tokens || 0,
-                  outputTokens: result.aiResponse.usage.completion_tokens || 0,
-                  totalTokens: result.aiResponse.usage.total_tokens || 0,
-                  model: result.aiResponse.model || "gpt-4",
-                  timestamp: result.aiResponse.timestamp,
-                  responseTime: responseTime,
-                }
-                setAiMetrics(metrics)
-              }
-
-              toast({
-                title: "AI Response Generated",
-                description: "View the complete AI response. Plans may need manual parsing.",
-              })
-            }
-          } else {
-            setShowClientDataPopup(true)
-            const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
-            toast({
-              title: "Client Data Retrieved",
-              description: `Showing data for ${clientName}`,
-            })
+        // Prepare plan data for overview component
+        if (result.workoutPlan) {
+          const planData = {
+            overview: result.workoutPlan.overview,
+            split: result.workoutPlan.split,
+            progression_model: result.workoutPlan.progression_model,
+            weekly_breakdown: result.workoutPlan.weekly_breakdown,
+            workout_plan: result.workoutPlan.workout_plan,
+            clientInfo: result.clientInfo,
+            generatedAt: result.generatedAt
           }
-        } else {
-          console.warn("⚠️ Success reported but no client data in response")
+          
+          console.log("📋 Plan data prepared for overview:", planData)
+          setPlanOverviewData(planData)
+          setShowFitnessPlanOverview(true)
+
+          const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
+          
           toast({
-            title: "Client Data Retrieved",
-            description: result.message,
+            title: "AI Fitness Plan Generated",
+            description: `Plan ready for review for ${clientName}. Review and customize before saving.`,
+          })
+        } else {
+          console.warn("⚠️ Success reported but no workout plan in response")
+          toast({
+            title: "Plan Generation Issue",
+            description: result.message || "Plan generated but no workout data found.",
+            variant: "destructive",
           })
         }
       } else {
@@ -1318,6 +1240,32 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
         rawResponse={debugData?.rawResponse}
         parsedData={debugData?.parsedData || []}
         clientName={clientInfo?.name || clientInfo?.preferredName}
+      />
+
+      {/* Fitness Plan Overview - New intermediate review component */}
+      <FitnessPlanOverview
+        isOpen={showFitnessPlanOverview}
+        onClose={() => {
+          setShowFitnessPlanOverview(false)
+          setPlanOverviewData(null)
+        }}
+        clientId={clientId ? Number(clientId) : 34}
+        initialPlanData={planOverviewData}
+        onPlanSaved={(success, message) => {
+          if (success) {
+            toast({
+              title: "Plan Saved Successfully",
+              description: message,
+            })
+            // Optionally refresh or update the current workout plans view
+          } else {
+            toast({
+              title: "Failed to Save Plan",
+              description: message,
+              variant: "destructive",
+            })
+          }
+        }}
       />
     </div>
   )

@@ -42,6 +42,7 @@ import {
   Share,
   Settings,
   LineChart,
+  Users,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -100,6 +101,7 @@ import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 import { Progress } from "@/components/ui/progress"
+
 import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 
 
@@ -3398,6 +3400,327 @@ const LoadingSpinner = ({ size = "default" }: { size?: "small" | "default" | "la
   )
 }
 
+// Enhanced All Clients Sidebar Component
+function AllClientsSidebar({
+  currentClientId,
+  onClientSelect,
+  trainerClients,
+  clientsLoading,
+}: {
+  currentClientId?: number
+  onClientSelect: (clientId: number) => void
+  trainerClients: any[]
+  clientsLoading: boolean
+}) {
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filteredClients = trainerClients.filter((client) =>
+    client.cl_name?.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  if (clientsLoading) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3">
+          <LoadingSpinner size="small" />
+          <span className="text-sm text-gray-500 dark:text-gray-400">Loading clients...</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Enhanced Search Bar */}
+      <div className="relative group">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+        <Input
+          placeholder="Search clients..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 transition-all duration-200"
+        />
+      </div>
+
+      {/* Client Count Badge */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''}
+        </span>
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSearchQuery("")}
+            className="h-6 px-2 text-xs text-gray-400 hover:text-gray-600"
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Clients List */}
+      <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+        {filteredClients.length === 0 ? (
+          <div className="text-center py-8">
+            <Users className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {searchQuery ? "No clients found" : "No clients assigned"}
+            </p>
+          </div>
+        ) : (
+          filteredClients.map((client) => (
+            <div
+              key={client.client_id}
+              className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${
+                currentClientId === client.client_id
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-500 shadow-sm"
+                  : "hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50/30 dark:hover:from-gray-800/50 dark:hover:to-blue-900/10"
+              }`}
+              onClick={() => onClientSelect(client.client_id)}
+            >
+              <div className="flex items-center gap-3">
+                {/* Enhanced Avatar */}
+                <div className="relative">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-200 ${
+                    currentClientId === client.client_id
+                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg"
+                      : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 group-hover:from-blue-100 group-hover:to-indigo-100 dark:group-hover:from-blue-800 dark:group-hover:to-indigo-800 group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                  }`}>
+                    {client.cl_name
+                      ?.split(" ")
+                      .map((n: string) => n[0])
+                      .join("")
+                      .toUpperCase() || "?"}
+                  </div>
+                  {/* Active Status Indicator */}
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 ${
+                    client.last_active && new Date(client.last_active) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                      ? "bg-green-500"
+                      : "bg-gray-300 dark:bg-gray-600"
+                  }`}></div>
+                </div>
+
+                {/* Client Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className={`font-medium truncate transition-colors ${
+                      currentClientId === client.client_id
+                        ? "text-blue-900 dark:text-blue-300"
+                        : "text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                    }`}>
+                      {client.cl_name}
+                    </p>
+                    {currentClientId === client.client_id && (
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {client.last_active
+                      ? `Active ${new Date(client.last_active).toLocaleDateString()}`
+                      : "No recent activity"}
+                  </p>
+                </div>
+
+                {/* Hover Arrow */}
+                <div className={`transition-all duration-200 ${
+                  currentClientId === client.client_id
+                    ? "opacity-100 text-blue-500"
+                    : "opacity-0 group-hover:opacity-100 text-gray-400"
+                }`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      {filteredClients.length > 0 && (
+        <div className="pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <Plus className="h-3 w-3 mr-2" />
+            Add New Client
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Filter Criteria Component
+function FilterCriteria() {
+  const criteria = [
+    { label: "Fitness Goals", color: "bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200" },
+    { label: "Outcome", color: "bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200" },
+    { label: "Timeline", color: "bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200" },
+    { label: "Motivational Factor", color: "bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200" },
+  ]
+
+  return (
+    <div className="space-y-2">
+      <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">Filter Criteria</h3>
+      <div className="grid grid-cols-2 gap-2">
+        {criteria.map((item, index) => (
+          <div key={index} className={`${item.color} p-2 rounded text-xs font-medium text-center`}>
+            {item.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Enhanced Notes and Todo Cards Component
+function TrainerNotesToDoSection({ 
+  client, 
+  trainerNotes, 
+  setTrainerNotes, 
+  handleSaveTrainerNotes, 
+  isSavingNotes, 
+  isEditingNotes, 
+  setIsEditingNotes,
+  notesDraft,
+  setNotesDraft,
+  notesError,
+  setNotesError 
+}: {
+  client: any
+  trainerNotes: string
+  setTrainerNotes: (notes: string) => void
+  handleSaveTrainerNotes: () => void
+  isSavingNotes: boolean
+  isEditingNotes: boolean
+  setIsEditingNotes: (editing: boolean) => void
+  notesDraft: string
+  setNotesDraft: (draft: string) => void
+  notesError: string | null
+  setNotesError: (error: string | null) => void
+}) {
+  const [todoItems, setTodoItems] = useState(
+    "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week",
+  )
+  const [isEditingTodo, setIsEditingTodo] = useState(false)
+  const { toast } = useToast()
+
+  const handleSaveTodo = () => {
+    setIsEditingTodo(false)
+    toast({
+      title: "To-Do saved",
+      description: "To-Do items have been updated successfully.",
+    })
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Enhanced Trainer Notes Card */}
+      <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-200 dark:border-yellow-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Edit className="h-5 w-5 text-yellow-600" />
+            Trainer Notes
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
+            disabled={isSavingNotes}
+          >
+            {isEditingNotes ? (
+              isSavingNotes ? (
+                <>
+                  <LoadingSpinner size="small" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save
+                </>
+              )
+            ) : (
+              <>
+                <Edit className="h-4 w-4" />
+                Edit
+              </>
+            )}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isEditingNotes ? (
+            <div className="space-y-2">
+              <Textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                placeholder="Add your notes about the client..."
+                className="min-h-[120px] bg-white dark:bg-gray-800"
+                disabled={isSavingNotes}
+              />
+              {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingNotes(false)
+                    setNotesError(null)
+                    setNotesDraft(trainerNotes)
+                  }}
+                  disabled={isSavingNotes}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="min-h-[120px] p-3 bg-gradient-to-br from-yellow-100/50 to-orange-100/50 dark:from-yellow-900/10 dark:to-orange-900/10 rounded border border-yellow-200/50 dark:border-yellow-800/50 whitespace-pre-line">
+              {trainerNotes || "No notes added yet. Click edit to add notes."}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Enhanced To-Do Card */}
+      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Edit className="h-5 w-5 text-blue-600" />
+            To-Do
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => (isEditingTodo ? handleSaveTodo() : setIsEditingTodo(true))}
+          >
+            {isEditingTodo ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isEditingTodo ? (
+            <Textarea
+              value={todoItems}
+              onChange={(e) => setTodoItems(e.target.value)}
+              placeholder="Add to-do items..."
+              className="min-h-[120px] bg-white dark:bg-gray-800"
+            />
+          ) : (
+            <div className="min-h-[120px] p-3 bg-gradient-to-br from-blue-100/50 to-indigo-100/50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded border border-blue-200/50 dark:border-blue-800/50 whitespace-pre-line">
+              {todoItems || "No to-do items added yet. Click edit to add items."}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // Page Loading Component
 const PageLoading = () => {
   return (
@@ -3443,11 +3766,10 @@ export default function ClientDashboard() {
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
   const navigate = useNavigate()
 
-  // Sample clients data (placeholder)
-  const sampleClients = [
-    { id: 1, name: "John Doe", email: "john@example.com" },
-    { id: 2, name: "Jane Smith", email: "jane@example.com" }
-  ]
+  // Handler for client selection from sidebar
+  const handleClientSelect = (selectedClientId: number) => {
+    navigate(`/client/${selectedClientId}`)
+  }
 
   // Placeholder handler functions
   const handleSaveNotes = () => {
@@ -3531,11 +3853,7 @@ export default function ClientDashboard() {
     }
   };
 
-  const filteredClients = sampleClients.filter(
-    (client: any) =>
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+
 
   // State for all clients of the trainer
   const [trainerClients, setTrainerClients] = useState<any[]>([]);
@@ -3577,10 +3895,10 @@ export default function ClientDashboard() {
         setClientsLoading(false);
         return;
       }
-      // Fetch client names for these client_ids
+      // Fetch complete client data for these client_ids
       const { data: clientsData, error: clientsError } = await supabase
         .from("client")
-        .select("client_id, cl_name")
+        .select("client_id, cl_name, cl_email, last_active, created_at")
         .in("client_id", clientIds);
       if (!clientsError && clientsData) {
         setTrainerClients(clientsData);
@@ -3723,9 +4041,100 @@ export default function ClientDashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50">
-      {/* Enhanced Header */}
-      <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex">
+      {/* AllClientsSidebar - Left Sidebar */}
+      <div className="w-80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto">
+        <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg flex-shrink-0">
+              <Users className="h-6 w-6 text-white" />
+            </div>
+            <div className="min-w-0 overflow-hidden">
+              <h2 className="font-bold text-gray-900 dark:text-white text-lg">Client Management</h2>
+              <div className="flex gap-2 mt-1">
+                <span className="bg-gradient-to-r from-pink-200 to-rose-200 dark:from-pink-800 dark:to-rose-800 text-pink-800 dark:text-pink-200 px-2 py-1 rounded-full text-xs font-medium">
+                  Smart Dashboard
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-3 rounded-xl">
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{trainerClients?.length || 0}</div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">Total Clients</div>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 p-3 rounded-xl">
+              <div className="text-xl font-bold text-green-600 dark:text-green-400">
+                {trainerClients?.filter(c => c.last_active && new Date(c.last_active) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length || 0}
+              </div>
+              <div className="text-xs text-green-700 dark:text-green-300">Active</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4">
+          {/* All Clients List */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              All Clients
+            </h3>
+            <AllClientsSidebar 
+              currentClientId={clientId} 
+              onClientSelect={handleClientSelect}
+              trainerClients={trainerClients}
+              clientsLoading={clientsLoading}
+            />
+          </div>
+
+          {/* Quick Filters */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Quick Filters
+            </h3>
+            <FilterCriteria />
+          </div>
+
+          {/* Quick Actions */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Quick Actions</h3>
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              >
+                <Calendar className="h-4 w-4 mr-3" />
+                Schedule
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+              >
+                <BarChart3 className="h-4 w-4 mr-3" />
+                Analytics
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              >
+                <Settings className="h-4 w-4 mr-3" />
+                Settings
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-h-screen">
+        {/* Enhanced Header */}
+        <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
@@ -3917,180 +4326,68 @@ export default function ClientDashboard() {
           {activeTab === "overview" && (
               <div className="space-y-8">
                 <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
-                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                    <CardTitle className="flex items-center gap-3">
-                      <Dumbbell className="h-5 w-5 text-red-400" />
-                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Trainer Notes</span>
-                    </CardTitle>
-                    {!isEditingNotes && (
-                      <Button size="icon" variant="ghost" onClick={() => setIsEditingNotes(true)}>
-                        <span className="sr-only">Edit</span>
-                        <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6-6m2 2l-6 6m-2 2h6" /></svg>
-                      </Button>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    {isEditingNotes ? (
-                      <div className="space-y-2">
-                        <textarea
-                          className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          value={notesDraft}
-                          onChange={e => setNotesDraft(e.target.value)}
-                          placeholder="Enter trainer notes..."
-                          disabled={isSavingNotes}
-                        />
-                        {notesError && <div className="text-red-500 text-sm">{notesError}</div>}
-                        <div className="flex gap-2 mt-2">
-                          <Button size="sm" onClick={handleSaveTrainerNotes} disabled={isSavingNotes}>
-                            {isSavingNotes ? (
-                              <div className="flex items-center gap-2">
-                                <LoadingSpinner size="small" />
-                                Saving...
-                              </div>
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => { setIsEditingNotes(false); setNotesError(null); setNotesDraft(trainerNotes); }} disabled={isSavingNotes}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-gray-800 dark:text-gray-200 whitespace-pre-line">
-                        {trainerNotes ? trainerNotes : <span className="text-gray-400 italic">No notes from trainer yet.</span>}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl p-6 flex flex-col gap-3">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-3">
-                      <Target className="h-5 w-5 text-blue-600" />
-                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Client Goals & Key Info</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {client.cl_primary_goal && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Primary Goal:</span>
-                        <span className="text-gray-900 dark:text-white">{client.cl_primary_goal}</span>
-                      </div>
-                    )}
-                    {client.cl_target_weight && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Target Weight:</span>
-                        <span className="text-gray-900 dark:text-white">{client.cl_target_weight} kg</span>
-                      </div>
-                    )}
-                    {client.confidence_level && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Confidence Level:</span>
-                        <span className="text-gray-900 dark:text-white">{client.confidence_level}/10</span>
-                      </div>
-                    )}
-                    {client.cl_activity_level && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Activity Level:</span>
-                        <span className="text-gray-900 dark:text-white">{client.cl_activity_level}</span>
-                      </div>
-                    )}
-                    {client.specific_outcome && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Specific Outcome:</span>
-                        <span className="text-gray-900 dark:text-white">{client.specific_outcome}</span>
-                      </div>
-                    )}
-                    {client.goal_timeline && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Goal Timeline:</span>
-                        <span className="text-gray-900 dark:text-white">{client.goal_timeline}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg dark:bg-black">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <Edit className="h-5 w-5 text-rose-500" />
-                        Trainer Notes
-                      </CardTitle>
-                      <div className="flex items-center gap-2">
-                        {!isEditing && notes && notes.trim().length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleSummarizeNotes}
-                            className="h-8 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:text-purple-300 dark:hover:bg-purple-900/20"
-                            disabled={isSummarizingNotes}
-                          >
-                            {isSummarizingNotes ? (
-                              <>
-                                <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-                                Analyzing...
-                              </>
-                            ) : (
-                              <>
-                                📋
-                                <span className="ml-1">Summarize</span>
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={isEditing ? handleSaveNotes : () => setIsEditing(true)}
-                          className="h-8 px-2"
-                          disabled={isEditing && isSaving}
-                        >
-                          {isEditing ? (
-                            isSaving ? (
-                              <>
-                                <div className="h-4 w-4 mr-1 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Save className="h-4 w-4 mr-1" />
-                                Save
-                              </>
-                            )
-                          ) : (
-                            <>
-                              <Pencil className="h-4 w-4 mr-1" />
-                              Edit
-                            </>
-                          )}
-                        </Button>
-                      </div>
+              {/* Enhanced Trainer Notes and To-Do Section */}
+              <TrainerNotesToDoSection
+                client={client}
+                trainerNotes={trainerNotes}
+                setTrainerNotes={setTrainerNotes}
+                handleSaveTrainerNotes={handleSaveTrainerNotes}
+                isSavingNotes={isSavingNotes}
+                isEditingNotes={isEditingNotes}
+                setIsEditingNotes={setIsEditingNotes}
+                notesDraft={notesDraft}
+                setNotesDraft={setNotesDraft}
+                notesError={notesError}
+                setNotesError={setNotesError}
+              />
+
+              {/* Client Goals & Key Info Card */}
+              <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-3">
+                    <Target className="h-5 w-5 text-blue-600" />
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Client Goals & Key Info</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {client.cl_primary_goal && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Primary Goal:</span>
+                      <span className="text-gray-900 dark:text-white">{client.cl_primary_goal}</span>
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    {isEditing ? (
-                      <Textarea
-                        value={editableNotes}
-                        onChange={(e) => setEditableNotes(e.target.value)}
-                        className="min-h-[200px] focus:border-rose-300 focus:ring-rose-200/50"
-                        placeholder="Add your notes about the client here..."
-                      />
-                    ) : (
-                      <div className="space-y-2">
-                        {notes ? (
-                          <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
-                            {notes}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">No notes added yet.</p>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                  )}
+                  {client.cl_target_weight && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Target Weight:</span>
+                      <span className="text-gray-900 dark:text-white">{client.cl_target_weight} kg</span>
+                    </div>
+                  )}
+                  {client.confidence_level && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Confidence Level:</span>
+                      <span className="text-gray-900 dark:text-white">{client.confidence_level}/10</span>
+                    </div>
+                  )}
+                  {client.cl_activity_level && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Activity Level:</span>
+                      <span className="text-gray-900 dark:text-white">{client.cl_activity_level}</span>
+                    </div>
+                  )}
+                  {client.specific_outcome && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Specific Outcome:</span>
+                      <span className="text-gray-900 dark:text-white">{client.specific_outcome}</span>
+                    </div>
+                  )}
+                  {client.goal_timeline && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-700 dark:text-gray-200">Goal Timeline:</span>
+                      <span className="text-gray-900 dark:text-white">{client.goal_timeline}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -4129,13 +4426,14 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* AI Notes Summary Popup */}
-      <AINotesSummaryPopup
-        isOpen={showNotesSummaryPopup}
-        onClose={() => setShowNotesSummaryPopup(false)}
-        summaryResponse={notesSummaryResponse}
-        clientName={client?.name || client?.preferredName}
-      />
+        {/* AI Notes Summary Popup */}
+        <AINotesSummaryPopup
+          isOpen={showNotesSummaryPopup}
+          onClose={() => setShowNotesSummaryPopup(false)}
+          summaryResponse={notesSummaryResponse}
+          clientName={client?.name || client?.preferredName}
+        />
+      </div>
     </div>
   )
 }
