@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback } from "react"
 
 import { useLocation, useNavigate } from "react-router-dom"
 import { useTheme } from "@/context/ThemeContext"
@@ -15,6 +15,11 @@ const TopBar: React.FC = () => {
   const { isExpanded } = useSidebar()
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [trainerName, setTrainerName] = useState<string | null>(null)
+  const [isVisible, setIsVisible] = useState(true)
+  const [hideTimer, setHideTimer] = useState<NodeJS.Timeout | null>(null)
+
+  // Check if we're on a client profile page
+  const isClientProfilePage = location.pathname.startsWith('/client/')
 
   useEffect(() => {
     const fetchTrainerData = async () => {
@@ -40,6 +45,51 @@ const TopBar: React.FC = () => {
     fetchTrainerData()
   }, [])
 
+  // Handle mouse movement to show/hide top bar on client profile pages
+  const handleMouseMove = useCallback((event: MouseEvent) => {
+    if (!isClientProfilePage) return
+
+    // Show top bar when mouse is near the top (within 50px)
+    if (event.clientY <= 50) {
+      setIsVisible(true)
+      
+      // Clear existing timer
+      if (hideTimer) {
+        clearTimeout(hideTimer)
+      }
+      
+      // Set new timer to hide after 30 seconds
+      const timer = setTimeout(() => {
+        setIsVisible(false)
+      }, 30000)
+      setHideTimer(timer)
+    }
+  }, [isClientProfilePage, hideTimer])
+
+  useEffect(() => {
+    // Set initial visibility based on page type
+    if (isClientProfilePage) {
+      setIsVisible(false)
+    } else {
+      setIsVisible(true)
+    }
+
+    // Add/remove mouse listener for client profile pages
+    if (isClientProfilePage) {
+      document.addEventListener('mousemove', handleMouseMove)
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove)
+    }
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      if (hideTimer) {
+        clearTimeout(hideTimer)
+      }
+    }
+  }, [isClientProfilePage, handleMouseMove, hideTimer])
+
   // Format the page title based on the current location
   const getPageTitle = () => {
     const path = location.pathname.split("/")[1]
@@ -50,11 +100,17 @@ const TopBar: React.FC = () => {
     return `Dashboard / ${formattedPath}`
   }
 
+  // Don't render if on client profile page and not visible
+  if (isClientProfilePage && !isVisible) {
+    return null
+  }
+
   return (
     <header
       className={cn(
         "bg-white dark:bg-black shadow-sm border-b border-gray-200 dark:border-slate-700 sticky top-0 z-20 transition-all duration-300 ease-in-out",
         isExpanded ? "ml-64" : "ml-16",
+        isClientProfilePage && "animate-in slide-in-from-top-2 duration-300"
       )}
     >
       <div className="flex items-center justify-between px-6 py-4">

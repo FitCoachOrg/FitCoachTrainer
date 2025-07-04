@@ -73,6 +73,7 @@ interface FitnessPlanOverviewProps {
   clientId: number
   initialPlanData?: FitnessPlanData | null
   onPlanSaved?: (success: boolean, message: string) => void
+  embedded?: boolean // New prop to control embedded vs popup rendering
 }
 
 const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
@@ -80,7 +81,8 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
   onClose,
   clientId,
   initialPlanData,
-  onPlanSaved
+  onPlanSaved,
+  embedded = false
 }) => {
   const { toast } = useToast()
   
@@ -722,30 +724,78 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     )
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Dumbbell className="h-5 w-5" />
-            Fitness Plan Overview
-            {isDraft && (
-              <Badge variant="outline" className="ml-2">
-                Draft: {draftName}
-              </Badge>
+    // Render the main content
+  const renderContent = () => (
+    <div className="space-y-6">
+      {/* Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleGenerateNewPlan}
+            disabled={isLoading}
+            variant="outline"
+          >
+            {isLoading ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Generate New Plan
+              </>
             )}
-          </DialogTitle>
-        </DialogHeader>
+          </Button>
+          
+          <Button
+            onClick={() => setIsEditing(!isEditing)}
+            variant={isEditing ? "default" : "outline"}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            {isEditing ? "Stop Editing" : "Edit Plan"}
+          </Button>
+        </div>
 
-        <div className="space-y-6">
-          {/* Action Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleGenerateNewPlan}
-                disabled={isLoading}
-                variant="outline"
-              >
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleSavePlan}
+            disabled={isSaving || !editedPlan.length}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isSaving ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Save to Database
+              </>
+            )}
+          </Button>
+          
+          {!embedded && (
+            <Button onClick={onClose} variant="outline">
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Plan Content - Table View First */}
+      <Card>
+        <CardContent className="p-6">
+          {editedPlan.length === 0 ? (
+            <div className="text-center py-8">
+              <Dumbbell className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Plan Generated</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Generate an AI fitness plan to get started.
+              </p>
+              <Button onClick={handleGenerateNewPlan} disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -754,227 +804,214 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
                 ) : (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2" />
-                    Generate New Plan
+                    Generate Plan
                   </>
                 )}
-              </Button>
-              
-              <Button
-                onClick={() => setIsEditing(!isEditing)}
-                variant={isEditing ? "default" : "outline"}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                {isEditing ? "Stop Editing" : "Edit Plan"}
               </Button>
             </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleSavePlan}
-                disabled={isSaving || !editedPlan.length}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Save to Database
-                  </>
-                )}
-              </Button>
-              
-              <Button onClick={onClose} variant="outline">
-                <X className="h-4 w-4 mr-2" />
-                Close
-              </Button>
-            </div>
-          </div>
-
-          {/* Plan Summary */}
-          {planData && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Plan Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {planData.overview && (
-                  <div>
-                    <Label className="font-semibold">Overview:</Label>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{planData.overview}</p>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {planData.split && (
-                    <div>
-                      <Label className="font-semibold">Split:</Label>
-                      <p className="text-sm">{planData.split}</p>
-                    </div>
-                  )}
-                  
-                  {planData.progression_model && (
-                    <div>
-                      <Label className="font-semibold">Progression Model:</Label>
-                      <p className="text-sm">{planData.progression_model}</p>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <Label className="font-semibold">Total Exercises:</Label>
-                    <p className="text-sm">{editedPlan.length}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          ) : (
+            <>
+              {/* Always show table view first */}
+              {renderTableView()}
+            </>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Draft Management */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Save className="h-5 w-5" />
-                Draft Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 mb-4">
-                <Input
-                  placeholder="Enter draft name"
-                  value={draftName}
-                  onChange={(e) => setDraftName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={handleSaveDraft} variant="outline">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Draft
-                </Button>
-              </div>
-              
-              {savedDrafts.length > 0 && (
-                <div>
-                  <Label className="font-semibold mb-2 block">Saved Drafts:</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {savedDrafts.map(draft => (
-                      <div key={draft} className="flex items-center gap-1">
-                        <Button
-                          onClick={() => handleLoadDraft(draft)}
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Upload className="h-3 w-3 mr-1" />
-                          {draft}
-                        </Button>
-                        <Button
-                          onClick={() => handleDeleteDraft(draft)}
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* View Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Tabs value={currentView} onValueChange={(value) => setCurrentView(value as any)}>
+          <TabsList>
+            <TabsTrigger value="table">
+              <Table className="h-4 w-4 mr-2" />
+              Table
+            </TabsTrigger>
+            <TabsTrigger value="calendar">
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              Calendar
+            </TabsTrigger>
+            <TabsTrigger value="weekly">
+              <Grid3X3 className="h-4 w-4 mr-2" />
+              Weekly
+            </TabsTrigger>
+            <TabsTrigger value="daily">
+              <List className="h-4 w-4 mr-2" />
+              Daily
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-          {/* View Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <Tabs value={currentView} onValueChange={(value) => setCurrentView(value as any)}>
-              <TabsList>
-                <TabsTrigger value="table">
-                  <Table className="h-4 w-4 mr-2" />
-                  Table
-                </TabsTrigger>
-                <TabsTrigger value="calendar">
-                  <CalendarIcon className="h-4 w-4 mr-2" />
-                  Calendar
-                </TabsTrigger>
-                <TabsTrigger value="weekly">
-                  <Grid3X3 className="h-4 w-4 mr-2" />
-                  Weekly
-                </TabsTrigger>
-                <TabsTrigger value="daily">
-                  <List className="h-4 w-4 mr-2" />
-                  Daily
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            {/* Metric Toggles */}
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <Label>Show:</Label>
-              
-              {Object.entries(visibleMetrics).map(([key, visible]) => (
-                <div key={key} className="flex items-center gap-1">
-                  <Switch
-                    checked={visible}
-                    onCheckedChange={() => toggleMetric(key as keyof typeof visibleMetrics)}
-                    id={key}
-                  />
-                  <Label htmlFor={key} className="text-xs capitalize">
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
-                  </Label>
-                </div>
-              ))}
+        {/* Metric Toggles */}
+        <div className="flex items-center gap-2">
+          <Settings className="h-4 w-4" />
+          <Label>Show:</Label>
+          
+          {Object.entries(visibleMetrics).map(([key, visible]) => (
+            <div key={key} className="flex items-center gap-1">
+              <Switch
+                checked={visible}
+                onCheckedChange={() => toggleMetric(key as keyof typeof visibleMetrics)}
+                id={key}
+              />
+              <Label htmlFor={key} className="text-xs capitalize">
+                {key.charAt(0).toUpperCase() + key.slice(1)}
+              </Label>
             </div>
-          </div>
-
-          {/* Add Exercise Button (when editing) */}
-          {isEditing && (
-            <div className="flex justify-center">
-              <Button onClick={handleAddExercise} variant="outline">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Exercise
-              </Button>
-            </div>
-          )}
-
-          {/* Plan Content */}
-          <Card>
-            <CardContent className="p-6">
-              {editedPlan.length === 0 ? (
-                <div className="text-center py-8">
-                  <Dumbbell className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Plan Generated</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    Generate an AI fitness plan to get started.
-                  </p>
-                  <Button onClick={handleGenerateNewPlan} disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Generate Plan
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {currentView === 'table' && renderTableView()}
-                  {currentView === 'calendar' && renderCalendarView()}
-                  {currentView === 'weekly' && renderWeeklyView()}
-                  {currentView === 'daily' && renderDailyView()}
-                </>
-              )}
-            </CardContent>
-          </Card>
+          ))}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+
+      {/* Add Exercise Button (when editing) */}
+      {isEditing && (
+        <div className="flex justify-center">
+          <Button onClick={handleAddExercise} variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Exercise
+          </Button>
+        </div>
+      )}
+
+      {/* Alternative Views */}
+      {editedPlan.length > 0 && currentView !== 'table' && (
+        <Card>
+          <CardContent className="p-6">
+            {currentView === 'calendar' && renderCalendarView()}
+            {currentView === 'weekly' && renderWeeklyView()}
+            {currentView === 'daily' && renderDailyView()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Plan Summary */}
+      {planData && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Plan Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {planData.overview && (
+              <div>
+                <Label className="font-semibold">Overview:</Label>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{planData.overview}</p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {planData.split && (
+                <div>
+                  <Label className="font-semibold">Split:</Label>
+                  <p className="text-sm">{planData.split}</p>
+                </div>
+              )}
+              
+              {planData.progression_model && (
+                <div>
+                  <Label className="font-semibold">Progression Model:</Label>
+                  <p className="text-sm">{planData.progression_model}</p>
+                </div>
+              )}
+              
+              <div>
+                <Label className="font-semibold">Total Exercises:</Label>
+                <p className="text-sm">{editedPlan.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Draft Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Save className="h-5 w-5" />
+            Draft Management
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <Input
+              placeholder="Enter draft name"
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              className="flex-1"
+            />
+            <Button onClick={handleSaveDraft} variant="outline">
+              <Save className="h-4 w-4 mr-2" />
+              Save Draft
+            </Button>
+          </div>
+          
+          {savedDrafts.length > 0 && (
+            <div>
+              <Label className="font-semibold mb-2 block">Saved Drafts:</Label>
+              <div className="flex flex-wrap gap-2">
+                {savedDrafts.map(draft => (
+                  <div key={draft} className="flex items-center gap-1">
+                    <Button
+                      onClick={() => handleLoadDraft(draft)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      {draft}
+                    </Button>
+                    <Button
+                      onClick={() => handleDeleteDraft(draft)}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
-}
+    
+    // Return embedded or dialog version
+    if (embedded) {
+      return (
+        <div className="h-full overflow-y-auto">
+          <div className="sticky top-0 bg-white dark:bg-gray-900 z-10 pb-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              <h2 className="text-xl font-bold">Fitness Plan Overview</h2>
+              {isDraft && (
+                <Badge variant="outline" className="ml-2">
+                  Draft: {draftName}
+                </Badge>
+              )}
+            </div>
+          </div>
+          {renderContent()}
+        </div>
+      )
+    }
+    
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Dumbbell className="h-5 w-5" />
+              Fitness Plan Overview
+              {isDraft && (
+                <Badge variant="outline" className="ml-2">
+                  Draft: {draftName}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {renderContent()}
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
 export default FitnessPlanOverview 

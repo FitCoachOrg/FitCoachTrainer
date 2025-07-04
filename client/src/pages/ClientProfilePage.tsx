@@ -43,6 +43,7 @@ import {
   Settings,
   LineChart,
   Users,
+  CheckCircle,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -3578,6 +3579,234 @@ function FilterCriteria() {
   )
 }
 
+// Fitness Goals Section Component
+function FitnessGoalsSection({ client }: { client: any }) {
+  return (
+    <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Target className="h-4 w-4 text-green-600" />
+          Fitness Goals
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Primary Goal</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            {client?.cl_primary_goal || "Weight loss and muscle building"}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Outcome</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            {client?.specific_outcome || "Lose 15 lbs and gain lean muscle"}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Timeline</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            {client?.goal_timeline || "6 months"}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Motivation</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            {client?.motivational_factors || "Health improvement, energy"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Fitness Plan Section Component
+function FitnessPlanSection({ client }: { client: any }) {
+  return (
+    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Calendar className="h-4 w-4 text-blue-600" />
+          Fitness Plan
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Schedule</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            Mon, Wed, Fri - 6:00 AM
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Duration</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            60 minutes per session
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Location</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            Home gym / Fitness center
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Equipment</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            Dumbbells, bands, yoga mat
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Limitations</Label>
+          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
+            {client?.injuries_limitations || "Lower back - avoid deadlifts"}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Trainer Notes Section Component
+function TrainerNotesSection({ 
+  client, 
+  trainerNotes, 
+  setTrainerNotes, 
+  handleSaveTrainerNotes, 
+  isSavingNotes, 
+  isEditingNotes, 
+  setIsEditingNotes,
+  notesDraft,
+  setNotesDraft,
+  notesError,
+  setNotesError 
+}: {
+  client: any
+  trainerNotes: string
+  setTrainerNotes: (notes: string) => void
+  handleSaveTrainerNotes: () => void
+  isSavingNotes: boolean
+  isEditingNotes: boolean
+  setIsEditingNotes: (editing: boolean) => void
+  notesDraft: string
+  setNotesDraft: (draft: string) => void
+  notesError: string | null
+  setNotesError: (error: string | null) => void
+}) {
+  return (
+    <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-200 dark:border-yellow-800 h-full">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Edit className="h-4 w-4 text-yellow-600" />
+          Trainer Notes
+        </CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
+          disabled={isSavingNotes}
+        >
+          {isEditingNotes ? (
+            isSavingNotes ? (
+              <>
+                <LoadingSpinner size="small" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-3 w-3" />
+                Save
+              </>
+            )
+          ) : (
+            <>
+              <Edit className="h-3 w-3" />
+              Edit
+            </>
+          )}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {isEditingNotes ? (
+          <div className="space-y-2">
+            <Textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              placeholder="Add your notes about the client..."
+              className="min-h-[120px] text-sm bg-white dark:bg-gray-800"
+              disabled={isSavingNotes}
+            />
+            {notesError && <div className="text-red-500 text-xs">{notesError}</div>}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditingNotes(false)
+                  setNotesError(null)
+                  setNotesDraft(trainerNotes)
+                }}
+                disabled={isSavingNotes}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="min-h-[120px] p-2 text-sm bg-gradient-to-br from-yellow-100/50 to-orange-100/50 dark:from-yellow-900/10 dark:to-orange-900/10 rounded border border-yellow-200/50 dark:border-yellow-800/50 whitespace-pre-line">
+            {trainerNotes || "No notes added yet. Click edit to add notes."}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Todo Section Component
+function TodoSection({ 
+  todoItems, 
+  setTodoItems, 
+  isEditingTodo, 
+  setIsEditingTodo,
+  handleSaveTodo 
+}: {
+  todoItems: string
+  setTodoItems: (items: string) => void
+  isEditingTodo: boolean
+  setIsEditingTodo: (editing: boolean) => void
+  handleSaveTodo: () => void
+}) {
+  return (
+    <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200 dark:border-purple-800 h-full">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CheckCircle className="h-4 w-4 text-purple-600" />
+          To-Do List
+        </CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => (isEditingTodo ? handleSaveTodo() : setIsEditingTodo(true))}
+        >
+          {isEditingTodo ? <Save className="h-3 w-3" /> : <Edit className="h-3 w-3" />}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {isEditingTodo ? (
+          <Textarea
+            value={todoItems}
+            onChange={(e) => setTodoItems(e.target.value)}
+            placeholder="Add to-do items..."
+            className="min-h-[120px] text-sm bg-white dark:bg-gray-800"
+          />
+        ) : (
+          <div className="min-h-[120px] p-2 text-sm bg-gradient-to-br from-purple-100/50 to-pink-100/50 dark:from-purple-900/10 dark:to-pink-900/10 rounded border border-purple-200/50 dark:border-purple-800/50 whitespace-pre-line">
+            {todoItems || "No to-do items added yet. Click edit to add items."}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // Enhanced Notes and Todo Cards Component
 function TrainerNotesToDoSection({ 
   client, 
@@ -3764,6 +3993,10 @@ export default function ClientDashboard() {
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
+  const [todoItems, setTodoItems] = useState(
+    "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week"
+  )
+  const [isEditingTodo, setIsEditingTodo] = useState(false)
   const navigate = useNavigate()
 
   // Handler for client selection from sidebar
@@ -3820,6 +4053,12 @@ export default function ClientDashboard() {
     } finally {
       setIsSavingNotes(false);
     }
+  }
+
+  const handleSaveTodo = () => {
+    setIsEditingTodo(false)
+    // In a real app, this would save to the database
+    console.log("Todo saved:", todoItems)
   }
 
   const handleSummarizeNotes = async () => {
@@ -4043,24 +4282,10 @@ export default function ClientDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex">
       {/* AllClientsSidebar - Left Sidebar */}
-      <div className="w-80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto">
+      <div className="w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto">
         <div className="p-4 border-b border-gray-200/50 dark:border-gray-700/50">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg flex-shrink-0">
-              <Users className="h-6 w-6 text-white" />
-            </div>
-            <div className="min-w-0 overflow-hidden">
-              <h2 className="font-bold text-gray-900 dark:text-white text-lg">Client Management</h2>
-              <div className="flex gap-2 mt-1">
-                <span className="bg-gradient-to-r from-pink-200 to-rose-200 dark:from-pink-800 dark:to-rose-800 text-pink-800 dark:text-pink-200 px-2 py-1 rounded-full text-xs font-medium">
-                  Smart Dashboard
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 p-3 rounded-xl">
               <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{trainerClients?.length || 0}</div>
               <div className="text-xs text-blue-700 dark:text-blue-300">Total Clients</div>
@@ -4076,9 +4301,8 @@ export default function ClientDashboard() {
 
         <div className="p-4">
           {/* All Clients List */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-              <Users className="h-4 w-4" />
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
               All Clients
             </h3>
             <AllClientsSidebar 
@@ -4089,45 +4313,7 @@ export default function ClientDashboard() {
             />
           </div>
 
-          {/* Quick Filters */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Quick Filters
-            </h3>
-            <FilterCriteria />
-          </div>
 
-          {/* Quick Actions */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Quick Actions</h3>
-            <div className="space-y-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              >
-                <Calendar className="h-4 w-4 mr-3" />
-                Schedule
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-              >
-                <BarChart3 className="h-4 w-4 mr-3" />
-                Analytics
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-              >
-                <Settings className="h-4 w-4 mr-3" />
-                Settings
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -4299,8 +4485,41 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Enhanced Navigation Tabs */}
+      {/* Permanent Card Sections */}
       <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-2 gap-4 mb-8">
+          {/* Fitness Goals Section */}
+          <FitnessGoalsSection client={client} />
+
+          {/* Fitness Plan Section */}
+          <FitnessPlanSection client={client} />
+
+          {/* Trainer Notes Section */}
+          <TrainerNotesSection
+            client={client}
+            trainerNotes={trainerNotes}
+            setTrainerNotes={setTrainerNotes}
+            handleSaveTrainerNotes={handleSaveTrainerNotes}
+            isSavingNotes={isSavingNotes}
+            isEditingNotes={isEditingNotes}
+            setIsEditingNotes={setIsEditingNotes}
+            notesDraft={notesDraft}
+            setNotesDraft={setNotesDraft}
+            notesError={notesError}
+            setNotesError={setNotesError}
+          />
+
+          {/* To Do Section */}
+          <TodoSection
+            todoItems={todoItems}
+            setTodoItems={setTodoItems}
+            isEditingTodo={isEditingTodo}
+            setIsEditingTodo={setIsEditingTodo}
+            handleSaveTodo={handleSaveTodo}
+          />
+        </div>
+
+        {/* Enhanced Navigation Tabs */}
         <div className="flex space-x-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-2 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 mb-8">
           {tabs.map((tab) => {
             const Icon = tab.icon

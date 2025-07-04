@@ -10,9 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Save, X, Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart } from "lucide-react"
+import { Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart } from "lucide-react"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
@@ -611,11 +609,6 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
   const { toast } = useToast()
   const [customExercises, setCustomExercises] = useState<Exercise[]>([])
   const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
-  const [scheduledWorkouts, setScheduledWorkouts] = useState<WorkoutPlan[][]>(() =>
-    Array(7)
-      .fill(null)
-      .map(() => []),
-  )
   const [showAddExercise, setShowAddExercise] = useState(false)
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [showClientDataPopup, setShowClientDataPopup] = useState(false)
@@ -678,124 +671,8 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
     localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
   }, [weeklyPlan])
 
-  // New editable table state for workout plans
-  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null)
-  const [editValue, setEditValue] = useState<string | number>("")
-  const [allWorkoutPlans, setAllWorkoutPlans] = useState<any[]>([])
-  
   // Fitness Plan Overview state
-  const [showFitnessPlanOverview, setShowFitnessPlanOverview] = useState(false)
   const [planOverviewData, setPlanOverviewData] = useState<any>(null)
-
-  // Initialize workout plans from recommended and AI generated
-  useEffect(() => {
-    const initialPlans = [
-      // Convert AI generated plans to flat exercises
-      ...aiGeneratedPlans.flatMap((plan) =>
-        plan.exercises.map((exercise: any, index: number) => ({
-          id: `${plan.id}-${index}`,
-          day: "Monday", // Default day
-          exercise: exercise.workout,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          duration: exercise.duration,
-          weight: exercise.weights,
-          coach_tip: exercise.coach_tip,
-          category: exercise.category,
-          body_part: exercise.body_part,
-          icon: exercise.icon,
-          source: "ai",
-        })),
-      ),
-    ]
-    setAllWorkoutPlans(initialPlans)
-  }, [aiGeneratedPlans])
-
-    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-  const weightOptions = [
-    "bodyweight",
-    "5kg",
-    "10kg",
-    "15kg",
-    "20kg",
-    "25kg",
-    "30kg",
-    "Dumbbells",
-    "Barbell",
-    "Kettlebell",
-    "Resistance Bands",
-  ]
-
-  const getDayColor = (day: string) => {
-    const colors = {
-      Monday: "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm",
-      Tuesday: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm",
-      Wednesday: "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm",
-      Thursday: "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm",
-      Friday: "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-sm",
-      Saturday: "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm",
-      Sunday: "bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-sm",
-    }
-    return colors[day as keyof typeof colors] || "bg-gradient-to-r from-gray-500 to-gray-600 text-white shadow-sm"
-  }
-
-  const handleCellClick = (workout: any, field: string) => {
-    setEditingCell({ id: workout.id, field })
-    setEditValue(workout[field])
-  }
-
-  const handleSave = () => {
-    if (editingCell) {
-      setAllWorkoutPlans((prev) =>
-        prev.map((w) =>
-          w.id === editingCell.id
-            ? {
-                ...w,
-                [editingCell.field]:
-                  editingCell.field === "sets" || editingCell.field === "duration" ? Number(editValue) : editValue,
-              }
-            : w,
-        ),
-      )
-      setEditingCell(null)
-      setEditValue("")
-    }
-  }
-
-  const handleCancel = () => {
-    setEditingCell(null)
-    setEditValue("")
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave()
-    } else if (e.key === "Escape") {
-      handleCancel()
-    }
-  }
-
-  const handleDeleteWorkout = (id: string) => {
-    setAllWorkoutPlans((prev) => prev.filter((w) => w.id !== id))
-  }
-
-  const handleAddNewWorkout = () => {
-    const newWorkout = {
-      id: Date.now().toString(),
-      day: "Monday",
-      exercise: "New Exercise",
-      sets: 3,
-      reps: "10",
-      duration: 30,
-      weight: "bodyweight",
-      coach_tip: "Focus on proper form",
-      category: "strength",
-      body_part: "full_body",
-      icon: "💪",
-      source: "custom",
-    }
-    setAllWorkoutPlans((prev) => [...prev, newWorkout])
-  }
 
   // Function to parse AI response and convert to recommended plans format
   const parseAIResponseToPlans = (aiResponseText: string) => {
@@ -892,16 +769,15 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
             generatedAt: result.generatedAt
           }
           
-          console.log("📋 Plan data prepared for overview:", planData)
-          setPlanOverviewData(planData)
-          setShowFitnessPlanOverview(true)
+                  console.log("📋 Plan data prepared for overview:", planData)
+        setPlanOverviewData(planData)
 
-          const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
-          
-          toast({
-            title: "AI Fitness Plan Generated",
-            description: `Plan ready for review for ${clientName}. Review and customize before saving.`,
-          })
+        const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
+        
+        toast({
+          title: "AI Fitness Plan Generated",
+          description: `Plan ready for review for ${clientName}. Review and customize before saving.`,
+        })
         } else {
           console.warn("⚠️ Success reported but no workout plan in response")
           toast({
@@ -943,269 +819,115 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
     }
   }
 
-  const renderEditableCell = (
-    workout: any,
-    field: string,
-    type: "text" | "number" | "select" | "textarea" = "text",
-  ) => {
-    const isEditing = editingCell?.id === workout.id && editingCell?.field === field
-    const value = workout[field]
 
-    if (isEditing) {
-      if (type === "select") {
-        const options = field === "day" ? days : weightOptions
-        return (
-          <div className="flex items-center gap-1">
-            <Select
-              value={String(editValue)}
-              onValueChange={setEditValue}
-              onOpenChange={(open) => !open && handleSave()}
-            >
-              <SelectTrigger className="h-6 min-w-[70px] text-xs border-0 p-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option) => (
-                  <SelectItem key={option} value={option} className="text-xs">
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
-      }
-
-      return (
-        <div className="flex items-center gap-1">
-          <Input
-            type={type}
-            value={editValue}
-            onChange={(e) => setEditValue(type === "number" ? Number(e.target.value) : e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="h-6 text-xs border-0 p-1"
-            autoFocus
-          />
-          <div className="flex gap-1">
-            <Button size="sm" onClick={handleSave} className="h-4 w-4 p-0">
-              <Save className="h-2 w-2" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleCancel} className="h-4 w-4 p-0">
-              <X className="h-2 w-2" />
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    const cellContent = () => {
-      if (field === "day") {
-        return (
-          <Badge className={`${getDayColor(String(value))} font-medium cursor-pointer text-xs px-1 py-0.5 border-0`}>
-            {String(value).slice(0, 3)}
-          </Badge>
-        )
-      }
-      if (field === "exercise") {
-        return (
-          <div className="flex items-center gap-1">
-            <span className="text-sm">{workout.icon || "💪"}</span>
-            <span className="cursor-pointer hover:text-blue-600 font-medium text-xs text-gray-800 truncate">
-              {String(value)}
-            </span>
-          </div>
-        )
-      }
-      return <span className="cursor-pointer hover:text-blue-600 text-xs text-gray-700 truncate">{String(value)}</span>
-    }
-
-    return (
-      <div
-        onClick={() => handleCellClick(workout, field)}
-        className="cursor-pointer hover:bg-blue-50 rounded transition-all duration-200 hover:shadow-sm w-full p-0.5"
-        title="Click to edit"
-      >
-        {cellContent()}
-      </div>
-    )
-  }
-
-  // Sort workouts by day
-  const sortedWorkouts = [...allWorkoutPlans].sort((a, b) => {
-    const dayOrder = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 }
-    return (dayOrder[a.day as keyof typeof dayOrder] || 8) - (dayOrder[b.day as keyof typeof dayOrder] || 8)
-  })
-
-  const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-  const handleDragOver = (e: any) => {
-    e.preventDefault()
-  }
-
-  const handleDrop = (e: any, day: any) => {
-    e.preventDefault()
-    const planData = JSON.parse(e.dataTransfer.getData("application/json"))
-    setWeeklyPlan((prev) => ({
-      ...prev,
-      [day]: planData,
-    }))
-  }
-
-  const removeFromCalendar = (day: any) => {
-    setWeeklyPlan((prev) => {
-      const newPlan = { ...prev }
-      delete newPlan[day]
-      return newPlan
-    })
-  }
 
   return (
-    <div className="grid grid-cols-12 gap-6 h-full">
-      {/* Weekly Schedule */}
-      <div className="col-span-8 flex flex-col">
+    <div className="h-full flex flex-col">
+      {/* Workout Plan Overview - Full Width */}
+      <div className="flex-1 overflow-hidden">
         <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Calendar className="h-6 w-6 text-blue-600" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Weekly Schedule</h3>
+              <Target className="h-6 w-6 text-purple-600" />
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Workout Plan Overview</h3>
             </div>
-            <Badge variant="outline" className="text-sm">
-              {Object.keys(weeklyPlan).length} days scheduled
-            </Badge>
-          </div>
-        </div>
-
-        {/* Calendar Grid - Simple version for now */}
-        <div className="grid grid-cols-7 gap-4">
-          {daysOfWeek.map((day, index) => (
-            <div key={day} className="min-h-0">
-              <div className="sticky top-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-20 pb-3 mb-3">
-                <h4 className="text-sm font-bold text-center text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  {day}
-                </h4>
-              </div>
-              <div
-                className="space-y-3 min-h-[200px] p-3 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl transition-all duration-200 hover:border-blue-300 hover:bg-blue-50/30"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                {scheduledWorkouts[index]?.length === 0 && (
-                  <div className="text-center text-gray-400 dark:text-gray-600 text-sm py-8 flex flex-col items-center gap-2">
-                    <Dumbbell className="h-6 w-6 text-gray-300" />
-                    <span>Drop workout here</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Workout Plans */}
-      <div className="col-span-4 flex flex-col h-full">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Dumbbell className="h-6 w-6 text-emerald-600" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Workout Plans</h3>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleAddNewWorkout} size="sm" variant="outline" className="text-sm font-medium flex-1">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Exercise
-            </Button>
-            <Button
-              onClick={handleGenerateAIPlans}
-              disabled={isGeneratingAI}
-              size="sm"
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 font-medium flex-1"
-            >
-              {isGeneratingAI ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <div className="mr-2">🤖</div>
-                  Generate AI Plan
-                </>
+            <div className="flex items-center gap-4">
+              {planOverviewData && (
+                <Badge variant="outline" className="text-sm">
+                  {planOverviewData.workout_plan?.length || 0} exercises
+                </Badge>
               )}
-            </Button>
-            {debugData && (
               <Button
-                onClick={() => setShowDebugPopup(true)}
+                onClick={handleGenerateAIPlans}
+                disabled={isGeneratingAI}
                 size="sm"
-                variant="outline"
-                className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                title="View AI Debug Data"
+                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 font-medium"
               >
-                <Bug className="h-4 w-4" />
+                {isGeneratingAI ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <div className="mr-2">🤖</div>
+                    Generate AI Plan
+                  </>
+                )}
               </Button>
-            )}
+              {debugData && (
+                <Button
+                  onClick={() => setShowDebugPopup(true)}
+                  size="sm"
+                  variant="outline"
+                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                  title="View AI Debug Data"
+                >
+                  <Bug className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          <Card className="shadow-xl border-0 bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 h-full flex flex-col">
-            <CardContent className="p-0 flex-1 flex flex-col">
-              <div className="flex-1 overflow-hidden">
-                {sortedWorkouts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
-                    <Dumbbell className="h-16 w-16 text-gray-300 mb-4" />
-                    <div className="text-center">
-                      <p className="text-lg font-medium mb-2">No workout exercises yet</p>
-                      <p className="text-sm">Click "Generate AI Plan" or "Add Exercise" to get started</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-full overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-white dark:bg-gray-900 z-10">
-                        <TableRow className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
-                          <TableHead className="font-bold text-xs w-[60px] text-center p-2">Day</TableHead>
-                          <TableHead className="font-bold text-xs min-w-[140px] p-2">Exercise</TableHead>
-                          <TableHead className="font-bold text-xs w-[50px] text-center p-2">Sets</TableHead>
-                          <TableHead className="font-bold text-xs w-[60px] text-center p-2">Reps</TableHead>
-                          <TableHead className="font-bold text-xs w-[50px] text-center p-2">Del</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {sortedWorkouts.map((workout) => (
-                          <TableRow
-                            key={workout.id}
-                            className="hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors group border-b border-gray-100 dark:border-gray-800"
-                          >
-                            <TableCell className="py-2 px-2">{renderEditableCell(workout, "day", "select")}</TableCell>
-                            <TableCell className="py-2 px-2">
-                              {renderEditableCell(workout, "exercise", "text")}
-                            </TableCell>
-                            <TableCell className="py-2 px-2 text-center">
-                              {renderEditableCell(workout, "sets", "number")}
-                            </TableCell>
-                            <TableCell className="py-2 px-2 text-center">
-                              {renderEditableCell(workout, "reps", "text")}
-                            </TableCell>
-                            <TableCell className="py-2 px-2 text-center">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteWorkout(workout.id)}
-                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-600 rounded-full"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Embedded Fitness Plan Overview */}
+        <div className="h-full overflow-hidden">
+          {planOverviewData ? (
+            <div className="h-full">
+              <FitnessPlanOverview
+                isOpen={true}
+                onClose={() => {}}
+                clientId={clientId ? Number(clientId) : 34}
+                initialPlanData={planOverviewData}
+                embedded={true}
+                onPlanSaved={(success, message) => {
+                  if (success) {
+                    toast({
+                      title: "Plan Saved Successfully",
+                      description: message,
+                    })
+                  } else {
+                    toast({
+                      title: "Failed to Save Plan",
+                      description: message,
+                      variant: "destructive",
+                    })
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <Card className="h-full flex items-center justify-center">
+              <CardContent className="text-center p-8">
+                <Target className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <div>
+                  <h3 className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
+                    No Workout Plan Generated
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Generate an AI workout plan to see the detailed overview here
+                  </p>
+                  <Button
+                    onClick={handleGenerateAIPlans}
+                    disabled={isGeneratingAI}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  >
+                    {isGeneratingAI ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <div className="mr-2">🤖</div>
+                        Generate AI Plan
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -1240,32 +962,6 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
         rawResponse={debugData?.rawResponse}
         parsedData={debugData?.parsedData || []}
         clientName={clientInfo?.name || clientInfo?.preferredName}
-      />
-
-      {/* Fitness Plan Overview - New intermediate review component */}
-      <FitnessPlanOverview
-        isOpen={showFitnessPlanOverview}
-        onClose={() => {
-          setShowFitnessPlanOverview(false)
-          setPlanOverviewData(null)
-        }}
-        clientId={clientId ? Number(clientId) : 34}
-        initialPlanData={planOverviewData}
-        onPlanSaved={(success, message) => {
-          if (success) {
-            toast({
-              title: "Plan Saved Successfully",
-              description: message,
-            })
-            // Optionally refresh or update the current workout plans view
-          } else {
-            toast({
-              title: "Failed to Save Plan",
-              description: message,
-              variant: "destructive",
-            })
-          }
-        }}
       />
     </div>
   )
