@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -44,6 +44,8 @@ import {
   LineChart,
   Users,
   CheckCircle,
+  Droplet,
+  Moon,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -1331,22 +1333,11 @@ const METRIC_LIBRARY = [
     icon: Weight,
     type: "line",
     color: "#3b82f6",
-    data: [
-      { date: "Jan", weight: 82.5 },
-      { date: "Feb", weight: 81.8 },
-      { date: "Mar", weight: 80.5 },
-      { date: "Apr", weight: 79.2 },
-      { date: "May", weight: 78.4 },
-      { date: "Jun", weight: 77.6 },
-      { date: "Jul", weight: 76.8 },
-      { date: "Aug", weight: 76.2 },
-      { date: "Sep", weight: 75.8 },
-      { date: "Oct", weight: 75.2 },
-      { date: "Nov", weight: 74.8 },
-      { date: "Dec", weight: 74.4 },
-    ],
-    dataKey: "weight",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
     yLabel: "kg",
+    activityName: "weight",
+    dataSource: "activity_info"
   },
   {
     key: "sleep",
@@ -1354,22 +1345,11 @@ const METRIC_LIBRARY = [
     icon: Clock,
     type: "bar",
     color: "#14b8a6",
-    data: [
-      { date: "Jan", hours: 5.8 },
-      { date: "Feb", hours: 6.2 },
-      { date: "Mar", hours: 6.5 },
-      { date: "Apr", hours: 6.8 },
-      { date: "May", hours: 7.0 },
-      { date: "Jun", hours: 7.2 },
-      { date: "Jul", hours: 7.0 },
-      { date: "Aug", hours: 7.2 },
-      { date: "Sep", hours: 7.4 },
-      { date: "Oct", hours: 7.2 },
-      { date: "Nov", hours: 7.0 },
-      { date: "Dec", hours: 7.2 },
-    ],
-    dataKey: "hours",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
     yLabel: "h",
+    activityName: "Sleep Duration",
+    dataSource: "activity_info"
   },
   {
     key: "heartRate",
@@ -1377,22 +1357,12 @@ const METRIC_LIBRARY = [
     icon: Heart,
     type: "line",
     color: "#e11d48",
-    data: [
-      { date: "Jan", rate: 78 },
-      { date: "Feb", rate: 76 },
-      { date: "Mar", rate: 74 },
-      { date: "Apr", rate: 72 },
-      { date: "May", rate: 70 },
-      { date: "Jun", rate: 68 },
-      { date: "Jul", rate: 66 },
-      { date: "Aug", rate: 64 },
-      { date: "Sep", rate: 63 },
-      { date: "Oct", rate: 62 },
-      { date: "Nov", rate: 61 },
-      { date: "Dec", rate: 60 },
-    ],
-    dataKey: "rate",
+    data: [] as any[], // Will be populated from external_device_connect table
+    dataKey: "qty",
     yLabel: "bpm",
+    activityName: "Heart Rate",
+    dataSource: "external_device_connect",
+    columnName: "heart_rate"
   },
   {
     key: "steps",
@@ -1400,22 +1370,74 @@ const METRIC_LIBRARY = [
     icon: Footprints,
     type: "bar",
     color: "#d97706",
-    data: [
-      { date: "Jan", steps: 6500 },
-      { date: "Feb", steps: 7200 },
-      { date: "Mar", steps: 7800 },
-      { date: "Apr", steps: 8200 },
-      { date: "May", steps: 8800 },
-      { date: "Jun", steps: 9200 },
-      { date: "Jul", steps: 9000 },
-      { date: "Aug", steps: 9400 },
-      { date: "Sep", steps: 9600 },
-      { date: "Oct", steps: 9800 },
-      { date: "Nov", steps: 9500 },
-      { date: "Dec", steps: 10000 },
-    ],
-    dataKey: "steps",
+    data: [] as any[], // Will be populated from external_device_connect table
+    dataKey: "qty",
     yLabel: "steps",
+    activityName: "Steps",
+    dataSource: "external_device_connect",
+    columnName: "steps"
+  },
+  {
+    key: "waterIntake",
+    label: "Water Intake",
+    icon: Droplet,
+    type: "bar",
+    color: "#0ea5e9",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
+    yLabel: "ml",
+    activityName: "hydration",
+    dataSource: "activity_info"
+  },
+  {
+    key: "sleepQuality",
+    label: "Sleep Quality",
+    icon: Moon,
+    type: "line",
+    color: "#8b5cf6",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
+    yLabel: "score",
+    activityName: "Sleep Quality",
+    dataSource: "activity_info"
+  },
+  {
+    key: "energyLevel",
+    label: "Energy Level",
+    icon: Zap,
+    type: "line",
+    color: "#f59e0b",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
+    yLabel: "level",
+    activityName: "Energy Level",
+    dataSource: "activity_info"
+  },
+  {
+    key: "caloriesSpent",
+    label: "Calories Spent",
+    icon: Activity,
+    type: "bar",
+    color: "#6366f1",
+    data: [] as any[], // Will be populated from external_device_connect table
+    dataKey: "qty",
+    yLabel: "kcal",
+    activityName: "Calories Spent",
+    dataSource: "external_device_connect",
+    columnName: "calories_spent"
+  },
+  {
+    key: "exerciseTime",
+    label: "Exercise Time",
+    icon: Clock,
+    type: "bar",
+    color: "#10b981",
+    data: [] as any[], // Will be populated from external_device_connect table
+    dataKey: "qty",
+    yLabel: "min",
+    activityName: "Exercise Time",
+    dataSource: "external_device_connect",
+    columnName: "exercise_time"
   },
   {
     key: "workoutAdherence",
@@ -1423,22 +1445,11 @@ const METRIC_LIBRARY = [
     icon: Activity,
     type: "line",
     color: "#6366f1",
-    data: [
-      { date: "Jan", value: 65 },
-      { date: "Feb", value: 70 },
-      { date: "Mar", value: 75 },
-      { date: "Apr", value: 78 },
-      { date: "May", value: 82 },
-      { date: "Jun", value: 85 },
-      { date: "Jul", value: 88 },
-      { date: "Aug", value: 90 },
-      { date: "Sep", value: 92 },
-      { date: "Oct", value: 94 },
-      { date: "Nov", value: 93 },
-      { date: "Dec", value: 95 },
-    ],
-    dataKey: "value",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
     yLabel: "%",
+    activityName: "Workout Adherence",
+    dataSource: "activity_info"
   },
   {
     key: "retention",
@@ -1446,22 +1457,11 @@ const METRIC_LIBRARY = [
     icon: Target,
     type: "line",
     color: "#10b981",
-    data: [
-      { date: "Jan", value: 65 },
-      { date: "Feb", value: 68 },
-      { date: "Mar", value: 71 },
-      { date: "Apr", value: 73 },
-      { date: "May", value: 75 },
-      { date: "Jun", value: 77 },
-      { date: "Jul", value: 79 },
-      { date: "Aug", value: 81 },
-      { date: "Sep", value: 82 },
-      { date: "Oct", value: 83 },
-      { date: "Nov", value: 84 },
-      { date: "Dec", value: 85 },
-    ],
-    dataKey: "value",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
     yLabel: "%",
+    activityName: "Retention Rate",
+    dataSource: "activity_info"
   },
   {
     key: "progress",
@@ -1469,22 +1469,11 @@ const METRIC_LIBRARY = [
     icon: TrendingUp,
     type: "line",
     color: "#9333ea",
-    data: [
-      { date: "Jan", value: 45 },
-      { date: "Feb", value: 50 },
-      { date: "Mar", value: 55 },
-      { date: "Apr", value: 58 },
-      { date: "May", value: 62 },
-      { date: "Jun", value: 65 },
-      { date: "Jul", value: 68 },
-      { date: "Aug", value: 70 },
-      { date: "Sep", value: 72 },
-      { date: "Oct", value: 74 },
-      { date: "Nov", value: 76 },
-      { date: "Dec", value: 78 },
-    ],
-    dataKey: "value",
+    data: [] as any[], // Will be populated from activity_info table
+    dataKey: "qty",
     yLabel: "%",
+    activityName: "Progress",
+    dataSource: "activity_info"
   },
 ]
 
@@ -1813,36 +1802,273 @@ const EditableSection: React.FC<EditableSectionProps> = ({ title, icon, initialC
 const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem("selectedMetrics")
-    return saved ? JSON.parse(saved) : ["weight", "sleep", "heartRate", "steps"]
+    return saved ? JSON.parse(saved) : ["heartRate", "steps", "caloriesSpent", "exerciseTime"]
   })
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [workoutInfo, setWorkoutInfo] = useState<any[]>([])
-  const [loadingWorkout, setLoadingWorkout] = useState(false)
-  const [workoutError, setWorkoutError] = useState<string | null>(null)
-  const [workoutCount, setWorkoutCount] = useState<number>(0);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [activityData, setActivityData] = useState<any[]>([])
+  const [externalDeviceData, setExternalDeviceData] = useState<any[]>([])
+  const [filteredActivityData, setFilteredActivityData] = useState<any[]>([])
+  const [filteredExternalDeviceData, setFilteredExternalDeviceData] = useState<any[]>([])
+  const [loadingActivity, setLoadingActivity] = useState(false)
+  const [activityError, setActivityError] = useState<string | null>(null)
+  const [workoutCount, setWorkoutCount] = useState<number>(0)
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [timeRange, setTimeRange] = useState<"7D" | "30D" | "90D">("30D")
+
+  // Filter data based on selected time range
+  const filterDataByTimeRange = useCallback(() => {
+    const now = new Date();
+    let cutoffDate = new Date();
+    
+    // Set cutoff date based on selected time range
+    switch (timeRange) {
+      case "7D":
+        cutoffDate.setDate(now.getDate() - 7);
+        break;
+      case "30D":
+        cutoffDate.setDate(now.getDate() - 30);
+        break;
+      case "90D":
+        cutoffDate.setDate(now.getDate() - 90);
+        break;
+    }
+    
+    // Filter activity data if available
+    if (activityData.length) {
+      const filteredActivity = activityData.filter(item => 
+        new Date(item.created_at) >= cutoffDate
+      );
+      setFilteredActivityData(filteredActivity);
+    }
+    
+    // Filter external device data if available
+    if (externalDeviceData.length) {
+      const filteredExternal = externalDeviceData.filter(item => 
+        new Date(item.for_date) >= cutoffDate
+      );
+      setFilteredExternalDeviceData(filteredExternal);
+    }
+  }, [activityData, externalDeviceData, timeRange]);
+
+  // Update metrics data from both activity_info and external_device_connect
+  const updateMetricsData = useCallback(() => {
+    // Process activity_info data
+    const processActivityData = () => {
+      if (!filteredActivityData.length) return;
+      
+      // Group activity data by activity type
+      const groupedData: Record<string, any[]> = {};
+      filteredActivityData.forEach(item => {
+        if (!groupedData[item.activity]) {
+          groupedData[item.activity] = [];
+        }
+        
+        // Format date based on time range
+        const date = new Date(item.created_at);
+        let dateStr: string;
+        
+        if (timeRange === "7D") {
+          // Daily for 7D
+          dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        } else {
+          // Weekly for 30D and 90D
+          // Get the week number (approximate by dividing day of month by 7)
+          const weekNum = Math.ceil(date.getDate() / 7);
+          const monthName = date.toLocaleString('default', { month: 'short' });
+          dateStr = `${monthName} W${weekNum}`; // e.g., "Jan W1"
+        }
+        
+        // Add to grouped data
+        groupedData[item.activity].push({
+          date: dateStr,
+          qty: Number(item.qty),
+          unit: item.unit,
+          created_at: item.created_at
+        });
+      });
+      
+      // Update metrics from activity_info
+      METRIC_LIBRARY.forEach((metric, index) => {
+        if (metric.dataSource !== "activity_info") return;
+        
+        const activityName = metric.activityName;
+        if (groupedData[activityName]) {
+          // Group by date to calculate averages
+          const aggregatedData: Record<string, {total: number, count: number}> = {};
+          
+          groupedData[activityName].forEach(item => {
+            if (!aggregatedData[item.date]) {
+              aggregatedData[item.date] = { total: 0, count: 0 };
+            }
+            aggregatedData[item.date].total += item.qty;
+            aggregatedData[item.date].count += 1;
+          });
+          
+          // Convert to array of averages
+          const averagedData = Object.entries(aggregatedData).map(([date, values]) => {
+            return {
+              date: date,
+              qty: values.total / values.count,
+              fullDate: date // Keep for sorting
+            };
+          });
+          
+          // Sort and format data
+          const formattedData = formatAndSortData(averagedData);
+          
+          // Update the metric data
+          METRIC_LIBRARY[index].data = formattedData;
+        }
+      });
+    };
+    
+    // Process external device data
+    const processExternalDeviceData = () => {
+      if (!filteredExternalDeviceData.length) return;
+      
+      // Group external device data by column
+      const columnDataMap: Record<string, any[]> = {};
+      
+      filteredExternalDeviceData.forEach(item => {
+        // Format date based on time range
+        const date = new Date(item.for_date);
+        let dateStr: string;
+        
+        if (timeRange === "7D") {
+          // Daily for 7D
+          dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        } else {
+          // Weekly for 30D and 90D
+          const weekNum = Math.ceil(date.getDate() / 7);
+          const monthName = date.toLocaleString('default', { month: 'short' });
+          dateStr = `${monthName} W${weekNum}`; // e.g., "Jan W1"
+        }
+        
+        // Process each column from external device data
+        METRIC_LIBRARY.forEach(metric => {
+          if (metric.dataSource === "external_device_connect" && metric.columnName) {
+            const columnName = metric.columnName;
+            if (item[columnName] !== null) {
+              if (!columnDataMap[columnName]) {
+                columnDataMap[columnName] = [];
+              }
+              
+              columnDataMap[columnName].push({
+                date: dateStr,
+                qty: Number(item[columnName]),
+                for_date: item.for_date
+              });
+            }
+          }
+        });
+      });
+      
+      // Update metrics from external_device_connect
+      METRIC_LIBRARY.forEach((metric, index) => {
+        if (metric.dataSource !== "external_device_connect" || !metric.columnName) return;
+        
+        const columnName = metric.columnName;
+        if (columnDataMap[columnName]) {
+          // Group by date to calculate averages
+          const aggregatedData: Record<string, {total: number, count: number}> = {};
+          
+          columnDataMap[columnName].forEach(item => {
+            if (!aggregatedData[item.date]) {
+              aggregatedData[item.date] = { total: 0, count: 0 };
+            }
+            aggregatedData[item.date].total += item.qty;
+            aggregatedData[item.date].count += 1;
+          });
+          
+          // Convert to array of averages
+          const averagedData = Object.entries(aggregatedData).map(([date, values]) => {
+            return {
+              date: date,
+              qty: values.total / values.count,
+              fullDate: date // Keep for sorting
+            };
+          });
+          
+          // Sort and format data
+          const formattedData = formatAndSortData(averagedData);
+          
+          // Update the metric data
+          METRIC_LIBRARY[index].data = formattedData;
+        }
+      });
+    };
+    
+    // Helper function to sort and format date data consistently
+    const formatAndSortData = (averagedData: any[]) => {
+      // Sort by date
+      const sortedData = [...averagedData].sort((a, b) => {
+        // If using weekly format (Month W#), need custom sorting
+        if (timeRange !== "7D") {
+          const [aMonth, aWeek] = a.fullDate.split(" ");
+          const [bMonth, bWeek] = b.fullDate.split(" ");
+          
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const aMonthIndex = months.indexOf(aMonth);
+          const bMonthIndex = months.indexOf(bMonth);
+          
+          if (aMonthIndex !== bMonthIndex) return aMonthIndex - bMonthIndex;
+          return aWeek.localeCompare(bWeek);
+        }
+        
+        // For daily format, simple date comparison
+        return new Date(a.fullDate).getTime() - new Date(b.fullDate).getTime();
+      });
+      
+      // Format display dates
+      return sortedData.map(item => ({
+        ...item,
+        date: timeRange === "7D" 
+          ? new Date(item.fullDate).toLocaleDateString('default', { month: 'short', day: 'numeric' })
+          : item.date // Keep the Month W# format for weekly
+      }));
+    };
+    
+    // Process both data sources
+    processActivityData();
+    processExternalDeviceData();
+    
+  }, [filteredActivityData, filteredExternalDeviceData, timeRange]);
 
   useEffect(() => {
     localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
   }, [selectedKeys])
 
   useEffect(() => {
-    console.log("[MetricsSection] Effect running, clientId:", clientId, "isActive:", isActive);
     if (!clientId || !isActive || dataLoaded) {
-      console.log("[MetricsSection] Not loading - clientId:", clientId, "isActive:", isActive, "dataLoaded:", dataLoaded);
       return;
     }
-    setLoadingWorkout(true)
-    setWorkoutError(null)
-    ;(async () => {
+    
+    setLoadingActivity(true);
+    setActivityError(null);
+    
+    (async () => {
       try {
-        console.log("[MetricsSection] Fetching workout_info for clientId:", clientId);
-        const { data, error } = await supabase.from("workout_info").select("*").eq("client_id", clientId);
-        console.log("[MetricsSection] Query result:", data, error);
-        if (error) throw error;
-        setWorkoutInfo(data || []);
-
-        // Fetch count of workouts in last 30 days
+        // Fetch activity_info data for the client - get all historical data
+        const { data: activityData, error: activityError } = await supabase
+          .from("activity_info")
+          .select("*")
+          .eq("client_id", clientId)
+          .order('created_at', { ascending: true });
+          
+        if (activityError) throw activityError;
+        setActivityData(activityData || []);
+        
+        // Fetch external device data
+        const { data: deviceData, error: deviceError } = await supabase
+          .from("external_device_connect")
+          .select("*")
+          .eq("client_id", clientId)
+          .order('for_date', { ascending: true });
+          
+        if (deviceError) throw deviceError;
+        setExternalDeviceData(deviceData || []);
+        
+        // Fetch count of workouts in last 30 days (keeping existing functionality)
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 30);
         const sinceISOString = sinceDate.toISOString();
@@ -1851,19 +2077,30 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
           .select("id", { count: "exact", head: true })
           .eq("client_id", clientId)
           .gte("created_at", sinceISOString);
-        console.log("[MetricsSection] 30-day count:", count, countError);
+          
         if (countError) throw countError;
         setWorkoutCount(count || 0);
         setDataLoaded(true);
       } catch (err: any) {
-        setWorkoutError(err.message || "Failed to fetch workout info");
-        setWorkoutInfo([]);
+        setActivityError(err.message || "Failed to fetch activity data");
+        setActivityData([]);
+        setExternalDeviceData([]);
         setWorkoutCount(0);
       } finally {
-        setLoadingWorkout(false);
+        setLoadingActivity(false);
       }
     })();
   }, [clientId, isActive, dataLoaded]);
+
+  // Filter data whenever activity data, external device data, or time range changes
+  useEffect(() => {
+    filterDataByTimeRange();
+  }, [activityData, externalDeviceData, timeRange, filterDataByTimeRange]);
+
+  // Update metrics data whenever filtered data changes
+  useEffect(() => {
+    updateMetricsData();
+  }, [filteredActivityData, filteredExternalDeviceData, updateMetricsData]);
 
   const selectedMetrics = selectedKeys
     .map((key: string) => METRIC_LIBRARY.find((m) => m.key === key))
@@ -1898,73 +2135,104 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center gap-6">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-                  <BarChart3 className="h-5 w-5 text-white" />
+              <div className="flex items-center gap-3 mb-4 justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
+                    <BarChart3 className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
                 </div>
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <DndContext
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                  onDragStart={(e) => setDraggingId(String(e.active.id))}
-                >
-                  <SortableContext
-                    items={selectedMetrics.map((m: any) => m.key)}
-                    strategy={verticalListSortingStrategy}
+                <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
+                  <button
+                    onClick={() => setTimeRange("7D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "7D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
                   >
-                    {selectedMetrics.map((metric: any) => (
-                      <div
-                        key={metric.key}
-                        className="flex items-center gap-2 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2 shadow-lg cursor-grab hover:shadow-xl transition-all duration-300 group"
-                        tabIndex={0}
-                        aria-label={`Drag to reorder ${metric.label}`}
-                      >
-                        <span
-                          className="cursor-grab text-gray-400 group-hover:text-blue-500 transition-colors"
-                          title="Drag to reorder"
+                    7D
+                  </button>
+                  <button
+                    onClick={() => setTimeRange("30D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "30D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    30D
+                  </button>
+                  <button
+                    onClick={() => setTimeRange("90D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "90D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    90D
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3 items-center justify-between">
+                <div className="flex flex-wrap gap-3">
+                  <DndContext
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                    onDragStart={(e) => setDraggingId(String(e.active.id))}
+                  >
+                    <SortableContext
+                      items={selectedMetrics.map((m: any) => m.key)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {selectedMetrics.map((metric: any) => (
+                        <div
+                          key={metric.key}
+                          className="flex items-center gap-2 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2 shadow-lg cursor-grab hover:shadow-xl transition-all duration-300 group"
+                          tabIndex={0}
+                          aria-label={`Drag to reorder ${metric.label}`}
                         >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M3 4h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2z" />
-                          </svg>
-                        </span>
-                        <metric.icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{metric.label}</span>
-                        <button
-                          onClick={() => handleRemove(metric.key)}
-                          className="ml-2 text-red-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-950/50"
-                          aria-label={`Remove ${metric.label}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
+                          <span
+                            className="cursor-grab text-gray-400 group-hover:text-blue-500 transition-colors"
+                            title="Drag to reorder"
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M3 4h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2zm0 5h14a1 1 0 010 2H3a1 1 0 010-2z" />
+                            </svg>
+                          </span>
+                          <metric.icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">{metric.label}</span>
+                          <button
+                            onClick={() => handleRemove(metric.key)}
+                            className="ml-2 text-red-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-950/50"
+                            aria-label={`Remove ${metric.label}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    id="metric-select"
+                    className="border-2 border-blue-200 dark:border-blue-800 rounded-xl px-3 py-1 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                    onChange={handleSelectChange}
+                    value=""
+                  >
+                    <option value="">+ Add metric</option>
+                    {availableMetrics.map((m: any) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
                     ))}
-                  </SortableContext>
-                </DndContext>
+                  </select>
+                </div>
               </div>
             </div>
-            <div className="lg:w-64">
-              <label
-                htmlFor="metric-select"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Add New Metric
-              </label>
-              <select
-                id="metric-select"
-                className="w-full border-2 border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
-                onChange={handleSelectChange}
-                value=""
-              >
-                <option value="">Choose a metric...</option>
-                {availableMetrics.map((m: any) => (
-                  <option key={m.key} value={m.key}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Removed duplicate select since we moved it to the header */}
           </div>
         </CardContent>
       </Card>
@@ -1997,8 +2265,19 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                       {metric.type === "line" ? (
                         <Chart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                          <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <XAxis 
+                            dataKey="date" 
+                            tick={{ fontSize: 12 }} 
+                            axisLine={false} 
+                            tickLine={false}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis 
+                            tick={{ fontSize: 12 }} 
+                            axisLine={false} 
+                            tickLine={false}
+                            label={{ value: metric.yLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                          />
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "white",
@@ -2006,21 +2285,34 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                               borderRadius: "12px",
                               boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
                             }}
+                            formatter={(value: any) => [`${value} ${metric.yLabel}`, 'Daily Average']}
+                            labelFormatter={(label) => `Date: ${label}`}
                           />
                           <Line
                             type="monotone"
-                            dataKey={metric.dataKey}
+                            dataKey="qty"
                             stroke={metric.color}
                             strokeWidth={3}
-                            dot={{ r: 5, strokeWidth: 2, fill: "white" }}
-                            activeDot={{ r: 7, strokeWidth: 2 }}
+                            dot={{ r: 4, strokeWidth: 2, stroke: metric.color, fill: "white" }}
+                            activeDot={{ r: 6, strokeWidth: 0, fill: metric.color }}
                           />
                         </Chart>
                       ) : (
                         <BarChart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                          <XAxis dataKey="date" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                          <XAxis 
+                            dataKey="date" 
+                            tick={{ fontSize: 12 }} 
+                            axisLine={false} 
+                            tickLine={false}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis 
+                            tick={{ fontSize: 12 }} 
+                            axisLine={false} 
+                            tickLine={false}
+                            label={{ value: metric.yLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                          />
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "white",
@@ -2028,8 +2320,10 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                               borderRadius: "12px",
                               boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
                             }}
+                            formatter={(value: any) => [`${value} ${metric.yLabel}`, 'Daily Average']}
+                            labelFormatter={(label) => `Date: ${label}`}
                           />
-                          <Bar dataKey={metric.dataKey} fill={metric.color} radius={[8, 8, 0, 0]} />
+                          <Bar dataKey="qty" fill={metric.color} radius={[8, 8, 0, 0]} barSize={12} />
                         </BarChart>
                       )}
                     </ResponsiveContainer>
@@ -2067,19 +2361,19 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loadingWorkout ? (
+          {loadingActivity ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4"></div>
               <p className="text-gray-500 dark:text-gray-400">Loading workout history...</p>
             </div>
-          ) : workoutError ? (
+          ) : activityError ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <X className="w-8 h-8 text-red-500" />
               </div>
-              <p className="text-red-500 dark:text-red-400">{workoutError}</p>
+              <p className="text-red-500 dark:text-red-400">{activityError}</p>
             </div>
-          ) : workoutInfo.length === 0 ? (
+          ) : activityData.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Dumbbell className="w-8 h-8 text-gray-400" />
@@ -2105,7 +2399,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                   </tr>
                 </thead>
                 <tbody>
-                  {workoutInfo.map((w, idx) => (
+                  {activityData.map((w, idx) => (
                     <tr
                       key={w.id}
                       className={
@@ -4350,12 +4644,8 @@ export default function ClientDashboard() {
                     {client.cl_name}
                   </h1>
                   <div className="flex items-center gap-3 mt-1">
-                    <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 shadow-lg">
-                      {client.membershipType || "Premium"}
-                    </Badge>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Member since {new Date(client.created_at).getFullYear()}
-                    </span>
+                    {/* Removed Premium badge as per request */}
+                    {/* Removed Member since text as per request */}
                   </div>
                 </div>
               </div>
@@ -4407,80 +4697,98 @@ export default function ClientDashboard() {
             </div>
           </div>
 
-          {/* Enhanced Profile Card */}
+          {/* Enhanced Profile Card (Revised for Simplicity & Requirements) */}
           {showProfileCard && (
-            <Card className="absolute top-20 left-6 w-80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-0 shadow-2xl z-50 animate-in slide-in-from-top-2 duration-300">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl">
-                    {clientImageUrl ? (
-                      <img
-                        src={clientImageUrl}
-                        alt={client.cl_name}
-                        className="w-full h-full rounded-2xl object-cover"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-2xl flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg">
-                        {client.cl_name
-                          .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")}
-                      </div>
-                    )}
+            <>
+              {/* Overlay for click-away-to-close */}
+              <div
+                className="fixed inset-0 z-40 bg-black/10" // semi-transparent overlay
+                onClick={() => setShowProfileCard(false)}
+                aria-label="Close profile card by clicking outside"
+              />
+              <Card className="absolute top-20 left-6 w-80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-0 shadow-2xl z-50 animate-in slide-in-from-top-2 duration-300">
+                <CardContent className="p-6">
+                  {/* Profile Picture and Green Dot (active_session) */}
+                  <div className="flex items-center gap-4 mb-6 relative">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl relative">
+                      {clientImageUrl ? (
+                        <img
+                          src={clientImageUrl}
+                          alt={client.cl_name}
+                          className="w-full h-full rounded-2xl object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-2xl flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold text-lg">
+                          {client.cl_name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")}
+                        </div>
+                      )}
+                      {/* Green dot only if active_session is true */}
+                      {client.active_session && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full shadow-lg" title="Active now"></div>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.cl_name}</h3>
+                      {/* Email */}
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{client.cl_email || 'N/A'}</p>
+                      {/* Phone */}
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{client.cl_phone ? String(client.cl_phone) : 'N/A'}</p>
+                      {/* Last Active */}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Last Active: {client.last_active ? new Date(client.last_active).toLocaleString() : 'N/A'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">{client.cl_name}</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{client.cl_email}</p>
-                    <Badge className="bg-gradient-to-r from-emerald-500 to-green-600 text-white border-0 text-xs mt-1">
-                      {client.membershipType || "Premium"}
-                    </Badge>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 rounded-xl">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{client.cl_weight}</div>
-                    <div className="text-xs text-blue-700 dark:text-blue-300">Weight (kg)</div>
+                  {/* Simple Info Grid */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {/* Weight */}
+                    <div className="text-center p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 rounded-xl">
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{client.cl_weight ?? 'N/A'}</div>
+                      <div className="text-xs text-blue-700 dark:text-blue-300">Weight (kg)</div>
+                    </div>
+                    {/* Height */}
+                    <div className="text-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-xl">
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{client.cl_height ?? 'N/A'}</div>
+                      <div className="text-xs text-green-700 dark:text-green-300">Height (cm)</div>
+                    </div>
                   </div>
-                  <div className="text-center p-3 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/50 dark:to-emerald-950/50 rounded-xl">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">{client.cl_height}</div>
-                    <div className="text-xs text-green-700 dark:text-green-300">Height (cm)</div>
-                  </div>
-                </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 text-sm">
+                  {/* Age */}
+                  <div className="flex items-center gap-3 text-sm mb-4">
                     <User className="h-4 w-4 text-gray-400" />
                     <span className="text-gray-600 dark:text-gray-400">Age:</span>
                     <span className="font-medium text-gray-900 dark:text-white">
-                      {client.cl_dob ? new Date().getFullYear() - new Date(client.cl_dob).getFullYear() : "N/A"}
+                      {/* Prefer cl_age, else calculate from cl_dob */}
+                      {client.cl_age
+                        ? client.cl_age
+                        : client.cl_dob
+                          ? new Date().getFullYear() - new Date(client.cl_dob).getFullYear()
+                          : 'N/A'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                    <span className="text-gray-600 dark:text-gray-400">Joined:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {new Date(client.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Current Goals</h4>
-                  <div className="space-y-2">
-                    {client.cl_primary_goal ? (
-                      <div className="flex items-center gap-2 text-sm">
-                        <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
-                        <span className="text-gray-600 dark:text-gray-400">{client.cl_primary_goal}</span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-sm">No goals set yet.</span>
-                    )}
+                  {/* Goals */}
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Current Goals</h4>
+                    <div className="space-y-2">
+                      {client.cl_primary_goal ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Target className="h-4 w-4 text-blue-500" />
+                          <span className="text-gray-600 dark:text-gray-400">{client.cl_primary_goal}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No goals set yet.</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
       </div>
