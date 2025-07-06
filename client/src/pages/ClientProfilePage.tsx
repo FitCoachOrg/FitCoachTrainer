@@ -3915,91 +3915,220 @@ function FilterCriteria() {
   )
 }
 
-// Fitness Goals Section Component
+// Fitness Goals Section Component - Compact Editable Table
 function FitnessGoalsSection({ client }: { client: any }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [goalsData, setGoalsData] = useState({
+    primaryGoal: client?.cl_primary_goal || "Weight loss and muscle building",
+    outcome: client?.specific_outcome || "Lose 15 lbs and gain lean muscle",
+    timeline: client?.goal_timeline || "6 months",
+    motivation: client?.motivational_factors || "Health improvement, energy",
+    location: "Home gym / Fitness center",
+    equipment: "Dumbbells, bands, yoga mat",
+    limitations: client?.injuries_limitations || "Lower back - avoid deadlifts"
+  });
+
+  const handleSave = () => {
+    // Here you would typically save to the database
+    console.log("Saving fitness goals:", goalsData);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setGoalsData({
+      primaryGoal: client?.cl_primary_goal || "Weight loss and muscle building",
+      outcome: client?.specific_outcome || "Lose 15 lbs and gain lean muscle",
+      timeline: client?.goal_timeline || "6 months",
+      motivation: client?.motivational_factors || "Health improvement, energy",
+      location: "Home gym / Fitness center",
+      equipment: "Dumbbells, bands, yoga mat",
+      limitations: client?.injuries_limitations || "Lower back - avoid deadlifts"
+    });
+    setIsEditing(false);
+  };
+
   return (
-    <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 h-full">
-      <CardHeader className="pb-3">
+    <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Target className="h-4 w-4 text-green-600" />
           Fitness Goals
         </CardTitle>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+        >
+          {isEditing ? (
+            <>
+              <Save className="h-3 w-3 mr-1" />
+              Save
+            </>
+          ) : (
+            <>
+              <Edit className="h-3 w-3 mr-1" />
+              Edit
+            </>
+          )}
+        </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Primary Goal</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            {client?.cl_primary_goal || "Weight loss and muscle building"}
-          </p>
+      <CardContent className="p-3">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <tbody>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 w-1/3">
+                  Primary Goal
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.primaryGoal}
+                      onChange={(e) => setGoalsData({...goalsData, primaryGoal: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.primaryGoal}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Outcome
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.outcome}
+                      onChange={(e) => setGoalsData({...goalsData, outcome: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.outcome}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Timeline
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.timeline}
+                      onChange={(e) => setGoalsData({...goalsData, timeline: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.timeline}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Motivation
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.motivation}
+                      onChange={(e) => setGoalsData({...goalsData, motivation: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.motivation}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Location
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.location}
+                      onChange={(e) => setGoalsData({...goalsData, location: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.location}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Equipment
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.equipment}
+                      onChange={(e) => setGoalsData({...goalsData, equipment: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.equipment}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50">
+                  Limitations
+                </td>
+                <td className="px-3 py-2">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={goalsData.limitations}
+                      onChange={(e) => setGoalsData({...goalsData, limitations: e.target.value})}
+                      className="w-full bg-transparent border-none outline-none text-gray-900 dark:text-white"
+                    />
+                  ) : (
+                    <div className="max-h-16 overflow-y-auto">
+                      <span className="text-gray-900 dark:text-white">{goalsData.limitations}</span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Outcome</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            {client?.specific_outcome || "Lose 15 lbs and gain lean muscle"}
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Timeline</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            {client?.goal_timeline || "6 months"}
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Motivation</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            {client?.motivational_factors || "Health improvement, energy"}
-          </p>
-        </div>
+        {isEditing && (
+          <div className="flex gap-2 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancel}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
-// Fitness Plan Section Component
-function FitnessPlanSection({ client }: { client: any }) {
-  return (
-    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 h-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Calendar className="h-4 w-4 text-blue-600" />
-          Fitness Plan
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Schedule</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            Mon, Wed, Fri - 6:00 AM
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Duration</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            60 minutes per session
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Location</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            Home gym / Fitness center
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Equipment</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            Dumbbells, bands, yoga mat
-          </p>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-gray-700 dark:text-gray-300">Limitations</Label>
-          <p className="text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-800 p-2 rounded-md">
-            {client?.injuries_limitations || "Lower back - avoid deadlifts"}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+
 
 // Trainer Notes Section Component
 function TrainerNotesSection({ 
@@ -4837,12 +4966,9 @@ export default function ClientDashboard() {
 
       {/* Permanent Card Sections */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-4 mb-8">
           {/* Fitness Goals Section */}
           <FitnessGoalsSection client={client} />
-
-          {/* Fitness Plan Section */}
-          <FitnessPlanSection client={client} />
 
           {/* Trainer Notes Section */}
           <TrainerNotesSection
