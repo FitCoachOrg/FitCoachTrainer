@@ -46,6 +46,9 @@ import {
   CheckCircle,
   Droplet,
   Moon,
+  AlertTriangle,
+  Lightbulb,
+  Brain,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -103,7 +106,48 @@ import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
 
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
+import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { Progress } from "@/components/ui/progress"
+
+// Helper functions to format and parse trainer notes with AI recommendations
+const formatNotesWithAI = (notes: string, aiAnalysis: any): string => {
+  const aiSection = `
+
+---AI_ANALYSIS_START---
+${JSON.stringify(aiAnalysis)}
+---AI_ANALYSIS_END---`;
+  
+  return notes + aiSection;
+};
+
+const parseNotesWithAI = (combinedNotes: string): { notes: string; aiAnalysis: any | null } => {
+  const aiStartMarker = '---AI_ANALYSIS_START---';
+  const aiEndMarker = '---AI_ANALYSIS_END---';
+  
+  const aiStartIndex = combinedNotes.indexOf(aiStartMarker);
+  
+  if (aiStartIndex === -1) {
+    return { notes: combinedNotes, aiAnalysis: null };
+  }
+  
+  const notes = combinedNotes.substring(0, aiStartIndex).trim();
+  const aiStartContent = aiStartIndex + aiStartMarker.length;
+  const aiEndIndex = combinedNotes.indexOf(aiEndMarker, aiStartContent);
+  
+  if (aiEndIndex === -1) {
+    return { notes: combinedNotes, aiAnalysis: null };
+  }
+  
+  const aiContent = combinedNotes.substring(aiStartContent, aiEndIndex).trim();
+  
+  try {
+    const aiAnalysis = JSON.parse(aiContent);
+    return { notes, aiAnalysis };
+  } catch (error) {
+    console.error('Failed to parse AI analysis:', error);
+    return { notes: combinedNotes, aiAnalysis: null };
+  }
+};
 
 import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 
@@ -947,6 +991,304 @@ const AIMetricsPopup = ({
 }
 
 // AI Notes Summary Popup Component
+// Comprehensive Coach Analysis Popup Component
+const ComprehensiveAnalysisPopup = ({
+  isOpen,
+  onClose,
+  analysisResponse,
+  clientName,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  analysisResponse: any | null
+  clientName?: string
+}) => {
+  const [activeTab, setActiveTab] = useState<'summary' | 'action_plan' | 'recommendations' | 'next_session' | 'insights'>('summary');
+
+  if (!isOpen || !analysisResponse?.analysis) return null;
+
+  const analysis = analysisResponse.analysis;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-purple-600" />
+            <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              AI Coach Analysis for {clientName}
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg mb-6">
+          {[
+            { id: 'summary', label: 'Summary', icon: BarChart3 },
+            { id: 'action_plan', label: 'Action Plan', icon: Target },
+            { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+            { id: 'next_session', label: 'Next Session', icon: Calendar },
+            { id: 'insights', label: 'Insights', icon: Brain }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab Content */}
+        <div className="space-y-6">
+          {activeTab === 'summary' && analysis.summary && (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg text-blue-600">Client Status Overview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 dark:text-gray-300">{analysis.summary.client_status}</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg text-green-600">Progress Assessment</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 dark:text-gray-300">{analysis.summary.progress_assessment}</p>
+                </CardContent>
+              </Card>
+
+              {analysis.summary.key_insights && analysis.summary.key_insights.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-purple-600">Key Insights</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {analysis.summary.key_insights.map((insight: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-gray-700 dark:text-gray-300">{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {analysis.summary.immediate_concerns && analysis.summary.immediate_concerns.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5" />
+                        Immediate Concerns
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-1">
+                        {analysis.summary.immediate_concerns.map((concern: string, index: number) => (
+                          <li key={index} className="text-gray-700 dark:text-gray-300">• {concern}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {analysis.summary.positive_developments && analysis.summary.positive_developments.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-green-600 flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5" />
+                        Positive Developments
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-1">
+                        {analysis.summary.positive_developments.map((development: string, index: number) => (
+                          <li key={index} className="text-gray-700 dark:text-gray-300">• {development}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'action_plan' && analysis.action_plan && (
+            <div className="space-y-6">
+              {analysis.action_plan.immediate_actions && analysis.action_plan.immediate_actions.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                      <Zap className="h-5 w-5" />
+                      Immediate Actions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {analysis.action_plan.immediate_actions.map((action: any, index: number) => (
+                        <div key={index} className="border-l-4 border-red-500 pl-4 py-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant={action.priority === 'High' ? 'destructive' : action.priority === 'Medium' ? 'default' : 'secondary'}>
+                              {action.priority}
+                            </Badge>
+                            <Badge variant="outline">{action.category}</Badge>
+                            <span className="text-sm text-gray-500">{action.timeframe}</span>
+                          </div>
+                          <p className="font-medium text-gray-900 dark:text-white">{action.action}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{action.rationale}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {analysis.action_plan.weekly_focus && analysis.action_plan.weekly_focus.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
+                      <Calendar className="h-5 w-5" />
+                      Weekly Focus Areas
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {analysis.action_plan.weekly_focus.map((focus: any, index: number) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <h4 className="font-semibold text-gray-900 dark:text-white mb-2">{focus.focus_area}</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Actions:</h5>
+                              <ul className="text-sm space-y-1">
+                                {focus.specific_actions?.map((action: string, i: number) => (
+                                  <li key={i} className="text-gray-600 dark:text-gray-400">• {action}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Success Metrics:</h5>
+                              <ul className="text-sm space-y-1">
+                                {focus.success_metrics?.map((metric: string, i: number) => (
+                                  <li key={i} className="text-gray-600 dark:text-gray-400">• {metric}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'recommendations' && analysis.coaching_recommendations && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(analysis.coaching_recommendations).map(([key, recommendations]: [string, any]) => (
+                <Card key={key}>
+                  <CardHeader>
+                    <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {recommendations?.map((rec: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-gray-700 dark:text-gray-300">{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'next_session' && analysis.next_session_plan && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(analysis.next_session_plan).map(([key, items]: [string, any]) => (
+                <Card key={key}>
+                  <CardHeader>
+                    <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1">
+                      {items?.map((item: string, index: number) => (
+                        <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'insights' && analysis.client_insights && (
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg text-purple-600">Engagement Level</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700 dark:text-gray-300">{analysis.client_insights.engagement_level}</p>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(analysis.client_insights)
+                  .filter(([key]) => key !== 'engagement_level')
+                  .map(([key, items]: [string, any]) => (
+                    <Card key={key}>
+                      <CardHeader>
+                        <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-1">
+                          {items?.map((item: string, index: number) => (
+                            <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer with metadata */}
+        <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4">
+              <span>Model: {analysisResponse.model}</span>
+              <span>Generated: {new Date(analysisResponse.timestamp).toLocaleString()}</span>
+            </div>
+            {analysisResponse.usage && (
+              <span>Tokens: {analysisResponse.usage.total_tokens}</span>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
   isOpen: boolean;
   onClose: () => void;
@@ -4142,7 +4484,8 @@ function TrainerNotesSection({
   notesDraft,
   setNotesDraft,
   notesError,
-  setNotesError 
+  setNotesError,
+  isGeneratingAnalysis 
 }: {
   client: any
   trainerNotes: string
@@ -4155,6 +4498,7 @@ function TrainerNotesSection({
   setNotesDraft: (draft: string) => void
   notesError: string | null
   setNotesError: (error: string | null) => void
+  isGeneratingAnalysis: boolean
 }) {
   return (
     <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-200 dark:border-yellow-800 h-full">
@@ -4284,7 +4628,8 @@ function TrainerNotesToDoSection({
   notesDraft,
   setNotesDraft,
   notesError,
-  setNotesError 
+  setNotesError,
+  isGeneratingAnalysis 
 }: {
   client: any
   trainerNotes: string
@@ -4297,6 +4642,7 @@ function TrainerNotesToDoSection({
   setNotesDraft: (draft: string) => void
   notesError: string | null
   setNotesError: (error: string | null) => void
+  isGeneratingAnalysis: boolean
 }) {
   const [todoItems, setTodoItems] = useState(
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week",
@@ -4325,7 +4671,7 @@ function TrainerNotesToDoSection({
             variant="ghost"
             size="sm"
             onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
-            disabled={isSavingNotes}
+            disabled={isSavingNotes || isGeneratingAnalysis}
           >
             {isEditingNotes ? (
               isSavingNotes ? (
@@ -4346,6 +4692,13 @@ function TrainerNotesToDoSection({
               </>
             )}
           </Button>
+          
+          {isGeneratingAnalysis && (
+            <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+              <LoadingSpinner size="small" />
+              Generating AI Analysis...
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {isEditingNotes ? (
@@ -4452,6 +4805,10 @@ export default function ClientDashboard() {
   const [showNotesSummaryPopup, setShowNotesSummaryPopup] = useState(false)
   const [notesSummaryResponse, setNotesSummaryResponse] = useState<any>(null)
   const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
+  const [showComprehensiveAnalysisPopup, setShowComprehensiveAnalysisPopup] = useState(false)
+  const [comprehensiveAnalysisResponse, setComprehensiveAnalysisResponse] = useState<any>(null)
+  const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false)
+  const [lastAIRecommendation, setLastAIRecommendation] = useState<any>(null)
   const [trainerNotes, setTrainerNotes] = useState("")
   const [notesDraft, setNotesDraft] = useState("")
   const [isEditingNotes, setIsEditingNotes] = useState(false)
@@ -4503,15 +4860,61 @@ export default function ClientDashboard() {
         return;
       }
       const trainerEmail = sessionData.session.user.email;
-      const { error } = await supabase
+      
+      // First save the notes without AI analysis
+      const { error: initialSaveError } = await supabase
         .from("trainer")
         .update({ trainer_notes: notesDraft })
         .eq("trainer_email", trainerEmail);
-      if (error) {
-        setNotesError(error.message);
-      } else {
-        setTrainerNotes(notesDraft);
-        setIsEditingNotes(false);
+        
+      if (initialSaveError) {
+        setNotesError(initialSaveError.message);
+        setIsSavingNotes(false);
+        return;
+      }
+      
+      setTrainerNotes(notesDraft);
+      setIsEditingNotes(false);
+      
+      // Automatically trigger comprehensive coach analysis after notes are saved
+      if (clientId && notesDraft.trim().length > 20) {
+        console.log('🤖 Triggering comprehensive coach analysis...');
+        setIsGeneratingAnalysis(true);
+        
+        try {
+          const analysisResult = await performComprehensiveCoachAnalysis(
+            clientId,
+            notesDraft,
+            todoItems
+          );
+          
+          if (analysisResult.success && analysisResult.analysis) {
+            setComprehensiveAnalysisResponse(analysisResult);
+            setLastAIRecommendation(analysisResult.analysis);
+            setShowComprehensiveAnalysisPopup(true);
+            
+            // Save notes with AI analysis to database
+            const notesWithAI = formatNotesWithAI(notesDraft, analysisResult.analysis);
+            const { error: aiSaveError } = await supabase
+              .from("trainer")
+              .update({ trainer_notes: notesWithAI })
+              .eq("trainer_email", trainerEmail);
+              
+            if (aiSaveError) {
+              console.error('❌ Failed to save AI analysis with notes:', aiSaveError);
+            } else {
+              console.log('✅ Notes with AI analysis saved successfully');
+            }
+            
+            console.log('✅ Comprehensive analysis completed successfully');
+          } else {
+            console.error('❌ Comprehensive analysis failed:', analysisResult.message);
+          }
+        } catch (analysisError) {
+          console.error('💥 Error during comprehensive analysis:', analysisError);
+        } finally {
+          setIsGeneratingAnalysis(false);
+        }
       }
     } catch (err: any) {
       setNotesError(err.message || "Failed to save notes");
@@ -4631,6 +5034,8 @@ export default function ClientDashboard() {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !sessionData?.session?.user?.email) {
         setTrainerNotes("");
+        setNotesDraft("");
+        setLastAIRecommendation(null);
         return;
       }
       const trainerEmail = sessionData.session.user.email;
@@ -4642,9 +5047,20 @@ export default function ClientDashboard() {
         .eq("trainer_email", trainerEmail)
         .single();
       if (!error && data && data.trainer_notes) {
-        setTrainerNotes(data.trainer_notes);
+        const combinedNotes = data.trainer_notes;
+        const { notes, aiAnalysis } = parseNotesWithAI(combinedNotes);
+        
+        setTrainerNotes(notes);
+        setNotesDraft(notes);
+        setLastAIRecommendation(aiAnalysis);
+        
+        if (aiAnalysis) {
+          console.log('📊 Loaded previous AI analysis:', aiAnalysis);
+        }
       } else {
         setTrainerNotes("");
+        setNotesDraft("");
+        setLastAIRecommendation(null);
       }
     })();
   }, []);
@@ -4822,50 +5238,28 @@ export default function ClientDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50 transition-all duration-300"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export Data
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-2 border-purple-200 hover:border-purple-300 hover:bg-purple-50 dark:border-purple-800 dark:hover:border-purple-700 dark:hover:bg-purple-950/50 transition-all duration-300"
-              >
-                <Share className="h-4 w-4 mr-2" />
-                Share Progress
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50 transition-all duration-300"
+            {/* Tab Switcher */}
+            <div className="flex space-x-2 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm p-1 rounded-xl">
+              {tabs.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      activeTab === tab.id
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
+                        : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
+                    }`}
                   >
-                    {clientsLoading ? (
-                      <LoadingSpinner size="small" />
-                    ) : (
-                      "All Clients"
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {trainerClients.length === 0 ? (
-                    <DropdownMenuItem disabled>No clients found</DropdownMenuItem>
-                  ) : (
-                    trainerClients.map((c: any) => (
-                      <DropdownMenuItem key={c.client_id} onClick={() => navigate(`/client/${c.client_id}`)}>
-                        {c.cl_name}
-                      </DropdownMenuItem>
-                    ))
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden lg:inline">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
+
+
           </div>
 
           {/* Enhanced Profile Card (Revised for Simplicity & Requirements) */}
@@ -4983,6 +5377,7 @@ export default function ClientDashboard() {
             setNotesDraft={setNotesDraft}
             notesError={notesError}
             setNotesError={setNotesError}
+            isGeneratingAnalysis={isGeneratingAnalysis}
           />
 
           {/* To Do Section */}
@@ -4995,26 +5390,7 @@ export default function ClientDashboard() {
           />
         </div>
 
-        {/* Enhanced Navigation Tabs */}
-        <div className="flex space-x-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl p-2 rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 mb-8">
-          {tabs.map((tab) => {
-            const Icon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-3 px-6 py-3 rounded-xl text-sm font-medium transition-all duration-300 flex-1 justify-center ${
-                  activeTab === tab.id
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-blue-500/25 scale-105"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
+
 
         {/* Enhanced Content Area */}
         <div className="space-y-8">
@@ -5034,6 +5410,7 @@ export default function ClientDashboard() {
                 setNotesDraft={setNotesDraft}
                 notesError={notesError}
                 setNotesError={setNotesError}
+                isGeneratingAnalysis={isGeneratingAnalysis}
               />
 
               {/* Client Goals & Key Info Card */}
@@ -5083,6 +5460,79 @@ export default function ClientDashboard() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Last AI Recommendation Section */}
+              {lastAIRecommendation && (
+                <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 shadow-xl">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
+                        <Brain className="h-5 w-5 text-white" />
+                      </div>
+                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Last AI Coach Analysis</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setComprehensiveAnalysisResponse({ analysis: lastAIRecommendation, success: true });
+                          setShowComprehensiveAnalysisPopup(true);
+                        }}
+                        className="ml-auto"
+                      >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        View Full Analysis
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {lastAIRecommendation.summary && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4" />
+                          Key Insights
+                        </h4>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/70 dark:bg-gray-800/70 p-3 rounded-lg">
+                          {lastAIRecommendation.summary}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {lastAIRecommendation.immediate_actions && lastAIRecommendation.immediate_actions.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          Immediate Actions
+                        </h4>
+                        <ul className="space-y-1">
+                          {lastAIRecommendation.immediate_actions.slice(0, 3).map((action: string, index: number) => (
+                            <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              {action}
+                            </li>
+                          ))}
+                          {lastAIRecommendation.immediate_actions.length > 3 && (
+                            <li className="text-sm text-purple-600 dark:text-purple-400 italic">
+                              +{lastAIRecommendation.immediate_actions.length - 3} more actions...
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {lastAIRecommendation.next_session_focus && (
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          Next Session Focus
+                        </h4>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/70 dark:bg-gray-800/70 p-3 rounded-lg">
+                          {lastAIRecommendation.next_session_focus}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -5127,6 +5577,14 @@ export default function ClientDashboard() {
           onClose={() => setShowNotesSummaryPopup(false)}
           summaryResponse={notesSummaryResponse}
           clientName={client?.name || client?.preferredName}
+        />
+
+        {/* Comprehensive Coach Analysis Popup */}
+        <ComprehensiveAnalysisPopup
+          isOpen={showComprehensiveAnalysisPopup}
+          onClose={() => setShowComprehensiveAnalysisPopup(false)}
+          analysisResponse={comprehensiveAnalysisResponse}
+          clientName={client?.cl_name || client?.cl_prefer_name}
         />
       </div>
     </div>
