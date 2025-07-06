@@ -1451,18 +1451,7 @@ const METRIC_LIBRARY = [
     activityName: "Workout Adherence",
     dataSource: "activity_info"
   },
-  {
-    key: "retention",
-    label: "Client Retention Rate",
-    icon: Target,
-    type: "line",
-    color: "#10b981",
-    data: [] as any[], // Will be populated from activity_info table
-    dataKey: "qty",
-    yLabel: "%",
-    activityName: "Retention Rate",
-    dataSource: "activity_info"
-  },
+
   {
     key: "progress",
     label: "Progress Improvement",
@@ -1929,166 +1918,98 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
         return;
       }
       
-      console.log("Processing external device data:", filteredExternalDeviceData.length, "records");
-      
-      // Group external device data by column
+      // Group external device data by column and week
       const columnDataMap: Record<string, any[]> = {};
       
       filteredExternalDeviceData.forEach(item => {
-        // Format date based on time range
         const date = new Date(item.for_date);
         let dateStr: string;
         
         if (timeRange === "7D") {
-          // Daily for 7D
-          dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          // Daily for 7D - use exact date
+          dateStr = date.toISOString().split('T')[0];
         } else {
-          // Weekly for 30D and 90D
-          const weekNum = Math.ceil(date.getDate() / 7);
-          const monthName = date.toLocaleString('default', { month: 'short' });
-          dateStr = `${monthName} W${weekNum}`; // e.g., "Jan W1"
+          // Weekly for 30D/90D - get start of week (Monday)
+          const startOfWeek = new Date(date);
+          startOfWeek.setDate(date.getDate() - date.getDay() + 1);
+          dateStr = startOfWeek.toLocaleDateString('default', { month: 'numeric', day: 'numeric' });
         }
         
-        // Process each column from external device data
         METRIC_LIBRARY.forEach(metric => {
           if (metric.dataSource === "external_device_connect" && metric.columnName) {
             const columnName = metric.columnName;
-            // Log the column value for debugging
-            console.log(`Processing metric ${metric.label}, column ${columnName}, value: ${item[columnName]}`);
-            
-            // Check if the column exists in the item and has a value
             if (columnName in item && item[columnName] !== null) {
               if (!columnDataMap[columnName]) {
                 columnDataMap[columnName] = [];
               }
-              
               columnDataMap[columnName].push({
                 date: dateStr,
                 qty: Number(item[columnName]),
-                for_date: item.for_date,
-                isFallback: item.is_dummy_data === true
+                for_date: item.for_date
               });
             }
           }
         });
       });
       
-      console.log("Column data map:", Object.keys(columnDataMap).map(key => `${key}: ${columnDataMap[key].length} items`));
-      
-      // Update metrics from external_device_connect
+      // Update metrics
       METRIC_LIBRARY.forEach((metric, index) => {
         if (metric.dataSource !== "external_device_connect" || !metric.columnName) return;
         
         const columnName = metric.columnName;
-        console.log(`Checking metric ${metric.label} with column ${columnName}`);
+        if (!columnDataMap[columnName] || columnDataMap[columnName].length === 0) {
+          METRIC_LIBRARY[index].data = [];
+          return;
+        }
         
-        if (columnDataMap[columnName] && columnDataMap[columnName].length > 0) {
-          console.log(`Found ${columnDataMap[columnName].length} data points for ${metric.label}`);
-          
-          // Group by date to calculate averages
-          const aggregatedData: Record<string, {total: number, count: number, isDummy?: boolean}> = {};
-          
-          columnDataMap[columnName].forEach(item => {
-            if (!aggregatedData[item.date]) {
-              aggregatedData[item.date] = { total: 0, count: 0, isDummy: false };
-            }
+        // Create date placeholders based on time range
+        const aggregatedData: Record<string, {total: number, count: number}> = {};
+        const today = new Date();
+        
+        if (timeRange === "7D") {
+          // Create last 7 days
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            aggregatedData[dateStr] = { total: 0, count: 0 };
+          }
+        } else {
+          // Create weekly buckets (4 for 30D, 12 for 90D)
+          const weeks = timeRange === "30D" ? 4 : 12;
+          for (let i = weeks - 1; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - (i * 7));
+            const startOfWeek = new Date(date);
+            startOfWeek.setDate(date.getDate() - date.getDay() + 1);
+            const dateStr = startOfWeek.toLocaleDateString('default', { month: 'numeric', day: 'numeric' });
+            aggregatedData[dateStr] = { total: 0, count: 0 };
+          }
+        }
+        
+        // Aggregate actual data
+        columnDataMap[columnName].forEach(item => {
+          if (aggregatedData[item.date]) {
             aggregatedData[item.date].total += item.qty;
             aggregatedData[item.date].count += 1;
-            // If any data point is dummy, mark the whole aggregation as dummy
-            if (item.isFallback || item.is_dummy_data) {
-              aggregatedData[item.date].isDummy = true;
-            }
-          });
-          
-          // Convert to array of averages
-          const averagedData = Object.entries(aggregatedData).map(([date, values]) => {
-            return {
-              date: date,
-              qty: values.total / values.count,
-              fullDate: date, // Keep for sorting
-              isFallback: values.isDummy || false // Preserve dummy data flag
-            };
-          });
-          
-          // Sort and format data
-          const formattedData = formatAndSortData(averagedData);
-          console.log(`Formatted data for ${metric.label}:`, formattedData);
-          
-          // Update the metric data
-          METRIC_LIBRARY[index].data = formattedData;
-        } else {
-          console.log(`No data found for metric ${metric.label}, using fallback data`);
-          
-          // Generate fallback data for demonstration
-          const today = new Date();
-          const fallbackData = [];
-          
-          // Generate 7 days of data for 7D view, or 4 weeks for other views
-          const dataPoints = timeRange === "7D" ? 7 : 4;
-          
-          for (let i = 0; i < dataPoints; i++) {
-            const date = new Date(today);
-            
-            if (timeRange === "7D") {
-              // Daily data points
-              date.setDate(date.getDate() - (dataPoints - 1 - i));
-              const dateStr = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
-              
-              // Generate random value based on metric type
-              let value = 0;
-              if (columnName === "steps") value = Math.floor(5000 + Math.random() * 7000);
-              else if (columnName === "heart_rate") value = Math.floor(60 + Math.random() * 30);
-              else if (columnName === "calories_spent") value = Math.floor(200 + Math.random() * 600);
-              else if (columnName === "exercise_time") value = Math.floor(15 + Math.random() * 60);
-              
-              fallbackData.push({
-                date: dateStr,
-                qty: value,
-                fullDate: date.toISOString().split('T')[0],
-                isFallback: true
-              });
-            } else {
-              // Weekly data points
-              const weekNum = i + 1;
-              const monthName = date.toLocaleString('default', { month: 'short' });
-              const dateStr = `${monthName} W${weekNum}`;
-              
-              // Generate random value based on metric type
-              let value = 0;
-              if (columnName === "steps") value = Math.floor(5000 + Math.random() * 7000);
-              else if (columnName === "heart_rate") value = Math.floor(60 + Math.random() * 30);
-              else if (columnName === "calories_spent") value = Math.floor(200 + Math.random() * 600);
-              else if (columnName === "exercise_time") value = Math.floor(15 + Math.random() * 60);
-              
-              fallbackData.push({
-                date: dateStr,
-                qty: value,
-                fullDate: dateStr,
-                isFallback: true
-              });
-            }
           }
-          
-          // Sort the fallback data
-          const sortedFallbackData = fallbackData.sort((a, b) => {
-            if (timeRange === "7D") {
-              return new Date(a.fullDate).getTime() - new Date(b.fullDate).getTime();
-            } else {
-              const [aMonth, aWeek] = a.fullDate.split(" ");
-              const [bMonth, bWeek] = b.fullDate.split(" ");
-              
-              const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-              const aMonthIndex = months.indexOf(aMonth);
-              const bMonthIndex = months.indexOf(bMonth);
-              
-              if (aMonthIndex !== bMonthIndex) return aMonthIndex - bMonthIndex;
-              return aWeek.localeCompare(bWeek);
-            }
-          });
-          
-          // Update the metric with fallback data
-          METRIC_LIBRARY[index].data = sortedFallbackData;
-        }
+        });
+        
+        // Convert to array with proper date formatting
+        const formattedData = Object.entries(aggregatedData).map(([date, values]) => ({
+          date: timeRange === "7D" 
+            ? new Date(date).toLocaleDateString('default', { month: 'short', day: 'numeric' })
+            : date,
+          qty: values.count > 0 ? values.total / values.count : null,
+          fullDate: date
+        }));
+        
+        // Sort chronologically
+        METRIC_LIBRARY[index].data = formattedData.sort((a, b) => {
+          const dateA = new Date(a.fullDate);
+          const dateB = new Date(b.fullDate);
+          return dateA.getTime() - dateB.getTime();
+        });
       });
     };
     
@@ -2224,7 +2145,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value
-    if (selectedKeys.length < 4 && value && !selectedKeys.includes(value)) {
+    if (selectedKeys.length < 6 && value && !selectedKeys.includes(value)) {
       setSelectedKeys([...selectedKeys, value])
     }
   }
@@ -2257,37 +2178,52 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                 </div>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
               </div>
-                <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
-                  <button
-                    onClick={() => setTimeRange("7D")}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                      timeRange === "7D" 
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                    }`}
+                <div className="flex items-center gap-3">
+                  <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
+                    <button
+                      onClick={() => setTimeRange("7D")}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                        timeRange === "7D" 
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                      }`}
+                    >
+                      7D
+                    </button>
+                    <button
+                      onClick={() => setTimeRange("30D")}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                        timeRange === "30D" 
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                      }`}
+                    >
+                      30D
+                    </button>
+                    <button
+                      onClick={() => setTimeRange("90D")}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                        timeRange === "90D" 
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                      }`}
+                    >
+                      90D
+                    </button>
+                  </div>
+                  <select
+                    id="metric-select"
+                    className="border-2 border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
+                    onChange={handleSelectChange}
+                    value=""
                   >
-                    7D
-                  </button>
-                  <button
-                    onClick={() => setTimeRange("30D")}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                      timeRange === "30D" 
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                    }`}
-                  >
-                    30D
-                  </button>
-                  <button
-                    onClick={() => setTimeRange("90D")}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                      timeRange === "90D" 
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                    }`}
-                  >
-                    90D
-                  </button>
+                    <option value="">+ Add Metric (6 max)</option>
+                    {availableMetrics.map((m: any) => (
+                      <option key={m.key} value={m.key}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="flex flex-wrap gap-3 items-center justify-between">
@@ -2330,21 +2266,6 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                   </SortableContext>
                 </DndContext>
               </div>
-                <div className="flex items-center gap-2">
-              <select
-                id="metric-select"
-                    className="border-2 border-blue-200 dark:border-blue-800 rounded-xl px-3 py-1 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
-                onChange={handleSelectChange}
-                value=""
-              >
-                    <option value="">+ Add metric</option>
-                {availableMetrics.map((m: any) => (
-                  <option key={m.key} value={m.key}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
               </div>
             </div>
             {/* Removed duplicate select since we moved it to the header */}
@@ -2355,33 +2276,32 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
       {/* Enhanced Metrics Grid */}
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
             {selectedMetrics.map((metric: any) => (
               <Card
                 key={metric.key}
-                className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-500 dark:bg-gray-900/90 cursor-grab hover:scale-105"
+                className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl transition-all duration-300 dark:bg-gray-900/90 cursor-grab"
               >
-                <CardHeader className="pb-4">
+                <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-3">
                     <div className="p-3 rounded-xl shadow-lg" style={{ backgroundColor: `${metric.color}20` }}>
                       <metric.icon className="h-6 w-6" style={{ color: metric.color }} />
                     </div>
                     <div>
-                      <span className="text-lg font-bold text-gray-900 dark:text-white">{metric.label}</span>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Track your {metric.label.toLowerCase()} progress over time
-                        {metric.data.length > 0 && (metric.data[0].isFallback || metric.data[0].is_dummy_data) && 
-                          <span className="ml-1 text-amber-500 dark:text-amber-400">(Demo data)</span>
-                        }
-                      </p>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                        {metric.label} <span className="text-sm text-gray-500 dark:text-gray-400">({metric.yLabel})</span>
+                        {metric.data.length > 0 && (metric.data[0].isFallback || metric.data[0].is_dummy_data) && (
+                          <span className="text-xs text-amber-500 dark:text-amber-400 ml-1">(Demo)</span>
+                        )}
+                      </span>
                     </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[280px] w-full">
+                  <div className="h-[260px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       {metric.type === "line" ? (
-                        <Chart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                        <Chart data={metric.data} margin={{ top: 10, right: 0, left: 0, bottom: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                           <XAxis 
                             dataKey="date" 
@@ -2394,7 +2314,6 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                             tick={{ fontSize: 12 }} 
                             axisLine={false} 
                             tickLine={false}
-                            label={{ value: metric.yLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
                           />
                           <Tooltip
                             contentStyle={{
@@ -2421,7 +2340,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                           />
                         </Chart>
                       ) : (
-                        <BarChart data={metric.data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                        <BarChart data={metric.data} margin={{ top: 10, right: 0, left: 0, bottom: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                           <XAxis 
                             dataKey="date" 
@@ -2434,7 +2353,6 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                             tick={{ fontSize: 12 }} 
                             axisLine={false} 
                             tickLine={false}
-                            label={{ value: metric.yLabel, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
                           />
                           <Tooltip
                             contentStyle={{
@@ -3917,11 +3835,7 @@ function AllClientsSidebar({
                       .toUpperCase() || "?"}
                   </div>
                   {/* Active Status Indicator */}
-                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 ${
-                    client.last_active && new Date(client.last_active) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                      ? "bg-green-500"
-                      : "bg-gray-300 dark:bg-gray-600"
-                  }`}></div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900 shadow-lg"></div>
                 </div>
 
                 {/* Client Info */}
