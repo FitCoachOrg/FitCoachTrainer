@@ -4800,226 +4800,286 @@ function TrainerNotesToDoSection({
         </CardContent>
       </Card>
 
-      {/* AI Summary Card - Always Visible */}
+            {/* AI Coach Analysis - Always Visible */}
       <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-purple-600" />
-              AI Notes Summary & Insights
-            </CardTitle>
-            
-            {/* Tab Navigation */}
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
-              {['summary', 'actions', 'insights'].map((tab) => (
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-purple-600" />
+            <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              AI Coach Analysis
+            </span>
+          </CardTitle>
+          
+          {/* Tab Navigation with Icons */}
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg mt-4">
+            {[
+              { id: 'summary', label: 'Summary', icon: BarChart3 },
+              { id: 'action_plan', label: 'Action Plan', icon: Target },
+              { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+              { id: 'insights', label: 'Insights', icon: Brain }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
                 <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab as any)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${
-                    activeTab === tab
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  {tab === 'summary' ? 'Summary' : tab === 'actions' ? 'Actions' : 'Insights'}
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
                 </button>
-              ))}
-            </div>
-          </CardHeader>
-          
-          <CardContent>
-            {/* Summary Tab */}
-            {activeTab === 'summary' && lastAIRecommendation?.summary && (
-              <div className="space-y-4">
-                {lastAIRecommendation.summary.key_insights && (
-                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border">
-                    <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">Key Insights</h4>
-                    <ul className="space-y-2">
-                      {lastAIRecommendation.summary.key_insights?.map((insight: string, index: number) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <span className="text-purple-500 mt-1">•</span>
-                          <span className="text-gray-700 dark:text-gray-300 text-sm">{insight}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {lastAIRecommendation.summary.client_status && (
-                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                      <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Client Status</h4>
-                      <p className="text-sm text-green-700 dark:text-green-400">{lastAIRecommendation.summary.client_status}</p>
-                    </div>
+              );
+            })}
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {lastAIRecommendation ? (
+            <div className="space-y-6">
+              {/* Summary Tab */}
+              {activeTab === 'summary' && lastAIRecommendation.summary && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-blue-600">Client Status Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {typeof lastAIRecommendation.summary.client_status === 'string' 
+                          ? lastAIRecommendation.summary.client_status 
+                          : 'No client status available'}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-green-600">Progress Assessment</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {typeof lastAIRecommendation.summary.progress_assessment === 'string' 
+                          ? lastAIRecommendation.summary.progress_assessment 
+                          : 'No progress assessment available'}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {lastAIRecommendation.summary.key_insights && lastAIRecommendation.summary.key_insights.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-purple-600">Key Insights</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {lastAIRecommendation.summary.key_insights.map((insight: any, index: number) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-gray-700 dark:text-gray-300">
+                                {String(insight)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
                   )}
-                  
-                  {lastAIRecommendation.summary.immediate_concerns?.length > 0 && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                      <h4 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-2">Immediate Concerns</h4>
-                      <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
-                        {lastAIRecommendation.summary.immediate_concerns?.map((concern: string, index: number) => (
-                          <li key={index} className="flex items-start gap-1">
-                            <span>•</span>
-                            <span>{concern}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
 
-                {lastAIRecommendation.summary.positive_developments?.length > 0 && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Positive Developments</h4>
-                    <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
-                      {lastAIRecommendation.summary.positive_developments.map((development: string, index: number) => (
-                        <li key={index} className="flex items-start gap-1">
-                          <span>•</span>
-                          <span>{development}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Actions Tab */}
-            {activeTab === 'actions' && lastAIRecommendation?.action_plan && (
-              <div className="space-y-4">
-                {lastAIRecommendation.action_plan.immediate_actions?.length > 0 && (
-                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
-                    <h4 className="font-semibold mb-3 text-red-800 dark:text-red-300">Immediate Actions</h4>
-                    <div className="space-y-2">
-                      {lastAIRecommendation.action_plan.immediate_actions?.map((action: any, index: number) => (
-                        <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${
-                            action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                            action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                          }`}>
-                            {action.priority || 'Medium'}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900 dark:text-white text-sm">
-                              {typeof action === 'string' ? action : action.action || String(action)}
-                            </p>
-                            <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
-                              <span>⏰ {action.timeframe || 'This week'}</span>
-                              <span>📂 {action.category || 'General'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {lastAIRecommendation.action_plan.follow_up_actions?.length > 0 && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <h4 className="font-semibold mb-3 text-blue-800 dark:text-blue-300">Follow-up Actions</h4>
-                    <div className="space-y-2">
-                      {lastAIRecommendation.action_plan.follow_up_actions?.map((action: any, index: number) => (
-                        <div key={index} className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded border">
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${
-                            action.priority === 'High' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                            action.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                          }`}>
-                            {action.priority || 'Medium'}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900 dark:text-white text-sm">
-                              {typeof action === 'string' ? action : action.action || String(action)}
-                            </p>
-                            <div className="flex gap-4 mt-1 text-xs text-gray-600 dark:text-gray-400">
-                              <span>⏰ {action.timeframe || 'Next week'}</span>
-                              <span>📂 {action.category || 'General'}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Insights Tab */}
-            {activeTab === 'insights' && lastAIRecommendation?.progress_assessment && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {lastAIRecommendation.progress_assessment.patterns_observed?.length > 0 && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border">
-                    <h4 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">Patterns Observed</h4>
-                    <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
-                      {lastAIRecommendation.progress_assessment.patterns_observed?.map((pattern: string, index: number) => (
-                        <li key={index} className="flex items-start gap-1">
-                          <span>•</span>
-                          <span>{pattern}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {lastAIRecommendation.progress_assessment.areas_for_improvement?.length > 0 && (
-                  <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border">
-                    <h4 className="font-semibold text-orange-800 dark:text-orange-300 mb-2">Areas for Improvement</h4>
-                    <ul className="text-sm text-orange-700 dark:text-orange-400 space-y-1">
-                      {lastAIRecommendation.progress_assessment.areas_for_improvement?.map((area: string, index: number) => (
-                        <li key={index} className="flex items-start gap-1">
-                          <span>•</span>
-                          <span>{area}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {lastAIRecommendation.progress_assessment.positive_trends?.length > 0 && (
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border col-span-full">
-                    <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Positive Trends</h4>
-                    <ul className="text-sm text-green-700 dark:text-green-400 space-y-1">
-                      {lastAIRecommendation.progress_assessment.positive_trends?.map((trend: string, index: number) => (
-                        <li key={index} className="flex items-start gap-1">
-                          <span>•</span>
-                          <span>{trend}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {lastAIRecommendation.summary?.next_session_focus && (
-                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border col-span-full">
-                    <h4 className="font-semibold text-indigo-800 dark:text-indigo-300 mb-2">Next Session Focus</h4>
-                    <div className="space-y-2 text-sm text-indigo-700 dark:text-indigo-400">
-                      {lastAIRecommendation.summary.next_session_focus.primary_objectives && (
-                        <div>
-                          <span className="font-medium">Objectives:</span>
-                          <ul className="ml-4 mt-1">
-                            {lastAIRecommendation.summary.next_session_focus.primary_objectives.map((obj: string, index: number) => (
-                              <li key={index}>• {obj}</li>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {lastAIRecommendation.summary.immediate_concerns && lastAIRecommendation.summary.immediate_concerns.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Immediate Concerns
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="space-y-1">
+                            {lastAIRecommendation.summary.immediate_concerns.map((concern: any, index: number) => (
+                              <li key={index} className="text-gray-700 dark:text-gray-300">
+                                • {String(concern)}
+                              </li>
                             ))}
                           </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                        </CardContent>
+                      </Card>
+                    )}
 
-            {!lastAIRecommendation && (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Brain className="w-8 h-8 text-purple-500" />
+                    {lastAIRecommendation.summary.positive_developments && lastAIRecommendation.summary.positive_developments.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg text-green-600 flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5" />
+                            Positive Developments
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="space-y-1">
+                            {lastAIRecommendation.summary.positive_developments.map((development: any, index: number) => (
+                              <li key={index} className="text-gray-700 dark:text-gray-300">
+                                • {String(development)}
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
                 </div>
-                <p className="text-gray-600 dark:text-gray-400 mb-2">No AI analysis available</p>
-                <p className="text-sm text-gray-500">Generate AI analysis from your trainer notes to see detailed insights</p>
+              )}
+
+              {/* Action Plan Tab */}
+              {activeTab === 'action_plan' && lastAIRecommendation.action_plan && (
+                <div className="space-y-6">
+                  {lastAIRecommendation.action_plan.immediate_actions && lastAIRecommendation.action_plan.immediate_actions.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                          <Zap className="h-5 w-5" />
+                          Immediate Actions
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {lastAIRecommendation.action_plan.immediate_actions.map((action: any, index: number) => (
+                            <div key={index} className="border-l-4 border-red-500 pl-4 py-2">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant={action.priority === 'High' ? 'destructive' : action.priority === 'Medium' ? 'default' : 'secondary'}>
+                                  {action.priority || 'Medium'}
+                                </Badge>
+                                <Badge variant="outline">{action.category || 'General'}</Badge>
+                                <span className="text-sm text-gray-500">{action.timeframe || 'This week'}</span>
+                              </div>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                {typeof action === 'string' ? action : action.action || String(action)}
+                              </p>
+                              {action.rationale && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{action.rationale}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {lastAIRecommendation.action_plan.weekly_focus && lastAIRecommendation.action_plan.weekly_focus.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
+                          <Calendar className="h-5 w-5" />
+                          Weekly Focus Areas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {lastAIRecommendation.action_plan.weekly_focus.map((focus: any, index: number) => (
+                            <div key={index} className="border rounded-lg p-4">
+                              <h4 className="font-semibold text-gray-900 dark:text-white mb-2">{focus.focus_area}</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Actions:</h5>
+                                  <ul className="text-sm space-y-1">
+                                    {focus.specific_actions?.map((action: string, i: number) => (
+                                      <li key={i} className="text-gray-600 dark:text-gray-400">• {action}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Success Metrics:</h5>
+                                  <ul className="text-sm space-y-1">
+                                    {focus.success_metrics?.map((metric: string, i: number) => (
+                                      <li key={i} className="text-gray-600 dark:text-gray-400">• {metric}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              {/* Recommendations Tab */}
+              {activeTab === 'recommendations' && lastAIRecommendation.coaching_recommendations && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(lastAIRecommendation.coaching_recommendations).map(([key, recommendations]: [string, any]) => (
+                    <Card key={key}>
+                      <CardHeader>
+                        <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {recommendations?.map((rec: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-gray-700 dark:text-gray-300">{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Insights Tab */}
+              {activeTab === 'insights' && lastAIRecommendation.client_insights && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-purple-600">Engagement Level</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">{lastAIRecommendation.client_insights.engagement_level}</p>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(lastAIRecommendation.client_insights)
+                      .filter(([key]) => key !== 'engagement_level')
+                      .map(([key, items]: [string, any]) => (
+                        <Card key={key}>
+                          <CardHeader>
+                            <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ul className="space-y-1">
+                              {items?.map((item: string, index: number) => (
+                                <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Brain className="w-10 h-10 text-purple-500" />
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No AI Analysis Available</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Generate comprehensive AI analysis from your trainer notes to unlock detailed insights</p>
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  Add detailed trainer notes above, then the AI will automatically generate comprehensive analysis including client status, action plans, and coaching recommendations.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
