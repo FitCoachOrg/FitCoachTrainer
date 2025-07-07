@@ -2554,6 +2554,9 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
 
   return (
     <div className="space-y-8">
+      {/* Client Stats Section */}
+      <ClientStats clientId={clientId} isActive={isActive} />
+      
       {/* Enhanced Customization Panel */}
       <Card className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-purple-950/50 border-0 shadow-xl">
         <CardContent className="p-6">
@@ -4662,7 +4665,7 @@ function TodoSection({
   )
 }
 
-// Enhanced Notes and Todo Cards Component
+// Enhanced Trainer Notes Section
 function TrainerNotesToDoSection({ 
   client, 
   trainerNotes, 
@@ -4694,22 +4697,8 @@ function TrainerNotesToDoSection({
   handleSummarizeNotes: () => void
   isSummarizingNotes: boolean
 }) {
-  const [todoItems, setTodoItems] = useState(
-    "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week",
-  )
-  const [isEditingTodo, setIsEditingTodo] = useState(false)
-  const { toast } = useToast()
-
-  const handleSaveTodo = () => {
-    setIsEditingTodo(false)
-    toast({
-      title: "To-Do saved",
-      description: "To-Do items have been updated successfully.",
-    })
-  }
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div className="mb-8">
       {/* Enhanced Trainer Notes Card */}
       <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-200 dark:border-yellow-800">
         <CardHeader className="flex flex-row items-center justify-between">
@@ -4803,37 +4792,6 @@ function TrainerNotesToDoSection({
           ) : (
             <div className="min-h-[120px] p-3 bg-gradient-to-br from-yellow-100/50 to-orange-100/50 dark:from-yellow-900/10 dark:to-orange-900/10 rounded border border-yellow-200/50 dark:border-yellow-800/50 whitespace-pre-line">
               {trainerNotes || "No notes added yet. Click edit to add notes."}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Enhanced To-Do Card */}
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Edit className="h-5 w-5 text-blue-600" />
-            To-Do
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => (isEditingTodo ? handleSaveTodo() : setIsEditingTodo(true))}
-          >
-            {isEditingTodo ? <Save className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {isEditingTodo ? (
-            <Textarea
-              value={todoItems}
-              onChange={(e) => setTodoItems(e.target.value)}
-              placeholder="Add to-do items..."
-              className="min-h-[120px] bg-white dark:bg-gray-800"
-            />
-          ) : (
-            <div className="min-h-[120px] p-3 bg-gradient-to-br from-blue-100/50 to-indigo-100/50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded border border-blue-200/50 dark:border-blue-800/50 whitespace-pre-line">
-              {todoItems || "No to-do items added yet. Click edit to add items."}
             </div>
           )}
         </CardContent>
@@ -5661,8 +5619,6 @@ export default function ClientDashboard() {
         <div className="space-y-8">
           {activeTab === "overview" && (
               <div className="space-y-8">
-                                <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
- 
                 {/* Trainer Notes & To-Do Section */}
                 <TrainerNotesToDoSection
                   client={client}

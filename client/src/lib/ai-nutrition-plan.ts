@@ -26,57 +26,60 @@ async function generateAIResponse(clientInfo: any) {
   console.log('📋 Preparing comprehensive nutrition coach prompt...');
   
   // Use the comprehensive world-class nutrition coach prompt template
-const nutritionCoachPrompt = `You are a world-class nutrition coach and registered dietitian. Based on the inputs below, create a personalized, evidence-based nutrition plan tailored to the client's goals, preferences, dietary restrictions, and lifestyle. Make sure you provide with meal details for atleast a week. That means atleast 21 meals with details.
+const nutritionCoachPrompt = `You are a world-class nutrition coach and registered dietitian. Create a comprehensive 7-day nutrition plan with detailed meals for each day based on the client information below.
 
-Inputs:
-Primary Goal: ${clientInfo.primaryGoal || 'N/A'}
-Specific Outcome: ${clientInfo.specificOutcome || 'N/A'}
-Goal Deadline: ${clientInfo.goalTimeline || 'N/A'}
-Current Weight: ${clientInfo.weight || 'N/A'} kg
-Target Weight: ${clientInfo.targetWeight || 'N/A'} kg
-Height: ${clientInfo.height || 'N/A'} cm
-Age: ${clientInfo.age || 'N/A'}
-Sex: ${clientInfo.sex || 'N/A'}
-Activity Level: ${clientInfo.activityLevel || 'Moderate'}
+CLIENT INFORMATION:
+Physical Stats:
+- Age: ${clientInfo.age || 'N/A'} years
+- Sex: ${clientInfo.sex || 'N/A'}
+- Height: ${clientInfo.height || 'N/A'} cm
+- Current Weight: ${clientInfo.weight || 'N/A'} kg  
+- Target Weight: ${clientInfo.targetWeight || 'N/A'} kg
+- Activity Level: ${clientInfo.activityLevel || 'Moderate'}
 
+Goals & Timeline:
+- Primary Goal: ${clientInfo.primaryGoal || 'N/A'}
+- Specific Outcome: ${clientInfo.specificOutcome || 'N/A'}
+- Goal Timeline: ${clientInfo.goalTimeline || 'N/A'}
 
 Dietary Information:
-Eating Habits: ${clientInfo.eatingHabits || 'N/A'}
-Diet Preferences: ${Array.isArray(clientInfo.dietPreferences) ? clientInfo.dietPreferences.join(', ') : clientInfo.dietPreferences || 'None'}
-Food Allergies: ${Array.isArray(clientInfo.foodAllergies) ? clientInfo.foodAllergies.join(', ') : clientInfo.foodAllergies || 'None'}
-Preferred Meals Per Day: ${clientInfo.preferredMealsPerDay || '3 meals + 2 snacks'}
-Gastric Issues: ${clientInfo.gastricIssues || 'None'}
-Supplements: ${clientInfo.supplements || 'None'}
+- Eating Habits: ${clientInfo.eatingHabits || 'N/A'}
+- Diet Preferences: ${Array.isArray(clientInfo.dietPreferences) ? clientInfo.dietPreferences.join(', ') : clientInfo.dietPreferences || 'None'}
+- Food Allergies: ${Array.isArray(clientInfo.foodAllergies) ? clientInfo.foodAllergies.join(', ') : clientInfo.foodAllergies || 'None'}
+- Preferred Meals Per Day: ${clientInfo.preferredMealsPerDay || '3 meals + 2 snacks'}
+- Gastric Issues: ${clientInfo.gastricIssues || 'None'}
+- Current Supplements: ${clientInfo.supplements || 'None'}
 
+Schedule (if provided):
+- Wake Time: ${clientInfo.wakeTime || 'N/A'}
+- Breakfast Time: ${clientInfo.breakfastTime || 'N/A'}
+- Lunch Time: ${clientInfo.lunchTime || 'N/A'}
+- Dinner Time: ${clientInfo.dinnerTime || 'N/A'}
+- Snack Time: ${clientInfo.snackTime || 'N/A'}
+- Workout Time: ${clientInfo.workoutTime || 'N/A'}
 
+REQUIREMENTS:
+1. Generate EXACTLY 7 days of meals (Day 1 through Day 7)
+2. Each day must include: Breakfast, Lunch, Dinner, and 2 Snacks (minimum 5 items per day)
+3. Calculate appropriate daily caloric intake based on BMR, activity level, and goals
+4. Determine optimal macronutrient ratios based on goals and activity level
+5. Consider meal timing around workouts for optimal performance and recovery
+6. Respect all dietary preferences, restrictions, and allergies
+7. Account for gastric issues and food sensitivities
+8. Provide practical meal suggestions that fit the client's lifestyle
+9. Include variety across the week to prevent boredom
+10. Ensure nutritional adequacy and sustainability
 
-
-Guidelines:
-Make sure the plan is atleast 7 days long.
-Make sure the plan is atleast 3 meals per day(Breakfast, Lunch, Dinner, Snacks).
-Calculate appropriate caloric intake based on BMR, activity level, and goals (weight loss, maintenance, or gain).
-Determine optimal macronutrient ratios (protein, carbs, fats) based on goals and activity level.
-Consider meal timing around workouts for optimal performance and recovery.
-Respect dietary preferences, restrictions, and allergies.
-Account for gastric issues and food sensitivities.
-Include hydration recommendations.
-Provide practical meal suggestions that fit the client's schedule.
-Consider supplement recommendations if appropriate.
-Include progression and adjustment guidelines.
-Ensure nutritional adequacy and sustainability.
-Make sure the plan is atleast 7 days long.
-Make sure the plan is atleast 3 meals per day(Breakfast, Lunch, Dinner, Snacks).
-
-Output Format (in JSON):
+OUTPUT FORMAT (Strict JSON):
 {
   "overview": "Brief summary of the nutrition plan approach and rationale",
   "daily_targets": {
-    "calories": int,
-    "protein": int,
-    "carbs": int,
-    "fats": int,
-    "fiber": int,
-    "water_liters": int
+    "calories": 2000,
+    "protein": 150,
+    "carbs": 200,
+    "fats": 80,
+    "fiber": 30,
+    "water_liters": 3
   },
   "meal_timing": {
     "breakfast": "07:00",
@@ -86,28 +89,29 @@ Output Format (in JSON):
   },
   "nutrition_plan": [
     {
-      "food_name": "",
-      "meal_type": "breakfast/lunch/snack/dinner",
-      "portion_size": "",
-      "calories": int,
-      "protein": int,
-      "carbs": int,
-      "fats": int,
-      "fiber": int,
-      "for_day": "day1/day2/day3/day4/day5/day6/day7",
-      "for_time": "",
-      "coach_tip": "",
+      "food_name": "Greek Yogurt with Berries and Granola",
+      "meal_type": "breakfast",
+      "portion_size": "1 cup yogurt + 1/2 cup berries + 2 tbsp granola",
+      "calories": 320,
+      "protein": 20,
+      "carbs": 35,
+      "fats": 8,
+      "fiber": 5,
+      "for_day": "day1",
+      "for_time": "07:00",
+      "coach_tip": "High protein breakfast to kickstart metabolism",
       "icon": "🥣",
-      "category": "",
-      "dietary_tags": ["..", "..."]
-      ..........
-    }.....
+      "category": "protein_rich",
+      "dietary_tags": ["vegetarian", "gluten_free_option"]
+    }
   ],
-  "hydration_plan": "",
-  "supplement_recommendations": "",
-  "meal_prep_tips": "",
-  "progress_tracking": ""
-}`;
+  "hydration_plan": "Drink 8-10 glasses of water daily. Start with 2 glasses upon waking, have 1 glass before each meal, and maintain consistent intake throughout the day.",
+  "supplement_recommendations": "Based on your current routine and goals, consider adding...",
+  "meal_prep_tips": "Prepare proteins in bulk on Sunday. Pre-cut vegetables and store in containers...",
+  "progress_tracking": "Track daily weight, energy levels, and hunger patterns. Adjust portions if needed after week 1."
+}
+
+IMPORTANT: Generate at least 35 meal items total (7 days × 5 meals per day). Ensure each day has exactly 3 main meals and 2 snacks. Make each meal unique and varied across the week.`;
   
   console.log('📝 Nutrition coach prompt prepared with client data');
   
