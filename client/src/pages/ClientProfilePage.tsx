@@ -47,8 +47,10 @@ import {
   Droplet,
   Moon,
   AlertTriangle,
+  AlertCircle,
   Lightbulb,
   Brain,
+  PlusCircle,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -1007,7 +1009,41 @@ const ComprehensiveAnalysisPopup = ({
 
   if (!isOpen || !analysisResponse?.analysis) return null;
 
-  const analysis = analysisResponse.analysis;
+  // Sanitize the analysis data to prevent rendering objects directly
+  const rawAnalysis = analysisResponse.analysis;
+  const analysis = {
+    summary: {
+      client_status: typeof rawAnalysis.summary?.client_status === 'string' 
+        ? rawAnalysis.summary.client_status 
+        : typeof rawAnalysis.summary?.client_status === 'object' 
+          ? JSON.stringify(rawAnalysis.summary.client_status, null, 2)
+          : 'No client status available',
+      progress_assessment: typeof rawAnalysis.summary?.progress_assessment === 'string' 
+        ? rawAnalysis.summary.progress_assessment 
+        : typeof rawAnalysis.summary?.progress_assessment === 'object' 
+          ? JSON.stringify(rawAnalysis.summary.progress_assessment, null, 2)
+          : 'No progress assessment available',
+      key_insights: Array.isArray(rawAnalysis.summary?.key_insights) 
+        ? rawAnalysis.summary.key_insights 
+        : rawAnalysis.summary?.key_insights 
+          ? [String(rawAnalysis.summary.key_insights)]
+          : [],
+      immediate_concerns: Array.isArray(rawAnalysis.summary?.immediate_concerns) 
+        ? rawAnalysis.summary.immediate_concerns 
+        : rawAnalysis.summary?.immediate_concerns 
+          ? [String(rawAnalysis.summary.immediate_concerns)]
+          : [],
+      positive_developments: Array.isArray(rawAnalysis.summary?.positive_developments) 
+        ? rawAnalysis.summary.positive_developments 
+        : rawAnalysis.summary?.positive_developments 
+          ? [String(rawAnalysis.summary.positive_developments)]
+          : [],
+    },
+    action_plan: rawAnalysis.action_plan || {},
+    coaching_recommendations: rawAnalysis.coaching_recommendations || {},
+    next_session_plan: rawAnalysis.next_session_plan || {},
+    client_insights: rawAnalysis.client_insights || {}
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1057,7 +1093,9 @@ const ComprehensiveAnalysisPopup = ({
                   <CardTitle className="text-lg text-blue-600">Client Status Overview</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">{analysis.summary.client_status}</p>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {analysis.summary.client_status}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -1066,7 +1104,9 @@ const ComprehensiveAnalysisPopup = ({
                   <CardTitle className="text-lg text-green-600">Progress Assessment</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-700 dark:text-gray-300">{analysis.summary.progress_assessment}</p>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {analysis.summary.progress_assessment}
+                  </p>
                 </CardContent>
               </Card>
 
@@ -1077,10 +1117,12 @@ const ComprehensiveAnalysisPopup = ({
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-2">
-                      {analysis.summary.key_insights.map((insight: string, index: number) => (
+                      {analysis.summary.key_insights.map((insight: any, index: number) => (
                         <li key={index} className="flex items-start gap-2">
                           <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                          <span className="text-gray-700 dark:text-gray-300">{insight}</span>
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {String(insight)}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -1099,8 +1141,10 @@ const ComprehensiveAnalysisPopup = ({
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-1">
-                        {analysis.summary.immediate_concerns.map((concern: string, index: number) => (
-                          <li key={index} className="text-gray-700 dark:text-gray-300">• {concern}</li>
+                        {analysis.summary.immediate_concerns.map((concern: any, index: number) => (
+                          <li key={index} className="text-gray-700 dark:text-gray-300">
+                            • {String(concern)}
+                          </li>
                         ))}
                       </ul>
                     </CardContent>
@@ -1117,8 +1161,10 @@ const ComprehensiveAnalysisPopup = ({
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-1">
-                        {analysis.summary.positive_developments.map((development: string, index: number) => (
-                          <li key={index} className="text-gray-700 dark:text-gray-300">• {development}</li>
+                        {analysis.summary.positive_developments.map((development: any, index: number) => (
+                          <li key={index} className="text-gray-700 dark:text-gray-300">
+                            • {String(development)}
+                          </li>
                         ))}
                       </ul>
                     </CardContent>
@@ -4629,7 +4675,9 @@ function TrainerNotesToDoSection({
   setNotesDraft,
   notesError,
   setNotesError,
-  isGeneratingAnalysis 
+  isGeneratingAnalysis,
+  handleSummarizeNotes,
+  isSummarizingNotes 
 }: {
   client: any
   trainerNotes: string
@@ -4643,6 +4691,8 @@ function TrainerNotesToDoSection({
   notesError: string | null
   setNotesError: (error: string | null) => void
   isGeneratingAnalysis: boolean
+  handleSummarizeNotes: () => void
+  isSummarizingNotes: boolean
 }) {
   const [todoItems, setTodoItems] = useState(
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week",
@@ -4667,31 +4717,55 @@ function TrainerNotesToDoSection({
             <Edit className="h-5 w-5 text-yellow-600" />
             Trainer Notes
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
-            disabled={isSavingNotes || isGeneratingAnalysis}
-          >
-            {isEditingNotes ? (
-              isSavingNotes ? (
-                <>
-                  <LoadingSpinner size="small" />
-                  Saving...
-                </>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
+              disabled={isSavingNotes || isGeneratingAnalysis}
+            >
+              {isEditingNotes ? (
+                isSavingNotes ? (
+                  <>
+                    <LoadingSpinner size="small" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save
+                  </>
+                )
               ) : (
                 <>
-                  <Save className="h-4 w-4" />
-                  Save
+                  <Edit className="h-4 w-4" />
+                  Edit
                 </>
-              )
-            ) : (
-              <>
-                <Edit className="h-4 w-4" />
-                Edit
-              </>
+              )}
+            </Button>
+            
+            {!isEditingNotes && trainerNotes && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSummarizeNotes}
+                disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes}
+                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+              >
+                {isSummarizingNotes ? (
+                  <>
+                    <LoadingSpinner size="small" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    AI Summary
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
           
           {isGeneratingAnalysis && (
             <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
@@ -5364,30 +5438,221 @@ export default function ClientDashboard() {
           {/* Fitness Goals Section */}
           <FitnessGoalsSection client={client} />
 
-          {/* Trainer Notes Section */}
-          <TrainerNotesSection
-            client={client}
-            trainerNotes={trainerNotes}
-            setTrainerNotes={setTrainerNotes}
-            handleSaveTrainerNotes={handleSaveTrainerNotes}
-            isSavingNotes={isSavingNotes}
-            isEditingNotes={isEditingNotes}
-            setIsEditingNotes={setIsEditingNotes}
-            notesDraft={notesDraft}
-            setNotesDraft={setNotesDraft}
-            notesError={notesError}
-            setNotesError={setNotesError}
-            isGeneratingAnalysis={isGeneratingAnalysis}
-          />
+          {/* AI Coach Insights Section */}
+          <div className="xl:col-span-2">
+            <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 shadow-xl h-full">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
+                      <Brain className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white">AI Coach Insights</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (lastAIRecommendation) {
+                        setComprehensiveAnalysisResponse({ analysis: lastAIRecommendation, success: true });
+                        setShowComprehensiveAnalysisPopup(true);
+                      }
+                    }}
+                    disabled={!lastAIRecommendation}
+                    className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    View Full Analysis
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Debug info - remove this later */}
+                {/* <div className="text-xs text-gray-500 p-2 bg-gray-100 rounded">
+                  Debug: lastAIRecommendation = {lastAIRecommendation ? "exists" : "null"}
+                  {lastAIRecommendation && (
+                    <div>
+                      - summary: {lastAIRecommendation.summary ? "exists" : "null"}
+                      - immediate_actions: {lastAIRecommendation.immediate_actions ? "exists" : "null"}
+                    </div>
+                  )}
+                </div> */}
 
-          {/* To Do Section */}
-          <TodoSection
-            todoItems={todoItems}
-            setTodoItems={setTodoItems}
-            isEditingTodo={isEditingTodo}
-            setIsEditingTodo={setIsEditingTodo}
-            handleSaveTodo={handleSaveTodo}
-          />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Left Column: Concerns & Positive Developments */}
+                  <div className="space-y-4">
+                    {/* Immediate Concerns */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-red-700 dark:text-red-400 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        Immediate Concerns
+                      </h4>
+                      {lastAIRecommendation?.summary?.immediate_concerns && Array.isArray(lastAIRecommendation.summary.immediate_concerns) && lastAIRecommendation.summary.immediate_concerns.length > 0 ? (
+                        <div className="space-y-2">
+                          {lastAIRecommendation.summary.immediate_concerns.slice(0, 3).map((concern: any, index: number) => (
+                            <div key={index} className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-red-700 dark:text-red-300">
+                                {typeof concern === 'string' ? concern : String(concern)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {lastAIRecommendation ? "No immediate concerns identified" : "Generate AI analysis to see concerns"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Positive Developments */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-green-700 dark:text-green-400 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Positive Developments
+                      </h4>
+                      {lastAIRecommendation?.summary?.positive_developments && Array.isArray(lastAIRecommendation.summary.positive_developments) && lastAIRecommendation.summary.positive_developments.length > 0 ? (
+                        <div className="space-y-2">
+                          {lastAIRecommendation.summary.positive_developments.slice(0, 3).map((development: any, index: number) => (
+                            <div key={index} className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-green-700 dark:text-green-300">
+                                {typeof development === 'string' ? development : String(development)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {lastAIRecommendation ? "No positive developments noted yet" : "Generate AI analysis to see progress"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Action Plan & Weekly Focus */}
+                  <div className="space-y-4">
+                    {/* Action Plan */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                        <Target className="h-4 w-4" />
+                        Action Plan
+                      </h4>
+                      {/* Check multiple possible field names for actions */}
+                      {(() => {
+                        const actions = lastAIRecommendation?.action_plan?.immediate_actions || 
+                                      lastAIRecommendation?.immediate_actions || 
+                                      lastAIRecommendation?.action_items?.immediate_actions || 
+                                      lastAIRecommendation?.recommendations?.immediate_actions ||
+                                      lastAIRecommendation?.actions ||
+                                      [];
+                        
+                        if (Array.isArray(actions) && actions.length > 0) {
+                          return (
+                            <div className="space-y-2">
+                              {actions.slice(0, 4).map((action: any, index: number) => (
+                                <div key={index} className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                  <div className="flex-shrink-0 w-5 h-5 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                                    {index + 1}
+                                  </div>
+                                  <span className="text-sm text-blue-700 dark:text-blue-300">
+                                    {typeof action === 'string' ? action : 
+                                     typeof action === 'object' && action.action ? action.action :
+                                     String(action)}
+                                  </span>
+                                </div>
+                              ))}
+                              {actions.length > 4 && (
+                                <p className="text-sm text-blue-600 dark:text-blue-400 italic text-center">
+                                  +{actions.length - 4} more actions in full analysis
+                                </p>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {lastAIRecommendation ? "No action items generated yet" : "Generate AI analysis to see action plan"}
+                              </p>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+
+                    {/* Weekly Focus Areas */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Weekly Focus Areas
+                      </h4>
+                      {(() => {
+                        const weeklyFocus = lastAIRecommendation?.action_plan?.weekly_focus || 
+                                          lastAIRecommendation?.weekly_focus ||
+                                          [];
+                        
+                        if (Array.isArray(weeklyFocus) && weeklyFocus.length > 0) {
+                          return (
+                            <div className="space-y-3">
+                              {weeklyFocus.map((focus: any, index: number) => (
+                                <div key={index} className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                                  <h5 className="font-medium text-indigo-800 dark:text-indigo-300 mb-2">
+                                    {focus.focus_area || `Focus Area ${index + 1}`}
+                                  </h5>
+                                  {focus.specific_actions && Array.isArray(focus.specific_actions) && (
+                                    <div className="space-y-1">
+                                      {focus.specific_actions.map((action: string, actionIndex: number) => (
+                                        <div key={actionIndex} className="flex items-start gap-2">
+                                          <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                                          <span className="text-sm text-indigo-700 dark:text-indigo-300">
+                                            {action}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {lastAIRecommendation ? "No weekly focus areas defined yet" : "Generate AI analysis to see weekly focus"}
+                              </p>
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Call to action when no AI analysis */}
+                {!lastAIRecommendation && (
+                  <div className="text-center py-4 border-t border-gray-200 dark:border-gray-700">
+                    <Button
+                      onClick={() => {
+                        alert("Please add trainer notes first, then generate AI analysis.");
+                      }}
+                      variant="outline"
+                      size="sm"
+                      className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                    >
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      Generate AI Analysis
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
 
@@ -5396,22 +5661,25 @@ export default function ClientDashboard() {
         <div className="space-y-8">
           {activeTab === "overview" && (
               <div className="space-y-8">
-                <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
-              {/* Enhanced Trainer Notes and To-Do Section */}
-              <TrainerNotesToDoSection
-                client={client}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-              />
+                                <ClientStats clientId={clientId} isActive={activeTab === "overview"} />
+ 
+                {/* Trainer Notes & To-Do Section */}
+                <TrainerNotesToDoSection
+                  client={client}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                />
 
               {/* Client Goals & Key Info Card */}
               <Card className="bg-white/90 dark:bg-gray-900/90 border-0 shadow-xl">
@@ -5461,78 +5729,7 @@ export default function ClientDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Last AI Recommendation Section */}
-              {lastAIRecommendation && (
-                <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 shadow-xl">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
-                        <Brain className="h-5 w-5 text-white" />
-                      </div>
-                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Last AI Coach Analysis</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setComprehensiveAnalysisResponse({ analysis: lastAIRecommendation, success: true });
-                          setShowComprehensiveAnalysisPopup(true);
-                        }}
-                        className="ml-auto"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        View Full Analysis
-                      </Button>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {lastAIRecommendation.summary && (
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
-                          <Lightbulb className="h-4 w-4" />
-                          Key Insights
-                        </h4>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/70 dark:bg-gray-800/70 p-3 rounded-lg">
-                          {lastAIRecommendation.summary}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {lastAIRecommendation.immediate_actions && lastAIRecommendation.immediate_actions.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
-                          <Zap className="h-4 w-4" />
-                          Immediate Actions
-                        </h4>
-                        <ul className="space-y-1">
-                          {lastAIRecommendation.immediate_actions.slice(0, 3).map((action: string, index: number) => (
-                            <li key={index} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
-                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                              {action}
-                            </li>
-                          ))}
-                          {lastAIRecommendation.immediate_actions.length > 3 && (
-                            <li className="text-sm text-purple-600 dark:text-purple-400 italic">
-                              +{lastAIRecommendation.immediate_actions.length - 3} more actions...
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
-                    
-                    {lastAIRecommendation.next_session_focus && (
-                      <div className="space-y-2">
-                        <h4 className="font-semibold text-purple-900 dark:text-purple-100 flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          Next Session Focus
-                        </h4>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/70 dark:bg-gray-800/70 p-3 rounded-lg">
-                          {lastAIRecommendation.next_session_focus}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+
             </div>
           )}
 
