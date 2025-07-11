@@ -16,16 +16,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plan } from "@shared/schema";
 import PlanForm from "@/components/plans/PlanForm";
 import * as Icons from "@/lib/icons";
 import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, Sidebar, SidebarContent } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 
 const Plans: React.FC = () => {
   const { plans, isLoading } = usePlans();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -111,29 +121,123 @@ const Plans: React.FC = () => {
                   <SelectItem value="combined">Combined</SelectItem>
                 </SelectContent>
               </Select>
+              {/* View Toggle */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === "cards" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("cards")}
+                  className="flex items-center gap-2"
+                >
+                  <Icons.Grid3X3Icon className="h-4 w-4" />
+                  Cards
+                </Button>
+                <Button
+                  variant={viewMode === "table" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("table")}
+                  className="flex items-center gap-2"
+                >
+                  <Icons.TableIcon className="h-4 w-4" />
+                  Table
+                </Button>
+              </div>
             </div>
 
             {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div 
-                    key={i} 
-                    className="rounded-md border border-gray-200 dark:border-gray-700 h-48 animate-pulse bg-gray-100 dark:bg-gray-800"
-                  />
-                ))}
-              </div>
+              viewMode === "cards" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[...Array(6)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="rounded-md border border-gray-200 dark:border-gray-700 h-48 animate-pulse bg-gray-100 dark:bg-gray-800"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="h-16 rounded-md border border-gray-200 dark:border-gray-700 animate-pulse bg-gray-100 dark:bg-gray-800"
+                    />
+                  ))}
+                </div>
+              )
             ) : filteredPlans && filteredPlans.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPlans.map((plan) => (
-                  <PlanCard
-                    key={plan.id}
-                    plan={plan}
-                    onEdit={handleEdit}
-                    onView={handleView}
-                    onAssign={handleAssign}
-                  />
-                ))}
-              </div>
+              viewMode === "cards" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredPlans.map((plan) => (
+                    <PlanCard
+                      key={plan.id}
+                      plan={plan}
+                      onEdit={handleEdit}
+                      onView={handleView}
+                      onAssign={handleAssign}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPlans.map((plan) => (
+                        <TableRow key={plan.id}>
+                          <TableCell className="font-medium">{plan.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {plan.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {plan.description || "No description"}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(plan.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleView(plan)}
+                                className="h-8 px-2"
+                              >
+                                <Icons.EyeIcon className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(plan)}
+                                className="h-8 px-2"
+                              >
+                                <Icons.PencilIcon className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAssign(plan)}
+                                className="h-8 px-2"
+                              >
+                                <Icons.UserPlusIcon className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
             ) : (
               <div className="text-center py-12">
                 {plans && plans.length > 0 ? (

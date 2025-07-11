@@ -9,6 +9,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plan } from "@shared/schema";
 import PlanForm from "@/components/plans/PlanForm";
 import * as Icons from "@/lib/icons";
@@ -16,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SidebarProvider, Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import FitnessPlanOverview from "@/components/FitnessPlanOverview";
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan";
 
@@ -140,6 +149,7 @@ function FitnessPlanBuilder() {
 const FitnessPlans: React.FC = () => {
   const { plans, isLoading } = usePlans();
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -228,6 +238,15 @@ const FitnessPlans: React.FC = () => {
     setIsViewModalOpen(true);
   };
 
+  const handleAssign = (plan: Plan) => {
+    setSelectedPlan(plan);
+    // TODO: Implement assign functionality
+    toast({
+      title: "Assign Plan",
+      description: `Assigning "${plan.name}" to client functionality coming soon.`,
+    });
+  };
+
   const handleAddNew = () => {
     setSelectedPlan(null);
     setIsFormModalOpen(true);
@@ -247,8 +266,9 @@ const FitnessPlans: React.FC = () => {
     if (typeof content === "string") {
       try { content = JSON.parse(content); } catch {}
     }
-    if (!content?.weeks) return null;
-    return content.weeks.map((week: any, wIdx: number) => (
+    if (!content || typeof content !== 'object' || !('weeks' in content)) return null;
+    const typedContent = content as { weeks: any[] };
+    return typedContent.weeks.map((week: any, wIdx: number) => (
       <div key={wIdx} className="mb-6">
         <h4 className="font-semibold text-lg mb-2">{week.name}</h4>
         {week.days.map((day: any, dIdx: number) => (
@@ -333,25 +353,119 @@ const FitnessPlans: React.FC = () => {
                       className="pl-9"
                     />
                   </div>
+                  {/* View Toggle */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={viewMode === "cards" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("cards")}
+                      className="flex items-center gap-2"
+                    >
+                      <Icons.Grid3X3Icon className="h-4 w-4" />
+                      Cards
+                    </Button>
+                    <Button
+                      variant={viewMode === "table" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("table")}
+                      className="flex items-center gap-2"
+                    >
+                      <Icons.TableIcon className="h-4 w-4" />
+                      Table
+                    </Button>
+                  </div>
                 </div>
                 {isLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[...Array(6)].map((_, i) => (
-                      <div key={i} className="rounded-md border border-gray-200 dark:border-gray-700 h-48 animate-pulse bg-gray-100 dark:bg-gray-800" />
-                    ))}
-                  </div>
+                  viewMode === "cards" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className="rounded-md border border-gray-200 dark:border-gray-700 h-48 animate-pulse bg-gray-100 dark:bg-gray-800" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {[...Array(6)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className="h-16 rounded-md border border-gray-200 dark:border-gray-700 animate-pulse bg-gray-100 dark:bg-gray-800"
+                        />
+                      ))}
+                    </div>
+                  )
                 ) : fitnessPlans && fitnessPlans.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {fitnessPlans.map((plan) => (
-                      <PlanCard
-                        key={plan.id}
-                        plan={plan}
-                        onEdit={handleEdit}
-                        onView={handleView}
-                        onAssign={() => {}}
-                      />
-                    ))}
-                  </div>
+                  viewMode === "cards" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {fitnessPlans.map((plan) => (
+                        <PlanCard
+                          key={plan.id}
+                          plan={plan}
+                          onEdit={handleEdit}
+                          onView={handleView}
+                          onAssign={() => {}}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Created</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {fitnessPlans.map((plan) => (
+                            <TableRow key={plan.id}>
+                              <TableCell className="font-medium">{plan.name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">
+                                  {plan.type}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">
+                                {plan.description || "No description"}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(plan.createdAt).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleView(plan)}
+                                    className="h-8 px-2"
+                                  >
+                                    <Icons.EyeIcon className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEdit(plan)}
+                                    className="h-8 px-2"
+                                  >
+                                    <Icons.PencilIcon className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAssign(plan)}
+                                    className="h-8 px-2"
+                                  >
+                                    <Icons.UserPlusIcon className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )
                 ) : (
                   <div className="text-center py-12">
                     <Icons.ClipboardIcon className="mx-auto h-12 w-12 text-gray-400" />

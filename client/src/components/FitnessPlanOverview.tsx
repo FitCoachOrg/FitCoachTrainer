@@ -37,6 +37,7 @@ import {
   Grid3X3
 } from "lucide-react"
 import { generateAIWorkoutPlanForReview, saveReviewedWorkoutPlanToDatabase } from "@/lib/ai-fitness-plan"
+import { addWorkoutSchedule } from "@/lib/schedule-service"
 
 // Types
 interface WorkoutExercise {
@@ -95,6 +96,7 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
   const [currentView, setCurrentView] = useState<'table' | 'calendar' | 'weekly' | 'daily'>('table')
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [selectedWeek, setSelectedWeek] = useState<string>('Week 1')
+  const [planStartDate, setPlanStartDate] = useState<string>(new Date().toISOString().split('T')[0])
   
   // Metric toggles
   const [visibleMetrics, setVisibleMetrics] = useState({
@@ -106,7 +108,8 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     category: true,
     coachTip: true,
     date: true,
-    time: true
+    time: true,
+    day: true
   })
   
   // Draft management
@@ -114,16 +117,23 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
   const [draftName, setDraftName] = useState('')
   const [savedDrafts, setSavedDrafts] = useState<string[]>([])
 
+  // Schedule management
+  const [isAddingSchedule, setIsAddingSchedule] = useState(false)
+
   // Initialize plan data
   useEffect(() => {
     if (initialPlanData) {
       setPlanData(initialPlanData)
-      setEditedPlan(initialPlanData.workout_plan.map((exercise, index) => ({
+      const exercisesWithIds = initialPlanData.workout_plan.map((exercise, index) => ({
         ...exercise,
         id: exercise.id || `exercise-${index}`
-      })))
+      }))
+      setEditedPlan(exercisesWithIds)
+      
+      // Update exercise dates based on the start date
+      updateExerciseDates(planStartDate)
     }
-  }, [initialPlanData])
+  }, [initialPlanData, planStartDate])
 
   // Load saved drafts from localStorage
   useEffect(() => {
@@ -151,10 +161,14 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
         }
         
         setPlanData(newPlanData)
-        setEditedPlan(newPlanData.workout_plan.map((exercise, index) => ({
+        const exercisesWithIds = newPlanData.workout_plan.map((exercise, index) => ({
           ...exercise,
           id: exercise.id || `exercise-${index}`
-        })))
+        }))
+        setEditedPlan(exercisesWithIds)
+        
+        // Update exercise dates based on the start date
+        updateExerciseDates(planStartDate)
         
         toast({
           title: "Plan Generated Successfully",
@@ -305,14 +319,20 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
   }
 
   const handleAddExercise = () => {
+    // Calculate the next available date based on plan start date
+    const start = new Date(planStartDate)
+    const nextDate = new Date(start)
+    nextDate.setDate(start.getDate() + editedPlan.length)
+    
     const newExercise: WorkoutExercise = {
       id: `exercise-${Date.now()}`,
       workout: "New Exercise",
+      day: undefined,
       sets: 3,
       reps: "10",
       duration: 15,
       weights: "bodyweight",
-      for_date: selectedDate,
+      for_date: nextDate.toISOString().split('T')[0],
       for_time: "08:00:00",
       body_part: "Full Body",
       category: "Strength",
@@ -347,7 +367,7 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
 
   // Get unique dates from plan
   const getUniqueDates = () => {
-    const dates = [...new Set(editedPlan.map(ex => ex.for_date))]
+    const dates = Array.from(new Set(editedPlan.map(ex => ex.for_date)))
     return dates.sort()
   }
 
@@ -356,36 +376,120 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     setVisibleMetrics(prev => ({ ...prev, [metric]: !prev[metric] }))
   }
 
+  // Update exercise dates based on plan start date
+  const updateExerciseDates = (startDate: string) => {
+    if (!editedPlan.length) return
+
+    const start = new Date(startDate)
+    const updatedPlan = editedPlan.map((exercise, index) => {
+      // Calculate the date for this exercise based on its day
+      let exerciseDate = new Date(start)
+      
+      if (exercise.day) {
+        // Map day names to day numbers (0 = Sunday, 1 = Monday, etc.)
+        const dayMap: { [key: string]: number } = {
+          'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+          'Thursday': 4, 'Friday': 5, 'Saturday': 6
+        }
+        
+        const targetDay = dayMap[exercise.day]
+        if (targetDay !== undefined) {
+          // Find the next occurrence of this day of the week
+          const currentDay = start.getDay()
+          const daysToAdd = (targetDay - currentDay + 7) % 7
+          exerciseDate.setDate(start.getDate() + daysToAdd)
+        }
+      } else {
+        // If no day specified, just add index days
+        exerciseDate.setDate(start.getDate() + index)
+      }
+      
+      return {
+        ...exercise,
+        for_date: exerciseDate.toISOString().split('T')[0]
+      }
+    })
+    
+    setEditedPlan(updatedPlan)
+  }
+
+  // Handle plan start date change
+  const handlePlanStartDateChange = (newStartDate: string) => {
+    setPlanStartDate(newStartDate)
+    updateExerciseDates(newStartDate)
+  }
+
+  // Handle adding workout schedule to database
+  const handleAddSchedule = async () => {
+    if (!editedPlan.length) {
+      toast({
+        title: "No Plan to Schedule",
+        description: "Please generate or edit a fitness plan first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsAddingSchedule(true)
+    try {
+      const result = await addWorkoutSchedule(clientId, editedPlan)
+      
+      if (result.success) {
+        toast({
+          title: "Schedule Added Successfully",
+          description: result.message,
+        })
+      } else {
+        toast({
+          title: "Failed to Add Schedule",
+          description: result.message,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error adding schedule:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while adding schedule.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsAddingSchedule(false)
+    }
+  }
+
   // Render different views
   const renderTableView = () => (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="bg-gray-50 dark:bg-gray-800">
-            <th className="text-left p-3 font-semibold">Exercise</th>
-            {visibleMetrics.sets && <th className="text-left p-3 font-semibold">Sets</th>}
-            {visibleMetrics.reps && <th className="text-left p-3 font-semibold">Reps</th>}
-            {visibleMetrics.duration && <th className="text-left p-3 font-semibold">Duration</th>}
-            {visibleMetrics.weights && <th className="text-left p-3 font-semibold">Weight</th>}
-            {visibleMetrics.bodyPart && <th className="text-left p-3 font-semibold">Body Part</th>}
-            {visibleMetrics.category && <th className="text-left p-3 font-semibold">Category</th>}
-            {visibleMetrics.date && <th className="text-left p-3 font-semibold">Date</th>}
-            {visibleMetrics.time && <th className="text-left p-3 font-semibold">Time</th>}
-            {visibleMetrics.coachTip && <th className="text-left p-3 font-semibold">Coach Tip</th>}
-            {isEditing && <th className="text-left p-3 font-semibold">Actions</th>}
+            <th className="text-left p-4 font-semibold">Exercise</th>
+            {visibleMetrics.day && <th className="text-left p-4 font-semibold">Day</th>}
+            {visibleMetrics.sets && <th className="text-left p-4 font-semibold">Sets</th>}
+            {visibleMetrics.reps && <th className="text-left p-4 font-semibold">Reps</th>}
+            {visibleMetrics.duration && <th className="text-left p-4 font-semibold">Duration</th>}
+            {visibleMetrics.weights && <th className="text-left p-4 font-semibold">Weight</th>}
+            {visibleMetrics.bodyPart && <th className="text-left p-4 font-semibold">Body Part</th>}
+            {visibleMetrics.category && <th className="text-left p-4 font-semibold">Category</th>}
+            {visibleMetrics.date && <th className="text-left p-4 font-semibold">Date</th>}
+            {visibleMetrics.time && <th className="text-left p-4 font-semibold">Time</th>}
+            {visibleMetrics.coachTip && <th className="text-left p-4 font-semibold">Coach Tip</th>}
+            {isEditing && <th className="text-left p-4 font-semibold">Actions</th>}
           </tr>
         </thead>
         <tbody>
           {editedPlan.map((exercise, index) => (
             <tr key={exercise.id || index} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
-              <td className="p-3">
+              <td className="p-4">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{exercise.icon}</span>
                   {isEditing ? (
                     <Input
                       value={exercise.workout}
                       onChange={(e) => handleExerciseEdit(index, 'workout', e.target.value)}
-                      className="font-medium"
+                      className="font-medium w-48 h-10"
+                      placeholder="Enter exercise name..."
                     />
                   ) : (
                     <span className="font-medium">{exercise.workout}</span>
@@ -393,8 +497,36 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
                 </div>
               </td>
               
+              {visibleMetrics.day && (
+                <td className="p-4">
+                  {isEditing ? (
+                    <Select
+                      value={exercise.day || ''}
+                      onValueChange={(value) => handleExerciseEdit(index, 'day', value)}
+                    >
+                                          <SelectTrigger className="w-28 h-10 font-medium">
+                      <SelectValue placeholder="Day" />
+                    </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Monday">Monday</SelectItem>
+                        <SelectItem value="Tuesday">Tuesday</SelectItem>
+                        <SelectItem value="Wednesday">Wednesday</SelectItem>
+                        <SelectItem value="Thursday">Thursday</SelectItem>
+                        <SelectItem value="Friday">Friday</SelectItem>
+                        <SelectItem value="Saturday">Saturday</SelectItem>
+                        <SelectItem value="Sunday">Sunday</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      {exercise.day || 'N/A'}
+                    </Badge>
+                  )}
+                </td>
+              )}
+              
               {visibleMetrics.sets && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       type="number"
@@ -402,7 +534,8 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
                       max="20"
                       value={exercise.sets}
                       onChange={(e) => handleExerciseEdit(index, 'sets', parseInt(e.target.value) || 1)}
-                      className="w-20"
+                      className="w-24 h-10 text-center font-medium"
+                      placeholder="Sets"
                     />
                   ) : (
                     <Badge variant="secondary">{exercise.sets}</Badge>
@@ -411,12 +544,13 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.reps && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       value={exercise.reps}
                       onChange={(e) => handleExerciseEdit(index, 'reps', e.target.value)}
-                      className="w-20"
+                      className="w-28 h-10 text-center font-medium"
+                      placeholder="10-12"
                     />
                   ) : (
                     <Badge variant="outline">{exercise.reps}</Badge>
@@ -425,7 +559,7 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.duration && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       type="number"
@@ -433,7 +567,8 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
                       max="120"
                       value={exercise.duration}
                       onChange={(e) => handleExerciseEdit(index, 'duration', parseInt(e.target.value) || 1)}
-                      className="w-20"
+                      className="w-24 h-10 text-center font-medium"
+                      placeholder="30"
                     />
                   ) : (
                     <Badge variant="outline">{exercise.duration}min</Badge>
@@ -442,12 +577,13 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.weights && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       value={exercise.weights}
                       onChange={(e) => handleExerciseEdit(index, 'weights', e.target.value)}
-                      className="w-24"
+                      className="w-32 h-10 font-medium"
+                      placeholder="Bodyweight"
                     />
                   ) : (
                     <span className="text-sm">{exercise.weights}</span>
@@ -456,14 +592,14 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.bodyPart && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Select
                       value={exercise.body_part}
                       onValueChange={(value) => handleExerciseEdit(index, 'body_part', value)}
                     >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
+                      <SelectTrigger className="w-36 h-10 font-medium">
+                        <SelectValue placeholder="Select body part" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Full Body">Full Body</SelectItem>
@@ -484,14 +620,14 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.category && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Select
                       value={exercise.category}
                       onValueChange={(value) => handleExerciseEdit(index, 'category', value)}
                     >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
+                      <SelectTrigger className="w-36 h-10 font-medium">
+                        <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Strength">Strength</SelectItem>
@@ -509,13 +645,13 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.date && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       type="date"
                       value={exercise.for_date}
                       onChange={(e) => handleExerciseEdit(index, 'for_date', e.target.value)}
-                      className="w-32"
+                      className="w-36 h-10 font-medium"
                     />
                   ) : (
                     <span className="text-sm">{exercise.for_date}</span>
@@ -524,13 +660,13 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.time && (
-                <td className="p-3">
+                <td className="p-4">
                   {isEditing ? (
                     <Input
                       type="time"
                       value={exercise.for_time}
                       onChange={(e) => handleExerciseEdit(index, 'for_time', e.target.value)}
-                      className="w-24"
+                      className="w-28 h-10 font-medium"
                     />
                   ) : (
                     <span className="text-sm">{exercise.for_time}</span>
@@ -539,16 +675,17 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {visibleMetrics.coachTip && (
-                <td className="p-3 max-w-xs">
+                <td className="p-4 max-w-md">
                   {isEditing ? (
                     <Textarea
                       value={exercise.coach_tip}
                       onChange={(e) => handleExerciseEdit(index, 'coach_tip', e.target.value)}
-                      className="text-xs"
-                      rows={2}
+                      className="min-h-[80px] resize-none font-medium"
+                      placeholder="Enter coaching tip..."
+                      rows={3}
                     />
                   ) : (
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                       {exercise.coach_tip}
                     </span>
                   )}
@@ -556,7 +693,7 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
               )}
               
               {isEditing && (
-                <td className="p-3">
+                <td className="p-4">
                   <Button
                     variant="outline"
                     size="sm"
@@ -729,35 +866,78 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     <div className="space-y-6">
       {/* Action Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleGenerateNewPlan}
+              disabled={isLoading}
+              variant="outline"
+            >
+              {isLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Generate New Plan
+                </>
+              )}
+            </Button>
+            
+            <Button
+              onClick={() => setIsEditing(!isEditing)}
+              variant={isEditing ? "default" : "outline"}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              {isEditing ? "Stop Editing" : "Edit Plan"}
+            </Button>
+          </div>
+
+          {/* Plan Start Date Selector */}
+          {editedPlan.length > 0 && (
+            <div className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-600 pl-4">
+              <Calendar className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <Label htmlFor="plan-start-date" className="text-sm font-medium">
+                Start Date:
+              </Label>
+              <Input
+                id="plan-start-date"
+                type="date"
+                value={planStartDate}
+                onChange={(e) => handlePlanStartDateChange(e.target.value)}
+                className="w-40 h-8 text-sm"
+                min={new Date().toISOString().split('T')[0]}
+                title="Select the start date for your workout plan. Exercise dates will be automatically calculated based on their assigned days of the week."
+              />
+              <div className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">
+                Changes will update all exercise dates
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
           <Button
-            onClick={handleGenerateNewPlan}
-            disabled={isLoading}
+            onClick={handleAddSchedule}
+            disabled={isAddingSchedule || !editedPlan.length}
             variant="outline"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isLoading ? (
+            {isAddingSchedule ? (
               <>
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
+                Adding Schedule...
               </>
             ) : (
               <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Generate New Plan
+                <Calendar className="h-4 w-4 mr-2" />
+                Add Schedule
               </>
             )}
           </Button>
           
-          <Button
-            onClick={() => setIsEditing(!isEditing)}
-            variant={isEditing ? "default" : "outline"}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            {isEditing ? "Stop Editing" : "Edit Plan"}
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
           <Button
             onClick={handleSavePlan}
             disabled={isSaving || !editedPlan.length}
@@ -916,6 +1096,29 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
                 <p className="text-sm">{editedPlan.length}</p>
               </div>
             </div>
+
+            {/* Plan Start Date Info */}
+            {editedPlan.length > 0 && (
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <Label className="font-semibold text-blue-800 dark:text-blue-200">
+                    Plan Start Date:
+                  </Label>
+                  <Badge variant="outline" className="text-blue-700 dark:text-blue-300">
+                    {new Date(planStartDate).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </Badge>
+                </div>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  All exercise dates have been automatically calculated based on this start date.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

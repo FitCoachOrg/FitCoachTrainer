@@ -32,6 +32,7 @@ import FitnessCalendar from "./pages/Calendar-excercise"
 import SignupPage from "./pages/Signup"
 import AllProgramsPage from './pages/programs'
 import TrainerProfilePage from "./pages/TrainerProfilePage"
+import AuthCallback from "@/components/auth/AuthCallback"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -147,6 +148,10 @@ function App() {
                       <SignupPage />
                     </PublicLayout>
                   }
+                />
+                <Route
+                  path="/auth/callback"
+                  element={<AuthCallback />}
                 />
 
                 {/* Protected routes - authentication required */}

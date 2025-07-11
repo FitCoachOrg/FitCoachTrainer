@@ -10,7 +10,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart } from "lucide-react"
+import { Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { supabase } from "@/lib/supabase"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
@@ -32,6 +34,7 @@ interface Exercise {
 
 interface WorkoutExercise {
   workout: string
+  day?: string
   duration: number
   sets: number
   reps: string
@@ -190,6 +193,7 @@ const AIResponsePopup = ({
   const addNewWorkout = () => {
     const newWorkout = {
       workout: "New Exercise",
+      day: undefined,
       sets: 3, // number
       reps: "10", // string (can be range like "8-12")
       duration: 15, // number (minutes)
@@ -390,7 +394,9 @@ const AIResponsePopup = ({
                                   value={workout.weights}
                                   onValueChange={(value) => handleWorkoutChange(index, "weights", value)}
                                 >
-                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Select equipment" />
+                                  </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="bodyweight">Bodyweight</SelectItem>
                                     <SelectItem value="Dumbbells">Dumbbells</SelectItem>
@@ -410,7 +416,9 @@ const AIResponsePopup = ({
                                   value={workout.body_part}
                                   onValueChange={(value) => handleWorkoutChange(index, "body_part", value)}
                                 >
-                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Select body part" />
+                                  </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Full Body">Full Body</SelectItem>
                                     <SelectItem value="Upper Body">Upper Body</SelectItem>
@@ -433,7 +441,9 @@ const AIResponsePopup = ({
                                   value={workout.category}
                                   onValueChange={(value) => handleWorkoutChange(index, "category", value)}
                                 >
-                                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Select category" />
+                                  </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Strength">Strength</SelectItem>
                                     <SelectItem value="Cardio">Cardio</SelectItem>
@@ -638,6 +648,11 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
   const [mouseDownTime, setMouseDownTime] = useState(0)
   const [mouseDownPosition, setMouseDownPosition] = useState({ x: 0, y: 0 })
 
+  // Local LLM generation state
+  const [isGeneratingLocalAI, setIsGeneratingLocalAI] = useState(false)
+  const [selectedLocalModel, setSelectedLocalModel] = useState("deepseek-r1:latest")
+  const [generationTime, setGenerationTime] = useState<number | null>(null)
+
   const [newExercise, setNewExercise] = useState<Omit<Exercise, "id" | "createdAt">>({
     name: "",
     instructions: "",
@@ -674,16 +689,52 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
   // Fitness Plan Overview state
   const [planOverviewData, setPlanOverviewData] = useState<any>(null)
 
+  // === Persist last generated AI workout plan to localStorage ===
+  // Load on mount
+  useEffect(() => {
+    try {
+      const storedPlan = localStorage.getItem("last-ai-workout-plan")
+      if (storedPlan) {
+        const parsed = JSON.parse(storedPlan)
+        if (parsed && typeof parsed === "object") {
+          setPlanOverviewData(parsed)
+        }
+      }
+    } catch (err) {
+      console.error("Failed to parse stored workout plan:", err)
+    }
+  }, [])
+
+  // Save whenever planOverviewData changes (but only if it exists)
+  useEffect(() => {
+    if (planOverviewData) {
+      try {
+        localStorage.setItem("last-ai-workout-plan", JSON.stringify(planOverviewData))
+      } catch (err) {
+        console.error("Failed to persist workout plan:", err)
+      }
+    }
+  }, [planOverviewData])
+  
   // Function to parse AI response and convert to recommended plans format
   const parseAIResponseToPlans = (aiResponseText: string) => {
     try {
-      // Extract JSON from the AI response
-      const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        throw new Error("No JSON found in AI response")
+      // Remove any <think>...</think> or similar annotation blocks that DeepSeek may prepend
+      let cleaned = aiResponseText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
+
+      // DeepSeek sometimes wraps JSON in ```json ... ``` fences – strip them
+      cleaned = cleaned.replace(/```json[\s\S]*?```/gi, (m) => m.replace(/```json|```/gi, "")).trim()
+
+      // Attempt simple extraction: first '{' to last '}'
+      const firstBrace = cleaned.indexOf('{')
+      const lastBrace = cleaned.lastIndexOf('}')
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+        throw new Error('Could not locate complete JSON object in AI response')
       }
 
-      const aiData = JSON.parse(jsonMatch[0])
+      const jsonString = cleaned.substring(firstBrace, lastBrace + 1)
+
+      const aiData = JSON.parse(jsonString)
 
       if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
         throw new Error("Invalid workout plan format in AI response")
@@ -701,6 +752,7 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
         body_part: "full_body",
         exercises: aiData.workout_plan.map((exercise: any) => ({
           workout: exercise.workout,
+          day: exercise.day || null,
           duration: exercise.duration || 0,
           sets: exercise.sets || 1,
           reps: exercise.reps ? exercise.reps.toString() : "1",
@@ -790,9 +842,10 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
         console.log("❌ FAILURE - Data retrieval failed")
         console.log("💬 Error Message:", result.message)
 
-        // Capture debug data for failures
-        if (result.debugData) {
-          setDebugData(result.debugData)
+        // Capture debug data for failures (optional property)
+        const errDebugData = (result as any).debugData
+        if (errDebugData) {
+          setDebugData(errDebugData)
           setShowDebugPopup(true)
         }
 
@@ -819,6 +872,119 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
     }
   }
 
+  // === NEW: Generate plan using local LLM (qwen) running on http://localhost:11434 ===
+  const handleGenerateLocalAIPlans = async () => {
+    console.log("🤖 (Local LLM) === WORKOUT PLAN GENERATION STARTED ===")
+    setIsGeneratingLocalAI(true)
+
+    const startTime = Date.now()
+
+    try {
+      const actualClientId = clientId ? Number(clientId) : 34
+      // ---------------------- Fetch client data for richer prompt ----------------------
+      let clientPromptInfo = ""
+      try {
+        const { data: clientRow } = await supabase
+          .from("client")
+          .select("*")
+          .eq("client_id", actualClientId)
+          .single()
+
+        if (clientRow) {
+          clientPromptInfo = `\nInputs:\nGoal: ${clientRow.cl_primary_goal || 'N/A'}\nSpecific Outcome: ${clientRow.specific_outcome || 'N/A'}\nGoal Deadline: ${clientRow.goal_timeline || 'N/A'}\nConfidence Rating (1–10): ${clientRow.confidence_level || 'N/A'}\nChallenges/Obstacles: ${clientRow.obstacles || 'N/A'}\nTraining Experience: ${clientRow.training_experience || 'Beginner'}\nTraining History (Last 6 Months): ${clientRow.previous_training || 'Unknown'}\nTraining Frequency: ${clientRow.training_days_per_week || '3'}x/week\nSession Duration: ${clientRow.training_time_per_session || '30-45 min'}\nTraining Location: ${clientRow.training_location || 'Home'}\nAvailable Equipment: ${Array.isArray(clientRow.available_equipment) ? clientRow.available_equipment.join(', ') : clientRow.available_equipment || 'Bodyweight only'}\nLimitations/Injuries: ${clientRow.injuries_limitations || 'None'}\nBody Area Focus: ${Array.isArray(clientRow.focus_areas) ? clientRow.focus_areas.join(', ') : clientRow.focus_areas || 'None'}\n\nAdditional Client Information:\nName: ${clientRow.cl_name || clientRow.cl_prefer_name || 'N/A'}\nAge: ${clientRow.cl_age || 'N/A'}\nSex: ${clientRow.cl_sex || 'N/A'}\nHeight: ${clientRow.cl_height || 'N/A'} cm\nCurrent Weight: ${clientRow.cl_weight || 'N/A'} kg\nTarget Weight: ${clientRow.cl_target_weight || 'N/A'} kg\nSleep Hours: ${clientRow.sleep_hours || 'N/A'}\nStress Level: ${clientRow.cl_stress || 'N/A'}\nMotivation Style: ${clientRow.motivation_style || 'N/A'}\n`;
+        }
+      } catch (e) {
+        console.warn("Could not fetch client info for prompt; proceeding with minimal prompt")
+      }
+
+      // Comprehensive prompt similar to ChatGPT version
+      const prompt = `You are a world-class fitness coach. Based on the inputs below, create a personalized, evidence-based training program tailored to the client's goals, preferences, and constraints.${clientPromptInfo}\nGuidelines:\nUse the correct training philosophy based on the goal and training age.\nChoose appropriate progression models (linear, undulating, or block periodization) based on experience and timeline.\nStructure training based on available days and session duration.\nRespect equipment limitations and substitute intelligently.\nAdjust exercises based on injury/limitation info.\nEmphasize specified body areas without neglecting full-body balance.\nInclude progression triggers.\nInsert deload every 4–6 weeks with 40% volume reduction if program spans 8+ weeks.\nIf timeline is <6 weeks, consider a short cycle without deload.\n\nIMPORTANT: Create a complete weekly plan that includes every day of the week (Monday through Sunday). If a day is dedicated for rest, clearly indicate it as a rest day in the weekly_breakdown and include it in the workout_plan array with appropriate rest day information.\n\nOutput Format (in JSON):\n{\n  \"overview\": \"...\",\n  \"split\": \"...\",\n  \"progression_model\": \"...\",\n  \"weekly_breakdown\": {\n    \"Monday\": \"...\",\n    \"Tuesday\": \"...\",\n    \"Wednesday\": \"...\",\n    \"Thursday\": \"...\",\n    \"Friday\": \"...\",\n    \"Saturday\": \"...\",\n    \"Sunday\": \"...\"\n  },\n  \"workout_plan\": [\n    {\n      \"workout\": \"Glute Bridges\",\n      \"day\": \"Monday\",\n      \"sets\": 3,\n      \"reps\": 15,\n      \"duration\": 30,\n      \"weights\": \"bodyweight\",\n      \"for_time\": \"08:00:00\",\n      \"body_part\": \"Glutes\",\n      \"category\": \"Strength\",\n      \"coach_tip\": \"Push through the heels\"\n    },\n    {\n      \"workout\": \"Rest Day\",\n      \"day\": \"Wednesday\",\n      \"sets\": 0,\n      \"reps\": \"N/A\",\n      \"duration\": 0,\n      \"weights\": \"N/A\",\n      \"for_time\": \"00:00:00\",\n      \"body_part\": \"Recovery\",\n      \"category\": \"Rest\",\n      \"coach_tip\": \"Active recovery - light stretching or walking recommended\"\n    }\n  ]\n}\n\nReturn ONLY the JSON object described above — no markdown, no explanations.`
+
+      console.log("📝 (Local LLM) Prompt being sent:", prompt)
+      console.log("🤖 (Local LLM) Using model:", selectedLocalModel)
+      const requestBody = JSON.stringify({ model: selectedLocalModel, prompt, stream: false, format: "json" })
+      console.log("📤 (Local LLM) Request payload:", requestBody)
+
+      console.log("📡 (Local LLM) Sending request to /ollama/api/generate via proxy...")
+      const resp = await fetch("/ollama/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody
+      })
+
+      if (!resp.ok) {
+        throw new Error(`Local LLM request failed: ${resp.status} ${resp.statusText}`)
+      }
+
+      console.log("✅ (Local LLM) Response received from server. Status:", resp.status)
+
+      // Since we requested format:"json" and stream:false, the body should be a single JSON object
+      const aiText = await resp.text()
+
+      console.log("📥 (Local LLM) Raw AI response content:", aiText)
+
+      let innerJSONText = aiText
+      try {
+        const outer = JSON.parse(aiText)
+        if (outer && typeof outer === 'object' && outer.response) {
+          innerJSONText = typeof outer.response === 'string' ? outer.response : JSON.stringify(outer.response)
+        }
+      } catch (e) {
+        console.warn('Could not parse outer wrapper, assuming raw JSON is direct')
+      }
+
+      // Re-use existing parser to convert AI text into structured plan(s)
+      let generatedPlans: any[] = []
+      try {
+        generatedPlans = parseAIResponseToPlans(innerJSONText)
+        console.log("✨ (Local LLM) Successfully parsed workout plan.", generatedPlans.length, "plans generated.")
+      } catch (parseErr) {
+        console.error("Failed to parse local AI response:", parseErr)
+      }
+
+      if (generatedPlans.length === 0) {
+        toast({
+          title: "Local AI Generation Failed",
+          description: "Could not parse workout plan from local model output.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      const firstPlan = generatedPlans[0]
+      const planData = {
+        overview: "Locally generated workout plan",
+        split: "",
+        progression_model: "",
+        weekly_breakdown: undefined,
+        workout_plan: firstPlan.exercises,
+        clientInfo: null,
+        generatedAt: new Date().toISOString()
+      }
+
+      const endTime = Date.now()
+      const generationTimeSeconds = (endTime - startTime) / 1000
+      
+      setPlanOverviewData(planData)
+      setGenerationTime(generationTimeSeconds) // Store generation time in seconds
+
+      toast({
+        title: "Local AI Plan Ready",
+        description: `Generated ${firstPlan.exercises.length} exercises using ${selectedLocalModel} in ${generationTimeSeconds.toFixed(1)}s.`
+      })
+    } catch (err: any) {
+      console.error("💥 Local LLM generation error:", err)
+      toast({
+        title: "Local LLM Error",
+        description: err.message || "Unknown error",
+        variant: "destructive"
+      })
+    } finally {
+      const endTime = Date.now()
+      console.log("🏁 (Local LLM) WORKOUT PLAN GENERATION COMPLETED in", (endTime - startTime) / 1000, "seconds.")
+      setIsGeneratingLocalAI(false)
+    }
+  }
 
 
   return (
@@ -833,10 +999,18 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
             </div>
             <div className="flex items-center gap-4">
               {planOverviewData && (
-                <Badge variant="outline" className="text-sm">
-                  {planOverviewData.workout_plan?.length || 0} exercises
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-sm">
+                    {planOverviewData.workout_plan?.length || 0} exercises
+                  </Badge>
+                  {generationTime && (
+                    <Badge variant="secondary" className="text-sm">
+                      ⏱️ {generationTime.toFixed(1)}s
+                    </Badge>
+                  )}
+                </div>
               )}
+              {/* Cloud / remote generation */}
               <Button
                 onClick={handleGenerateAIPlans}
                 disabled={isGeneratingAI}
@@ -852,6 +1026,62 @@ const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
                   <>
                     <div className="mr-2">🤖</div>
                     Generate AI Plan
+                  </>
+                )}
+              </Button>
+
+                            {/* Local LLM Model Selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Model:</span>
+                <Select value={selectedLocalModel} onValueChange={setSelectedLocalModel}>
+                  <SelectTrigger className="w-44 h-9 text-xs">
+                    <SelectValue placeholder="Select Model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deepseek-r1:latest">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-3 w-3" />
+                        <span>DeepSeek R1</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="llama3:8b">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-3 w-3" />
+                        <span>Llama 3</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="qwen2.5:latest">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-3 w-3" />
+                        <span>Qwen 2.5</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Local LLM generation */}
+              <Button
+                onClick={handleGenerateLocalAIPlans}
+                disabled={isGeneratingLocalAI}
+                size="sm"
+                variant="outline"
+                className="border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/20"
+              >
+                {isGeneratingLocalAI ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="h-4 w-4 mr-2" />
+                    {selectedLocalModel === "deepseek-r1:latest" ? "DeepSeek Plan" : 
+                     selectedLocalModel === "llama3:8b" ? "Llama Plan" :
+                     selectedLocalModel === "qwen2.5:latest" ? "Qwen Plan" : "Local LLM Plan"}
+                    <span className="ml-1 text-xs opacity-70">
+                      ({selectedLocalModel.split(':')[0]})
+                    </span>
                   </>
                 )}
               </Button>

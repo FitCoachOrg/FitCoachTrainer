@@ -51,6 +51,10 @@ import {
   Lightbulb,
   Brain,
   PlusCircle,
+  Cpu,
+  CalendarDays,
+  Search as SearchIcon,
+  Table,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -105,10 +109,11 @@ import { supabase } from "@/lib/supabase"
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
 // Import the AI nutrition plan generator
-import { generateAINutritionPlan } from "@/lib/ai-nutrition-plan"
+import { generateAINutritionPlan, generateLocalLLMNutritionPlan } from "@/lib/ai-nutrition-plan"
 
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
+import { generateLocalLLMComprehensiveAnalysis } from "@/lib/local-llm-service"
 import { Progress } from "@/components/ui/progress"
 
 // Helper functions to format and parse trainer notes with AI recommendations
@@ -122,34 +127,7 @@ ${JSON.stringify(aiAnalysis)}
   return notes + aiSection;
 };
 
-const parseNotesWithAI = (combinedNotes: string): { notes: string; aiAnalysis: any | null } => {
-  const aiStartMarker = '---AI_ANALYSIS_START---';
-  const aiEndMarker = '---AI_ANALYSIS_END---';
-  
-  const aiStartIndex = combinedNotes.indexOf(aiStartMarker);
-  
-  if (aiStartIndex === -1) {
-    return { notes: combinedNotes, aiAnalysis: null };
-  }
-  
-  const notes = combinedNotes.substring(0, aiStartIndex).trim();
-  const aiStartContent = aiStartIndex + aiStartMarker.length;
-  const aiEndIndex = combinedNotes.indexOf(aiEndMarker, aiStartContent);
-  
-  if (aiEndIndex === -1) {
-    return { notes: combinedNotes, aiAnalysis: null };
-  }
-  
-  const aiContent = combinedNotes.substring(aiStartContent, aiEndIndex).trim();
-  
-  try {
-    const aiAnalysis = JSON.parse(aiContent);
-    return { notes, aiAnalysis };
-  } catch (error) {
-    console.error('Failed to parse AI analysis:', error);
-    return { notes: combinedNotes, aiAnalysis: null };
-  }
-};
+
 
 import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 
@@ -449,7 +427,7 @@ const AIResponsePopup = ({
                                   onValueChange={(value) => handleWorkoutChange(index, "weights", value)}
                                 >
                                   <SelectTrigger className="w-36 border-2 focus:border-blue-400">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select equipment" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="bodyweight">Bodyweight</SelectItem>
@@ -476,7 +454,7 @@ const AIResponsePopup = ({
                                   onValueChange={(value) => handleWorkoutChange(index, "body_part", value)}
                                 >
                                   <SelectTrigger className="w-36 border-2 focus:border-blue-400">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select body part" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Full Body">Full Body</SelectItem>
@@ -503,7 +481,7 @@ const AIResponsePopup = ({
                                   onValueChange={(value) => handleWorkoutChange(index, "category", value)}
                                 >
                                   <SelectTrigger className="w-32 border-2 focus:border-blue-400">
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Strength">Strength</SelectItem>
@@ -2352,9 +2330,9 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
         
         // Create date placeholders based on time range
         const aggregatedData: Record<string, {total: number, count: number}> = {};
-        const today = new Date();
-        
-        if (timeRange === "7D") {
+          const today = new Date();
+            
+            if (timeRange === "7D") {
           // Create last 7 days
           for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
@@ -2362,7 +2340,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
             const dateStr = date.toISOString().split('T')[0];
             aggregatedData[dateStr] = { total: 0, count: 0 };
           }
-        } else {
+            } else {
           // Create weekly buckets (4 for 30D, 12 for 90D)
           const weeks = timeRange === "30D" ? 4 : 12;
           for (let i = weeks - 1; i >= 0; i--) {
@@ -2570,37 +2548,37 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
               </div>
                 <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
-                    <button
-                      onClick={() => setTimeRange("7D")}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                        timeRange === "7D" 
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                      }`}
-                    >
-                      7D
-                    </button>
-                    <button
-                      onClick={() => setTimeRange("30D")}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                        timeRange === "30D" 
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                      }`}
-                    >
-                      30D
-                    </button>
-                    <button
-                      onClick={() => setTimeRange("90D")}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                        timeRange === "90D" 
-                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
-                          : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                      }`}
-                    >
-                      90D
-                    </button>
+                <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
+                  <button
+                    onClick={() => setTimeRange("7D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "7D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    7D
+                  </button>
+                  <button
+                    onClick={() => setTimeRange("30D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "30D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    30D
+                  </button>
+                  <button
+                    onClick={() => setTimeRange("90D")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      timeRange === "90D" 
+                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    90D
+                  </button>
                   </div>
                   <select
                     id="metric-select"
@@ -2656,7 +2634,7 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
                     ))}
                   </SortableContext>
                 </DndContext>
-              </div>
+            </div>
               </div>
             </div>
             {/* Removed duplicate select since we moved it to the header */}
@@ -2866,7 +2844,6 @@ const MetricsSection = ({ clientId, isActive }: { clientId?: number; isActive?: 
     </div>
   )
 }
-// 
 
 // Enhanced Nutrition Plan Section
 const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isActive?: boolean }) => {
@@ -2879,6 +2856,15 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiNutritionResponse, setAiNutritionResponse] = useState<any>(null)
   const [showAiResponsePopup, setShowAiResponsePopup] = useState(false)
+  
+  // Local LLM generation state
+  const [isGeneratingLocalAI, setIsGeneratingLocalAI] = useState(false)
+  const [selectedLocalModel, setSelectedLocalModel] = useState("deepseek-r1:latest")
+  const [generationTime, setGenerationTime] = useState<number | null>(null)
+  
+  // View state
+  const [showTableView, setShowTableView] = useState(false)
+  
   const { toast } = useToast()
   
   // Sample meal items data structure
@@ -3058,7 +3044,7 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
         
         toast({
           title: "Success",
-          description: "AI nutrition plan generated successfully!",
+          description: "ChatGPT nutrition plan generated successfully!",
         })
       } else {
         console.error('❌ AI nutrition plan generation failed:', result.message)
@@ -3077,6 +3063,57 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
       })
     } finally {
       setAiGenerating(false)
+    }
+  }
+
+  // Local LLM Nutrition Plan Generation
+  const handleGenerateLocalLLMNutritionPlan = async () => {
+    if (!clientId) {
+      toast({
+        title: "Error",
+        description: "No client selected. Please select a client first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGeneratingLocalAI(true)
+    setGenerationTime(null)
+    
+    try {
+      console.log('🚀 (Local LLM) Starting local LLM nutrition plan generation for client:', clientId)
+      const result = await generateLocalLLMNutritionPlan(clientId, selectedLocalModel)
+      
+      if (result.success) {
+        console.log('✅ (Local LLM) Nutrition plan generated successfully:', result)
+        setAiNutritionResponse(result)
+        setShowAiResponsePopup(true)
+        if (result.aiResponse?.generationTime) {
+          setGenerationTime(result.aiResponse.generationTime)
+        }
+        
+        const generationTimeText = result.aiResponse?.generationTime ? ` in ${result.aiResponse.generationTime}ms` : '';
+        toast({
+          title: "Success",
+          description: `Local LLM nutrition plan generated successfully${generationTimeText}!`,
+        })
+      } else {
+        console.error('❌ (Local LLM) Nutrition plan generation failed:', result.message)
+        toast({
+          title: "Error",
+          description: result.message || "Failed to generate local LLM nutrition plan",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('💥 (Local LLM) Error generating nutrition plan:', error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while generating the nutrition plan",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingLocalAI(false)
     }
   }
 
@@ -3158,6 +3195,39 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
     }
   }
 
+  // Create nutrition table data from meal items
+  const createNutritionTableData = () => {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    
+    const tableData: any[] = []
+    
+    days.forEach((day, dayIndex) => {
+      const dayMeals = mealItems[day] || { breakfast: [], lunch: [], dinner: [], snacks: [] }
+      const dayName = dayNames[dayIndex]
+      
+      // Get the first meal of each type for this day
+      const breakfast = dayMeals.breakfast[0] || null
+      const lunch = dayMeals.lunch[0] || null
+      const dinner = dayMeals.dinner[0] || null
+      const snack = dayMeals.snacks[0] || null
+      
+      // Create a row for this day
+      const row = {
+        date: new Date(Date.now() + dayIndex * 24 * 60 * 60 * 1000).toLocaleDateString(),
+        day: dayName,
+        breakfast: breakfast,
+        lunch: lunch,
+        dinner: dinner,
+        snack: snack
+      }
+      
+      tableData.push(row)
+    })
+    
+    return tableData
+  }
+
   // Data loading effect
   useEffect(() => {
     if (clientId && isActive && !dataLoaded) {
@@ -3183,6 +3253,80 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
         <div className="bg-green-400" style={{ width: `${proteinPercent}%` }} title={`Protein: ${protein}g`} />
         <div className="bg-blue-400" style={{ width: `${carbsPercent}%` }} title={`Carbs: ${carbs}g`} />
         <div className="bg-yellow-400" style={{ width: `${fatsPercent}%` }} title={`Fats: ${fats}g`} />
+      </div>
+    )
+  }
+
+  // Nutrition Table Component
+  const NutritionTable = () => {
+    const tableData = createNutritionTableData()
+    
+    const renderMealCell = (meal: any, mealType: string) => {
+      if (!meal) {
+        return <span className="text-gray-400 text-sm">No meal planned</span>
+      }
+      
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{meal.icon || "🍽️"}</span>
+            <span className="font-medium text-sm">{meal.meal}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1 text-xs text-gray-600 dark:text-gray-400">
+            <div>Calories: {meal.calories}</div>
+            <div>Protein: {meal.protein}g</div>
+            <div>Carbs: {meal.carbs}g</div>
+            <div>Fats: {meal.fats}g</div>
+          </div>
+          {meal.coach_tip && (
+            <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 p-2 rounded">
+              💡 {meal.coach_tip}
+            </div>
+          )}
+        </div>
+      )
+    }
+    
+    return (
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Date</th>
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Day</th>
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Breakfast</th>
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Lunch</th>
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Dinner</th>
+                <th className="text-left p-4 font-semibold text-gray-900 dark:text-white">Snack</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tableData.map((row, index) => (
+                <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <td className="p-4">
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">{row.date}</div>
+                  </td>
+                  <td className="p-4">
+                    <Badge variant="outline">{row.day}</Badge>
+                  </td>
+                  <td className="p-4">
+                    {renderMealCell(row.breakfast, 'breakfast')}
+                  </td>
+                  <td className="p-4">
+                    {renderMealCell(row.lunch, 'lunch')}
+                  </td>
+                  <td className="p-4">
+                    {renderMealCell(row.dinner, 'dinner')}
+                  </td>
+                  <td className="p-4">
+                    {renderMealCell(row.snack, 'snack')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     )
   }
@@ -3227,6 +3371,25 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
           </div>
         </div>
         <div className="flex gap-2">
+          {/* View Toggle */}
+          <Button 
+            onClick={() => setShowTableView(!showTableView)}
+            variant="outline"
+            className="border-gray-300 dark:border-gray-600"
+          >
+            {showTableView ? (
+              <>
+                <Calendar className="w-4 h-4 mr-2" />
+                Card View
+              </>
+            ) : (
+              <>
+                <Table className="w-4 h-4 mr-2" />
+                Table View
+              </>
+            )}
+          </Button>
+          
           <Button 
             onClick={handleGenerateAINutritionPlan}
             disabled={aiGenerating}
@@ -3240,10 +3403,60 @@ const NutritionPlanSection = ({ clientId, isActive }: { clientId?: number; isAct
             ) : (
               <>
                 <Zap className="w-4 h-4 mr-2" />
-                Generate Plan
+                ChatGPT Nutrition Plan
               </>
             )}
           </Button>
+          
+          {/* Local LLM Model Selection */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Model:</span>
+            <Select value={selectedLocalModel} onValueChange={setSelectedLocalModel}>
+              <SelectTrigger className="w-44 h-9 text-xs">
+                <SelectValue placeholder="Select Model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="deepseek-r1:latest">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="h-3 w-3" />
+                    <span>DeepSeek R1</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="llama3:8b">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="h-3 w-3" />
+                    <span>Llama 3</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="qwen2.5:latest">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="h-3 w-3" />
+                    <span>Qwen 2.5</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Local LLM Generation */}
+          <Button 
+            onClick={handleGenerateLocalLLMNutritionPlan}
+            disabled={isGeneratingLocalAI}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold shadow-lg disabled:opacity-50"
+          >
+            {isGeneratingLocalAI ? (
+              <>
+                <LoadingSpinner size="small" />
+                <span className="ml-2">Generating...</span>
+              </>
+            ) : (
+              <>
+                <Cpu className="w-4 h-4 mr-2" />
+                Local LLM
+              </>
+            )}
+          </Button>
+          
           <Button 
             onClick={() => {
               const sampleResponse = `{
@@ -4217,7 +4430,7 @@ function AllClientsSidebar({
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-200 ${
                     currentClientId === client.client_id
                       ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg"
-                      : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 group-hover:from-blue-100 group-hover:to-indigo-100 dark:group-hover:from-blue-800 dark:group-hover:to-indigo-800 group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                      : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 group-hover:from-blue-100 group-hover:to-indigo-100 dark:group-hover:from-blue-800 dark:group-hover:to-blue-800 group-hover:text-blue-700 dark:group-hover:text-blue-300"
                   }`}>
                     {client.cl_name
                       ?.split(" ")
@@ -4307,22 +4520,84 @@ function FilterCriteria() {
 }
 
 // Fitness Goals Section Component - Compact Editable Table
-function FitnessGoalsSection({ client }: { client: any }) {
+function FitnessGoalsSection({ client, onGoalsSaved }: { client: any; onGoalsSaved?: () => void }) {
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [goalsData, setGoalsData] = useState({
     primaryGoal: client?.cl_primary_goal || "Weight loss and muscle building",
     outcome: client?.specific_outcome || "Lose 15 lbs and gain lean muscle",
     timeline: client?.goal_timeline || "6 months",
-    motivation: client?.motivational_factors || "Health improvement, energy",
-    location: "Home gym / Fitness center",
-    equipment: "Dumbbells, bands, yoga mat",
+    motivation: "Health improvement, energy", // Not stored in database
+    location: "Home gym / Fitness center", // Not stored in database
+    equipment: "Dumbbells, bands, yoga mat", // Not stored in database
     limitations: client?.injuries_limitations || "Lower back - avoid deadlifts"
   });
 
-  const handleSave = () => {
-    // Here you would typically save to the database
-    console.log("Saving fitness goals:", goalsData);
-    setIsEditing(false);
+  // Update goals data when client data changes
+  useEffect(() => {
+    setGoalsData({
+      primaryGoal: client?.cl_primary_goal || "Weight loss and muscle building",
+      outcome: client?.specific_outcome || "Lose 15 lbs and gain lean muscle",
+      timeline: client?.goal_timeline || "6 months",
+      motivation: "Health improvement, energy", // Not stored in database
+      location: "Home gym / Fitness center", // Not stored in database
+      equipment: "Dumbbells, bands, yoga mat", // Not stored in database
+      limitations: client?.injuries_limitations || "Lower back - avoid deadlifts"
+    });
+  }, [client]);
+
+  const handleSave = async () => {
+    if (!client?.client_id) {
+      console.error("No client ID available for saving");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Update the client record with the new fitness goals data
+      const { data, error } = await supabase
+        .from("client")
+        .update({
+          cl_primary_goal: goalsData.primaryGoal,
+          specific_outcome: goalsData.outcome,
+          goal_timeline: goalsData.timeline,
+          injuries_limitations: goalsData.limitations,
+          // Note: motivation, location, and equipment fields are not in the database schema
+          // These would need to be added to the database schema if needed
+        })
+        .eq("client_id", client.client_id)
+        .select();
+
+      if (error) {
+        console.error("Error saving fitness goals:", error);
+        toast({
+          title: "Error saving fitness goals",
+          description: error.message || "Failed to save fitness goals. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        console.log("✅ Fitness goals saved successfully:", data);
+        toast({
+          title: "Fitness goals saved",
+          description: "Client fitness goals have been updated successfully.",
+        });
+        // Call the callback to refresh client data
+        if (onGoalsSaved) {
+          onGoalsSaved();
+        }
+      }
+    } catch (error) {
+      console.error("Exception while saving fitness goals:", error);
+      toast({
+        title: "Error saving fitness goals",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+      setIsEditing(false);
+    }
   };
 
   const handleCancel = () => {
@@ -4330,9 +4605,9 @@ function FitnessGoalsSection({ client }: { client: any }) {
       primaryGoal: client?.cl_primary_goal || "Weight loss and muscle building",
       outcome: client?.specific_outcome || "Lose 15 lbs and gain lean muscle",
       timeline: client?.goal_timeline || "6 months",
-      motivation: client?.motivational_factors || "Health improvement, energy",
-      location: "Home gym / Fitness center",
-      equipment: "Dumbbells, bands, yoga mat",
+      motivation: "Health improvement, energy", // Not stored in database
+      location: "Home gym / Fitness center", // Not stored in database
+      equipment: "Dumbbells, bands, yoga mat", // Not stored in database
       limitations: client?.injuries_limitations || "Lower back - avoid deadlifts"
     });
     setIsEditing(false);
@@ -4349,12 +4624,20 @@ function FitnessGoalsSection({ client }: { client: any }) {
           variant="ghost"
           size="sm"
           onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+          disabled={isSaving}
         >
           {isEditing ? (
-            <>
-              <Save className="h-3 w-3 mr-1" />
-              Save
-            </>
+            isSaving ? (
+              <>
+                <LoadingSpinner size="small" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-3 w-3 mr-1" />
+                Save
+              </>
+            )
           ) : (
             <>
               <Edit className="h-3 w-3 mr-1" />
@@ -4382,7 +4665,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.primaryGoal}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4401,7 +4684,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.outcome}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4420,7 +4703,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.timeline}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4439,7 +4722,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.motivation}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4458,7 +4741,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.location}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4477,7 +4760,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.equipment}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4496,7 +4779,7 @@ function FitnessGoalsSection({ client }: { client: any }) {
                   ) : (
                     <div className="max-h-16 overflow-y-auto">
                       <span className="text-gray-900 dark:text-white">{goalsData.limitations}</span>
-                    </div>
+        </div>
                   )}
                 </td>
               </tr>
@@ -4512,6 +4795,11 @@ function FitnessGoalsSection({ client }: { client: any }) {
             >
               Cancel
             </Button>
+          </div>
+        )}
+        {isEditing && (
+          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Note: Only Primary Goal, Outcome, Timeline, and Limitations are saved to the database.
           </div>
         )}
       </CardContent>
@@ -4665,8 +4953,16 @@ function TodoSection({
   )
 }
 
-// Enhanced Trainer Notes Section
-function TrainerNotesToDoSection({ 
+// Structured Trainer Note Interface
+interface TrainerNote {
+  id: string
+  date: string
+  notes: string
+  createdAt: string
+}
+
+// Structured Trainer Notes Section
+function StructuredTrainerNotesSection({ 
   client, 
   trainerNotes, 
   setTrainerNotes, 
@@ -4681,6 +4977,8 @@ function TrainerNotesToDoSection({
   isGeneratingAnalysis,
   handleSummarizeNotes,
   isSummarizingNotes,
+  handleSummarizeLocalLLM,
+  isSummarizingLocalLLM,
   lastAIRecommendation 
 }: {
   client: any
@@ -4697,9 +4995,697 @@ function TrainerNotesToDoSection({
   isGeneratingAnalysis: boolean
   handleSummarizeNotes: () => void
   isSummarizingNotes: boolean
+  handleSummarizeLocalLLM: () => void
+  isSummarizingLocalLLM: boolean
   lastAIRecommendation: any
 }) {
-  const [activeTab, setActiveTab] = useState<'summary' | 'actions' | 'insights'>('summary');
+  const [notes, setNotes] = useState<TrainerNote[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isAddingNote, setIsAddingNote] = useState(false)
+  const [newNote, setNewNote] = useState({ date: new Date().toISOString().split('T')[0], notes: "" })
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNote, setEditingNote] = useState<TrainerNote | null>(null)
+  const [activeTab, setActiveTab] = useState<'summary' | 'action_plan' | 'recommendations' | 'insights'>('summary')
+
+  // Load existing notes from trainerNotes string
+  useEffect(() => {
+    if (trainerNotes) {
+      try {
+        const parsedNotes = JSON.parse(trainerNotes)
+        if (Array.isArray(parsedNotes)) {
+          setNotes(parsedNotes)
+        } else {
+          // Convert old format to new format
+          setNotes([{
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            notes: trainerNotes,
+            createdAt: new Date().toISOString()
+          }])
+        }
+      } catch {
+        // If not JSON, treat as old format
+        if (trainerNotes.trim()) {
+          setNotes([{
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            notes: trainerNotes,
+            createdAt: new Date().toISOString()
+          }])
+        }
+      }
+    }
+  }, [trainerNotes])
+
+  // Save notes to parent component
+  const saveNotesToParent = (notesToSave: TrainerNote[]) => {
+    const notesString = JSON.stringify(notesToSave)
+    setTrainerNotes(notesString)
+  }
+
+  // Add new note
+  const handleAddNote = () => {
+    if (!newNote.notes.trim()) return
+    
+    const note: TrainerNote = {
+      id: Date.now().toString(),
+      date: newNote.date,
+      notes: newNote.notes.trim(),
+      createdAt: new Date().toISOString()
+    }
+    
+    const updatedNotes = [note, ...notes]
+    setNotes(updatedNotes)
+    saveNotesToParent(updatedNotes)
+    
+    setNewNote({ date: new Date().toISOString().split('T')[0], notes: "" })
+    setIsAddingNote(false)
+  }
+
+  // Update note
+  const handleUpdateNote = () => {
+    if (!editingNote || !editingNote.notes.trim()) return
+    
+    const updatedNotes = notes.map(note => 
+      note.id === editingNote.id ? editingNote : note
+    )
+    setNotes(updatedNotes)
+    saveNotesToParent(updatedNotes)
+    
+    setEditingNoteId(null)
+    setEditingNote(null)
+  }
+
+  // Delete note
+  const handleDeleteNote = (id: string) => {
+    const updatedNotes = notes.filter(note => note.id !== id)
+    setNotes(updatedNotes)
+    saveNotesToParent(updatedNotes)
+  }
+
+  // Filter notes based on search query
+  const filteredNotes = notes.filter(note =>
+    note.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    note.date.includes(searchQuery)
+  )
+
+  return (
+    <div className="mb-8">
+      {/* Structured Trainer Notes Card */}
+      <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-yellow-200 dark:border-yellow-800">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Edit className="h-5 w-5 text-yellow-600" />
+            Trainer Notes
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAddingNote(true)}
+              disabled={isSavingNotes || isGeneratingAnalysis}
+              className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/20"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Note
+            </Button>
+            
+            {notes.length > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSummarizeNotes}
+                  disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes || isSummarizingLocalLLM}
+                  className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                >
+                  {isSummarizingNotes ? (
+                    <>
+                      <LoadingSpinner size="small" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      ChatGPT Summary
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSummarizeLocalLLM}
+                  disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes || isSummarizingLocalLLM}
+                  className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/20"
+                >
+                  {isSummarizingLocalLLM ? (
+                    <>
+                      <LoadingSpinner size="small" />
+                      Local LLM...
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="h-4 w-4 mr-2" />
+                      Local LLM Summary
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
+          
+          {isGeneratingAnalysis && (
+            <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+              <LoadingSpinner size="small" />
+              Generating AI Analysis...
+            </div>
+          )}
+        </CardHeader>
+        
+        <CardContent>
+          {/* Search Bar */}
+          {notes.length > 0 && (
+            <div className="mb-4">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search notes by date or content..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Add New Note Form */}
+          {isAddingNote && (
+            <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-gray-500" />
+                    <Label htmlFor="note-date">Date:</Label>
+                  </div>
+                  <Input
+                    id="note-date"
+                    type="date"
+                    value={newNote.date}
+                    onChange={(e) => setNewNote({ ...newNote, date: e.target.value })}
+                    className="w-40"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="note-content">Notes:</Label>
+                  <Textarea
+                    id="note-content"
+                    value={newNote.notes}
+                    onChange={(e) => setNewNote({ ...newNote, notes: e.target.value })}
+                    placeholder="Add your notes about the client..."
+                    className="min-h-[100px] mt-1"
+                    style={{ 
+                      minHeight: '100px',
+                      height: Math.max(100, newNote.notes.split('\n').length * 20)
+                    }}
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleAddNote}
+                    disabled={!newNote.notes.trim()}
+                    size="sm"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Note
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingNote(false)
+                      setNewNote({ date: new Date().toISOString().split('T')[0], notes: "" })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes List - Fixed Height with Scroll */}
+          {filteredNotes.length > 0 ? (
+            <div className="relative">
+              <div className="max-h-[400px] overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
+                {filteredNotes.map((note) => (
+                  <div key={note.id} className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    {editingNoteId === note.id ? (
+                      // Edit Mode
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-gray-500" />
+                            <Label htmlFor={`edit-date-${note.id}`}>Date:</Label>
+                          </div>
+                          <Input
+                            id={`edit-date-${note.id}`}
+                            type="date"
+                            value={editingNote?.date || note.date}
+                            onChange={(e) => setEditingNote(editingNote ? { ...editingNote, date: e.target.value } : null)}
+                            className="w-40"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor={`edit-content-${note.id}`}>Notes:</Label>
+                          <Textarea
+                            id={`edit-content-${note.id}`}
+                            value={editingNote?.notes || note.notes}
+                            onChange={(e) => setEditingNote(editingNote ? { ...editingNote, notes: e.target.value } : null)}
+                            className="mt-1"
+                            style={{ 
+                              minHeight: '100px',
+                              height: Math.max(100, (editingNote?.notes || note.notes).split('\n').length * 20)
+                            }}
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleUpdateNote}
+                            disabled={!editingNote?.notes.trim()}
+                            size="sm"
+                          >
+                            <Save className="h-4 w-4 mr-2" />
+                            Update Note
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingNoteId(null)
+                              setEditingNote(null)
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View Mode
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <CalendarDays className="h-4 w-4" />
+                            {new Date(note.date).toLocaleDateString()}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingNoteId(note.id)
+                                setEditingNote(note)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="whitespace-pre-line text-gray-700 dark:text-gray-300">
+                          {note.notes}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Scroll indicator */}
+              {filteredNotes.length > 3 && (
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-yellow-50 dark:from-yellow-900/20 to-transparent pointer-events-none rounded-b-lg"></div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Edit className="h-8 w-8 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                {searchQuery ? "No notes found" : "No notes added yet"}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                {searchQuery ? "Try adjusting your search terms" : "Click 'Add Note' to start documenting your sessions"}
+              </p>
+              {!searchQuery && (
+                <Button
+                  onClick={() => setIsAddingNote(true)}
+                  className="text-yellow-600 border-yellow-200 hover:bg-yellow-50 dark:text-yellow-400 dark:border-yellow-800 dark:hover:bg-yellow-900/20"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First Note
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Coach Analysis - Always Visible */}
+      <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-purple-600" />
+            <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              AI Coach Analysis
+            </span>
+          </CardTitle>
+          
+          {/* Tab Navigation with Icons */}
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg mt-4">
+            {[
+              { id: 'summary', label: 'Summary', icon: BarChart3 },
+              { id: 'action_plan', label: 'Action Plan', icon: Target },
+              { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+              { id: 'insights', label: 'Insights', icon: Brain }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {lastAIRecommendation ? (
+            <div className="space-y-6">
+              {/* Summary Tab */}
+              {activeTab === 'summary' && lastAIRecommendation.summary && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-blue-600">Client Status Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {typeof lastAIRecommendation.summary.client_status === 'string' 
+                          ? lastAIRecommendation.summary.client_status 
+                          : 'No client status available'}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-green-600">Progress Assessment</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {typeof lastAIRecommendation.summary.progress_assessment === 'string' 
+                          ? lastAIRecommendation.summary.progress_assessment 
+                          : 'No progress assessment available'}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {lastAIRecommendation.summary.key_insights && lastAIRecommendation.summary.key_insights.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-purple-600">Key Insights</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {lastAIRecommendation.summary.key_insights.map((insight: any, index: number) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-gray-700 dark:text-gray-300">
+                                {String(insight)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {lastAIRecommendation.summary.immediate_concerns && lastAIRecommendation.summary.immediate_concerns.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Immediate Concerns
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="space-y-1">
+                            {lastAIRecommendation.summary.immediate_concerns.map((concern: any, index: number) => (
+                              <li key={index} className="text-gray-700 dark:text-gray-300">
+                                • {String(concern)}
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {lastAIRecommendation.summary.positive_developments && lastAIRecommendation.summary.positive_developments.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg text-green-600 flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5" />
+                            Positive Developments
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="space-y-1">
+                            {lastAIRecommendation.summary.positive_developments.map((development: any, index: number) => (
+                              <li key={index} className="text-gray-700 dark:text-gray-300">
+                                • {String(development)}
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Plan Tab */}
+              {activeTab === 'action_plan' && lastAIRecommendation.action_plan && (
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-blue-600">Immediate Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {lastAIRecommendation.action_plan.immediate_actions?.map((action: any, index: number) => (
+                          <div key={index} className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                {typeof action === 'string' ? action : action.action}
+                              </p>
+                              {typeof action === 'object' && (
+                                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                                  {action.priority && (
+                                    <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs">
+                                      Priority: {action.priority}
+                                    </span>
+                                  )}
+                                  {action.timeframe && (
+                                    <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
+                                      {action.timeframe}
+                                    </span>
+                                  )}
+                                  {action.category && (
+                                    <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
+                                      {action.category}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {lastAIRecommendation.action_plan.weekly_focus && lastAIRecommendation.action_plan.weekly_focus.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg text-indigo-600">Weekly Focus Areas</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          {lastAIRecommendation.action_plan.weekly_focus.map((focus: any, index: number) => (
+                            <div key={index} className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+                              <h4 className="font-medium text-indigo-900 dark:text-indigo-100 mb-2">
+                                {focus.focus_area || `Focus Area ${index + 1}`}
+                              </h4>
+                              {focus.specific_actions && (
+                                <ul className="space-y-1">
+                                  {focus.specific_actions.map((action: string, actionIndex: number) => (
+                                    <li key={actionIndex} className="flex items-start gap-2 text-sm text-indigo-700 dark:text-indigo-300">
+                                      <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                                      {action}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              {/* Recommendations Tab */}
+              {activeTab === 'recommendations' && lastAIRecommendation.coaching_recommendations && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(lastAIRecommendation.coaching_recommendations).map(([key, recommendations]: [string, any]) => (
+                    <Card key={key}>
+                      <CardHeader>
+                        <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {recommendations?.map((rec: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-gray-700 dark:text-gray-300">{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Insights Tab */}
+              {activeTab === 'insights' && lastAIRecommendation.client_insights && (
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg text-purple-600">Engagement Level</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-gray-700 dark:text-gray-300">{lastAIRecommendation.client_insights.engagement_level}</p>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(lastAIRecommendation.client_insights)
+                      .filter(([key]) => key !== 'engagement_level')
+                      .map(([key, items]: [string, any]) => (
+                        <Card key={key}>
+                          <CardHeader>
+                            <CardTitle className="text-lg capitalize">{key.replace('_', ' ')}</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ul className="space-y-1">
+                              {items?.map((item: string, index: number) => (
+                                <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
+                              ))}
+                            </ul>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Brain className="w-10 h-10 text-purple-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No AI Analysis Available</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">Generate comprehensive AI analysis from your trainer notes to unlock detailed insights</p>
+              <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                <p className="text-sm text-purple-700 dark:text-purple-300">
+                  Add detailed trainer notes above, then the AI will automatically generate comprehensive analysis including client status, action plans, and coaching recommendations.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// Enhanced Trainer Notes Section
+function TrainerNotesToDoSection({ 
+  client, 
+  trainerNotes, 
+  setTrainerNotes, 
+  handleSaveTrainerNotes, 
+  isSavingNotes, 
+  isEditingNotes, 
+  setIsEditingNotes,
+  notesDraft,
+  setNotesDraft,
+  notesError,
+  setNotesError,
+  isGeneratingAnalysis,
+  handleSummarizeNotes,
+  isSummarizingNotes,
+  handleSummarizeLocalLLM,
+  isSummarizingLocalLLM,
+  lastAIRecommendation 
+}: {
+  client: any
+  trainerNotes: string
+  setTrainerNotes: (notes: string) => void
+  handleSaveTrainerNotes: () => void
+  isSavingNotes: boolean
+  isEditingNotes: boolean
+  setIsEditingNotes: (editing: boolean) => void
+  notesDraft: string
+  setNotesDraft: (draft: string) => void
+  notesError: string | null
+  setNotesError: (error: string | null) => void
+  isGeneratingAnalysis: boolean
+  handleSummarizeNotes: () => void
+  isSummarizingNotes: boolean
+  handleSummarizeLocalLLM: () => void
+  isSummarizingLocalLLM: boolean
+  lastAIRecommendation: any
+}) {
+  const [activeTab, setActiveTab] = useState<'summary' | 'action_plan' | 'recommendations' | 'insights'>('summary');
   return (
     <div className="mb-8">
       {/* Enhanced Trainer Notes Card */}
@@ -4710,52 +5696,74 @@ function TrainerNotesToDoSection({
             Trainer Notes
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => (isEditingNotes ? handleSaveTrainerNotes() : setIsEditingNotes(true))}
               disabled={isSavingNotes || isGeneratingAnalysis}
-            >
-              {isEditingNotes ? (
-                isSavingNotes ? (
-                  <>
-                    <LoadingSpinner size="small" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save
-                  </>
-                )
+          >
+            {isEditingNotes ? (
+              isSavingNotes ? (
+                <>
+                  <LoadingSpinner size="small" />
+                  Saving...
+                </>
               ) : (
                 <>
-                  <Edit className="h-4 w-4" />
-                  Edit
+                  <Save className="h-4 w-4" />
+                  Save
                 </>
-              )}
-            </Button>
+              )
+            ) : (
+              <>
+                <Edit className="h-4 w-4" />
+                Edit
+              </>
+            )}
+          </Button>
             
             {!isEditingNotes && trainerNotes && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSummarizeNotes}
-                disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
-              >
-                {isSummarizingNotes ? (
-                  <>
-                    <LoadingSpinner size="small" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="h-4 w-4 mr-2" />
-                    AI Summary
-                  </>
-                )}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSummarizeNotes}
+                  disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes || isSummarizingLocalLLM}
+                  className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+                >
+                  {isSummarizingNotes ? (
+                    <>
+                      <LoadingSpinner size="small" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="h-4 w-4 mr-2" />
+                      ChatGPT Summary
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSummarizeLocalLLM}
+                  disabled={isSavingNotes || isGeneratingAnalysis || isSummarizingNotes || isSummarizingLocalLLM}
+                  className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/20"
+                >
+                  {isSummarizingLocalLLM ? (
+                    <>
+                      <LoadingSpinner size="small" />
+                      Local LLM...
+                    </>
+                  ) : (
+                    <>
+                      <Cpu className="h-4 w-4 mr-2" />
+                      Local LLM Summary
+                    </>
+                  )}
+                </Button>
+              </>
             )}
           </div>
           
@@ -5121,6 +6129,7 @@ export default function ClientDashboard() {
   const [showNotesSummaryPopup, setShowNotesSummaryPopup] = useState(false)
   const [notesSummaryResponse, setNotesSummaryResponse] = useState<any>(null)
   const [isSummarizingNotes, setIsSummarizingNotes] = useState(false)
+  const [isSummarizingLocalLLM, setIsSummarizingLocalLLM] = useState(false)
   const [showComprehensiveAnalysisPopup, setShowComprehensiveAnalysisPopup] = useState(false)
   const [comprehensiveAnalysisResponse, setComprehensiveAnalysisResponse] = useState<any>(null)
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false)
@@ -5177,61 +6186,36 @@ export default function ClientDashboard() {
       }
       const trainerEmail = sessionData.session.user.email;
       
-      // First save the notes without AI analysis
-      const { error: initialSaveError } = await supabase
+      // Get trainer ID
+      const { data: trainerData, error: trainerError } = await supabase
         .from("trainer")
+        .select("id")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      
+      if (trainerError || !trainerData?.id || !clientId) {
+        setNotesError("Failed to get trainer or client information");
+        setIsSavingNotes(false);
+        return;
+      }
+      
+      // Save the notes to trainer_client_web table
+      const { error: saveError } = await supabase
+        .from("trainer_client_web")
         .update({ trainer_notes: notesDraft })
-        .eq("trainer_email", trainerEmail);
+        .eq("trainer_id", trainerData.id)
+        .eq("client_id", clientId);
         
-      if (initialSaveError) {
-        setNotesError(initialSaveError.message);
+      if (saveError) {
+        setNotesError(saveError.message);
         setIsSavingNotes(false);
         return;
       }
       
       setTrainerNotes(notesDraft);
       setIsEditingNotes(false);
+      console.log('✅ Notes saved successfully without AI analysis');
       
-      // Automatically trigger comprehensive coach analysis after notes are saved
-      if (clientId && notesDraft.trim().length > 20) {
-        console.log('🤖 Triggering comprehensive coach analysis...');
-        setIsGeneratingAnalysis(true);
-        
-        try {
-          const analysisResult = await performComprehensiveCoachAnalysis(
-            clientId,
-            notesDraft,
-            todoItems
-          );
-          
-          if (analysisResult.success && analysisResult.analysis) {
-            setComprehensiveAnalysisResponse(analysisResult);
-            setLastAIRecommendation(analysisResult.analysis);
-            setShowComprehensiveAnalysisPopup(true);
-            
-            // Save notes with AI analysis to database
-            const notesWithAI = formatNotesWithAI(notesDraft, analysisResult.analysis);
-            const { error: aiSaveError } = await supabase
-              .from("trainer")
-              .update({ trainer_notes: notesWithAI })
-              .eq("trainer_email", trainerEmail);
-              
-            if (aiSaveError) {
-              console.error('❌ Failed to save AI analysis with notes:', aiSaveError);
-            } else {
-              console.log('✅ Notes with AI analysis saved successfully');
-            }
-            
-            console.log('✅ Comprehensive analysis completed successfully');
-          } else {
-            console.error('❌ Comprehensive analysis failed:', analysisResult.message);
-          }
-        } catch (analysisError) {
-          console.error('💥 Error during comprehensive analysis:', analysisError);
-        } finally {
-          setIsGeneratingAnalysis(false);
-        }
-      }
     } catch (err: any) {
       setNotesError(err.message || "Failed to save notes");
     } finally {
@@ -5246,8 +6230,8 @@ export default function ClientDashboard() {
   }
 
   const handleSummarizeNotes = async () => {
-    if (!notes || notes.trim().length === 0) {
-      console.log("No notes to summarize");
+    if (!trainerNotes || trainerNotes.trim().length === 0) {
+      console.log("No trainer notes to summarize");
       return;
     }
 
@@ -5255,12 +6239,61 @@ export default function ClientDashboard() {
       setIsSummarizingNotes(true);
       console.log('🔄 Starting notes summarization...');
       
-      // Call the AI notes summary service (notes is guaranteed to be non-null here)
-      const result = await summarizeTrainerNotes(notes as string, client?.id);
+      // Get trainer ID
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        throw new Error("Not logged in");
+      }
+      const trainerEmail = sessionData.session.user.email;
+      
+      const { data: trainerData, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      
+      if (trainerError || !trainerData?.id || !clientId) {
+        throw new Error("Failed to get trainer or client information");
+      }
+      
+      // Call the AI notes summary service
+      const result = await summarizeTrainerNotes(trainerNotes, client?.id);
       
       console.log('📊 Summary Result:', result);
       
       if (result.success) {
+        // Parse the AI response to get the analysis data
+        let analysisData;
+        try {
+          if (result.aiResponse?.response) {
+            const jsonMatch = result.aiResponse.response.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              analysisData = JSON.parse(jsonMatch[0]);
+            } else {
+              analysisData = JSON.parse(result.aiResponse.response);
+            }
+          }
+        } catch (parseError) {
+          console.error('❌ Failed to parse AI response:', parseError);
+          analysisData = result.aiResponse;
+        }
+        
+        // Save AI analysis to ai_summary column
+        if (analysisData) {
+          const { error: aiSaveError } = await supabase
+            .from("trainer_client_web")
+            .update({ ai_summary: analysisData })
+            .eq("trainer_id", trainerData.id)
+            .eq("client_id", clientId);
+            
+          if (aiSaveError) {
+            console.error('⚠️ Failed to save AI analysis:', aiSaveError);
+          } else {
+            console.log('✅ AI analysis saved to database');
+            setLastAIRecommendation(analysisData);
+          }
+        }
+        
         setNotesSummaryResponse(result);
         setShowNotesSummaryPopup(true);
         console.log('✅ Notes summary generated successfully');
@@ -5273,6 +6306,129 @@ export default function ClientDashboard() {
       // You could show an error toast notification here
     } finally {
       setIsSummarizingNotes(false);
+    }
+  };
+
+  const handleSummarizeLocalLLM = async () => {
+    if (!trainerNotes || trainerNotes.trim().length === 0) {
+      console.log("No trainer notes to summarize");
+      return;
+    }
+
+    try {
+      setIsSummarizingLocalLLM(true);
+      console.log('🔄 Starting local LLM notes summarization...');
+      
+      // Get trainer ID and save notes to trainer_client_web table
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData?.session?.user?.email) {
+        throw new Error("Not logged in");
+      }
+      const trainerEmail = sessionData.session.user.email;
+      
+      // Get trainer ID
+      const { data: trainerData, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      
+      if (trainerError || !trainerData?.id || !clientId) {
+        throw new Error("Failed to get trainer or client information");
+      }
+      
+      // Save the notes first to trainer_client_web table
+      const { error: saveError } = await supabase
+        .from("trainer_client_web")
+        .update({ trainer_notes: trainerNotes })
+        .eq("trainer_id", trainerData.id)
+        .eq("client_id", clientId);
+        
+      if (saveError) {
+        throw new Error(`Failed to save notes: ${saveError.message}`);
+      }
+      
+      console.log('✅ Notes saved successfully before local LLM analysis');
+      
+      // Call the local LLM comprehensive analysis service
+      const result = await generateLocalLLMComprehensiveAnalysis(
+        trainerNotes,
+        client,
+        todoItems,
+        "qwen2.5:latest"
+      );
+      
+      console.log('📊 Local LLM Summary Result:', result);
+      
+      // Parse the response to get the analysis data
+      let analysisData;
+      try {
+        const jsonMatch = result.response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysisData = JSON.parse(jsonMatch[0]);
+        } else {
+          analysisData = JSON.parse(result.response);
+        }
+      } catch (parseError) {
+        console.error('❌ Failed to parse local LLM response:', parseError);
+        throw new Error('Failed to parse local LLM analysis response');
+      }
+      
+      // Save AI analysis to ai_summary column
+      const { error: aiSaveError } = await supabase
+        .from("trainer_client_web")
+        .update({ ai_summary: analysisData })
+        .eq("trainer_id", trainerData.id)
+        .eq("client_id", clientId);
+        
+      if (aiSaveError) {
+        console.error('⚠️ Failed to save AI analysis:', aiSaveError);
+        // Continue anyway as the analysis was successful
+      } else {
+        console.log('✅ AI analysis saved to database');
+      }
+      
+      // Set the analysis response and show popup
+      setComprehensiveAnalysisResponse({
+        success: true,
+        message: 'Local LLM analysis completed successfully',
+        analysis: analysisData,
+        model: result.model,
+        timestamp: result.timestamp,
+        generationTime: result.generationTime
+      });
+      setLastAIRecommendation(analysisData);
+      setShowComprehensiveAnalysisPopup(true);
+      
+      console.log('✅ Local LLM analysis completed successfully');
+    } catch (error) {
+      console.error('💥 Error with local LLM summarization:', error);
+      // You could show an error toast notification here
+    } finally {
+      setIsSummarizingLocalLLM(false);
+    }
+  };
+
+  // Function to refresh client data after goals are saved
+  const refreshClientData = async () => {
+    if (!clientId) return;
+    
+    try {
+      console.log('🔄 Refreshing client data...');
+      const { data, error } = await supabase
+        .from("client")
+        .select("*")
+        .eq("client_id", clientId)
+        .single();
+
+      if (error) {
+        console.error("Error refreshing client data:", error);
+      } else if (data) {
+        console.log("✅ Client data refreshed:", data);
+        setClient(data);
+      }
+    } catch (err) {
+      console.error("Unexpected error refreshing client data:", err);
     }
   };
 
@@ -5356,22 +6512,41 @@ export default function ClientDashboard() {
       }
       const trainerEmail = sessionData.session.user.email;
       console.log(trainerEmail,"himanshu");
-      // 2. Fetch the trainer by email
-      const { data, error } = await supabase
+      
+      // 2. Fetch trainer ID
+      const { data: trainerData, error: trainerError } = await supabase
         .from("trainer")
-        .select("trainer_notes")
+        .select("id")
         .eq("trainer_email", trainerEmail)
         .single();
-      if (!error && data && data.trainer_notes) {
-        const combinedNotes = data.trainer_notes;
-        const { notes, aiAnalysis } = parseNotesWithAI(combinedNotes);
-        
+      
+      if (trainerError || !trainerData?.id || !clientId) {
+        setTrainerNotes("");
+        setNotesDraft("");
+        setLastAIRecommendation(null);
+        return;
+      }
+      
+      // 3. Fetch client-specific trainer notes from trainer_client_web table
+      const { data, error } = await supabase
+        .from("trainer_client_web")
+        .select("trainer_notes, ai_summary")
+        .eq("trainer_id", trainerData.id)
+        .eq("client_id", clientId)
+        .single();
+      
+      if (!error && data) {
+        // Set trainer notes
+        const notes = data.trainer_notes || "";
         setTrainerNotes(notes);
         setNotesDraft(notes);
-        setLastAIRecommendation(aiAnalysis);
         
-        if (aiAnalysis) {
-          console.log('📊 Loaded previous AI analysis:', aiAnalysis);
+        // Set AI analysis from ai_summary column
+        if (data.ai_summary) {
+          setLastAIRecommendation(data.ai_summary);
+          console.log('📊 Loaded previous AI analysis:', data.ai_summary);
+        } else {
+          setLastAIRecommendation(null);
         }
       } else {
         setTrainerNotes("");
@@ -5379,7 +6554,7 @@ export default function ClientDashboard() {
         setLastAIRecommendation(null);
       }
     })();
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     if (!clientId) {
@@ -5678,7 +6853,7 @@ export default function ClientDashboard() {
       <div className="max-w-7xl mx-auto px-6 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-4 mb-8">
           {/* Fitness Goals Section */}
-          <FitnessGoalsSection client={client} />
+          <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
 
           {/* AI Coach Insights Section */}
           <div className="xl:col-span-2">
@@ -5774,7 +6949,7 @@ export default function ClientDashboard() {
                         </div>
                       )}
                     </div>
-                  </div>
+        </div>
 
                   {/* Right Column: Action Plan & Weekly Focus */}
                   <div className="space-y-4">
@@ -5794,7 +6969,7 @@ export default function ClientDashboard() {
                                       [];
                         
                         if (Array.isArray(actions) && actions.length > 0) {
-                          return (
+            return (
                             <div className="space-y-2">
                               {actions.slice(0, 4).map((action: any, index: number) => (
                                 <div key={index} className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -5876,22 +7051,7 @@ export default function ClientDashboard() {
                   </div>
                 </div>
 
-                {/* Call to action when no AI analysis */}
-                {!lastAIRecommendation && (
-                  <div className="text-center py-4 border-t border-gray-200 dark:border-gray-700">
-                    <Button
-                      onClick={() => {
-                        alert("Please add trainer notes first, then generate AI analysis.");
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
-                    >
-                      <PlusCircle className="h-4 w-4 mr-2" />
-                      Generate AI Analysis
-                    </Button>
-                  </div>
-                )}
+
               </CardContent>
             </Card>
           </div>
@@ -5904,21 +7064,23 @@ export default function ClientDashboard() {
           {activeTab === "overview" && (
               <div className="space-y-8">
                 {/* Trainer Notes & To-Do Section */}
-                <TrainerNotesToDoSection
-                  client={client}
-                  trainerNotes={trainerNotes}
-                  setTrainerNotes={setTrainerNotes}
-                  handleSaveTrainerNotes={handleSaveTrainerNotes}
-                  isSavingNotes={isSavingNotes}
-                  isEditingNotes={isEditingNotes}
-                  setIsEditingNotes={setIsEditingNotes}
-                  notesDraft={notesDraft}
-                  setNotesDraft={setNotesDraft}
-                  notesError={notesError}
-                  setNotesError={setNotesError}
+              <StructuredTrainerNotesSection
+                client={client}
+                trainerNotes={trainerNotes}
+                setTrainerNotes={setTrainerNotes}
+                handleSaveTrainerNotes={handleSaveTrainerNotes}
+                isSavingNotes={isSavingNotes}
+                isEditingNotes={isEditingNotes}
+                setIsEditingNotes={setIsEditingNotes}
+                notesDraft={notesDraft}
+                setNotesDraft={setNotesDraft}
+                notesError={notesError}
+                setNotesError={setNotesError}
                   isGeneratingAnalysis={isGeneratingAnalysis}
                   handleSummarizeNotes={handleSummarizeNotes}
                   isSummarizingNotes={isSummarizingNotes}
+                  handleSummarizeLocalLLM={handleSummarizeLocalLLM}
+                  isSummarizingLocalLLM={isSummarizingLocalLLM}
                   lastAIRecommendation={lastAIRecommendation}
                 />
             </div>

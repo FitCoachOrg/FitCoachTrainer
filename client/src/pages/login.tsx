@@ -3,9 +3,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import * as Icons from "@/lib/icons";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import GoogleSignIn from "@/components/auth/GoogleSignIn";
 
 const FloatingDots = () => {
   const [dots, setDots] = useState<Array<{ id: number; x: number; y: number; size: number; delay: number }>>([]);
@@ -153,33 +155,57 @@ const LoginPage = () => {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Input
-                    type="email"
-                    placeholder="Email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
-                    required
-                    disabled={isLoading}
-                    autoComplete="email"
-                  />
-                </div>
-                {error && (
-                  <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
-                    <p className="text-sm text-red-400 text-center">{error}</p>
+              <div className="space-y-4">
+                {/* Google Sign-In */}
+                <GoogleSignIn 
+                  onSuccess={() => {
+                    // Google sign-in will redirect automatically
+                  }}
+                  onError={(error) => {
+                    setError(error);
+                  }}
+                  className="bg-white hover:bg-gray-50 text-gray-900 border-gray-300 hover:border-gray-400"
+                />
+                
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-slate-600" />
                   </div>
-                )}
-                <Button
-                  type="submit"
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Sending..." : "Send Magic Link"}
-                </Button>
-              </form>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-slate-800 px-2 text-slate-400">Or continue with</span>
+                  </div>
+                </div>
+                
+                {/* Magic Link Form */}
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Input
+                      type="email"
+                      placeholder="Email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400"
+                      required
+                      disabled={isLoading}
+                      autoComplete="email"
+                    />
+                  </div>
+                  {error && (
+                    <div className="p-3 rounded-md bg-red-900/20 border border-red-400/20">
+                      <p className="text-sm text-red-400 text-center">{error}</p>
+                    </div>
+                  )}
+                  <Button
+                    type="submit"
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Sending..." : "Send Magic Link"}
+                  </Button>
+                </form>
+              </div>
             )}
           </CardContent>
         </Card>

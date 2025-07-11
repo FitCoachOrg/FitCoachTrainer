@@ -5,12 +5,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 const NutritionPlans = () => {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [nutritionPlan, setNutritionPlan] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"text" | "table">("table");
+  const [structuredPlan, setStructuredPlan] = useState<any>(null);
   const [formData, setFormData] = useState({
     clientName: "",
     dietaryPreference: "balanced",
@@ -31,6 +42,85 @@ const NutritionPlans = () => {
     // Simulate plan generation
     setTimeout(() => {
       setIsGenerating(false);
+      
+      // Create structured plan data
+      const structuredData = {
+        clientName: formData.clientName,
+        calorieTarget: formData.calorieTarget || "2000",
+        goal: formData.healthGoal || "Balanced nutrition and weight maintenance",
+        dietaryPreference: formData.dietaryPreference,
+        restrictions: formData.restrictions,
+        meals: [
+          {
+            meal: "Breakfast",
+            time: "7:00 AM",
+            calories: 500,
+            foods: [
+              "Overnight oats with berries and nuts",
+              "Greek yogurt with honey",
+              "Green tea or black coffee"
+            ],
+            macros: { protein: "15g", carbs: "45g", fats: "12g" }
+          },
+          {
+            meal: "Mid-morning Snack",
+            time: "10:00 AM",
+            calories: 200,
+            foods: [
+              "Apple with 1 tbsp almond butter",
+              "Herbal tea"
+            ],
+            macros: { protein: "4g", carbs: "25g", fats: "8g" }
+          },
+          {
+            meal: "Lunch",
+            time: "1:00 PM",
+            calories: 600,
+            foods: [
+              "Grilled chicken salad with mixed greens",
+              "1/2 cup quinoa",
+              "Olive oil and lemon dressing",
+              "Water with lemon"
+            ],
+            macros: { protein: "35g", carbs: "40g", fats: "20g" }
+          },
+          {
+            meal: "Afternoon Snack",
+            time: "4:00 PM",
+            calories: 200,
+            foods: [
+              "Carrot sticks with hummus",
+              "10 almonds"
+            ],
+            macros: { protein: "6g", carbs: "20g", fats: "10g" }
+          },
+          {
+            meal: "Dinner",
+            time: "7:00 PM",
+            calories: 500,
+            foods: [
+              "Baked salmon with herbs",
+              "Steamed broccoli and asparagus",
+              "1/2 cup brown rice",
+              "Water"
+            ],
+            macros: { protein: "30g", carbs: "35g", fats: "15g" }
+          }
+        ],
+        hydration: "Aim for 2-3 liters of water daily",
+        supplements: [
+          { name: "Vitamin D3", dosage: "1000 IU daily" },
+          { name: "Omega-3", dosage: "1000mg daily" }
+        ],
+        mealPrepTips: [
+          "Prepare overnight oats in batches for 3-4 days",
+          "Grill extra chicken for quick lunch additions",
+          "Wash and chop vegetables in advance",
+          "Cook grains in batches for quicker meal assembly"
+        ]
+      };
+      
+      setStructuredPlan(structuredData);
       setNutritionPlan(`# Personalized Nutrition Plan for ${formData.clientName}
 
 ## Daily Calorie Target: ${formData.calorieTarget || "2000"} calories
@@ -194,17 +284,153 @@ Aim for 2-3 liters of water daily
           {nutritionPlan && (
             <Card>
               <CardHeader>
-                <CardTitle>Generated Nutrition Plan</CardTitle>
-                <CardDescription>
-                  Review and customize this plan before assigning to your client
-                </CardDescription>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Generated Nutrition Plan</CardTitle>
+                    <CardDescription>
+                      Review and customize this plan before assigning to your client
+                    </CardDescription>
+                  </div>
+                  {/* View Toggle */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={viewMode === "table" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("table")}
+                      className="flex items-center gap-2"
+                    >
+                      <Icons.TableIcon className="h-4 w-4" />
+                      Table
+                    </Button>
+                    <Button
+                      variant={viewMode === "text" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setViewMode("text")}
+                      className="flex items-center gap-2"
+                    >
+                      <Icons.ScrollIcon className="h-4 w-4" />
+                      Text
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="prose dark:prose-invert max-w-none">
-                  <pre className="text-sm p-4 bg-slate-100 dark:bg-slate-800 rounded-md whitespace-pre-wrap">
-                    {nutritionPlan}
-                  </pre>
-                </div>
+                {viewMode === "table" && structuredPlan ? (
+                  <div className="space-y-6">
+                    {/* Plan Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Client</Label>
+                        <p className="font-semibold">{structuredPlan.clientName}</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Calorie Target</Label>
+                        <p className="font-semibold">{structuredPlan.calorieTarget} cal</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Diet</Label>
+                        <Badge variant="outline" className="capitalize">{structuredPlan.dietaryPreference}</Badge>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Goal</Label>
+                        <p className="font-semibold text-sm">{structuredPlan.goal}</p>
+                      </div>
+                    </div>
+
+                    {/* Meals Table */}
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Meal</TableHead>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Calories</TableHead>
+                            <TableHead>Foods</TableHead>
+                            <TableHead>Macros</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {structuredPlan.meals.map((meal: any, index: number) => (
+                            <TableRow key={index}>
+                              <TableCell className="font-medium">{meal.meal}</TableCell>
+                              <TableCell>{meal.time}</TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">{meal.calories} cal</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  {meal.foods.map((food: string, foodIndex: number) => (
+                                    <div key={foodIndex} className="text-sm">• {food}</div>
+                                  ))}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-xs space-y-1">
+                                  <div>Protein: {meal.macros.protein}</div>
+                                  <div>Carbs: {meal.macros.carbs}</div>
+                                  <div>Fats: {meal.macros.fats}</div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Additional Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Hydration */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Hydration</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm">{structuredPlan.hydration}</p>
+                        </CardContent>
+                      </Card>
+
+                      {/* Supplements */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Supplements</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {structuredPlan.supplements.map((supplement: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center">
+                                <span className="font-medium">{supplement.name}</span>
+                                <Badge variant="outline">{supplement.dosage}</Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Meal Prep Tips */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg">Weekly Meal Prep Tips</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {structuredPlan.mealPrepTips.map((tip: string, index: number) => (
+                            <div key={index} className="flex items-start gap-2">
+                              <span className="text-blue-500 font-bold">{index + 1}.</span>
+                              <span className="text-sm">{tip}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <div className="prose dark:prose-invert max-w-none">
+                    <pre className="text-sm p-4 bg-slate-100 dark:bg-slate-800 rounded-md whitespace-pre-wrap">
+                      {nutritionPlan}
+                    </pre>
+                  </div>
+                )}
                 
                 <div className="flex justify-end space-x-2 mt-4">
                   <Button variant="outline">

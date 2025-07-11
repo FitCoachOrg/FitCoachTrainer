@@ -19,6 +19,14 @@ export default defineConfig({
   server: {
     port: 8080,
     strictPort: true,
+    proxy: {
+      // Proxy any request beginning with /ollama to the local Ollama server
+      '/ollama': {
+        target: 'http://localhost:11434',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ollama/, ''),
+      },
+    },
   },
   clearScreen: false,
   envPrefix: ['VITE_'],

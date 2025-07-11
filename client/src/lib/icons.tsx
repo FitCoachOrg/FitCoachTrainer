@@ -40,6 +40,8 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  Table,
+  Grid3X3,
   Loader2 as Loader,
   PaperclipIcon as Paperclip,
   CheckIcon as CheckMark,
@@ -90,4 +92,6 @@ export const SaveIcon = Save;
 export const ChevronLeftIcon = ChevronLeft;
 export const ChevronRightIcon = ChevronRight;
 export const AlertTriangleIcon = AlertTriangle;
+export const TableIcon = Table;
+export const Grid3X3Icon = Grid3X3;
 export const LoaderIcon = Loader;

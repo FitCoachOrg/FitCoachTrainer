@@ -9,7 +9,7 @@ import ClientDetailPanel from "@/components/dashboard/ClientDetailPanel"
 import SlidingPanel from "@/components/layout/SlidingPanel"
 import { useNavigate } from "react-router-dom"
 import Demo from "@/components/dashboard/demo"
-import EnhancedCalendar from "@/components/dashboard/PeriodTrackingCard"
+import ProfessionalCalendar from "@/components/dashboard/ProfessionalCalendar"
 import { Users, Clipboard, BarChart3, MessageCircle, TrendingUp, Activity, CheckCircle } from "lucide-react"
 
 // Sample client data
@@ -60,7 +60,7 @@ const sampleClient = {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const [isPanelOpen, setIsPanelOpen] = useState(false)
-  const [selectedClient, setSelectedClient] = useState<string | null>(null)
+  const [selectedClient, setSelectedClient] = useState<typeof sampleClient | null>(null)
 
   const recommendedActions = [
     {
@@ -122,7 +122,7 @@ const Dashboard: React.FC = () => {
       description: "Recent messages from your clients",
       actionLabel: "View Messages",
       onAction: () => {
-        setSelectedClient("Sarah Johnson")
+        setSelectedClient(sampleClient)
         setIsPanelOpen(true)
       },
       priority: "medium" as const,
@@ -187,7 +187,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="mb-8">
-          <EnhancedCalendar />
+          <ProfessionalCalendar />
         </div>
 
         {/* Enhanced Recommended Actions */}
