@@ -1,6 +1,6 @@
-// AI Fitness Plan Generation with OpenAI Integration
+// AI Fitness Plan Generation with OpenRouter Integration
 import { supabase } from './supabase'
-import OpenAI from 'openai'
+import { askOpenRouter } from './open-router-service'
 
 /**
  * Helper function to get the next occurrence of a specific day of the week
@@ -56,14 +56,17 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
   try {
     console.log('📅 === PROCESSING WORKOUT PLAN DATES ===');
     console.log('📅 Processing workout plan dates...');
+    if (typeof aiResponseText !== 'string') {
+      console.error('❌ processWorkoutPlanDates received a non-string input:', aiResponseText);
+      throw new Error('Invalid input: Expected a string response from AI.');
+    }
     console.log('📅 AI Response Text Length:', aiResponseText.length);
     console.log('📅 AI Response Preview (first 500 chars):', aiResponseText.substring(0, 500));
     
-    // Try to extract JSON from response
+    // Try to extract JSON from response using a robust regex
     console.log('🔍 Attempting to extract JSON from AI response...');
     let jsonText = aiResponseText;
-    
-    // Check if response contains JSON within larger text
+    // Find the first {...} block (greedy, but stops at the last closing brace)
     const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       jsonText = jsonMatch[0];
@@ -72,10 +75,16 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
     } else {
       console.log('🔍 No JSON brackets found, using full response');
     }
+    // Try parsing, and if it fails, show a user-friendly error and log the raw response
+    let aiData;
+    try {
+      aiData = JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error('❌ Failed to parse AI response as JSON:', parseError);
+      console.error('❌ Raw AI response:', aiResponseText);
+      throw new Error('The AI returned invalid JSON. Please try again or check the raw response in the console.');
+    }
     
-    // Parse the AI response JSON
-    console.log('🔄 Parsing JSON...');
-    const aiData = JSON.parse(jsonText);
     console.log('✅ JSON parsing successful');
     console.log('📊 Parsed AI Data Keys:', Object.keys(aiData));
     
@@ -146,6 +155,7 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
         reps: cleanReps,
         duration: cleanDuration,
         weights: ensureString(workout.weights, 'bodyweight'),
+        equipment: ensureString(workout.equipment, 'bodyweight'),
         body_part: ensureString(workout.body_part, 'Full Body'),
         category: ensureString(workout.category, 'Strength'),
         coach_tip: ensureString(workout.coach_tip, 'Focus on proper form'),
@@ -342,29 +352,33 @@ async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
 }
 
 /**
- * Function to generate AI response using OpenAI ChatGPT
+ * Function to generate AI response using OpenRouter
  * @param clientInfo - Organized client information
  */
 async function generateAIResponse(clientInfo: any) {
-  console.log('🔑 Checking for OpenAI API key...');
+  console.log('🔑 Checking for OpenRouter API key...');
   
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error('OpenAI API key not found. Please add VITE_OPENAI_API_KEY to your .env file');
+    throw new Error('OpenRouter API key not found. Please add VITE_OPENROUTER_API_KEY to your .env file');
   }
   
-  console.log('✅ OpenAI API key found');
-  console.log('🔧 Initializing OpenAI client...');
-  
-  // Initialize OpenAI client
-  const client = new OpenAI({
-    apiKey: apiKey,
-    dangerouslyAllowBrowser: true // Required for client-side usage
-  });
-  
+  console.log('✅ OpenRouter API key found');
   console.log('📋 Preparing comprehensive fitness coach prompt...');
   
   // Use the comprehensive world-class fitness coach prompt template
+  // Helper to format client's preferred workout days
+  const formatWorkoutDays = (workoutDays: any) => {
+    if (!workoutDays) return 'N/A';
+    if (typeof workoutDays === 'string') return workoutDays;
+    if (Array.isArray(workoutDays)) return workoutDays.join(', ');
+    if (typeof workoutDays === 'object') {
+      // If it's an object like {"Monday": true, "Wednesday": true, "Friday": true}
+      return Object.keys(workoutDays).filter(day => workoutDays[day]).join(', ');
+    }
+    return 'N/A';
+  };
+
   const fitnessCoachPrompt = `You are a world-class fitness coach. Based on the inputs below, create a personalized, evidence-based training program tailored to the client's goals, preferences, and constraints.
 
 Inputs:
@@ -379,6 +393,7 @@ Training Frequency: ${clientInfo.trainingDaysPerWeek || '3'}x/week
 Session Duration: ${clientInfo.trainingTimePerSession || '30-45 min'}
 Training Location: ${clientInfo.trainingLocation || 'Home'}
 Available Equipment: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
+Preferred Workout Days: ${formatWorkoutDays(clientInfo.workoutDays)}
 Limitations/Injuries: ${clientInfo.injuriesLimitations || 'None'}
 Body Area Focus: ${Array.isArray(clientInfo.focusAreas) ? clientInfo.focusAreas.join(', ') : clientInfo.focusAreas || 'None'}
 Workout Style Preferences: ${clientInfo.activityLevel || 'General'}
@@ -397,13 +412,31 @@ Motivation Style: ${clientInfo.motivationStyle || 'N/A'}
 Guidelines:
 Use the correct training philosophy based on the goal and training age
 Choose appropriate progression models (linear, undulating, or block periodization) based on experience and timeline.
-Structure training based on available days and session duration.
-Respect equipment limitations and substitute intelligently.
+CRITICAL: Respect the exact number of training days per week specified in "Training Frequency" (${clientInfo.trainingDaysPerWeek || '3'} days)
+CRITICAL: If "Preferred Workout Days" are specified, prioritize scheduling workouts on those specific days of the week
+Respect equipment limitations and substitute intelligently. Only use exercises that can be performed with the available equipment.
 Adjust exercises based on injury/limitation info.
 Emphasize specified body areas without neglecting full-body balance.
 Include progression triggers.
 Insert deload every 4–6 weeks with 40% volume reduction if program spans 8+ weeks.
 If timeline is <6 weeks, consider a short cycle without deload.
+
+IMPORTANT: Create a complete weekly plan that includes every day of the week (Monday through Sunday). If a day is dedicated for rest, clearly indicate it as a rest day in the weekly_breakdown and include it in the workout_plan array with appropriate rest day information.
+
+ICONS: Provide thoughtful, exercise-appropriate emojis that match the exercise type:
+- Strength training: 🏋️‍♂️, 💪, 🔥
+- Cardio: 🏃‍♂️, 🚴‍♂️, ❤️, 🫀
+- Flexibility/Stretching: 🧘‍♂️, 🤸‍♂️, 🌟
+- Core: 🔥, 💪, ⚡
+- Upper body: 💪, 🏋️‍♂️, 🔥
+- Lower body: 🦵, 🏃‍♂️, 💪
+- Full body: 🔥, ⚡, 🎯
+- Warm-up: 🌟, ⚡, 🔥
+- Cool-down: 🧘‍♂️, 😌, 🌟
+
+Respond with ONLY valid JSON. Do not include any text, comments, or explanations before or after the JSON.
+
+IMPORTANT: Use clean, simple exercise names in the "workout" field (e.g., "Push-ups", "Squats", "Deadlifts"). Do not include category or body part in the exercise name itself.
 
 Output Format (in JSON):
 {
@@ -427,11 +460,12 @@ Output Format (in JSON):
       "reps": 15,
       "duration": 30,
       "weights": "bodyweight",
+      "equipment": "None - bodyweight only",
       "for_time": "08:00:00",
       "body_part": "Glutes",
       "category": "Strength",
-      "coach_tip": "Push through the heels",
-      "icon": "🏋️‍♂️",
+      "coach_tip": "Provide a unique, actionable coaching tip for this exercise (e.g., 'Push through the heels to engage glutes fully. Maintain a neutral spine.')",
+      "icon": "🔥",
       "progression_notes": "Add 2 reps when RPE ≤ 8"
     }
   ]
@@ -439,40 +473,22 @@ Output Format (in JSON):
   
   console.log('📝 Fitness coach prompt prepared with client data');
   
-  console.log('🚀 Sending request to OpenAI using client SDK...');
+  console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const response = await client.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'user',
-          content: fitnessCoachPrompt
-        }
-      ],
-      max_tokens: 3000,
-      temperature: 0.7,
-    });
-
-    console.log('📊 OpenAI Response received:', response);
-    
-    if (!response.choices || !response.choices[0] || !response.choices[0].message) {
-      throw new Error('Invalid response format from OpenAI');
-    }
-
-    const aiResponse = response.choices[0].message.content;
-    console.log('✅ AI Response extracted:', aiResponse);
+    const aiResponse = await askOpenRouter(fitnessCoachPrompt);
+    console.log('📊 OpenRouter Response received');
+    console.log('✅ AI Response extracted');
     
     return {
-      response: aiResponse,
-      usage: response.usage,
-      model: response.model,
+      response: aiResponse.response, // Correctly unpack the response string
+      model: 'qwen/qwen3-8b:free',
       timestamp: new Date().toISOString()
     };
     
   } catch (error) {
-    console.error('❌ OpenAI API Error:', error);
-    throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ OpenRouter API Error:', error);
+    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -934,13 +950,14 @@ export async function generateAIWorkoutPlanForReview(clientId: number) {
       console.log('✅ AI Response generated successfully');
       console.log('⏱️ AI Generation took:', endTime - startTime, 'ms');
       
-      // Check if response contains expected structure
-      if (!aiResponse?.response) {
-        console.error('❌ AI Response missing response field:', aiResponse);
-        throw new Error('AI response is empty or null');
+      // After receiving the OpenRouter response:
+      // Assume 'aiResponse' is the parsed response from OpenRouter
+      // Add this check after parsing:
+      if (!aiResponse || !aiResponse.response || aiResponse.response.trim() === '') {
+        console.error('❌ AI Response missing or empty:', aiResponse);
+        throw new Error('Failed to generate AI response: AI response is empty or null');
       }
       
-      // Process workout plan dates
       console.log('🔄 Processing workout plan dates...');
       const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
       console.log('✅ Date processing completed');
@@ -975,7 +992,7 @@ export async function generateAIWorkoutPlanForReview(clientId: number) {
         aiResponse: aiResponse,
         workoutPlan: processedWorkoutPlan,
         generatedAt: new Date().toISOString(),
-        autoSaved: false // Important flag to indicate this was NOT auto-saved
+        autoSaved: false 
       };
         
     } catch (aiError) {

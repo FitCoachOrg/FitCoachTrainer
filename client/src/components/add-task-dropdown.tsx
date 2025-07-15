@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from "react"
 import { CheckCircle, Camera, BarChart3, Dumbbell, Apple, FileText, Droplet } from "lucide-react"
-import type { Task, TaskType } from "@/app/page"
+import type { Task, TaskType } from "@/types/program"
 
 interface AddTaskDropdownProps {
   isOpen: boolean
@@ -15,13 +15,13 @@ export function AddTaskDropdown({ isOpen, onClose, onAddTask, selectedDay }: Add
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const taskTypes = [
-    { type: "checkin" as TaskType, label: "Check-in", icon: CheckCircle, color: "bg-green-600" },
-    { type: "picture" as TaskType, label: "Picture Upload", icon: Camera, color: "bg-purple-600" },
-    { type: "metric" as TaskType, label: "Weight check in", icon: BarChart3, color: "bg-red-600" },
-    { type: "hydration" as TaskType, label: "Hydration", icon: Droplet, color: "bg-cyan-600" },
-    { type: "workout" as TaskType, label: "Workout", icon: Dumbbell, color: "bg-blue-600" },
-    { type: "nutrition" as TaskType, label: "Nutrition", icon: Apple, color: "bg-orange-600" },
-    { type: "note" as TaskType, label: "Note", icon: FileText, color: "bg-gray-600" },
+    { type: "Check-in" as TaskType, label: "Check-in", icon: CheckCircle, color: "bg-green-600" },
+    { type: "Picture" as TaskType, label: "Picture Upload", icon: Camera, color: "bg-purple-600" },
+    { type: "Metric" as TaskType, label: "Weight check in", icon: BarChart3, color: "bg-red-600" },
+    { type: "Hydration" as TaskType, label: "Hydration", icon: Droplet, color: "bg-cyan-600" },
+    { type: "Workout" as TaskType, label: "Workout", icon: Dumbbell, color: "bg-blue-600" },
+    { type: "Nutrition" as TaskType, label: "Nutrition", icon: Apple, color: "bg-orange-600" },
+    { type: "Note" as TaskType, label: "Note", icon: FileText, color: "bg-gray-600" },
   ]
 
   useEffect(() => {
@@ -45,7 +45,6 @@ export function AddTaskDropdown({ isOpen, onClose, onAddTask, selectedDay }: Add
       id: Date.now().toString(),
       type,
       title: label,
-      description: `${label} for Day ${selectedDay}`,
     }
 
     onAddTask(newTask)

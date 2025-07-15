@@ -4,40 +4,23 @@ import React, { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
 import { 
-  Calendar, 
-  Clock, 
-  Dumbbell, 
-  Target, 
-  Save, 
-  Edit, 
-  Eye, 
-  EyeOff, 
   Plus, 
   Trash2, 
   CheckCircle, 
-  X,
-  BarChart3,
-  Download,
-  Upload,
-  RefreshCw,
-  Settings,
-  Filter,
-  Calendar as CalendarIcon,
-  Table,
-  List,
-  Grid3X3
+  X
 } from "lucide-react"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+
 import { generateAIWorkoutPlanForReview, saveReviewedWorkoutPlanToDatabase } from "@/lib/ai-fitness-plan"
 import { addWorkoutSchedule } from "@/lib/schedule-service"
+
+import { FitnessPlanHeader } from './fitness-plan-overview/FitnessPlanHeader'
+import { FitnessPlanSummary } from './fitness-plan-overview/FitnessPlanSummary'
+import { ExerciseCard } from './fitness-plan-overview/ExerciseCard'
+import { SortableExerciseCard } from './fitness-plan-overview/SortableExerciseCard'
 
 // Types
 interface WorkoutExercise {
@@ -74,7 +57,7 @@ interface FitnessPlanOverviewProps {
   clientId: number
   initialPlanData?: FitnessPlanData | null
   onPlanSaved?: (success: boolean, message: string) => void
-  embedded?: boolean // New prop to control embedded vs popup rendering
+  embedded?: boolean
 }
 
 const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
@@ -94,56 +77,25 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
   const [isSaving, setIsSaving] = useState(false)
   const [editedPlan, setEditedPlan] = useState<WorkoutExercise[]>([])
   const [currentView, setCurrentView] = useState<'table' | 'calendar' | 'weekly' | 'daily'>('table')
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
-  const [selectedWeek, setSelectedWeek] = useState<string>('Week 1')
-  const [planStartDate, setPlanStartDate] = useState<string>(new Date().toISOString().split('T')[0])
-  
-  // Metric toggles
-  const [visibleMetrics, setVisibleMetrics] = useState({
-    sets: true,
-    reps: true,
-    duration: true,
-    weights: true,
-    bodyPart: true,
-    category: true,
-    coachTip: true,
-    date: true,
-    time: true,
-    day: true
-  })
-  
-  // Draft management
-  const [isDraft, setIsDraft] = useState(false)
-  const [draftName, setDraftName] = useState('')
-  const [savedDrafts, setSavedDrafts] = useState<string[]>([])
 
-  // Schedule management
-  const [isAddingSchedule, setIsAddingSchedule] = useState(false)
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  // Initialize plan data
   useEffect(() => {
     if (initialPlanData) {
       setPlanData(initialPlanData)
       const exercisesWithIds = initialPlanData.workout_plan.map((exercise, index) => ({
         ...exercise,
-        id: exercise.id || `exercise-${index}`
+        id: exercise.id || `exercise-${Date.now()}-${index}`
       }))
       setEditedPlan(exercisesWithIds)
-      
-      // Update exercise dates based on the start date
-      updateExerciseDates(planStartDate)
     }
-  }, [initialPlanData, planStartDate])
+  }, [initialPlanData])
 
-  // Load saved drafts from localStorage
-  useEffect(() => {
-    const drafts = localStorage.getItem('fitness-plan-drafts')
-    if (drafts) {
-      setSavedDrafts(JSON.parse(drafts))
-    }
-  }, [])
-
-  // Generate new AI plan
   const handleGenerateNewPlan = async () => {
     setIsLoading(true)
     try {
@@ -151,11 +103,7 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
       
       if (result.success && result.workoutPlan) {
         const newPlanData: FitnessPlanData = {
-          overview: result.workoutPlan.overview,
-          split: result.workoutPlan.split,
-          progression_model: result.workoutPlan.progression_model,
-          weekly_breakdown: result.workoutPlan.weekly_breakdown,
-          workout_plan: result.workoutPlan.workout_plan,
+          ...result.workoutPlan,
           clientInfo: result.clientInfo,
           generatedAt: result.generatedAt
         }
@@ -163,12 +111,9 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
         setPlanData(newPlanData)
         const exercisesWithIds = newPlanData.workout_plan.map((exercise, index) => ({
           ...exercise,
-          id: exercise.id || `exercise-${index}`
+          id: exercise.id || `exercise-${Date.now()}-${index}`
         }))
         setEditedPlan(exercisesWithIds)
-        
-        // Update exercise dates based on the start date
-        updateExerciseDates(planStartDate)
         
         toast({
           title: "Plan Generated Successfully",
@@ -193,7 +138,6 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     }
   }
 
-  // Save plan to Supabase
   const handleSavePlan = async () => {
     if (!editedPlan.length) {
       toast({
@@ -213,12 +157,6 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
           title: "Plan Saved Successfully",
           description: `Saved ${editedPlan.length} exercises to the database.`,
         })
-        
-        // Clear draft if it was saved
-        if (isDraft && draftName) {
-          handleDeleteDraft(draftName)
-        }
-        
         onPlanSaved?.(true, result.message)
         onClose()
       } else {
@@ -242,979 +180,146 @@ const FitnessPlanOverview: React.FC<FitnessPlanOverviewProps> = ({
     }
   }
 
-  // Save as draft
-  const handleSaveDraft = () => {
-    if (!draftName.trim()) {
-      toast({
-        title: "Draft Name Required",
-        description: "Please enter a name for your draft.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const draftData = {
-      name: draftName,
-      planData: planData,
-      editedPlan: editedPlan,
-      savedAt: new Date().toISOString(),
-      clientId: clientId
-    }
-
-    const existingDrafts = JSON.parse(localStorage.getItem('fitness-plan-drafts') || '{}')
-    existingDrafts[draftName] = draftData
-    localStorage.setItem('fitness-plan-drafts', JSON.stringify(existingDrafts))
-
-    setSavedDrafts(Object.keys(existingDrafts))
-    setIsDraft(true)
-    
-    toast({
-      title: "Draft Saved",
-      description: `Draft "${draftName}" has been saved locally.`,
-    })
-  }
-
-  // Load draft
-  const handleLoadDraft = (draftName: string) => {
-    const existingDrafts = JSON.parse(localStorage.getItem('fitness-plan-drafts') || '{}')
-    const draft = existingDrafts[draftName]
-    
-    if (draft) {
-      setPlanData(draft.planData)
-      setEditedPlan(draft.editedPlan)
-      setDraftName(draftName)
-      setIsDraft(true)
-      
-      toast({
-        title: "Draft Loaded",
-        description: `Draft "${draftName}" has been loaded.`,
-      })
-    }
-  }
-
-  // Delete draft
-  const handleDeleteDraft = (draftName: string) => {
-    const existingDrafts = JSON.parse(localStorage.getItem('fitness-plan-drafts') || '{}')
-    delete existingDrafts[draftName]
-    localStorage.setItem('fitness-plan-drafts', JSON.stringify(existingDrafts))
-    
-    setSavedDrafts(Object.keys(existingDrafts))
-    
-    if (isDraft && draftName === draftName) {
-      setIsDraft(false)
-      setDraftName('')
-    }
-    
-    toast({
-      title: "Draft Deleted",
-      description: `Draft "${draftName}" has been deleted.`,
-    })
-  }
-
-  // Exercise editing functions
   const handleExerciseEdit = (index: number, field: string, value: any) => {
-    const updatedPlan = [...editedPlan]
-    updatedPlan[index] = { ...updatedPlan[index], [field]: value }
-    setEditedPlan(updatedPlan)
-  }
+    const newPlan = [...editedPlan];
+    (newPlan[index] as any)[field] = value;
+    setEditedPlan(newPlan);
+  };
 
   const handleAddExercise = () => {
-    // Calculate the next available date based on plan start date
-    const start = new Date(planStartDate)
-    const nextDate = new Date(start)
-    nextDate.setDate(start.getDate() + editedPlan.length)
-    
     const newExercise: WorkoutExercise = {
-      id: `exercise-${Date.now()}`,
+      id: `new-${Date.now()}`,
       workout: "New Exercise",
-      day: undefined,
+      day: "Monday",
       sets: 3,
-      reps: "10",
-      duration: 15,
-      weights: "bodyweight",
-      for_date: nextDate.toISOString().split('T')[0],
-      for_time: "08:00:00",
+      reps: "10-12",
+      duration: 60,
+      weights: "Bodyweight",
+      for_date: new Date().toISOString().split('T')[0],
+      for_time: "10:00",
       body_part: "Full Body",
       category: "Strength",
-      coach_tip: "Focus on proper form",
+      coach_tip: "Focus on form.",
       icon: "💪",
-      workout_yt_link: ""
-    }
-    
-    setEditedPlan([...editedPlan, newExercise])
-  }
+    };
+    setEditedPlan([...editedPlan, newExercise]);
+  };
 
   const handleRemoveExercise = (index: number) => {
-    setEditedPlan(editedPlan.filter((_, i) => i !== index))
-  }
+    const newPlan = editedPlan.filter((_, i) => i !== index);
+    setEditedPlan(newPlan);
+  };
 
-  // Get exercises for selected date (daily view)
-  const getExercisesForDate = (date: string) => {
-    return editedPlan.filter(exercise => exercise.for_date === date)
-  }
-
-  // Get exercises grouped by week
-  const getExercisesByWeek = () => {
-    const weeks: Record<string, WorkoutExercise[]> = {}
-    editedPlan.forEach(exercise => {
-      const exerciseDate = new Date(exercise.for_date)
-      const weekKey = `Week ${Math.ceil(exerciseDate.getDate() / 7)}`
-      if (!weeks[weekKey]) weeks[weekKey] = []
-      weeks[weekKey].push(exercise)
-    })
-    return weeks
-  }
-
-  // Get unique dates from plan
-  const getUniqueDates = () => {
-    const dates = Array.from(new Set(editedPlan.map(ex => ex.for_date)))
-    return dates.sort()
-  }
-
-  // Toggle metric visibility
-  const toggleMetric = (metric: keyof typeof visibleMetrics) => {
-    setVisibleMetrics(prev => ({ ...prev, [metric]: !prev[metric] }))
-  }
-
-  // Update exercise dates based on plan start date
-  const updateExerciseDates = (startDate: string) => {
-    if (!editedPlan.length) return
-
-    const start = new Date(startDate)
-    const updatedPlan = editedPlan.map((exercise, index) => {
-      // Calculate the date for this exercise based on its day
-      let exerciseDate = new Date(start)
-      
-      if (exercise.day) {
-        // Map day names to day numbers (0 = Sunday, 1 = Monday, etc.)
-        const dayMap: { [key: string]: number } = {
-          'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
-          'Thursday': 4, 'Friday': 5, 'Saturday': 6
-        }
-        
-        const targetDay = dayMap[exercise.day]
-        if (targetDay !== undefined) {
-          // Find the next occurrence of this day of the week
-          const currentDay = start.getDay()
-          const daysToAdd = (targetDay - currentDay + 7) % 7
-          exerciseDate.setDate(start.getDate() + daysToAdd)
-        }
-      } else {
-        // If no day specified, just add index days
-        exerciseDate.setDate(start.getDate() + index)
-      }
-      
-      return {
-        ...exercise,
-        for_date: exerciseDate.toISOString().split('T')[0]
-      }
-    })
+  function handleDragEnd(event: DragEndEvent) {
+    const {active, over} = event;
     
-    setEditedPlan(updatedPlan)
-  }
-
-  // Handle plan start date change
-  const handlePlanStartDateChange = (newStartDate: string) => {
-    setPlanStartDate(newStartDate)
-    updateExerciseDates(newStartDate)
-  }
-
-  // Handle adding workout schedule to database
-  const handleAddSchedule = async () => {
-    if (!editedPlan.length) {
-      toast({
-        title: "No Plan to Schedule",
-        description: "Please generate or edit a fitness plan first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsAddingSchedule(true)
-    try {
-      const result = await addWorkoutSchedule(clientId, editedPlan)
-      
-      if (result.success) {
-        toast({
-          title: "Schedule Added Successfully",
-          description: result.message,
-        })
-      } else {
-        toast({
-          title: "Failed to Add Schedule",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error('Error adding schedule:', error)
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred while adding schedule.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsAddingSchedule(false)
+    if (over && active.id !== over.id) {
+      setEditedPlan((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
   }
 
-  // Render different views
   const renderTableView = () => (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="bg-gray-50 dark:bg-gray-800">
-            <th className="text-left p-4 font-semibold">Exercise</th>
-            {visibleMetrics.day && <th className="text-left p-4 font-semibold">Day</th>}
-            {visibleMetrics.sets && <th className="text-left p-4 font-semibold">Sets</th>}
-            {visibleMetrics.reps && <th className="text-left p-4 font-semibold">Reps</th>}
-            {visibleMetrics.duration && <th className="text-left p-4 font-semibold">Duration</th>}
-            {visibleMetrics.weights && <th className="text-left p-4 font-semibold">Weight</th>}
-            {visibleMetrics.bodyPart && <th className="text-left p-4 font-semibold">Body Part</th>}
-            {visibleMetrics.category && <th className="text-left p-4 font-semibold">Category</th>}
-            {visibleMetrics.date && <th className="text-left p-4 font-semibold">Date</th>}
-            {visibleMetrics.time && <th className="text-left p-4 font-semibold">Time</th>}
-            {visibleMetrics.coachTip && <th className="text-left p-4 font-semibold">Coach Tip</th>}
-            {isEditing && <th className="text-left p-4 font-semibold">Actions</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {editedPlan.map((exercise, index) => (
-            <tr key={exercise.id || index} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
-              <td className="p-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">{exercise.icon}</span>
-                  {isEditing ? (
-                    <Input
-                      value={exercise.workout}
-                      onChange={(e) => handleExerciseEdit(index, 'workout', e.target.value)}
-                      className="font-medium w-48 h-10"
-                      placeholder="Enter exercise name..."
-                    />
-                  ) : (
-                    <span className="font-medium">{exercise.workout}</span>
-                  )}
-                </div>
-              </td>
-              
-              {visibleMetrics.day && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Select
-                      value={exercise.day || ''}
-                      onValueChange={(value) => handleExerciseEdit(index, 'day', value)}
-                    >
-                                          <SelectTrigger className="w-28 h-10 font-medium">
-                      <SelectValue placeholder="Day" />
-                    </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Monday">Monday</SelectItem>
-                        <SelectItem value="Tuesday">Tuesday</SelectItem>
-                        <SelectItem value="Wednesday">Wednesday</SelectItem>
-                        <SelectItem value="Thursday">Thursday</SelectItem>
-                        <SelectItem value="Friday">Friday</SelectItem>
-                        <SelectItem value="Saturday">Saturday</SelectItem>
-                        <SelectItem value="Sunday">Sunday</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge variant="outline" className="text-xs">
-                      {exercise.day || 'N/A'}
-                    </Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.sets && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={exercise.sets}
-                      onChange={(e) => handleExerciseEdit(index, 'sets', parseInt(e.target.value) || 1)}
-                      className="w-24 h-10 text-center font-medium"
-                      placeholder="Sets"
-                    />
-                  ) : (
-                    <Badge variant="secondary">{exercise.sets}</Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.reps && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      value={exercise.reps}
-                      onChange={(e) => handleExerciseEdit(index, 'reps', e.target.value)}
-                      className="w-28 h-10 text-center font-medium"
-                      placeholder="10-12"
-                    />
-                  ) : (
-                    <Badge variant="outline">{exercise.reps}</Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.duration && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={exercise.duration}
-                      onChange={(e) => handleExerciseEdit(index, 'duration', parseInt(e.target.value) || 1)}
-                      className="w-24 h-10 text-center font-medium"
-                      placeholder="30"
-                    />
-                  ) : (
-                    <Badge variant="outline">{exercise.duration}min</Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.weights && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      value={exercise.weights}
-                      onChange={(e) => handleExerciseEdit(index, 'weights', e.target.value)}
-                      className="w-32 h-10 font-medium"
-                      placeholder="Bodyweight"
-                    />
-                  ) : (
-                    <span className="text-sm">{exercise.weights}</span>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.bodyPart && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Select
-                      value={exercise.body_part}
-                      onValueChange={(value) => handleExerciseEdit(index, 'body_part', value)}
-                    >
-                      <SelectTrigger className="w-36 h-10 font-medium">
-                        <SelectValue placeholder="Select body part" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Full Body">Full Body</SelectItem>
-                        <SelectItem value="Upper Body">Upper Body</SelectItem>
-                        <SelectItem value="Lower Body">Lower Body</SelectItem>
-                        <SelectItem value="Core">Core</SelectItem>
-                        <SelectItem value="Arms">Arms</SelectItem>
-                        <SelectItem value="Legs">Legs</SelectItem>
-                        <SelectItem value="Chest">Chest</SelectItem>
-                        <SelectItem value="Back">Back</SelectItem>
-                        <SelectItem value="Shoulders">Shoulders</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge variant="outline">{exercise.body_part}</Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.category && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Select
-                      value={exercise.category}
-                      onValueChange={(value) => handleExerciseEdit(index, 'category', value)}
-                    >
-                      <SelectTrigger className="w-36 h-10 font-medium">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Strength">Strength</SelectItem>
-                        <SelectItem value="Cardio">Cardio</SelectItem>
-                        <SelectItem value="Flexibility">Flexibility</SelectItem>
-                        <SelectItem value="Balance">Balance</SelectItem>
-                        <SelectItem value="Endurance">Endurance</SelectItem>
-                        <SelectItem value="HIIT">HIIT</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Badge variant="outline">{exercise.category}</Badge>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.date && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      type="date"
-                      value={exercise.for_date}
-                      onChange={(e) => handleExerciseEdit(index, 'for_date', e.target.value)}
-                      className="w-36 h-10 font-medium"
-                    />
-                  ) : (
-                    <span className="text-sm">{exercise.for_date}</span>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.time && (
-                <td className="p-4">
-                  {isEditing ? (
-                    <Input
-                      type="time"
-                      value={exercise.for_time}
-                      onChange={(e) => handleExerciseEdit(index, 'for_time', e.target.value)}
-                      className="w-28 h-10 font-medium"
-                    />
-                  ) : (
-                    <span className="text-sm">{exercise.for_time}</span>
-                  )}
-                </td>
-              )}
-              
-              {visibleMetrics.coachTip && (
-                <td className="p-4 max-w-md">
-                  {isEditing ? (
-                    <Textarea
-                      value={exercise.coach_tip}
-                      onChange={(e) => handleExerciseEdit(index, 'coach_tip', e.target.value)}
-                      className="min-h-[80px] resize-none font-medium"
-                      placeholder="Enter coaching tip..."
-                      rows={3}
-                    />
-                  ) : (
-                    <span className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                      {exercise.coach_tip}
-                    </span>
-                  )}
-                </td>
-              )}
-              
-              {isEditing && (
-                <td className="p-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRemoveExercise(index)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-
-  const renderCalendarView = () => {
-    const uniqueDates = getUniqueDates()
-    
-    return (
-      <div className="grid grid-cols-7 gap-2">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="text-center font-semibold p-2 bg-gray-100 dark:bg-gray-800 rounded">
-            {day}
-          </div>
-        ))}
-        
-        {uniqueDates.map(date => {
-          const exercises = getExercisesForDate(date)
-          const dateObj = new Date(date)
-          
-          return (
-            <div
-              key={date}
-              className={`p-2 border rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                date === selectedDate ? 'bg-blue-100 dark:bg-blue-900 border-blue-300' : ''
-              }`}
-              onClick={() => setSelectedDate(date)}
-            >
-              <div className="text-sm font-medium">{dateObj.getDate()}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">
-                {exercises.length} exercises
-              </div>
-              <div className="mt-1 space-y-1">
-                {exercises.slice(0, 2).map((exercise, index) => (
-                  <div key={index} className="text-xs truncate">
-                    {exercise.icon} {exercise.workout}
-                  </div>
-                ))}
-                {exercises.length > 2 && (
-                  <div className="text-xs text-gray-500">
-                    +{exercises.length - 2} more
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
-  const renderWeeklyView = () => {
-    const weeklyExercises = getExercisesByWeek()
-    
-    return (
-      <div className="space-y-6">
-        {Object.entries(weeklyExercises).map(([week, exercises]) => (
-          <Card key={week}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                {week}
-                <Badge variant="secondary">{exercises.length} exercises</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {exercises.map((exercise, index) => (
-                  <Card key={index} className="border-l-4 border-l-blue-500">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">{exercise.icon}</span>
-                        <h4 className="font-medium">{exercise.workout}</h4>
-                      </div>
-                      <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                        <div>Sets: {exercise.sets} | Reps: {exercise.reps}</div>
-                        <div>Duration: {exercise.duration}min</div>
-                        <div>Body Part: {exercise.body_part}</div>
-                        <div>Date: {exercise.for_date}</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    )
-  }
-
-  const renderDailyView = () => {
-    const dailyExercises = getExercisesForDate(selectedDate)
-    
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">
-            Exercises for {new Date(selectedDate).toLocaleDateString()}
-          </h3>
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-40"
-          />
-        </div>
-        
-        {dailyExercises.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No exercises scheduled for this date
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {dailyExercises.map((exercise, index) => (
-              <Card key={index} className="border-l-4 border-l-green-500">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{exercise.icon}</span>
-                      <div>
-                        <h4 className="font-semibold text-lg">{exercise.workout}</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {exercise.body_part} • {exercise.category}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">{exercise.for_time}</div>
-                      <div className="text-sm text-gray-500">{exercise.duration}min</div>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 flex gap-4">
-                    <Badge variant="secondary">Sets: {exercise.sets}</Badge>
-                    <Badge variant="secondary">Reps: {exercise.reps}</Badge>
-                    <Badge variant="secondary">Weight: {exercise.weights}</Badge>
-                  </div>
-                  
-                  {exercise.coach_tip && (
-                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <p className="text-sm">
-                        <strong>Coach Tip:</strong> {exercise.coach_tip}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+    <div>
+        <DndContext 
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext 
+            items={editedPlan.map(e => ({...e, id: e.id || ''}))}
+            strategy={verticalListSortingStrategy}
+          >
+            {editedPlan.map((exercise, index) => (
+              <SortableExerciseCard
+                key={exercise.id}
+                id={exercise.id!}
+                exercise={exercise}
+                index={index}
+                isEditing={isEditing}
+                handleExerciseEdit={handleExerciseEdit}
+                handleRemoveExercise={handleRemoveExercise}
+              />
             ))}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-    // Render the main content
-  const renderContent = () => (
-    <div className="space-y-6">
-      {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleGenerateNewPlan}
-              disabled={isLoading}
-              variant="outline"
-            >
-              {isLoading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Generate New Plan
-                </>
-              )}
-            </Button>
-            
-            <Button
-              onClick={() => setIsEditing(!isEditing)}
-              variant={isEditing ? "default" : "outline"}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              {isEditing ? "Stop Editing" : "Edit Plan"}
-            </Button>
-          </div>
-
-          {/* Plan Start Date Selector */}
-          {editedPlan.length > 0 && (
-            <div className="flex items-center gap-2 border-l border-gray-300 dark:border-gray-600 pl-4">
-              <Calendar className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-              <Label htmlFor="plan-start-date" className="text-sm font-medium">
-                Start Date:
-              </Label>
-              <Input
-                id="plan-start-date"
-                type="date"
-                value={planStartDate}
-                onChange={(e) => handlePlanStartDateChange(e.target.value)}
-                className="w-40 h-8 text-sm"
-                min={new Date().toISOString().split('T')[0]}
-                title="Select the start date for your workout plan. Exercise dates will be automatically calculated based on their assigned days of the week."
-              />
-              <div className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">
-                Changes will update all exercise dates
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleAddSchedule}
-            disabled={isAddingSchedule || !editedPlan.length}
-            variant="outline"
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {isAddingSchedule ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Adding Schedule...
-              </>
-            ) : (
-              <>
-                <Calendar className="h-4 w-4 mr-2" />
-                Add Schedule
-              </>
-            )}
-          </Button>
-          
-          <Button
-            onClick={handleSavePlan}
-            disabled={isSaving || !editedPlan.length}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            {isSaving ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Save to Database
-              </>
-            )}
-          </Button>
-          
-          {!embedded && (
-            <Button onClick={onClose} variant="outline">
-              <X className="h-4 w-4 mr-2" />
-              Close
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Plan Content - Table View First */}
-      <Card>
-        <CardContent className="p-6">
-          {editedPlan.length === 0 ? (
-            <div className="text-center py-8">
-              <Dumbbell className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Plan Generated</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Generate an AI fitness plan to get started.
-              </p>
-              <Button onClick={handleGenerateNewPlan} disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Generate Plan
-                  </>
-                )}
-              </Button>
-            </div>
-          ) : (
-            <>
-              {/* Always show table view first */}
-              {renderTableView()}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* View Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <Tabs value={currentView} onValueChange={(value) => setCurrentView(value as any)}>
-          <TabsList>
-            <TabsTrigger value="table">
-              <Table className="h-4 w-4 mr-2" />
-              Table
-            </TabsTrigger>
-            <TabsTrigger value="calendar">
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              Calendar
-            </TabsTrigger>
-            <TabsTrigger value="weekly">
-              <Grid3X3 className="h-4 w-4 mr-2" />
-              Weekly
-            </TabsTrigger>
-            <TabsTrigger value="daily">
-              <List className="h-4 w-4 mr-2" />
-              Daily
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {/* Metric Toggles */}
-        <div className="flex items-center gap-2">
-          <Settings className="h-4 w-4" />
-          <Label>Show:</Label>
-          
-          {Object.entries(visibleMetrics).map(([key, visible]) => (
-            <div key={key} className="flex items-center gap-1">
-              <Switch
-                checked={visible}
-                onCheckedChange={() => toggleMetric(key as keyof typeof visibleMetrics)}
-                id={key}
-              />
-              <Label htmlFor={key} className="text-xs capitalize">
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </Label>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Add Exercise Button (when editing) */}
+          </SortableContext>
+        </DndContext>
       {isEditing && (
-        <div className="flex justify-center">
-          <Button onClick={handleAddExercise} variant="outline">
+        <div className="mt-4">
+          <Button onClick={handleAddExercise} variant="outline" size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Add Exercise
           </Button>
         </div>
       )}
-
-      {/* Alternative Views */}
-      {editedPlan.length > 0 && currentView !== 'table' && (
-        <Card>
-          <CardContent className="p-6">
-            {currentView === 'calendar' && renderCalendarView()}
-            {currentView === 'weekly' && renderWeeklyView()}
-            {currentView === 'daily' && renderDailyView()}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Plan Summary */}
-      {planData && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Plan Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {planData.overview && (
-              <div>
-                <Label className="font-semibold">Overview:</Label>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{planData.overview}</p>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {planData.split && (
-                <div>
-                  <Label className="font-semibold">Split:</Label>
-                  <p className="text-sm">{planData.split}</p>
-                </div>
-              )}
-              
-              {planData.progression_model && (
-                <div>
-                  <Label className="font-semibold">Progression Model:</Label>
-                  <p className="text-sm">{planData.progression_model}</p>
-                </div>
-              )}
-              
-              <div>
-                <Label className="font-semibold">Total Exercises:</Label>
-                <p className="text-sm">{editedPlan.length}</p>
-              </div>
-            </div>
-
-            {/* Plan Start Date Info */}
-            {editedPlan.length > 0 && (
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  <Label className="font-semibold text-blue-800 dark:text-blue-200">
-                    Plan Start Date:
-                  </Label>
-                  <Badge variant="outline" className="text-blue-700 dark:text-blue-300">
-                    {new Date(planStartDate).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </Badge>
-                </div>
-                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                  All exercise dates have been automatically calculated based on this start date.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Draft Management */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Save className="h-5 w-5" />
-            Draft Management
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 mb-4">
-            <Input
-              placeholder="Enter draft name"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-              className="flex-1"
-            />
-            <Button onClick={handleSaveDraft} variant="outline">
-              <Save className="h-4 w-4 mr-2" />
-              Save Draft
-            </Button>
-          </div>
-          
-          {savedDrafts.length > 0 && (
-            <div>
-              <Label className="font-semibold mb-2 block">Saved Drafts:</Label>
-              <div className="flex flex-wrap gap-2">
-                {savedDrafts.map(draft => (
-                  <div key={draft} className="flex items-center gap-1">
-                    <Button
-                      onClick={() => handleLoadDraft(draft)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Upload className="h-3 w-3 mr-1" />
-                      {draft}
-                    </Button>
-                    <Button
-                      onClick={() => handleDeleteDraft(draft)}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
-  )
-    
-    // Return embedded or dialog version
-    if (embedded) {
-      return (
-        <div className="h-full overflow-y-auto">
-          <div className="sticky top-0 bg-white dark:bg-gray-900 z-10 pb-4 mb-4">
-            <div className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5" />
-              <h2 className="text-xl font-bold">Fitness Plan Overview</h2>
-              {isDraft && (
-                <Badge variant="outline" className="ml-2">
-                  Draft: {draftName}
-                </Badge>
-              )}
-            </div>
-          </div>
-          {renderContent()}
+  );
+
+  const renderCalendarView = () => (
+    <Card>
+      <CardContent className="p-4">
+        <p>Calendar view coming soon!</p>
+      </CardContent>
+    </Card>
+  );
+
+  const renderContent = () => (
+    <div className={`p-4 sm:p-6 ${!embedded ? 'max-h-[85vh] overflow-y-auto' : ''}`}>
+      <FitnessPlanHeader
+        isLoading={isLoading}
+        isSaving={isSaving}
+        isEditing={isEditing}
+        handleGenerateNewPlan={handleGenerateNewPlan}
+        handleSavePlan={handleSavePlan}
+        setIsEditing={setIsEditing}
+        setCurrentView={setCurrentView}
+        currentView={currentView}
+      />
+      
+      <div className="mt-6">
+        <div className="flex justify-end mb-4">
+            {!isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>Edit Plan</Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button onClick={() => setIsEditing(false)} variant="outline">
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={() => setIsEditing(false)}>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Done Editing
+                </Button>
+              </div>
+            )}
         </div>
-      )
-    }
-    
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5" />
-              Fitness Plan Overview
-              {isDraft && (
-                <Badge variant="outline" className="ml-2">
-                  Draft: {draftName}
-                </Badge>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {renderContent()}
-        </DialogContent>
-      </Dialog>
-    )
+        {currentView === 'table' ? renderTableView() : renderCalendarView()}
+      </div>
+
+      {planData && (
+        <FitnessPlanSummary
+          overview={planData.overview}
+          split={planData.split}
+          progressionModel={planData.progression_model}
+        />
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg">{renderContent()}</div>;
   }
 
-export default FitnessPlanOverview 
+  return (
+    <Card className="w-full max-w-4xl mx-auto my-8">
+      <CardContent className="p-0">
+        {renderContent()}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default FitnessPlanOverview; 

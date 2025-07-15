@@ -33,6 +33,7 @@ import SignupPage from "./pages/Signup"
 import AllProgramsPage from './pages/programs'
 import TrainerProfilePage from "./pages/TrainerProfilePage"
 import AuthCallback from "@/components/auth/AuthCallback"
+import DatePickerTestPage from "./pages/DatePickerTestPage"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -211,7 +212,27 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>
+                        <FitnessPlans />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/fitness-calendar"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
                         <FitnessCalendar />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/date-picker-test"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <DatePickerTestPage />
                       </ProtectedLayout>
                     </ProtectedRoute>
                   }

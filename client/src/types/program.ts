@@ -1,7 +1,7 @@
 export type ViewMode = "day" | "week" | "month"
 export type Difficulty = "Easy" | "Medium" | "Hard"
 export type StartDay = "Sunday" | "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday"
-export type TaskType = "workout" | "metric" | "checkin" | "picture" | "nutrition" | "note" | "hydration"
+export type TaskType = "workout" | "metric" | "checkin" | "picture" | "nutrition" | "note" | "hydration" | "Workout" | "Check-in" | "Nutrition" | "Metric" | "Picture" | "Note" | "Hydration"
 
 export interface Macros {
   protein: number
@@ -10,7 +10,8 @@ export interface Macros {
 }
 
 export interface Task {
-  type: "Workout" | "Check-in" | "Nutrition" | "Metric" | "Picture" | "Note" | "Hydration"
+  id: string
+  type: TaskType
   title?: string
   duration?: string
   subType?: string
@@ -33,19 +34,7 @@ export interface Program {
   viewMode: ViewMode
   createdAt: string
   tasks: {
-    [unit: string]: Array<{
-      type: "Workout" | "Check-in" | "Nutrition" | "Metric" | "Picture" | "Note" | "Hydration"
-      title?: string
-      duration?: string
-      subType?: string
-      mealType?: string
-      calories?: number
-      macros?: Macros
-      mood?: number
-      energyLevel?: number
-      weight?: number
-      notes?: string
-    }>
+    [unit: string]: Task[]
   }
 }
 

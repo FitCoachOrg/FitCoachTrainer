@@ -1,6 +1,6 @@
 // AI Comprehensive Coach Analysis - Automatic Analysis When Trainer Notes Are Saved
 import { supabase } from './supabase'
-import OpenAI from 'openai'
+import { askOpenRouter } from './open-router-service'
 
 /**
  * Interface for the comprehensive analysis response
@@ -60,7 +60,7 @@ interface CoachAnalysisResponse {
 }
 
 /**
- * Function to generate comprehensive coach analysis using OpenAI
+ * Function to generate comprehensive coach analysis using OpenRouter
  * @param trainerNotes - Current trainer notes
  * @param clientInfo - Client information and goals
  * @param todoItems - Current to-do items
@@ -72,21 +72,14 @@ async function generateComprehensiveAnalysis(
   todoItems: string,
   previousAnalysis?: any
 ): Promise<any> {
-  console.log('🔑 Checking for OpenAI API key...');
+  console.log('🔑 Checking for OpenRouter API key...');
   
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error('OpenAI API key not found. Please add VITE_OPENAI_API_KEY to your .env file');
+    throw new Error('OpenRouter API key not found. Please add VITE_OPENROUTER_API_KEY to your .env file');
   }
   
-  console.log('✅ OpenAI API key found');
-  console.log('🔧 Initializing OpenAI client...');
-  
-  const client = new OpenAI({
-    apiKey: apiKey,
-    dangerouslyAllowBrowser: true
-  });
-  
+  console.log('✅ OpenRouter API key found');
   console.log('📋 Preparing comprehensive coach analysis prompt...');
   
   // Create detailed client context
@@ -207,40 +200,22 @@ GUIDELINES:
 - Consider the client's goal timeline and current progress toward goals`;
 
   console.log('📝 Comprehensive analysis prompt prepared');
-  console.log('🚀 Sending request to OpenAI...');
+  console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const response = await client.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'user',
-          content: comprehensivePrompt
-        }
-      ],
-      max_tokens: 3500,
-      temperature: 0.4, // Balanced for creativity and consistency
-    });
-
-    console.log('📊 OpenAI Response received');
-    
-    if (!response.choices || !response.choices[0] || !response.choices[0].message) {
-      throw new Error('Invalid response format from OpenAI');
-    }
-
-    const aiResponse = response.choices[0].message.content;
+    const aiResponse = await askOpenRouter(comprehensivePrompt);
+    console.log('📊 OpenRouter Response received');
     console.log('✅ AI Response extracted');
     
     return {
       response: aiResponse,
-      usage: response.usage,
-      model: response.model,
+      model: 'qwen/qwen3-8b:free',
       timestamp: new Date().toISOString()
     };
     
   } catch (error) {
-    console.error('❌ OpenAI API Error:', error);
-    throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ OpenRouter API Error:', error);
+    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

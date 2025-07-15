@@ -113,12 +113,16 @@ export default function ProgramPage() {
     setProgramData((prev) => ({ ...prev, ...updates }))
   }
 
-  const addTask = (day: number, task: Task) => {
+  const addTask = (day: number, task: Omit<Task, 'id'>) => {
+    const taskWithId: Task = {
+      ...task,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
     setProgramData((prev) => ({
       ...prev,
       tasks: {
         ...prev.tasks,
-        [day]: [...(prev.tasks[day] || []), task],
+        [day]: [...(prev.tasks[day] || []), taskWithId],
       },
     }))
   }

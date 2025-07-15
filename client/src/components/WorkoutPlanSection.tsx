@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Calendar, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 
@@ -18,6 +18,18 @@ import { supabase } from "@/lib/supabase"
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
 import AIDebugPopup from "@/components/AIDebugPopup"
 import FitnessPlanOverview from "@/components/FitnessPlanOverview"
+import { SidePopup } from "@/components/ui/side-popup"
+import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
+import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection"
+import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSection"
+import { TrainerNotesSection } from "@/components/overview/TrainerNotesSection"
+import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
+import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSection"
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { WorkoutPlanTable } from './WorkoutPlanTable';
 
 // Types
 interface Exercise {
@@ -56,6 +68,20 @@ interface WorkoutPlan {
   category: string
   body_part: string
   exercises: WorkoutExercise[]
+}
+
+interface WeekDay {
+  date: string
+  dayName: string
+  workouts: any[]
+}
+
+interface WeeklyWorkoutPlan {
+  weekDates: WeekDay[]
+  allWorkouts: any[]
+  hasAnyWorkouts: boolean
+  planStartDate: string
+  planEndDate: string
 }
 
 // The real AI workout plan generator is now imported from ai-fitness-plan.ts 
@@ -613,588 +639,356 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => (
 
 interface WorkoutPlanSectionProps {
   clientId?: string | number;
+  client?: any;
+  lastAIRecommendation?: any;
+  trainerNotes?: string;
+  setTrainerNotes?: (notes: string) => void;
+  handleSaveTrainerNotes?: () => void;
+  isSavingNotes?: boolean;
+  isEditingNotes?: boolean;
+  setIsEditingNotes?: (editing: boolean) => void;
+  notesDraft?: string;
+  setNotesDraft?: (draft: string) => void;
+  notesError?: string | null;
+  setNotesError?: (error: string | null) => void;
+  isGeneratingAnalysis?: boolean;
+  handleSummarizeNotes?: () => void;
+  isSummarizingNotes?: boolean;
 }
 
-const WorkoutPlanSection = ({ clientId }: WorkoutPlanSectionProps) => {
-  const { toast } = useToast()
-  const [customExercises, setCustomExercises] = useState<Exercise[]>([])
-  const [weeklyPlan, setWeeklyPlan] = useState<Record<string, WorkoutPlan>>({})
-  const [showAddExercise, setShowAddExercise] = useState(false)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [showClientDataPopup, setShowClientDataPopup] = useState(false)
-  const [clientInfo, setClientInfo] = useState<any>(null)
-  const [showAIResponsePopup, setShowAIResponsePopup] = useState(false)
-  const [aiResponse, setAiResponse] = useState<any>(null)
-  const [aiGeneratedPlans, setAiGeneratedPlans] = useState<WorkoutPlan[]>([])
-  const [showAIMetricsPopup, setShowAIMetricsPopup] = useState(false)
-  const [aiMetrics, setAiMetrics] = useState<{
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-    model: string
-    timestamp: string
-    responseTime?: number
-  } | null>(null)
-  const [showDebugPopup, setShowDebugPopup] = useState(false)
-  const [debugData, setDebugData] = useState<{
-    rawResponse: any
-    parsedData: any[]
-  } | null>(null)
-  const [editingPlan, setEditingPlan] = useState<WorkoutPlan | null>(null)
-  const [showEditPlanModal, setShowEditPlanModal] = useState(false)
-  const [editedPlan, setEditedPlan] = useState<WorkoutPlan | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragStartTime, setDragStartTime] = useState(0)
-  const [mouseDownTime, setMouseDownTime] = useState(0)
-  const [mouseDownPosition, setMouseDownPosition] = useState({ x: 0, y: 0 })
+const WorkoutPlanSection = ({
+  clientId,
+  client,
+  ...props
+}: WorkoutPlanSectionProps) => {
+  const { toast } = useToast();
+  const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  const [isFetchingPlan, setIsFetchingPlan] = useState(false);
+  const [workoutPlan, setWorkoutPlan] = useState<WeeklyWorkoutPlan | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [showFitnessGoals, setShowFitnessGoals] = useState(false);
+  const [showAICoachInsights, setShowAICoachInsights] = useState(false);
+  const [showTrainerNotes, setShowTrainerNotes] = useState(false);
+  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false);
+  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
 
-  // Local LLM generation state
-  const [isGeneratingLocalAI, setIsGeneratingLocalAI] = useState(false)
-  const [selectedLocalModel, setSelectedLocalModel] = useState("deepseek-r1:latest")
-  const [generationTime, setGenerationTime] = useState<number | null>(null)
+  // Ensure clientId is a number and not undefined
+  const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
 
-  const [newExercise, setNewExercise] = useState<Omit<Exercise, "id" | "createdAt">>({
-    name: "",
-    instructions: "",
-    sets: "",
-    reps: "",
-    duration: "",
-    equipment: "",
-    difficulty: "Beginner",
-  })
-  const [showProfileCard, setShowProfileCard] = useState(false)
-
-  // Load data from localStorage on component mount
+  // Fetch workout plan for client and date
   useEffect(() => {
-    const savedExercises = localStorage.getItem("custom-exercises")
-    const savedWeeklyPlan = localStorage.getItem("weekly-plan")
-
-    if (savedExercises) {
-      setCustomExercises(JSON.parse(savedExercises))
-    }
-    if (savedWeeklyPlan) {
-      setWeeklyPlan(JSON.parse(savedWeeklyPlan))
-    }
-  }, [])
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem("custom-exercises", JSON.stringify(customExercises))
-  }, [customExercises])
-
-  useEffect(() => {
-    localStorage.setItem("weekly-plan", JSON.stringify(weeklyPlan))
-  }, [weeklyPlan])
-
-  // Fitness Plan Overview state
-  const [planOverviewData, setPlanOverviewData] = useState<any>(null)
-
-  // === Persist last generated AI workout plan to localStorage ===
-  // Load on mount
-  useEffect(() => {
-    try {
-      const storedPlan = localStorage.getItem("last-ai-workout-plan")
-      if (storedPlan) {
-        const parsed = JSON.parse(storedPlan)
-        if (parsed && typeof parsed === "object") {
-          setPlanOverviewData(parsed)
-        }
-      }
-    } catch (err) {
-      console.error("Failed to parse stored workout plan:", err)
-    }
-  }, [])
-
-  // Save whenever planOverviewData changes (but only if it exists)
-  useEffect(() => {
-    if (planOverviewData) {
-      try {
-        localStorage.setItem("last-ai-workout-plan", JSON.stringify(planOverviewData))
-      } catch (err) {
-        console.error("Failed to persist workout plan:", err)
-      }
-    }
-  }, [planOverviewData])
-  
-  // Function to parse AI response and convert to recommended plans format
-  const parseAIResponseToPlans = (aiResponseText: string) => {
-    try {
-      // Remove any <think>...</think> or similar annotation blocks that DeepSeek may prepend
-      let cleaned = aiResponseText.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
-
-      // DeepSeek sometimes wraps JSON in ```json ... ``` fences – strip them
-      cleaned = cleaned.replace(/```json[\s\S]*?```/gi, (m) => m.replace(/```json|```/gi, "")).trim()
-
-      // Attempt simple extraction: first '{' to last '}'
-      const firstBrace = cleaned.indexOf('{')
-      const lastBrace = cleaned.lastIndexOf('}')
-      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-        throw new Error('Could not locate complete JSON object in AI response')
-      }
-
-      const jsonString = cleaned.substring(firstBrace, lastBrace + 1)
-
-      const aiData = JSON.parse(jsonString)
-
-      if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
-        throw new Error("Invalid workout plan format in AI response")
-      }
-
-      // Convert AI workout plan to recommended plans format
-      const aiPlan: WorkoutPlan = {
-        id: `ai-plan-${Date.now()}`,
-        name: `AI Generated Plan`,
-        type: "AI Generated",
-        duration: aiData.workout_plan.reduce((total: number, exercise: any) => total + (exercise.duration || 0), 0),
-        difficulty: "AI Recommended",
-        color: "bg-gradient-to-r from-purple-500 to-pink-500",
-        category: "ai_generated",
-        body_part: "full_body",
-        exercises: aiData.workout_plan.map((exercise: any) => ({
-          workout: exercise.workout,
-          day: exercise.day || null,
-          duration: exercise.duration || 0,
-          sets: exercise.sets || 1,
-          reps: exercise.reps ? exercise.reps.toString() : "1",
-          weights: exercise.weights || "bodyweight",
-          coach_tip: exercise.coach_tip || "Follow proper form",
-          icon: exercise.icon || "💪",
-          category: exercise.category || "strength",
-          body_part: exercise.body_part || "full_body",
-          workout_yt_link: "",
-        })),
-      }
-
-      return [aiPlan]
-    } catch (error) {
-      console.error("Error parsing AI response:", error)
-      throw new Error("Failed to parse AI response")
-    }
-  }
-
-  // Handle AI fitness plan generation
-  const handleGenerateAIPlans = async () => {
-    console.log("🚀 === AI GENERATION BUTTON CLICKED ===")
-    console.log("🚀 Button clicked - Starting AI generation process")
-    console.log("⏰ Timestamp:", new Date().toISOString())
-    console.log("🔍 Component State - isGeneratingAI:", isGeneratingAI)
-    console.log("🔒 NEW WORKFLOW: Will generate plan for REVIEW, not auto-save")
-
-    setIsGeneratingAI(true)
-    const startTime = Date.now() // Track response time
-
-    try {
-      // Use the actual client ID passed as prop, fallback to hardcoded for testing
-      const actualClientId = clientId ? Number(clientId) : 34
-      console.log("🎯 Using client ID:", actualClientId, clientId ? "(from props)" : "(fallback)")
-      console.log("📞 CALLING generateAIWorkoutPlanForReview function...")
-      console.log("📞 Function will generate plan for REVIEW, NOT auto-save to database")
-
-      const result = await generateAIWorkoutPlanForReview(actualClientId)
-      console.log("📨 === FUNCTION CALL COMPLETED ===")
-      console.log("📨 Full result object:", result)
-      const responseTime = Date.now() - startTime // Calculate response time
-
-      console.log("📬 Function Response:")
-      console.log("  - Success:", result.success)
-      console.log("  - Message:", result.message)
-      console.log("  - Has Client Data:", !!result.clientData)
-
-      if (result.success) {
-        console.log("✅ SUCCESS - AI Plan generated for REVIEW")
-        console.log("🔒 Plan is ready for review in FitnessPlanOverview component")
-
-        // Set client info
-        if (result.clientInfo) {
-          setClientInfo(result.clientInfo)
-        }
-
-        // Prepare plan data for overview component
-        if (result.workoutPlan) {
-          const planData = {
-            overview: result.workoutPlan.overview,
-            split: result.workoutPlan.split,
-            progression_model: result.workoutPlan.progression_model,
-            weekly_breakdown: result.workoutPlan.weekly_breakdown,
-            workout_plan: result.workoutPlan.workout_plan,
-            clientInfo: result.clientInfo,
-            generatedAt: result.generatedAt
+    setAiError(null); // Clear AI error on new fetch
+    if (numericClientId) {
+      const fetchPlan = async () => {
+        setIsFetchingPlan(true);
+        setWorkoutPlan(null);
+        
+        console.log('📅 Fetching workout plan for 7 days starting from:', format(planStartDate, 'yyyy-MM-dd'));
+        
+        // Calculate end date (6 days after start date for a full 7-day week)
+        const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+        
+        const { data, error } = await supabase
+          .from('schedule')
+          .select('*')
+          .eq('client_id', numericClientId)
+          .eq('type', 'workout')
+          .gte('for_date', format(planStartDate, 'yyyy-MM-dd'))
+          .lte('for_date', format(endDate, 'yyyy-MM-dd'))
+          .order('for_date', { ascending: true });
+          
+        if (error) {
+          toast({ title: 'Error', description: error.message, variant: 'destructive' });
+          setWorkoutPlan(null);
+        } else {
+          // Create a 7-day structure with all dates, even if no workouts exist for some days
+          const weekDates = [];
+          for (let i = 0; i < 7; i++) {
+            const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+            weekDates.push({
+              date: format(currentDate, 'yyyy-MM-dd'),
+              dayName: format(currentDate, 'EEEE'),
+              workouts: data?.filter(workout => workout.for_date === format(currentDate, 'yyyy-MM-dd')) || []
+            });
           }
           
-                  console.log("📋 Plan data prepared for overview:", planData)
-        setPlanOverviewData(planData)
-
-        const clientName = result.clientInfo?.name || result.clientInfo?.preferredName || "Client"
+          console.log('📊 7-day workout plan structure:', weekDates);
+          
+          // Always set the workout plan - either with data or empty structure
+          setWorkoutPlan({
+            weekDates,
+            allWorkouts: data || [],
+            hasAnyWorkouts: data && data.length > 0,
+            planStartDate: format(planStartDate, 'yyyy-MM-dd'),
+            planEndDate: format(endDate, 'yyyy-MM-dd')
+          });
+        }
         
-        toast({
-          title: "AI Fitness Plan Generated",
-          description: `Plan ready for review for ${clientName}. Review and customize before saving.`,
-        })
-        } else {
-          console.warn("⚠️ Success reported but no workout plan in response")
-          toast({
-            title: "Plan Generation Issue",
-            description: result.message || "Plan generated but no workout data found.",
-            variant: "destructive",
-          })
-        }
-      } else {
-        console.log("❌ FAILURE - Data retrieval failed")
-        console.log("💬 Error Message:", result.message)
-
-        // Capture debug data for failures (optional property)
-        const errDebugData = (result as any).debugData
-        if (errDebugData) {
-          setDebugData(errDebugData)
-          setShowDebugPopup(true)
-        }
-
-        toast({
-          title: "Error",
-          description: result.message,
-          variant: "destructive",
-        })
-      }
-    } catch (err) {
-      console.error("💥 EXCEPTION CAUGHT in handleGenerateAIPlans:")
-      console.error("  - Error Type:", typeof err)
-      console.error("  - Error:", err)
-      console.error("  - Stack:", err instanceof Error ? err.stack : "No stack")
-
-      toast({
-        title: "Error",
-        description: "Something went wrong while fetching client data.",
-        variant: "destructive",
-      })
-    } finally {
-      console.log("🏁 Process completed - Resetting loading state")
-      setIsGeneratingAI(false)
+        setIsFetchingPlan(false);
+      };
+      fetchPlan();
     }
-  }
+  }, [numericClientId, planStartDate]);
 
-  // === NEW: Generate plan using local LLM (qwen) running on http://localhost:11434 ===
-  const handleGenerateLocalAIPlans = async () => {
-    console.log("🤖 (Local LLM) === WORKOUT PLAN GENERATION STARTED ===")
-    setIsGeneratingLocalAI(true)
-
-    const startTime = Date.now()
-
+  // AI generation handler
+  const handleGeneratePlan = async () => {
+    setAiError(null); // Clear previous error
+    if (!numericClientId) {
+      toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
+      return;
+    }
+    setIsGenerating(true);
     try {
-      const actualClientId = clientId ? Number(clientId) : 34
-      // ---------------------- Fetch client data for richer prompt ----------------------
-      let clientPromptInfo = ""
-      try {
-        const { data: clientRow } = await supabase
-          .from("client")
-          .select("*")
-          .eq("client_id", actualClientId)
-          .single()
-
-        if (clientRow) {
-          clientPromptInfo = `\nInputs:\nGoal: ${clientRow.cl_primary_goal || 'N/A'}\nSpecific Outcome: ${clientRow.specific_outcome || 'N/A'}\nGoal Deadline: ${clientRow.goal_timeline || 'N/A'}\nConfidence Rating (1–10): ${clientRow.confidence_level || 'N/A'}\nChallenges/Obstacles: ${clientRow.obstacles || 'N/A'}\nTraining Experience: ${clientRow.training_experience || 'Beginner'}\nTraining History (Last 6 Months): ${clientRow.previous_training || 'Unknown'}\nTraining Frequency: ${clientRow.training_days_per_week || '3'}x/week\nSession Duration: ${clientRow.training_time_per_session || '30-45 min'}\nTraining Location: ${clientRow.training_location || 'Home'}\nAvailable Equipment: ${Array.isArray(clientRow.available_equipment) ? clientRow.available_equipment.join(', ') : clientRow.available_equipment || 'Bodyweight only'}\nLimitations/Injuries: ${clientRow.injuries_limitations || 'None'}\nBody Area Focus: ${Array.isArray(clientRow.focus_areas) ? clientRow.focus_areas.join(', ') : clientRow.focus_areas || 'None'}\n\nAdditional Client Information:\nName: ${clientRow.cl_name || clientRow.cl_prefer_name || 'N/A'}\nAge: ${clientRow.cl_age || 'N/A'}\nSex: ${clientRow.cl_sex || 'N/A'}\nHeight: ${clientRow.cl_height || 'N/A'} cm\nCurrent Weight: ${clientRow.cl_weight || 'N/A'} kg\nTarget Weight: ${clientRow.cl_target_weight || 'N/A'} kg\nSleep Hours: ${clientRow.sleep_hours || 'N/A'}\nStress Level: ${clientRow.cl_stress || 'N/A'}\nMotivation Style: ${clientRow.motivation_style || 'N/A'}\n`;
+      const result = await generateAIWorkoutPlanForReview(numericClientId);
+      if (result.success) {
+        toast({ title: 'AI Plan Generated', description: 'The new plan is ready for review.' });
+        
+        // Convert AI plan structure to WeeklyWorkoutPlan format
+        const aiWorkoutPlan = result.workoutPlan;
+        const workoutExercises = aiWorkoutPlan.workout_plan || [];
+        
+        // Create 7-day structure with AI workouts
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          weekDates.push({
+            date: dateStr,
+            dayName: format(currentDate, 'EEEE'),
+            workouts: workoutExercises.filter((workout: any) => workout.for_date === dateStr) || []
+          });
         }
-      } catch (e) {
-        console.warn("Could not fetch client info for prompt; proceeding with minimal prompt")
+        
+        // Convert workout exercises to the format expected by WorkoutPlanTable
+        const convertedWorkouts = workoutExercises.map((workout: any, index: number) => ({
+          id: `new-${new Date().getTime()}-${index}`,
+          workout: workout.workout || workout.exercise_name,
+          summary: workout.workout || workout.exercise_name,
+          category: workout.category,
+          body_part: workout.body_part,
+          sets: workout.sets,
+          reps: workout.reps,
+          duration: workout.duration,
+          weights: workout.weights,
+          equipment: workout.equipment,
+          for_date: workout.for_date,
+          coach_tip: workout.coach_tip,
+          icon: workout.icon,
+          details_json: {
+            category: workout.category,
+            body_part: workout.body_part,
+            main_workout: [{
+              exercise_name: workout.workout || workout.exercise_name,
+              sets: workout.sets,
+              reps: workout.reps,
+              duration: workout.duration,
+              weight: workout.weights,
+              equipment: workout.equipment,
+              coach_tip: workout.coach_tip,
+              other_details: ''
+            }]
+          }
+        }));
+        
+        setWorkoutPlan({
+          weekDates,
+          allWorkouts: convertedWorkouts,
+          hasAnyWorkouts: convertedWorkouts.length > 0,
+          planStartDate: format(planStartDate, 'yyyy-MM-dd'),
+          planEndDate: format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        });
+      } else {
+        throw new Error(result.message || 'Unknown error');
       }
-
-      // Comprehensive prompt similar to ChatGPT version
-      const prompt = `You are a world-class fitness coach. Based on the inputs below, create a personalized, evidence-based training program tailored to the client's goals, preferences, and constraints.${clientPromptInfo}\nGuidelines:\nUse the correct training philosophy based on the goal and training age.\nChoose appropriate progression models (linear, undulating, or block periodization) based on experience and timeline.\nStructure training based on available days and session duration.\nRespect equipment limitations and substitute intelligently.\nAdjust exercises based on injury/limitation info.\nEmphasize specified body areas without neglecting full-body balance.\nInclude progression triggers.\nInsert deload every 4–6 weeks with 40% volume reduction if program spans 8+ weeks.\nIf timeline is <6 weeks, consider a short cycle without deload.\n\nIMPORTANT: Create a complete weekly plan that includes every day of the week (Monday through Sunday). If a day is dedicated for rest, clearly indicate it as a rest day in the weekly_breakdown and include it in the workout_plan array with appropriate rest day information.\n\nOutput Format (in JSON):\n{\n  \"overview\": \"...\",\n  \"split\": \"...\",\n  \"progression_model\": \"...\",\n  \"weekly_breakdown\": {\n    \"Monday\": \"...\",\n    \"Tuesday\": \"...\",\n    \"Wednesday\": \"...\",\n    \"Thursday\": \"...\",\n    \"Friday\": \"...\",\n    \"Saturday\": \"...\",\n    \"Sunday\": \"...\"\n  },\n  \"workout_plan\": [\n    {\n      \"workout\": \"Glute Bridges\",\n      \"day\": \"Monday\",\n      \"sets\": 3,\n      \"reps\": 15,\n      \"duration\": 30,\n      \"weights\": \"bodyweight\",\n      \"for_time\": \"08:00:00\",\n      \"body_part\": \"Glutes\",\n      \"category\": \"Strength\",\n      \"coach_tip\": \"Push through the heels\"\n    },\n    {\n      \"workout\": \"Rest Day\",\n      \"day\": \"Wednesday\",\n      \"sets\": 0,\n      \"reps\": \"N/A\",\n      \"duration\": 0,\n      \"weights\": \"N/A\",\n      \"for_time\": \"00:00:00\",\n      \"body_part\": \"Recovery\",\n      \"category\": \"Rest\",\n      \"coach_tip\": \"Active recovery - light stretching or walking recommended\"\n    }\n  ]\n}\n\nReturn ONLY the JSON object described above — no markdown, no explanations.`
-
-      console.log("📝 (Local LLM) Prompt being sent:", prompt)
-      console.log("🤖 (Local LLM) Using model:", selectedLocalModel)
-      const requestBody = JSON.stringify({ model: selectedLocalModel, prompt, stream: false, format: "json" })
-      console.log("📤 (Local LLM) Request payload:", requestBody)
-
-      console.log("📡 (Local LLM) Sending request to /ollama/api/generate via proxy...")
-      const resp = await fetch("/ollama/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: requestBody
-      })
-
-      if (!resp.ok) {
-        throw new Error(`Local LLM request failed: ${resp.status} ${resp.statusText}`)
-      }
-
-      console.log("✅ (Local LLM) Response received from server. Status:", resp.status)
-
-      // Since we requested format:"json" and stream:false, the body should be a single JSON object
-      const aiText = await resp.text()
-
-      console.log("📥 (Local LLM) Raw AI response content:", aiText)
-
-      let innerJSONText = aiText
-      try {
-        const outer = JSON.parse(aiText)
-        if (outer && typeof outer === 'object' && outer.response) {
-          innerJSONText = typeof outer.response === 'string' ? outer.response : JSON.stringify(outer.response)
-        }
-      } catch (e) {
-        console.warn('Could not parse outer wrapper, assuming raw JSON is direct')
-      }
-
-      // Re-use existing parser to convert AI text into structured plan(s)
-      let generatedPlans: any[] = []
-      try {
-        generatedPlans = parseAIResponseToPlans(innerJSONText)
-        console.log("✨ (Local LLM) Successfully parsed workout plan.", generatedPlans.length, "plans generated.")
-      } catch (parseErr) {
-        console.error("Failed to parse local AI response:", parseErr)
-      }
-
-      if (generatedPlans.length === 0) {
-        toast({
-          title: "Local AI Generation Failed",
-          description: "Could not parse workout plan from local model output.",
-          variant: "destructive"
-        })
-        return
-      }
-
-      const firstPlan = generatedPlans[0]
-      const planData = {
-        overview: "Locally generated workout plan",
-        split: "",
-        progression_model: "",
-        weekly_breakdown: undefined,
-        workout_plan: firstPlan.exercises,
-        clientInfo: null,
-        generatedAt: new Date().toISOString()
-      }
-
-      const endTime = Date.now()
-      const generationTimeSeconds = (endTime - startTime) / 1000
-      
-      setPlanOverviewData(planData)
-      setGenerationTime(generationTimeSeconds) // Store generation time in seconds
-
-      toast({
-        title: "Local AI Plan Ready",
-        description: `Generated ${firstPlan.exercises.length} exercises using ${selectedLocalModel} in ${generationTimeSeconds.toFixed(1)}s.`
-      })
-    } catch (err: any) {
-      console.error("💥 Local LLM generation error:", err)
-      toast({
-        title: "Local LLM Error",
-        description: err.message || "Unknown error",
-        variant: "destructive"
-      })
+    } catch (error: any) {
+      setAiError('AI response was invalid or could not be parsed. Please try again or check the console for details.');
+      console.error('Full AI response error:', error);
+      toast({ title: 'AI Generation Failed', description: error.message || 'Could not generate workout plan.', variant: 'destructive' });
     } finally {
-      const endTime = Date.now()
-      console.log("🏁 (Local LLM) WORKOUT PLAN GENERATION COMPLETED in", (endTime - startTime) / 1000, "seconds.")
-      setIsGeneratingLocalAI(false)
+      setIsGenerating(false);
     }
-  }
-
+  };
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Workout Plan Overview - Full Width */}
-      <div className="flex-1 overflow-hidden">
-        <div className="sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Target className="h-6 w-6 text-purple-600" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Workout Plan Overview</h3>
-            </div>
-            <div className="flex items-center gap-4">
-              {planOverviewData && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-sm">
-                    {planOverviewData.workout_plan?.length || 0} exercises
-                  </Badge>
-                  {generationTime && (
-                    <Badge variant="secondary" className="text-sm">
-                      ⏱️ {generationTime.toFixed(1)}s
-                    </Badge>
-                  )}
-                </div>
-              )}
-              {/* Cloud / remote generation */}
-              <Button
-                onClick={handleGenerateAIPlans}
-                disabled={isGeneratingAI}
-                size="sm"
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 font-medium"
-              >
-                {isGeneratingAI ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <div className="mr-2">🤖</div>
-                    Generate AI Plan
-                  </>
-                )}
-              </Button>
-
-                            {/* Local LLM Model Selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Model:</span>
-                <Select value={selectedLocalModel} onValueChange={setSelectedLocalModel}>
-                  <SelectTrigger className="w-44 h-9 text-xs">
-                    <SelectValue placeholder="Select Model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="deepseek-r1:latest">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="h-3 w-3" />
-                        <span>DeepSeek R1</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="llama3:8b">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="h-3 w-3" />
-                        <span>Llama 3</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="qwen2.5:latest">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="h-3 w-3" />
-                        <span>Qwen 2.5</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Local LLM generation */}
-              <Button
-                onClick={handleGenerateLocalAIPlans}
-                disabled={isGeneratingLocalAI}
-                size="sm"
-                variant="outline"
-                className="border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/20"
-              >
-                {isGeneratingLocalAI ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Cpu className="h-4 w-4 mr-2" />
-                    {selectedLocalModel === "deepseek-r1:latest" ? "DeepSeek Plan" : 
-                     selectedLocalModel === "llama3:8b" ? "Llama Plan" :
-                     selectedLocalModel === "qwen2.5:latest" ? "Qwen Plan" : "Local LLM Plan"}
-                    <span className="ml-1 text-xs opacity-70">
-                      ({selectedLocalModel.split(':')[0]})
-                    </span>
-                  </>
-                )}
-              </Button>
-              {debugData && (
-                <Button
-                  onClick={() => setShowDebugPopup(true)}
-                  size="sm"
-                  variant="outline"
-                  className="text-orange-600 border-orange-200 hover:bg-orange-50"
-                  title="View AI Debug Data"
-                >
-                  <Bug className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Embedded Fitness Plan Overview */}
-        <div className="h-full overflow-hidden">
-          {planOverviewData ? (
-            <div className="h-full">
-              <FitnessPlanOverview
-                isOpen={true}
-                onClose={() => {}}
-                clientId={clientId ? Number(clientId) : 34}
-                initialPlanData={planOverviewData}
-                embedded={true}
-                onPlanSaved={(success, message) => {
-                  if (success) {
-                    toast({
-                      title: "Plan Saved Successfully",
-                      description: message,
-                    })
-                  } else {
-                    toast({
-                      title: "Failed to Save Plan",
-                      description: message,
-                      variant: "destructive",
-                    })
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <Card className="h-full flex items-center justify-center">
-              <CardContent className="text-center p-8">
-                <Target className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <div>
-                  <h3 className="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">
-                    No Workout Plan Generated
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    Generate an AI workout plan to see the detailed overview here
-                  </p>
-                  <Button
-                    onClick={handleGenerateAIPlans}
-                    disabled={isGeneratingAI}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  >
-                    {isGeneratingAI ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <div className="mr-2">🤖</div>
-                        Generate AI Plan
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+    <div className="space-y-4">
+      {/* Placeholder Cards Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} />
+        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} />
+        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} />
+        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} />
+        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} />
       </div>
 
-      {/* Popups */}
-      <ClientDataPopup
-        isOpen={showClientDataPopup}
-        onClose={() => setShowClientDataPopup(false)}
-        clientInfo={clientInfo}
-      />
+      {/* Date Picker at the top */}
+      <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+        <div className="grid gap-2 w-full sm:w-auto">
+          <Label htmlFor="date-select">Plan Start Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className="w-full sm:w-[280px] justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {format(planStartDate, "PPP")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={planStartDate}
+                onSelect={(date) => date && setPlanStartDate(date)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="ml-auto pt-4 sm:pt-0">
+          <Button onClick={handleGeneratePlan} disabled={isGenerating || !numericClientId}>
+            {isGenerating ? (
+              <>
+                <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              "Generate with AI"
+            )}
+          </Button>
+        </div>
+      </div>
+      {/* Plan Table or Empty State */}
+      <div>
+        {aiError && (
+          <Card className="flex flex-col items-center justify-center h-32 text-center bg-red-50 border-red-200">
+            <h3 className="text-lg font-semibold text-red-700">AI Response Error</h3>
+            <p className="text-red-600 mt-2">{aiError}</p>
+          </Card>
+        )}
+        {isFetchingPlan ? (
+          <Card className="flex items-center justify-center h-64">
+            <span>Loading workout plan...</span>
+          </Card>
+        ) : workoutPlan ? (
+          <div className="space-y-4">
+            {/* 7-Day Overview Header */}
+            <Card className="p-4">
+              <h3 className="text-lg font-semibold mb-3">
+                7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
+              </h3>
+              <div className="grid grid-cols-7 gap-2 text-sm">
+                {workoutPlan.weekDates?.map((day: WeekDay, index: number) => (
+                  <div key={day.date} className={`p-2 rounded text-center ${
+                    day.workouts.length > 0 
+                      ? 'bg-green-100 text-green-800 border border-green-200' 
+                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}>
+                    <div className="font-medium">{day.dayName}</div>
+                    <div className="text-xs">{format(new Date(day.date), "MMM d")}</div>
+                    <div className="text-xs mt-1">
+                      {day.workouts.length > 0 
+                        ? `${day.workouts.length} exercise${day.workouts.length > 1 ? 's' : ''}` 
+                        : 'Rest day'
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
 
-      <AIResponsePopup
-        isOpen={showAIResponsePopup}
-        onClose={() => setShowAIResponsePopup(false)}
-        aiResponse={aiResponse}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-        onShowMetrics={() => {
-          setShowAIResponsePopup(false)
-          setShowAIMetricsPopup(true)
-        }}
-      />
+            {/* Workout Plan Table */}
+            {workoutPlan.hasAnyWorkouts ? (
+              <WorkoutPlanTable 
+                initialPlanData={workoutPlan.allWorkouts} 
+                clientId={numericClientId} 
+              />
+            ) : (
+              <Card className="flex flex-col items-center justify-center h-32 text-center">
+                <h3 className="text-lg font-semibold">No Workout Plans Available</h3>
+                <p className="text-muted-foreground mt-2">
+                  No workout plans found for the week of {format(planStartDate, "MMM d, yyyy")}
+                </p>
+                <Button onClick={handleGeneratePlan} disabled={isGenerating} className="mt-4">
+                  {isGenerating ? 'Generating...' : 'Generate a new plan with AI'}
+                </Button>
+              </Card>
+            )}
+          </div>
+        ) : (
+          <Card className="flex flex-col items-center justify-center h-64 text-center">
+            <h3 className="text-lg font-semibold">Select a Date to View Workout Plan</h3>
+            <p className="text-muted-foreground mt-2">Choose a start date to view the 7-day workout plan.</p>
+          </Card>
+        )}
+      </div>
 
-      <AIMetricsPopup
-        isOpen={showAIMetricsPopup}
-        onClose={() => setShowAIMetricsPopup(false)}
-        metrics={aiMetrics}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-      />
+      {/* Side Popups */}
+      <SidePopup
+        isOpen={showFitnessGoals}
+        onClose={() => setShowFitnessGoals(false)}
+        title="Fitness Goals"
+        icon={<Target className="h-5 w-5 text-white" />}
+      >
+        <FitnessGoalsSection client={client} onGoalsSaved={() => {}} />
+      </SidePopup>
 
-      <AIDebugPopup
-        isOpen={showDebugPopup}
-        onClose={() => setShowDebugPopup(false)}
-        rawResponse={debugData?.rawResponse}
-        parsedData={debugData?.parsedData || []}
-        clientName={clientInfo?.name || clientInfo?.preferredName}
-      />
+      <SidePopup
+        isOpen={showAICoachInsights}
+        onClose={() => setShowAICoachInsights(false)}
+        title="AI Coach Insights"
+        icon={<Brain className="h-5 w-5 text-white" />}
+      >
+        <AICoachInsightsSection 
+          lastAIRecommendation={props.lastAIRecommendation}
+          onViewFullAnalysis={() => {}}
+        />
+      </SidePopup>
+
+      <SidePopup
+        isOpen={showTrainerNotes}
+        onClose={() => setShowTrainerNotes(false)}
+        title="Trainer Notes"
+        icon={<FileText className="h-5 w-5 text-white" />}
+      >
+        <TrainerNotesSection 
+          client={client}
+          trainerNotes={props.trainerNotes || ""}
+          setTrainerNotes={props.setTrainerNotes || (() => {})}
+          handleSaveTrainerNotes={props.handleSaveTrainerNotes || (() => {})}
+          isSavingNotes={props.isSavingNotes || false}
+          isEditingNotes={props.isEditingNotes || false}
+          setIsEditingNotes={props.setIsEditingNotes || (() => {})}
+          notesDraft={props.notesDraft || ""}
+          setNotesDraft={props.setNotesDraft || (() => {})}
+          notesError={props.notesError || null}
+          setNotesError={props.setNotesError || (() => {})}
+          isGeneratingAnalysis={props.isGeneratingAnalysis || false}
+          handleSummarizeNotes={props.handleSummarizeNotes || (() => {})}
+          isSummarizingNotes={props.isSummarizingNotes || false}
+          lastAIRecommendation={props.lastAIRecommendation}
+        />
+      </SidePopup>
+
+      <SidePopup
+        isOpen={showNutritionalPreferences}
+        onClose={() => setShowNutritionalPreferences(false)}
+        title="Nutritional Preferences"
+        icon={<Utensils className="h-5 w-5 text-white" />}
+      >
+        <NutritionalPreferencesSection client={client} />
+      </SidePopup>
+
+      <SidePopup
+        isOpen={showTrainingPreferences}
+        onClose={() => setShowTrainingPreferences(false)}
+        title="Training Preferences"
+        icon={<Dumbbell className="h-5 w-5 text-white" />}
+      >
+        <TrainingPreferencesSection client={client} />
+      </SidePopup>
     </div>
-  )
-}
+  );
+};
 
-export default WorkoutPlanSection 
+export default WorkoutPlanSection; 

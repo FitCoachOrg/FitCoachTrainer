@@ -2,7 +2,7 @@
 
 import { Plus, Dumbbell, CheckCircle, Apple, Camera, BarChart3, FileText, Droplet, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { Task, TaskType } from "@/app/page"
+import type { Task, TaskType } from "@/types/program"
 
 interface ProgramCardProps {
   day: number
@@ -16,36 +16,42 @@ interface ProgramCardProps {
 
 const getTaskIcon = (type: TaskType) => {
   switch (type) {
-    case "workout":
+    case "Workout":
       return <Dumbbell className="w-3 h-3" />
-    case "checkin":
+    case "Check-in":
       return <CheckCircle className="w-3 h-3" />
-    case "nutrition":
+    case "Nutrition":
       return <Apple className="w-3 h-3" />
-    case "picture":
+    case "Picture":
       return <Camera className="w-3 h-3" />
-    case "metric":
+    case "Metric":
       return <BarChart3 className="w-3 h-3" />
-    case "note":
+    case "Note":
       return <FileText className="w-3 h-3" />
-    case "hydration":
+    case "Hydration":
       return <Droplet className="w-3 h-3" />
+    default:
+      return <CheckCircle className="w-3 h-3" />
   }
 }
 
 const getTaskColor = (type: TaskType) => {
   switch (type) {
-    case "workout":
+    case "Workout":
       return "bg-blue-600"
-    case "checkin":
+    case "Check-in":
       return "bg-green-600"
-    case "nutrition":
+    case "Nutrition":
       return "bg-orange-600"
-    case "picture":
+    case "Picture":
       return "bg-purple-600"
-    case "metric":
+    case "Metric":
       return "bg-red-600"
-    case "note":
+    case "Note":
+      return "bg-gray-600"
+    case "Hydration":
+      return "bg-cyan-600"
+    default:
       return "bg-gray-600"
   }
 }

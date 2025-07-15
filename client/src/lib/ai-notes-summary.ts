@@ -1,29 +1,21 @@
-// AI Notes Summary Generation with OpenAI Integration
+// AI Notes Summary Generation with OpenRouter Integration
 import { supabase } from './supabase'
-import OpenAI from 'openai'
+import { askOpenRouter } from './open-router-service'
 
 /**
- * Function to generate AI summary and action items using OpenAI ChatGPT
+ * Function to generate AI summary and action items using OpenRouter
  * @param trainerNotes - The content of trainer notes to summarize
  * @param clientInfo - Optional client information for context
  */
 async function generateNotesSummary(trainerNotes: string, clientInfo?: any) {
-  console.log('🔑 Checking for OpenAI API key...');
+  console.log('🔑 Checking for OpenRouter API key...');
   
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error('OpenAI API key not found. Please add VITE_OPENAI_API_KEY to your .env file');
+    throw new Error('OpenRouter API key not found. Please add VITE_OPENROUTER_API_KEY to your .env file');
   }
   
-  console.log('✅ OpenAI API key found');
-  console.log('🔧 Initializing OpenAI client...');
-  
-  // Initialize OpenAI client
-  const client = new OpenAI({
-    apiKey: apiKey,
-    dangerouslyAllowBrowser: true // Required for client-side usage
-  });
-  
+  console.log('✅ OpenRouter API key found');
   console.log('📋 Preparing trainer notes summary prompt...');
   
   // Create context string if client info is available
@@ -99,40 +91,22 @@ Guidelines:
   
   console.log('📝 Notes summary prompt prepared');
   
-  console.log('🚀 Sending request to OpenAI using client SDK...');
+  console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const response = await client.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'user',
-          content: notesSummaryPrompt
-        }
-      ],
-      max_tokens: 2500,
-      temperature: 0.3, // Lower temperature for more consistent, factual analysis
-    });
-
-    console.log('📊 OpenAI Response received:', response);
-    
-    if (!response.choices || !response.choices[0] || !response.choices[0].message) {
-      throw new Error('Invalid response format from OpenAI');
-    }
-
-    const aiResponse = response.choices[0].message.content;
-    console.log('✅ AI Response extracted:', aiResponse);
+    const aiResponse = await askOpenRouter(notesSummaryPrompt);
+    console.log('📊 OpenRouter Response received');
+    console.log('✅ AI Response extracted');
     
     return {
       response: aiResponse,
-      usage: response.usage,
-      model: response.model,
+      model: 'qwen/qwen3-8b:free',
       timestamp: new Date().toISOString()
     };
     
   } catch (error) {
-    console.error('❌ OpenAI API Error:', error);
-    throw new Error(`OpenAI API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ OpenRouter API Error:', error);
+    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -187,7 +161,7 @@ export async function summarizeTrainerNotes(trainerNotes: string, clientId?: num
     }
 
     // Generate AI summary using the comprehensive notes analysis prompt
-    console.log('🤖 Starting OpenAI notes analysis...');
+    console.log('🤖 Starting OpenRouter notes analysis...');
     
     try {
       const aiResponse = await generateNotesSummary(trainerNotes, clientInfo);
