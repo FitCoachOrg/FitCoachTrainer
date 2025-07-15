@@ -28,3 +28,10 @@ client/.env.local
 client/.env
 .env.local
 .env
+client/src/.env.local
+.env.local
+client/.env
+client/.env
+client/.env.local
+client/src/.env
+client/src/.env.local
