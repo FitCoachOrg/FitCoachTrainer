@@ -642,7 +642,8 @@ const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
   useEffect(() => {
     if (summaryResponse?.aiResponse?.response) {
       try {
-        const jsonMatch = summaryResponse.aiResponse.response.match(/\{[\s\S]*\}/);
+        const responseStr = summaryResponse.aiResponse.response;
+        const jsonMatch = responseStr.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsedData = JSON.parse(jsonMatch[0]);
           setParsedSummary(parsedData);
@@ -1447,11 +1448,12 @@ export default function ClientDashboard() {
         let analysisData;
         try {
           if (result.aiResponse?.response) {
-            const jsonMatch = result.aiResponse.response.match(/\{[\s\S]*\}/);
+            const responseStr = result.aiResponse.response;
+            const jsonMatch = responseStr.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               analysisData = JSON.parse(jsonMatch[0]);
             } else {
-              analysisData = JSON.parse(result.aiResponse.response);
+              analysisData = JSON.parse(responseStr);
             }
           }
         } catch (parseError) {

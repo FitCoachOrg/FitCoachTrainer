@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 
@@ -30,6 +30,7 @@ import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
+import { debounce } from 'lodash';
 
 // Types
 interface Exercise {
@@ -70,18 +71,18 @@ interface WorkoutPlan {
   exercises: WorkoutExercise[]
 }
 
+// 1. Update WeeklyWorkoutPlan and WeekDay interfaces to match new schema
 interface WeekDay {
-  date: string
-  dayName: string
-  workouts: any[]
+  date: string;
+  focus: string;
+  exercises: any[];
 }
 
 interface WeeklyWorkoutPlan {
-  weekDates: WeekDay[]
-  allWorkouts: any[]
-  hasAnyWorkouts: boolean
-  planStartDate: string
-  planEndDate: string
+  week: WeekDay[];
+  hasAnyWorkouts: boolean;
+  planStartDate: string;
+  planEndDate: string;
 }
 
 // The real AI workout plan generator is now imported from ai-fitness-plan.ts 
@@ -167,7 +168,7 @@ const AIResponsePopup = ({
               
               return {
                 ...workout,
-                sets: extractNumber(workout.sets, 3),
+                sets: String(workout.sets ?? '3'),
                 reps: cleanReps?.toString() || '10',
                 duration: extractNumber(workout.duration, 15),
                 weights: workout.weights || 'bodyweight',
@@ -220,7 +221,7 @@ const AIResponsePopup = ({
     const newWorkout = {
       workout: "New Exercise",
       day: undefined,
-      sets: 3, // number
+      sets: "3", // string
       reps: "10", // string (can be range like "8-12")
       duration: 15, // number (minutes)
       weights: "bodyweight",
@@ -637,6 +638,65 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => (
   </Dialog>
 ) 
 
+// --- Comprehensive Normalization function for all AI models ---
+function normalizeExercise(ex: any): any {
+  // Handle all possible variations of property names from different AI models
+  const normalized = {
+    // Exercise name variations
+    exercise: ex.exercise || ex.exercise_name || ex.name || ex.workout || ex.title || '',
+    
+    // Category variations
+    category: ex.category || ex.type || ex.exercise_type || ex.workout_type || '',
+    
+    // Body part variations
+    body_part: ex.body_part || ex.bodyPart || ex.body_parts || ex.target_area || ex.muscle_group || '',
+    
+    // Sets variations
+    sets: String(ex.sets ?? ex.set_count ?? ex.number_of_sets ?? ''),
+    
+    // Reps variations
+    reps: ex.reps ?? ex.repetitions ?? ex.rep_count ?? ex.number_of_reps ?? '',
+    
+    // Duration variations
+    duration: ex.duration ?? ex.time ?? ex.exercise_duration ?? ex.minutes ?? '',
+    
+    // Weight variations
+    weight: ex.weight ?? ex.weights ?? ex.weight_amount ?? ex.load ?? ex.resistance ?? '',
+    
+    // Equipment variations
+    equipment: ex.equipment ?? ex.equipment_needed ?? ex.tools ?? ex.machines ?? '',
+    
+    // Coach tip variations
+    coach_tip: ex.coach_tip ?? ex.tips ?? ex.tip ?? ex.instruction ?? ex.notes ?? ex.cue ?? '',
+    
+    // Rest variations
+    rest: ex.rest ?? ex.rest_time ?? ex.rest_period ?? ex.rest_duration ?? '',
+    
+    // Video link variations
+    video_link: ex.video_link ?? ex.videoLink ?? ex.video_url ?? ex.video ?? ex.link ?? '',
+    
+    // Preserve any other properties that might be useful
+    ...ex
+  };
+  
+  // Ensure all required fields have fallback values
+  return {
+    ...normalized,
+    exercise: normalized.exercise || 'Unknown Exercise',
+    category: normalized.category || 'Strength',
+    body_part: normalized.body_part || 'Full Body',
+    sets: normalized.sets || '3',
+    reps: normalized.reps || '10',
+    duration: normalized.duration || '15',
+    weight: normalized.weight || 'Bodyweight',
+    equipment: normalized.equipment || 'None',
+    coach_tip: normalized.coach_tip || 'Focus on proper form',
+    rest: normalized.rest || '60',
+    video_link: normalized.video_link || ''
+  };
+}
+// ---
+
 interface WorkoutPlanSectionProps {
   clientId?: string | number;
   client?: any;
@@ -656,6 +716,152 @@ interface WorkoutPlanSectionProps {
   isSummarizingNotes?: boolean;
 }
 
+// Add approvePlan implementation to copy from schedule_preview to schedule
+async function approvePlan(clientId: number, planStartDate: Date) {
+  try {
+    // 1. Get the week range
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+
+    // 2. Fetch all rows from schedule_preview for this client/week/type
+    const { data: previewRows, error: fetchError } = await supabase
+      .from('schedule_preview')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr);
+    if (fetchError) {
+      console.error('[approvePlan] Error fetching from schedule_preview:', fetchError);
+      return { success: false, error: fetchError.message };
+    }
+    if (!previewRows || previewRows.length === 0) {
+      return { success: false, error: 'No draft plan found to approve.' };
+    }
+
+    // 3. Delete any existing rows in schedule for this client/week/type
+    const { error: deleteError } = await supabase
+      .from('schedule')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr);
+    if (deleteError) {
+      console.error('[approvePlan] Error deleting old schedule rows:', deleteError);
+      return { success: false, error: deleteError.message };
+    }
+
+    // 4. Insert the preview rows into schedule (remove id/created_at fields)
+    const rowsToInsert = previewRows.map(({ id, created_at, ...rest }) => rest);
+    const { error: insertError } = await supabase
+      .from('schedule')
+      .insert(rowsToInsert);
+    if (insertError) {
+      console.error('[approvePlan] Error inserting into schedule:', insertError);
+      return { success: false, error: insertError.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('[approvePlan] Unexpected error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// Helper to save plan to schedule_preview
+async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, planStartDate: Date) {
+  console.log('[savePlanToSchedulePreview] Initiating save.', { clientId, planWeek });
+  try {
+    // Fetch client's preferred workout_time. Fallback to a default if not set.
+    const { data: clientData, error: clientError } = await supabase
+      .from('client')
+      .select('workout_time')
+      .eq('client_id', clientId)
+      .single();
+
+    if (clientError) {
+      console.error('[savePlanToSchedulePreview] Error fetching client workout time:', clientError);
+    }
+    const for_time = clientData?.workout_time || '08:00:00';
+    console.log(`[savePlanToSchedulePreview] Using workout time: ${for_time}`);
+
+    const workout_id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+
+    const rows = planWeek.map((day) => ({
+      client_id: clientId,
+      type: 'workout',
+      task: 'workout',
+      icon: 'dumbell',
+      summary: day.focus,
+      for_date: day.date,
+      for_time,
+      workout_id,
+      details_json: {
+        focus: day.focus,
+        exercises: (day.exercises || []).map((ex: any, idx: number) => ({
+          // Standardize property names to match what the UI expects
+          exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+          body_part: String(ex.body_part || 'Full Body'),
+          sets: String(ex.sets || '3'),
+          reps: String(ex.reps || '10'),
+          rest: String(ex.rest || ex.rest_sec || '60'), // Use 'rest'
+          weight: String(ex.weight || ex.weights || 'Bodyweight'),
+          duration: String(ex.duration || ex.duration_sec || '15'), // Use 'duration'
+          equipment: String(ex.equipment || 'None'),
+          coach_tip: String(ex.coach_tip || 'Focus on proper form'),
+          video_link: String(ex.video_link || ex.youtube_video_id || ''),
+          tempo: String(ex.tempo || ''),
+          order: idx + 1
+        }))
+      }
+    }));
+    
+    console.log('[savePlanToSchedulePreview] Prepared rows for database:', JSON.stringify(rows, null, 2));
+
+    // Delete any existing preview for this client and week
+    const firstDate = planWeek[0]?.date;
+    const lastDate = planWeek[planWeek.length - 1]?.date;
+    if (!firstDate || !lastDate) {
+      console.error('[savePlanToSchedulePreview] Invalid date range in planWeek.', {firstDate, lastDate});
+      return { success: false, error: 'Invalid date range' };
+    }
+    
+    console.log(`[savePlanToSchedulePreview] Deleting existing preview for client ${clientId} between ${firstDate} and ${lastDate}`);
+    const { error: deleteError } = await supabase
+      .from('schedule_preview')
+      .delete()
+      .eq('client_id', clientId)
+      .gte('for_date', firstDate)
+      .lte('for_date', lastDate);
+
+    if (deleteError) {
+      console.error('[savePlanToSchedulePreview] Error deleting old preview:', deleteError);
+      // Don't stop; try to insert anyway, as it might be a non-critical issue (e.g., nothing to delete)
+    } else {
+      console.log('[savePlanToSchedulePreview] Successfully deleted old preview entries.');
+    }
+
+    // Insert new rows
+    console.log('[savePlanToSchedulePreview] Inserting new rows into schedule_preview.');
+    const { error, data } = await supabase
+      .from('schedule_preview')
+      .insert(rows)
+      .select(); // Use .select() to get the inserted data back
+
+    if (error) {
+      console.error('[savePlanToSchedulePreview] CRITICAL: Error saving to schedule_preview:', error);
+      return { success: false, error };
+    }
+    
+    console.log('[savePlanToSchedulePreview] SUCCESS: Successfully inserted to schedule_preview. Rows inserted:', data?.length);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('[savePlanToSchedulePreview] CATCH BLOCK: An unexpected error occurred:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 const WorkoutPlanSection = ({
   clientId,
   client,
@@ -666,70 +872,145 @@ const WorkoutPlanSection = ({
   const [isFetchingPlan, setIsFetchingPlan] = useState(false);
   const [workoutPlan, setWorkoutPlan] = useState<WeeklyWorkoutPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
   const [showFitnessGoals, setShowFitnessGoals] = useState(false);
   const [showAICoachInsights, setShowAICoachInsights] = useState(false);
   const [showTrainerNotes, setShowTrainerNotes] = useState(false);
   const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false);
   const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
+  const [hasAIGeneratedPlan, setHasAIGeneratedPlan] = useState(false); // Add this flag
+  const [isDraftPlan, setIsDraftPlan] = useState(false); // Indicates if plan is from preview (draft)
+  const [isApproving, setIsApproving] = useState(false);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
 
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
 
+  const fetchPlan = async () => {
+    console.log('[WorkoutPlanSection] fetchPlan triggered.');
+    if (!numericClientId) {
+      console.log('[WorkoutPlanSection] No numericClientId, aborting fetch.');
+      return;
+    }
+
+    setIsFetchingPlan(true);
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    console.log(`[WorkoutPlanSection] Fetching plan for client ${numericClientId} from ${startDateStr} to ${endDateStr}`);
+
+    // 1. Try schedule_preview first
+    let { data, error } = await supabase
+      .from('schedule_preview')
+      .select('*')
+      .eq('client_id', numericClientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr)
+      .order('for_date', { ascending: true });
+    
+    console.log('[WorkoutPlanSection] Fetched from schedule_preview. Data length:', data?.length, 'Error:', error);
+
+    if (data && data.length > 0) {
+      setIsDraftPlan(true);
+    } else {
+      // 2. Fallback to schedule
+      console.log('[WorkoutPlanSection] No data in schedule_preview, falling back to schedule.');
+      ({ data, error } = await supabase
+        .from('schedule')
+        .select('*')
+        .eq('client_id', numericClientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr)
+        .order('for_date', { ascending: true }));
+      setIsDraftPlan(false);
+      console.log('[WorkoutPlanSection] Fetched from schedule. Data length:', data?.length, 'Error:', error);
+    }
+    if (error) {
+      toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
+      setWorkoutPlan(null);
+    } else {
+      // Build week structure, ensuring exercises are normalized
+      const weekDates = [];
+      for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        
+        const dayData = data?.find(workout => workout.for_date === dateStr);
+        let planDay = {
+            date: dateStr,
+            focus: 'Rest Day',
+            exercises: []
+        };
+        if (dayData && dayData.details_json?.exercises) {
+            planDay.focus = dayData.summary || 'Workout';
+            // Use the comprehensive normalizeExercise function here
+            planDay.exercises = dayData.details_json.exercises.map(normalizeExercise);
+        }
+        weekDates.push(planDay);
+      }
+      const dbWorkoutPlan = {
+        week: weekDates,
+        hasAnyWorkouts: weekDates.some(day => day.exercises && day.exercises.length > 0),
+        planStartDate: startDateStr,
+        planEndDate: endDateStr
+      };
+      setWorkoutPlan(dbWorkoutPlan);
+      console.log('[WorkoutPlanSection] Successfully processed and set workout plan:', dbWorkoutPlan);
+    }
+    setIsFetchingPlan(false);
+  };
+
+  // Debounced save function for autosaving inline edits
+  const debouncedSave = debounce(async (updatedPlan: WeekDay[]) => {
+    console.log('[WorkoutPlanSection] Debounced save triggered with updated plan:', updatedPlan);
+    setIsSavingEdits(true);
+    const result = await savePlanToSchedulePreview(updatedPlan, numericClientId, planStartDate);
+    setIsSavingEdits(false);
+    if (result.success) {
+      toast({ title: 'Changes saved', description: 'Your edits have been saved to the draft.' });
+      // DO NOT REFETCH HERE. The local state is the source of truth during editing.
+      // fetchPlan(); 
+    } else {
+      toast({ title: 'Save Failed', description: 'Could not save changes.', variant: 'destructive' });
+    }
+  }, 1500); // 1.5-second debounce delay
+
+  const handlePlanChange = (updatedWeek: WeekDay[]) => {
+    console.log('[WorkoutPlanSection] handlePlanChange received updated week:', updatedWeek);
+    // Update the state immediately for a responsive UI
+    setWorkoutPlan(currentPlan => {
+      if (!currentPlan) return null;
+      return { ...currentPlan, week: updatedWeek };
+    });
+    // Trigger the debounced save
+    debouncedSave(updatedWeek);
+  };
+
   // Fetch workout plan for client and date
   useEffect(() => {
-    setAiError(null); // Clear AI error on new fetch
-    if (numericClientId) {
-      const fetchPlan = async () => {
-        setIsFetchingPlan(true);
-        setWorkoutPlan(null);
-        
-        console.log('📅 Fetching workout plan for 7 days starting from:', format(planStartDate, 'yyyy-MM-dd'));
-        
-        // Calculate end date (6 days after start date for a full 7-day week)
-        const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-        
-        const { data, error } = await supabase
-          .from('schedule')
-          .select('*')
-          .eq('client_id', numericClientId)
-          .eq('type', 'workout')
-          .gte('for_date', format(planStartDate, 'yyyy-MM-dd'))
-          .lte('for_date', format(endDate, 'yyyy-MM-dd'))
-          .order('for_date', { ascending: true });
-          
-        if (error) {
-          toast({ title: 'Error', description: error.message, variant: 'destructive' });
-          setWorkoutPlan(null);
-        } else {
-          // Create a 7-day structure with all dates, even if no workouts exist for some days
-          const weekDates = [];
-          for (let i = 0; i < 7; i++) {
-            const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
-            weekDates.push({
-              date: format(currentDate, 'yyyy-MM-dd'),
-              dayName: format(currentDate, 'EEEE'),
-              workouts: data?.filter(workout => workout.for_date === format(currentDate, 'yyyy-MM-dd')) || []
-            });
-          }
-          
-          console.log('📊 7-day workout plan structure:', weekDates);
-          
-          // Always set the workout plan - either with data or empty structure
-          setWorkoutPlan({
-            weekDates,
-            allWorkouts: data || [],
-            hasAnyWorkouts: data && data.length > 0,
-            planStartDate: format(planStartDate, 'yyyy-MM-dd'),
-            planEndDate: format(endDate, 'yyyy-MM-dd')
-          });
-        }
-        
-        setIsFetchingPlan(false);
-      };
-      fetchPlan();
+    if (hasAIGeneratedPlan) {
+      console.log('[WorkoutPlanSection] Skipping database fetch because AI-generated plan is active.');
+      return;
     }
-  }, [numericClientId, planStartDate]);
+    fetchPlan();
+  }, [numericClientId, planStartDate, hasAIGeneratedPlan]);
+
+  // Reset AI generated plan flag when client changes
+  useEffect(() => {
+    setHasAIGeneratedPlan(false);
+  }, [numericClientId]);
+
+  // Clear workout plan when client changes (but not when we have AI data)
+  useEffect(() => {
+    if (!hasAIGeneratedPlan) {
+      console.log('🗑️ Clearing workout plan due to client change');
+      setWorkoutPlan(null);
+    }
+  }, [numericClientId, hasAIGeneratedPlan]);
 
   // AI generation handler
   const handleGeneratePlan = async () => {
@@ -739,65 +1020,87 @@ const WorkoutPlanSection = ({
       return;
     }
     setIsGenerating(true);
+    setCurrentModel('qwen2.5:latest');
+    setRetryCount(0);
     try {
-      const result = await generateAIWorkoutPlanForReview(numericClientId);
+      let result;
+      let lastError = null;
+      const modelsToTry = [
+        'qwen2.5:latest',
+        'qwen2.5-vl-72b-instruct',
+        'qwen2.5-vl-32b-instruct',
+      ];
+      for (let i = 0; i < modelsToTry.length; i++) {
+        setCurrentModel(modelsToTry[i]);
+        setRetryCount(i);
+        try {
+          result = await generateAIWorkoutPlanForReview(numericClientId, modelsToTry[i]);
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!result) throw lastError;
+      if (result.fallbackModelUsed) {
+        toast({
+          title: 'Alternate AI Model Used',
+          description: `The primary model failed. Using alternate model: ${result.aiModel}`,
+          variant: 'default',
+        });
+      }
       if (result.success) {
         toast({ title: 'AI Plan Generated', description: 'The new plan is ready for review.' });
-        
-        // Convert AI plan structure to WeeklyWorkoutPlan format
         const aiWorkoutPlan = result.workoutPlan;
-        const workoutExercises = aiWorkoutPlan.workout_plan || [];
+        const aiDays = aiWorkoutPlan.days || [];
         
-        // Create 7-day structure with AI workouts
-        const weekDates = [];
-        for (let i = 0; i < 7; i++) {
+        console.log('🔍 === DEBUGGING AI RESPONSE MAPPING ===');
+        console.log('🔍 AI Workout Plan:', aiWorkoutPlan);
+        console.log('🔍 AI Days:', aiDays);
+        console.log('🔍 First day sample:', aiDays[0]);
+        console.log('🔍 First day exercises:', aiDays[0]?.exercises);
+        console.log('🔍 First exercise sample:', aiDays[0]?.exercises?.[0]);
+        
+        // Build week array starting from planStartDate, assigning each LLM day to a date
+        const week = [];
+        for (let i = 0; i < aiDays.length; i++) {
           const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
           const dateStr = format(currentDate, 'yyyy-MM-dd');
-          weekDates.push({
+          
+          const normalizedExercises = (aiDays[i].exercises || []).map(normalizeExercise);
+          console.log(`🔍 Day ${i} exercises before normalization:`, aiDays[i].exercises);
+          console.log(`🔍 Day ${i} exercises after normalization:`, normalizedExercises);
+          
+          week.push({
             date: dateStr,
-            dayName: format(currentDate, 'EEEE'),
-            workouts: workoutExercises.filter((workout: any) => workout.for_date === dateStr) || []
+            focus: aiDays[i].focus,
+            exercises: normalizedExercises,
           });
         }
         
-        // Convert workout exercises to the format expected by WorkoutPlanTable
-        const convertedWorkouts = workoutExercises.map((workout: any, index: number) => ({
-          id: `new-${new Date().getTime()}-${index}`,
-          workout: workout.workout || workout.exercise_name,
-          summary: workout.workout || workout.exercise_name,
-          category: workout.category,
-          body_part: workout.body_part,
-          sets: workout.sets,
-          reps: workout.reps,
-          duration: workout.duration,
-          weights: workout.weights,
-          equipment: workout.equipment,
-          for_date: workout.for_date,
-          coach_tip: workout.coach_tip,
-          icon: workout.icon,
-          details_json: {
-            category: workout.category,
-            body_part: workout.body_part,
-            main_workout: [{
-              exercise_name: workout.workout || workout.exercise_name,
-              sets: workout.sets,
-              reps: workout.reps,
-              duration: workout.duration,
-              weight: workout.weights,
-              equipment: workout.equipment,
-              coach_tip: workout.coach_tip,
-              other_details: ''
-            }]
-          }
-        }));
+        console.log('🔍 Final week structure:', week);
+        console.log('🔍 First week day sample:', week[0]);
+        console.log('🔍 First week day exercises:', week[0]?.exercises);
         
-        setWorkoutPlan({
-          weekDates,
-          allWorkouts: convertedWorkouts,
-          hasAnyWorkouts: convertedWorkouts.length > 0,
-          planStartDate: format(planStartDate, 'yyyy-MM-dd'),
-          planEndDate: format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
-        });
+        const newWorkoutPlan = {
+          week,
+          hasAnyWorkouts: week.some((day: WeekDay) => day.exercises && day.exercises.length > 0),
+          planStartDate: week[0]?.date || '',
+          planEndDate: week[week.length - 1]?.date || ''
+        };
+        console.log('✅ Setting AI-generated workout plan:', newWorkoutPlan);
+        setWorkoutPlan(newWorkoutPlan);
+        if (week.length > 0) {
+          setPlanStartDate(new Date(week[0].date));
+        }
+        setHasAIGeneratedPlan(true); // Mark that AI generated data is now available
+        // Immediately save to schedule_preview
+        console.log('[DEBUG] Calling savePlanToSchedulePreview...');
+        const saveResult = await savePlanToSchedulePreview(week, numericClientId, planStartDate);
+        if (!saveResult.success) {
+          toast({ title: 'Error', description: 'Failed to save plan to schedule_preview.', variant: 'destructive' });
+        } else {
+          setIsDraftPlan(true);
+        }
       } else {
         throw new Error(result.message || 'Unknown error');
       }
@@ -807,6 +1110,8 @@ const WorkoutPlanSection = ({
       toast({ title: 'AI Generation Failed', description: error.message || 'Could not generate workout plan.', variant: 'destructive' });
     } finally {
       setIsGenerating(false);
+      setCurrentModel(null);
+      setRetryCount(0);
     }
   };
 
@@ -850,7 +1155,7 @@ const WorkoutPlanSection = ({
             {isGenerating ? (
               <>
                 <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}
               </>
             ) : (
               "Generate with AI"
@@ -860,6 +1165,109 @@ const WorkoutPlanSection = ({
       </div>
       {/* Plan Table or Empty State */}
       <div>
+        {/* Show plan source status */}
+        {workoutPlan && (
+          <div className="mb-2 flex items-center gap-4">
+            {isDraftPlan ? (
+              <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Draft Plan (Not Yet Approved)</span>
+            ) : (
+              <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved Plan</span>
+            )}
+            {/* Approve button for draft plans */}
+            {isDraftPlan && (
+              <Button
+                onClick={async () => {
+                  setIsApproving(true);
+                  const result = await approvePlan(numericClientId, planStartDate);
+                  setIsApproving(false);
+                  if (result.success) {
+                    toast({ title: 'Plan Approved', description: 'The plan has been moved to production.', variant: 'default' });
+                    setIsDraftPlan(false); // UI update: now approved
+                  } else {
+                    toast({ title: 'Approval Failed', description: 'Could not approve plan.', variant: 'destructive' });
+                  }
+                }}
+                disabled={isApproving}
+                className="ml-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                {isApproving ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2 animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Approve Plan
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        )}
+        {workoutPlan && isDraftPlan && (
+          <div className="mb-2 flex items-center gap-4">
+            <Button
+              onClick={async () => {
+                setIsSavingEdits(true);
+                const saveResult = await savePlanToSchedulePreview(workoutPlan.week, numericClientId, planStartDate);
+                if (saveResult.success) {
+                  // Refetch the plan from schedule_preview to ensure UI is up-to-date
+                  const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+                  const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+                  const endDateStr = format(endDate, 'yyyy-MM-dd');
+                  let { data, error } = await supabase
+                    .from('schedule_preview')
+                    .select('*')
+                    .eq('client_id', numericClientId)
+                    .eq('type', 'workout')
+                    .gte('for_date', startDateStr)
+                    .lte('for_date', endDateStr)
+                    .order('for_date', { ascending: true });
+                  console.log('[Save Changes] Data fetched from schedule_preview after save:', data);
+                  if (!error && data) {
+                    // Build week structure as before, always mapping from details_json.exercises
+                    const weekDates = [];
+                    for (let i = 0; i < 7; i++) {
+                      const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+                      const dateStr = format(currentDate, 'yyyy-MM-dd');
+                      const dayRow = data.find(workout => workout.for_date === dateStr);
+                      let exercises = [];
+                      let focus = 'Rest Day';
+                      if (dayRow && dayRow.details_json && Array.isArray(dayRow.details_json.exercises)) {
+                        exercises = dayRow.details_json.exercises;
+                        focus = dayRow.summary || 'Workout';
+                      }
+                      weekDates.push({
+                        date: dateStr,
+                        focus,
+                        exercises
+                      });
+                    }
+                    const dbWorkoutPlan = {
+                      week: weekDates,
+                      hasAnyWorkouts: weekDates.some(day => day.exercises && day.exercises.length > 0),
+                      planStartDate: startDateStr,
+                      planEndDate: endDateStr
+                    };
+                    console.log('[Save Changes] Setting workout plan in UI to:', dbWorkoutPlan);
+                    setWorkoutPlan(dbWorkoutPlan);
+                  } else {
+                    console.warn('[Save Changes] Error or no data after save:', error, data);
+                  }
+                  toast({ title: 'Changes Saved', description: 'Your edits have been saved to the draft and UI updated.', variant: 'default' });
+                } else {
+                  toast({ title: 'Save Failed', description: 'Could not save changes to the draft.', variant: 'destructive' });
+                }
+                setIsSavingEdits(false);
+              }}
+              disabled={isSavingEdits}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSavingEdits ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        )}
         {aiError && (
           <Card className="flex flex-col items-center justify-center h-32 text-center bg-red-50 border-red-200">
             <h3 className="text-lg font-semibold text-red-700">AI Response Error</h3>
@@ -878,17 +1286,17 @@ const WorkoutPlanSection = ({
                 7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
               </h3>
               <div className="grid grid-cols-7 gap-2 text-sm">
-                {workoutPlan.weekDates?.map((day: WeekDay, index: number) => (
+                {workoutPlan.week?.map((day: WeekDay, index: number) => (
                   <div key={day.date} className={`p-2 rounded text-center ${
-                    day.workouts.length > 0 
+                    day.exercises.length > 0 
                       ? 'bg-green-100 text-green-800 border border-green-200' 
                       : 'bg-gray-100 text-gray-600 border border-gray-200'
                   }`}>
-                    <div className="font-medium">{day.dayName}</div>
+                    <div className="font-medium">{day.focus}</div>
                     <div className="text-xs">{format(new Date(day.date), "MMM d")}</div>
                     <div className="text-xs mt-1">
-                      {day.workouts.length > 0 
-                        ? `${day.workouts.length} exercise${day.workouts.length > 1 ? 's' : ''}` 
+                      {day.exercises.length > 0 
+                        ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` 
                         : 'Rest day'
                       }
                     </div>
@@ -900,8 +1308,10 @@ const WorkoutPlanSection = ({
             {/* Workout Plan Table */}
             {workoutPlan.hasAnyWorkouts ? (
               <WorkoutPlanTable 
-                initialPlanData={workoutPlan.allWorkouts} 
-                clientId={numericClientId} 
+                week={workoutPlan.week}
+                clientId={numericClientId}
+                onPlanChange={handlePlanChange}
+                planStartDate={planStartDate} // Pass planStartDate as required by WorkoutPlanTable
               />
             ) : (
               <Card className="flex flex-col items-center justify-center h-32 text-center">

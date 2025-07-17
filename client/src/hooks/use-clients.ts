@@ -95,24 +95,40 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
   const [schedule, setSchedule] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isDraftPlan, setIsDraftPlan] = useState(false)
 
   useEffect(() => {
     async function fetchSchedule() {
       try {
         setLoading(true)
-        const { data, error } = await supabase
-          .from('schedule')
+        // 1. Try schedule_preview first
+        let { data, error } = await supabase
+          .from('schedule_preview')
           .select('*')
           .eq('client_id', clientId)
           .gte('for_date', startDate)
           .lte('for_date', endDate)
           .order('for_date', { ascending: true })
-
+        if (error) {
+          console.warn('Error fetching from schedule_preview:', error)
+        }
+        if (data && data.length > 0) {
+          setIsDraftPlan(true)
+        } else {
+          // 2. Fallback to schedule
+          ({ data, error } = await supabase
+            .from('schedule')
+            .select('*')
+            .eq('client_id', clientId)
+            .gte('for_date', startDate)
+            .lte('for_date', endDate)
+            .order('for_date', { ascending: true }))
+          setIsDraftPlan(false)
+        }
         if (error) {
           setError(error.message)
           return
         }
-
         // Transform the data for the schedule component
         const transformedSchedule = (data || []).map((item: any) => ({
           date: item.for_date,
@@ -122,7 +138,6 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
           type: item.type,
           icon: item.icon
         }))
-
         setSchedule(transformedSchedule)
       } catch (err) {
         setError('Failed to fetch schedule')
@@ -131,11 +146,10 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
         setLoading(false)
       }
     }
-
     if (clientId && startDate && endDate) {
       fetchSchedule()
     }
   }, [clientId, startDate, endDate])
 
-  return { data: schedule, isLoading: loading, error }
+  return { data: schedule, isLoading: loading, error, isDraftPlan }
 }

@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap } from 'lucide-react';
+import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -20,6 +20,8 @@ import { supabase } from '@/lib/supabase';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 // Define the type for a single exercise item
 export interface Exercise {
@@ -34,6 +36,7 @@ export interface Exercise {
   weight: number | string;
   equipment: string;
   date: string;
+  rest?: number | string; // Rest in seconds between sets
   other_details?: string;
   coach_tip?: string;
   details_json?: any;
@@ -41,30 +44,37 @@ export interface Exercise {
 }
 
 interface WorkoutPlanTableProps {
-  initialPlanData: any[];
+  week: Array<{
+    date: string;
+    focus: string;
+    exercises: any[];
+  }>;
   clientId: number;
+  onPlanChange: (updatedWeek: any[]) => void; // Callback to notify parent of changes
 }
 
-// Helper to get an icon based on exercise category/body part
-const getExerciseIcon = (exercise: Exercise) => {
-    const category = exercise.category?.toLowerCase() || '';
-    const bodyPart = exercise.body_part?.toLowerCase() || '';
+// Helper to get a focus icon
+const getFocusIcon = (focus: string) => {
+  const f = focus.toLowerCase();
+  if (f.includes('rest')) return <BedDouble className="h-6 w-6 text-blue-400" />;
+  if (f.includes('cardio')) return <HeartPulse className="h-6 w-6 text-red-500" />;
+  if (f.includes('strength') || f.includes('upper') || f.includes('lower') || f.includes('body')) return <Dumbbell className="h-6 w-6 text-green-600" />;
+  if (f.includes('core')) return <PersonStanding className="h-6 w-6 text-orange-500" />;
+  if (f.includes('hiit')) return <Zap className="h-6 w-6 text-yellow-500" />;
+  if (f.includes('cool') || f.includes('stretch')) return <Snowflake className="h-6 w-6 text-cyan-500" />;
+  return <Dumbbell className="h-6 w-6 text-gray-400" />;
+};
 
-    if (category.includes('cardio')) return <HeartPulse className="h-5 w-5 text-red-500" />;
-    if (category.includes('stretch')) return <PersonStanding className="h-5 w-5 text-blue-500" />;
-    if (category.includes('warmup')) return <Zap className="h-5 w-5 text-yellow-500" />;
-    if (category.includes('cooldown')) return <Snowflake className="h-5 w-5 text-cyan-500" />;
-
-    if (bodyPart.includes('leg')) return <Footprints className="h-5 w-5 text-green-500" />;
-    if (bodyPart.includes('chest')) return <HeartPulse className="h-5 w-5 text-red-600" />;
-    if (bodyPart.includes('back')) return <PersonStanding className="h-5 w-5 text-gray-500" />;
-    if (bodyPart.includes('arm')) return <Dumbbell className="h-5 w-5 text-indigo-500" />;
-    if (bodyPart.includes('shoulder')) return <Dumbbell className="h-5 w-5 text-purple-500" />;
-    if (bodyPart.includes('core')) return <Weight className="h-5 w-5 text-orange-500" />;
-
-
-    return <Dumbbell className="h-5 w-5 text-muted-foreground" />;
-}
+// Helper to get an exercise icon (optional, fallback to focus icon)
+const getExerciseIcon = (ex: any) => {
+  const cat = (ex.category || '').toLowerCase();
+  if (cat.includes('cardio')) return <HeartPulse className="h-5 w-5 text-red-500" />;
+  if (cat.includes('strength')) return <Dumbbell className="h-5 w-5 text-green-600" />;
+  if (cat.includes('core')) return <PersonStanding className="h-5 w-5 text-orange-500" />;
+  if (cat.includes('hiit')) return <Zap className="h-5 w-5 text-yellow-500" />;
+  if (cat.includes('cool') || cat.includes('stretch')) return <Snowflake className="h-5 w-5 text-cyan-500" />;
+  return <Dumbbell className="h-5 w-5 text-gray-400" />;
+};
 
 // A single sortable row in the table
 const SortableExerciseRow = ({
@@ -130,6 +140,7 @@ const SortableExerciseRow = ({
       <TableCell>{renderCell('sets', 'number')}</TableCell>
       <TableCell>{renderCell('reps', 'number')}</TableCell>
       <TableCell>{renderCell('time')}</TableCell>
+      <TableCell>{renderCell('rest', 'number')}</TableCell> {/* New Rest column */}
       <TableCell>{renderCell('weight', 'number')}</TableCell>
       <TableCell>{renderCell('equipment')}</TableCell>
       <TableCell>{exercise.date}</TableCell>
@@ -157,467 +168,340 @@ const SortableExerciseRow = ({
   );
 };
 
+// Helper to get a 7-day array for the week, filling missing days as null
+function getFullWeek(startDate: Date, week: any[]) {
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+    const dateStr = date.toISOString().slice(0, 10);
+    const day = week.find((d) => d && d.date === dateStr);
+    days.push(day || null);
+  }
+  return days;
+}
 
-export const WorkoutPlanTable = ({ initialPlanData, clientId }: WorkoutPlanTableProps) => {
-  console.log('WorkoutPlanTable initialPlanData (first item):', initialPlanData && initialPlanData[0]);
-  const { toast } = useToast();
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [editingCell, setEditingCell] = useState<{ exerciseId: string; field: keyof Exercise } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [deletedExerciseIds, setDeletedExerciseIds] = useState<string[]>([]);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }: WorkoutPlanTableProps & { planStartDate: Date }) => {
+  // Debug logging
+  console.log('[WorkoutPlanTable] Rendering with week data:', week);
+  
+  // State for editing sets x reps
+  const [editIdx, setEditIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [editSets, setEditSets] = useState('');
+  const [editReps, setEditReps] = useState('');
+  const [editDurationIdx, setEditDurationIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [editDuration, setEditDuration] = useState('');
+  const [editRestIdx, setEditRestIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [editRest, setEditRest] = useState('');
+  const [editWeightIdx, setEditWeightIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [editWeight, setEditWeight] = useState('');
+  // Accordion open panels state
+  const [openPanels, setOpenPanels] = useState<string[]>([]);
+  // State for delete confirmation
+  const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
+
+  // Local copy of the week for editing
+  const [editableWeek, setEditableWeek] = useState(week);
 
   useEffect(() => {
-    // Always use an array for mapping
-    const safePlanData = Array.isArray(initialPlanData) ? initialPlanData : [];
-    if (safePlanData.length > 0) {
-      const formattedExercises: Exercise[] = safePlanData.map((item, index) => {
-        // Helper to get a value from top-level, details_json, or details_json.main_workout[0]
-        const getField = (field: string, fallback: any = 'N/A') => {
-          if (item[field] !== undefined && item[field] !== null) return item[field];
-          if (item.details_json && item.details_json[field] !== undefined && item.details_json[field] !== null) return item.details_json[field];
-          if (item.details_json && item.details_json.main_workout && Array.isArray(item.details_json.main_workout) && item.details_json.main_workout[0] && item.details_json.main_workout[0][field] !== undefined) {
-            return item.details_json.main_workout[0][field];
-          }
-          return fallback;
-        };
+    // Keep local state in sync with parent prop
+    setEditableWeek(week);
+  }, [week]);
 
-        return {
-          id: item.id?.toString() || `new-${new Date().getTime()}-${index}`,
-          exercise: getField('exercise_name', item.workout || item.summary || 'New Exercise'),
-          category: getField('category', 'N/A'),
-          body_part: getField('body_part', 'N/A'),
-          sets: getField('sets', 0),
-          reps: getField('reps', 0),
-          time: getField('duration', '0s'),
-          weight: getField('weights', getField('weight', 0)),
-          equipment: getField('equipment', 'bodyweight'),
-          date: item.for_date || item.date || '',
-          other_details: getField('other_details', ''),
-          coach_tip: getField('coach_tip', ''),
-          details_json: item.details_json || item,
-        };
-      });
-      console.log('WorkoutPlanTable formattedExercises (first item):', formattedExercises && formattedExercises[0]);
-      setExercises(formattedExercises);
-    } else {
-      setExercises([]);
-    }
-  }, [initialPlanData]);
+  // Expand all by default on initial load or when week changes
+  useEffect(() => {
+    setOpenPanels(editableWeek.map(day => day.date));
+  }, [editableWeek]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const handleExpandAll = () => setOpenPanels(editableWeek.map(day => day.date));
+  const handleCollapseAll = () => setOpenPanels([]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setExercises((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
-
-  const handleCellClick = (exerciseId: string, field: keyof Exercise) => {
-    setEditingCell({ exerciseId, field });
-  };
-
-  const handleInputChange = (exerciseId: string, field: keyof Exercise, value: any) => {
-    setExercises(prev =>
-      prev.map(ex =>
-        ex.id === exerciseId ? { ...ex, [field]: value } : ex
-      )
-    );
-  };
-  
-  const handleDeleteExercise = (exerciseId: string) => {
-    // Check if this is a database ID (not a temporary one)
-    const isValidDatabaseId = (id: string): boolean => {
-      return /^\d+$/.test(id) && !isNaN(parseInt(id)) && parseInt(id) > 0;
+  // --- Normalization function ---
+  function normalizeExercise(ex: any): any {
+    return {
+      ...ex,
+      exercise: ex.exercise || ex.exercise_name || ex.name || '',
+      category: ex.category || '',
+      body_part: ex.body_part || ex.bodyPart || '',
+      sets: String(ex.sets ?? ''), // Always coerce sets to string
+      reps: ex.reps ?? '',
+      duration: ex.duration ?? ex.time ?? '',
+      weight: ex.weight ?? ex.weights ?? '',
+      equipment: ex.equipment ?? '',
+      coach_tip: ex.coach_tip ?? ex.tips ?? '',
+      rest: ex.rest ?? '',
+      video_link: ex.video_link ?? ex.videoLink ?? '',
     };
-    
-    if (isValidDatabaseId(exerciseId)) {
-      setDeletedExerciseIds(prev => [...prev, exerciseId]);
-    }
-    setExercises(prev => prev.filter(ex => ex.id !== exerciseId));
   }
+  // ---
 
-  // Check if there are existing workouts for the same date range
-  const checkExistingWorkouts = async () => {
-    const newExercises = exercises.filter(ex => !/^\d+$/.test(ex.id));
-    if (newExercises.length === 0) return false;
+  const normalizedWeek = editableWeek.map(day => ({
+    ...day,
+    exercises: (day.exercises || []).map(normalizeExercise),
+  }));
+
+  const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
+    console.log(`[WorkoutPlanTable] handlePlanChange triggered. Day: ${dayIdx}, Ex: ${exIdx}, Field: ${field}, Value:`, value);
+    const updatedWeek = [...normalizedWeek];
+    const newExercises = [...updatedWeek[dayIdx].exercises];
+    newExercises[exIdx] = { ...newExercises[exIdx], [field]: value };
+    updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
     
-    const dates = newExercises.map(ex => ex.date).filter(Boolean);
-    if (dates.length === 0) return false;
-    
-    const minDate = dates.reduce((a, b) => a < b ? a : b);
-    const maxDate = dates.reduce((a, b) => a > b ? a : b);
-    
-    const { data, error } = await supabase
-      .from('schedule')
-      .select('id')
-      .eq('client_id', clientId)
-      .eq('type', 'workout')
-      .gte('for_date', minDate)
-      .lte('for_date', maxDate);
-      
-    return data && data.length > 0;
+    setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
+    onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
+    console.log('[WorkoutPlanTable] Called onPlanChange with updated week:', updatedWeek);
   };
 
-  const handleSaveClick = async () => {
-    const hasExisting = await checkExistingWorkouts();
-    if (hasExisting) {
-      setIsConfirmDialogOpen(true);
-    } else {
-      handleSaveChanges();
-    }
+  const handleEditClick = (dayIdx: number, exIdx: number, sets: any, reps: any) => {
+    setEditIdx({ dayIdx, exIdx });
+    setEditSets(sets?.toString() || '');
+    setEditReps(reps?.toString() || '');
+  };
+  const handleSaveEdit = (onChange: (sets: string, reps: string) => void) => {
+    onChange(editSets, editReps);
+    setEditIdx(null);
   };
 
-  // Helper to get date range for confirmation dialog
-  const getDateRange = () => {
-    const newExercises = exercises.filter(ex => !/^\d+$/.test(ex.id));
-    const dates = newExercises.map(ex => ex.date).filter(Boolean);
-    if (dates.length === 0) return { minDate: '', maxDate: '' };
-    
-    const minDate = dates.reduce((a, b) => a < b ? a : b);
-    const maxDate = dates.reduce((a, b) => a > b ? a : b);
-    return { minDate, maxDate };
-  };
+  const { toast } = useToast();
 
-
-  const handleSaveChanges = async () => {
-    setIsSaving(true);
-    toast({
-        title: 'Saving...',
-        description: 'Your workout plan is being saved.',
-    });
-
-    // 1. Fetch for_time from client table for the clientId
-    let forTime = '08:00:00'; // default
+  // Delete all exercises for a day and remove the row from schedule_preview
+  const handleDeleteDay = async (dayIdx: number) => {
+    if (!window.confirm('Are you sure you want to delete all workouts for this day?')) return;
+    const day = editableWeek[dayIdx];
     try {
-      const { data: clientData, error: clientError } = await supabase
-        .from('client')
-        .select('workout_time')
+      // Delete the row from schedule_preview for this client and date
+      console.log(`[Delete Day] Deleting row for clientId ${clientId}, date ${day.date}`);
+      const { error } = await supabase
+        .from('schedule_preview')
+        .delete()
         .eq('client_id', clientId)
-        .single();
-      if (clientData && clientData.workout_time) {
-        forTime = clientData.workout_time;
+        .eq('for_date', day.date)
+        .eq('type', 'workout');
+      if (error) {
+        console.error('[Delete Day] Error deleting row:', error);
+        toast({ title: 'Delete Failed', description: 'Could not delete the day from the database.', variant: 'destructive' });
+        return;
       }
+      // Remove the day from local state
+      const updatedWeek = editableWeek.map((d, idx) => idx === dayIdx ? { ...d, exercises: [] } : d);
+      setEditableWeek(updatedWeek);
+      onPlanChange(updatedWeek);
+      toast({ title: 'Day Deleted', description: 'The day has been removed from the plan.' });
+      console.log('[Delete Day] Successfully deleted row and updated UI.');
     } catch (err) {
-      // fallback to default
-      console.warn('Could not fetch client workout_time, using default:', err);
-    }
-
-    // 2. Separate new exercises from existing ones based on proper ID validation
-    // Valid database IDs are bigint (numbers), invalid ones should be treated as new
-    const isValidDatabaseId = (id: string): boolean => {
-      // Database IDs are bigint (numeric strings), not containing dashes or letters
-      return /^\d+$/.test(id) && !isNaN(parseInt(id)) && parseInt(id) > 0;
-    };
-
-    const newExercises = exercises.filter(ex => !isValidDatabaseId(ex.id));
-    const existingExercises = exercises.filter(ex => isValidDatabaseId(ex.id));
-
-    console.log('💾 Saving workout plan:', {
-      total: exercises.length,
-      new: newExercises.length,
-      existing: existingExercises.length,
-      clientId,
-      forTime,
-      exerciseIds: exercises.map(ex => ({ id: ex.id, isValid: isValidDatabaseId(ex.id), exercise: ex.exercise }))
-    });
-
-    try {
-      // 3. STRATEGY: Replace and Clean - Delete existing workouts for the same date range
-      if (newExercises.length > 0) {
-        // Get the date range from the new exercises
-        const dates = newExercises.map(ex => ex.date).filter(Boolean);
-        if (dates.length > 0) {
-          const minDate = dates.reduce((a, b) => a < b ? a : b);
-          const maxDate = dates.reduce((a, b) => a > b ? a : b);
-          
-          console.log('🗑️ Cleaning existing workouts for date range:', { minDate, maxDate });
-          
-          // Delete existing workouts for this client and date range
-          const { error: deleteError } = await supabase
-            .from('schedule')
-            .delete()
-            .eq('client_id', clientId)
-            .eq('type', 'workout')
-            .gte('for_date', minDate)
-            .lte('for_date', maxDate);
-            
-          if (deleteError) {
-            console.warn('⚠️ Failed to clean existing workouts:', deleteError.message);
-            // Continue anyway - we'll try to insert new ones
-          } else {
-            console.log('✅ Successfully cleaned existing workouts for date range');
-            toast({
-              title: 'Replacing Plan',
-              description: `Replaced existing workout plan for ${minDate} to ${maxDate}`,
-            });
-          }
-        }
-      }
-
-      // 4. Handle new exercises (INSERT) - Now safe to insert since we cleaned old ones
-      if (newExercises.length > 0) {
-        const newExerciseData = newExercises.map(ex => {
-          // Validate required fields
-          if (!ex.exercise || !ex.date) {
-            throw new Error(`Missing required fields for exercise: ${ex.exercise || 'Unknown'}`);
-          }
-
-          // Structure details_json in the specified format
-          const details_json = {
-            category: ex.category || 'General',
-            body_part: ex.body_part || 'Full Body',
-            cool_down: [], // Empty array as specified
-            main_workout: [{
-              reps: typeof ex.reps === 'string' ? ex.reps : ex.reps?.toString() || '0',
-              sets: typeof ex.sets === 'string' ? parseInt(ex.sets) || 0 : ex.sets || 0,
-              coach_tip: ex.coach_tip || '',
-              exercise_name: ex.exercise,
-              is_time_based: ex.time && ex.time !== '0s' && ex.time !== '0',
-              equipment_type: ex.weight && ex.weight !== '0' && ex.weight !== 'bodyweight' ? 'Yes' : 'No',
-              equipment: ex.equipment || 'bodyweight',
-              youtube_video_id: '',
-              weight_applicable: ex.weight && ex.weight !== '0' && ex.weight !== 'bodyweight',
-              weight: ex.weight || '0',
-              duration: ex.time || '0s',
-              other_details: ex.other_details || ''
-            }],
-            warm_up_details: [], // Empty array as specified
-            session_duration_minutes: 30 // Default session duration
-          };
-
-          return {
-            // Don't include id for new exercises - let DB generate it
-            client_id: clientId,
-            type: 'workout',
-            task: 'workout',
-            for_date: ex.date,
-            for_time: forTime,
-            icon: ex.icon || 'dumbbell',
-            coach_tip: ex.coach_tip || '',
-            summary: `${ex.category || 'General'} + ${ex.body_part || 'Full Body'} + ${ex.exercise}`, // New summary format
-            details_json,
-          };
-        });
-
-        const { error: insertError } = await supabase
-          .from('schedule')
-          .insert(newExerciseData);
-
-        if (insertError) {
-          throw new Error(`Failed to insert new exercises: ${insertError.message}`);
-        }
-        console.log('✅ Successfully inserted new exercises:', newExerciseData.length);
-      }
-
-      // 5. Handle existing exercises (UPDATE) - Only for exercises that were already in DB
-      if (existingExercises.length > 0) {
-        for (const ex of existingExercises) {
-          // Double-check ID validation before attempting update
-          if (!isValidDatabaseId(ex.id)) {
-            console.warn(`⚠️ Skipping update for exercise with invalid ID: ${ex.id} (${ex.exercise})`);
-            continue; // Skip this exercise, don't try to update it
-          }
-
-          // Validate required fields
-          if (!ex.exercise || !ex.date || !ex.id) {
-            throw new Error(`Missing required fields for exercise update: ${ex.exercise || 'Unknown'}`);
-          }
-
-          // Structure details_json in the specified format (same as INSERT)
-          const details_json = {
-            category: ex.category || 'General',
-            body_part: ex.body_part || 'Full Body',
-            cool_down: [], // Empty array as specified
-            main_workout: [{
-              reps: typeof ex.reps === 'string' ? ex.reps : ex.reps?.toString() || '0',
-              sets: typeof ex.sets === 'string' ? parseInt(ex.sets) || 0 : ex.sets || 0,
-              coach_tip: ex.coach_tip || '',
-              exercise_name: ex.exercise,
-              is_time_based: ex.time && ex.time !== '0s' && ex.time !== '0',
-              equipment_type: ex.weight && ex.weight !== '0' && ex.weight !== 'bodyweight' ? 'Yes' : 'No',
-              equipment: ex.equipment || 'bodyweight',
-              youtube_video_id: '',
-              weight_applicable: ex.weight && ex.weight !== '0' && ex.weight !== 'bodyweight',
-              weight: ex.weight || '0',
-              duration: ex.time || '0s',
-              other_details: ex.other_details || ''
-            }],
-            warm_up_details: [], // Empty array as specified
-            session_duration_minutes: 30 // Default session duration
-          };
-
-          const updateData = {
-            client_id: clientId,
-            type: 'workout',
-            task: 'workout',
-            for_date: ex.date,
-            for_time: forTime,
-            icon: ex.icon || 'dumbbell',
-            coach_tip: ex.coach_tip || '',
-            summary: `${ex.category || 'General'} + ${ex.body_part || 'Full Body'} + ${ex.exercise}`, // New summary format
-            workout_id: ex.workout_id || uuidv4(),
-            details_json,
-          };
-
-          console.log(`🔄 Updating exercise ${ex.exercise} with ID: ${ex.id}`);
-          const { error: updateError } = await supabase
-            .from('schedule')
-            .update(updateData)
-            .eq('id', parseInt(ex.id)); // Convert to number to ensure proper bigint matching
-
-          if (updateError) {
-            throw new Error(`Failed to update exercise ${ex.exercise} (ID: ${ex.id}): ${updateError.message}`);
-          }
-        }
-        console.log('✅ Successfully updated existing exercises:', existingExercises.length);
-      }
-
-      // 6. Perform the delete operation for any removed exercises (from table editing)
-      if (deletedExerciseIds.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('schedule')
-          .delete()
-          .in('id', deletedExerciseIds);
-
-        if (deleteError) {
-          console.warn('⚠️ Failed to delete some exercises:', deleteError.message);
-          // Continue even if delete fails, as the main save succeeded
-        } else {
-          setDeletedExerciseIds([]); // Clear the list on successful deletion
-          console.log('✅ Successfully deleted exercises:', deletedExerciseIds.length);
-        }
-      }
-
-      setIsSaving(false);
-      toast({
-        title: 'Plan Saved!',
-        description: 'The workout plan has been successfully saved to the database.',
-      });
-      
-      // Close confirmation dialog if it was open
-      setIsConfirmDialogOpen(false);
-
-    } catch (error: any) {
-      console.error('❌ Error saving workout plan:', error);
-      toast({
-        title: 'Save Failed',
-        description: `Could not save the plan. Error: ${error.message || 'Unknown error'}`,
-        variant: 'destructive',
-      });
-      setIsSaving(false);
+      console.error('[Delete Day] Unexpected error:', err);
+      toast({ title: 'Delete Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
     }
   };
 
-  const handleConfirmSave = () => {
-    setIsConfirmDialogOpen(false);
-    handleSaveChanges();
-  };
-
-  const handleAddExercise = () => {
-    const newExercise: Exercise = {
-        id: `new-${new Date().getTime()}`,
-        exercise: 'New Exercise',
-        category: 'Strength',
-        body_part: 'Full Body',
-        sets: 3,
-        reps: 10,
-        time: '60s',
-        weight: '10kg',
-        equipment: 'bodyweight',
-        date: new Date().toISOString().split('T')[0], // Default to today
-        other_details: '',
-    };
-    setExercises(prev => [...prev, newExercise]);
-  }
+  // Always render 7 days, filling missing days as null
+  const fullWeek = getFullWeek(planStartDate, editableWeek);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Workout Plan</CardTitle>
-            <CardDescription>Drag and drop to reorder exercises. Click on a field to edit.</CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleAddExercise} variant="outline">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Exercise
-            </Button>
-            <Button onClick={handleSaveClick} disabled={isSaving}>
-              {isSaving ? 'Saving...' : <><Save className="mr-2 h-4 w-4" /> Save Plan</>}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={exercises.map(e => e.id)} strategy={verticalListSortingStrategy}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>Icon</TableHead>
-                  <TableHead>Exercise</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Body Part</TableHead>
-                  <TableHead>Sets</TableHead>
-                  <TableHead>Reps</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Equipment</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Other Details</TableHead>
-                  <TableHead>Coach Tip</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exercises.map(exercise => (
-                  <SortableExerciseRow
-                    key={exercise.id}
-                    exercise={exercise}
-                    isEditing={(field) =>
-                      editingCell?.exerciseId === exercise.id && editingCell?.field === field
-                    }
-                    onCellClick={(field) => handleCellClick(exercise.id, field)}
-                    onInputChange={(field, value) => handleInputChange(exercise.id, field, value)}
-                    onInputBlur={() => setEditingCell(null)}
-                    onDelete={() => handleDeleteExercise(exercise.id)}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          </SortableContext>
-        </DndContext>
-      </CardContent>
-
-      <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Plan Replacement</DialogTitle>
-            <DialogDescription>
-              You have existing workouts for the date range of the new exercises.
-              This will replace the existing plan for {getDateRange().minDate} to {getDateRange().maxDate}.
-              Are you sure you want to proceed?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleConfirmSave}>Replace Plan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
+    <div>
+      {/* Legend for day types */}
+      <div className="mb-2 flex gap-6 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1"><Bed className="w-4 h-4" /> Rest Day</span>
+        <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Plan Not Generated</span>
+      </div>
+      {/* Render each day */}
+      {fullWeek.map((day, dayIdx) => {
+        if (!day) {
+          // Plan Not Generated
+          return (
+            <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-yellow-50">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              <span className="font-semibold">Plan Not Generated</span>
+              <span className="ml-2 text-xs text-muted-foreground">No workout plan exists for this day.</span>
+            </div>
+          );
+        }
+        if (day.exercises.length === 0) {
+          // Rest Day
+          return (
+            <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-gray-50">
+              <Bed className="w-5 h-5" />
+              <span className="font-semibold">Rest Day</span>
+              <span className="ml-2 text-xs text-muted-foreground">Enjoy your recovery!</span>
+            </div>
+          );
+        }
+        // Normal workout day
+        return (
+          <Accordion key={day.date} type="multiple" value={openPanels} onValueChange={setOpenPanels} className="w-full">
+            <AccordionItem value={day.date}>
+              <AccordionTrigger>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full justify-between">
+                  <div className="flex items-center gap-3">
+                    {getFocusIcon(day.focus)}
+                    <div>
+                      <div className="text-xs text-gray-500">{new Date(day.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                      <div className="text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
+                        {day.focus}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Delete Day Button */}
+                  <button
+                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
+                    title="Delete all workouts for this day"
+                    onClick={async e => { e.stopPropagation(); await handleDeleteDay(dayIdx); }}
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete Day
+                  </button>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                        <th className="text-left p-3">Icon</th>
+                        <th className="text-left p-3">Exercise</th>
+                        <th className="text-left p-3">Category</th>
+                        <th className="text-left p-3">Body Part</th>
+                        <th className="text-left p-3">Sets x Reps</th>
+                        <th className="text-left p-3">Rest (sec)</th>
+                        <th className="text-left p-3">Weight</th>
+                        <th className="text-left p-3">Duration</th>
+                        <th className="text-left p-3">Equipment</th>
+                        <th className="text-left p-3">Coach Tip</th>
+                        <th className="text-left p-3">Video Link</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {day.exercises.map((ex: any, exIdx: number) => (
+                        <tr key={exIdx} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <td className="p-3">{getExerciseIcon(ex)}</td>
+                          <td className="p-3 font-semibold">{ex.exercise}</td>
+                          <td className="p-3">{ex.category}</td>
+                          <td className="p-3">{ex.body_part}</td>
+                          <td className="p-3">
+                            <Popover open={editIdx?.dayIdx === dayIdx && editIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditIdx(null); }}>
+                              <PopoverTrigger asChild>
+                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => handleEditClick(dayIdx, exIdx, ex.sets, ex.reps)}>
+                                  {ex.sets} x {ex.reps}
+                                  <span className="ml-1 text-xs">✎</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-48">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs">Sets</label>
+                                  <input type="number" min="1" value={editSets} onChange={e => setEditSets(e.target.value)} className="border rounded px-2 py-1" />
+                                  <label className="text-xs">Reps</label>
+                                  <input type="text" value={editReps} onChange={e => setEditReps(e.target.value)} className="border rounded px-2 py-1" />
+                                  <button
+                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1"
+                                    onClick={() => {
+                                      console.log(`[WorkoutPlanTable] Saving Sets/Reps. Day: ${dayIdx}, Ex: ${exIdx}`);
+                                      handlePlanChange(dayIdx, exIdx, 'sets', editSets);
+                                      handlePlanChange(dayIdx, exIdx, 'reps', editReps);
+                                      setEditIdx(null);
+                                    }}
+                                  >Save</button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+                          <td className="p-3">
+                            <Popover open={editRestIdx?.dayIdx === dayIdx && editRestIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditRestIdx(null); }}>
+                              <PopoverTrigger asChild>
+                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditRestIdx({ dayIdx, exIdx }); setEditRest(ex.rest?.toString() || ''); }}>
+                                  {ex.rest || '-'} <span className="ml-1 text-xs">✎</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-32">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs">Rest (sec)</label>
+                                  <input type="number" min="0" value={editRest} onChange={e => setEditRest(e.target.value)} className="border rounded px-2 py-1" />
+                                  <button 
+                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
+                                    onClick={() => {
+                                      console.log(`[WorkoutPlanTable] Saving Rest. Day: ${dayIdx}, Ex: ${exIdx}`);
+                                      handlePlanChange(dayIdx, exIdx, 'rest', editRest);
+                                      setEditRestIdx(null);
+                                    }}
+                                  >Save</button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+                          <td className="p-3">
+                            <Popover open={editWeightIdx?.dayIdx === dayIdx && editWeightIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditWeightIdx(null); }}>
+                              <PopoverTrigger asChild>
+                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditWeightIdx({ dayIdx, exIdx }); setEditWeight(ex.weight?.toString() || ''); }}>
+                                  {ex.weight || '-'} <span className="ml-1 text-xs">✎</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-32">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs">Weight</label>
+                                  <input type="text" value={editWeight} onChange={e => setEditWeight(e.target.value)} className="border rounded px-2 py-1" />
+                                  <button 
+                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1"
+                                    onClick={() => {
+                                      console.log(`[WorkoutPlanTable] Saving Weight. Day: ${dayIdx}, Ex: ${exIdx}`);
+                                      handlePlanChange(dayIdx, exIdx, 'weight', editWeight);
+                                      setEditWeightIdx(null);
+                                    }}
+                                  >Save</button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+                          <td className="p-3">
+                            <Popover open={editDurationIdx?.dayIdx === dayIdx && editDurationIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditDurationIdx(null); }}>
+                              <PopoverTrigger asChild>
+                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditDurationIdx({ dayIdx, exIdx }); setEditDuration(ex.duration?.toString() || ''); }}>
+                                  {ex.duration} min <span className="ml-1 text-xs">✎</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-32">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs">Duration (min)</label>
+                                  <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} className="border rounded px-2 py-1" />
+                                  <button 
+                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
+                                    onClick={() => {
+                                      console.log(`[WorkoutPlanTable] Saving Duration. Day: ${dayIdx}, Ex: ${exIdx}`);
+                                      handlePlanChange(dayIdx, exIdx, 'duration', editDuration);
+                                      setEditDurationIdx(null);
+                                    }}
+                                  >Save</button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+                          <td className="p-3">{ex.equipment}</td>
+                          <td className="p-3 text-sm text-gray-600 dark:text-gray-400">{ex.coach_tip}</td>
+                          <td className="p-3">
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="flex items-center gap-1 text-blue-500 underline">
+                                  <Link2 className="h-4 w-4" />
+                                  {ex.video_link}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64">
+                                <input 
+                                  type="text" 
+                                  className="border rounded px-2 py-1 w-full" 
+                                  placeholder="Paste video link here" 
+                                  value={ex.video_link || ''} 
+                                  onChange={e => handlePlanChange(dayIdx, exIdx, 'video_link', e.target.value)} 
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        );
+      })}
+    </div>
   );
 }; 

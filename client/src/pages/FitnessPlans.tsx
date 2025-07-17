@@ -23,34 +23,42 @@ import DatePickerTest from "@/components/DatePickerTest"
 // The placeholder component is now removed, as we are importing the real one.
 
 // TODO: Move this to a library file (e.g., lib/workout-plans.ts)
-async function fetchWorkoutPlan(clientId: number, date: Date) {
-  console.log(`Fetching workout plan for client ${clientId} on ${format(date, "yyyy-MM-dd")}`)
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // In a real implementation, you would query your Supabase 'schedule' table
-  // For now, we return a mock plan for demonstration purposes.
-  // Replace this with a real Supabase query.
-  const { data, error } = await supabase
+// Refactored fetchWorkoutPlan to check schedule_preview first
+async function fetchWorkoutPlan(clientId: number, date: Date): Promise<{plan: any, isDraftPlan: boolean}> {
+  const startDateStr = format(date, 'yyyy-MM-dd');
+  const endDateStr = format(new Date(date.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+  // 1. Try schedule_preview first
+  let { data, error } = await supabase
+    .from('schedule_preview')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('type', 'workout')
+    .gte('for_date', startDateStr)
+    .lte('for_date', endDateStr)
+    .order('for_date', { ascending: true });
+  if (error) {
+    console.warn('Error fetching from schedule_preview:', error);
+  }
+  if (data && data.length > 0) {
+    return { plan: data, isDraftPlan: true };
+  }
+  // 2. Fallback to schedule
+  ({ data, error } = await supabase
     .from('schedule')
     .select('*')
     .eq('client_id', clientId)
     .eq('type', 'workout')
-    .gte('for_date', format(date, 'yyyy-MM-dd'))
-    .lte('for_date', format(new Date(date.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')) // for the next 7 days
-    .order('for_date', { ascending: true });
-
+    .gte('for_date', startDateStr)
+    .lte('for_date', endDateStr)
+    .order('for_date', { ascending: true }));
   if (error) {
-    console.error("Error fetching workout plan:", error);
-    return null;
+    console.error('Error fetching workout plan:', error);
+    return { plan: null, isDraftPlan: false };
   }
-
-  // Return some mock data if nothing is found for demonstration
   if (!data || data.length === 0) {
-    return null;
+    return { plan: null, isDraftPlan: false };
   }
-
-  return data;
+  return { plan: data, isDraftPlan: false };
 }
 
 const FitnessPlansPage = () => {
@@ -64,6 +72,7 @@ const FitnessPlansPage = () => {
   // State for data loading and plan storage
   const [isFetchingPlan, setIsFetchingPlan] = useState(false)
   const [workoutPlan, setWorkoutPlan] = useState<any | null>(null)
+  const [isDraftPlan, setIsDraftPlan] = useState(false);
   
   // State for AI generation
   const [isGenerating, setIsGenerating] = useState(false)
@@ -74,8 +83,9 @@ const FitnessPlansPage = () => {
       const loadPlan = async () => {
         setIsFetchingPlan(true)
         setWorkoutPlan(null) // Clear previous plan
-        const plan = await fetchWorkoutPlan(selectedClientId, planStartDate)
+        const { plan, isDraftPlan } = await fetchWorkoutPlan(selectedClientId, planStartDate)
         setWorkoutPlan(plan)
+        setIsDraftPlan(isDraftPlan)
         setIsFetchingPlan(false)
       }
       loadPlan()
@@ -210,6 +220,16 @@ const FitnessPlansPage = () => {
 
         {/* Plan Display Area */}
         <div className="mt-6">
+          {/* Show plan source status */}
+          {workoutPlan && (
+            <div className="mb-2">
+              {isDraftPlan ? (
+                <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Draft Plan (Not Yet Approved)</span>
+              ) : (
+                <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved Plan</span>
+              )}
+            </div>
+          )}
           {!selectedClientId ? (
             <Card className="flex items-center justify-center h-64">
               <p className="text-muted-foreground">Please select a client to view their workout plan.</p>
@@ -221,7 +241,7 @@ const FitnessPlansPage = () => {
             </Card>
           ) : workoutPlan ? (
             // Replace the placeholder with the real component
-            <WorkoutPlanTable initialPlanData={workoutPlan} clientId={selectedClientId} />
+            <WorkoutPlanTable week={workoutPlan} clientId={selectedClientId} />
           ) : (
             <Card className="flex flex-col items-center justify-center h-64 text-center">
                <h3 className="text-lg font-semibold">No Workout Plan Found</h3>
