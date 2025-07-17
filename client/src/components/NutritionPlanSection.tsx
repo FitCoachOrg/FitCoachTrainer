@@ -562,7 +562,7 @@ const NutritionPlanSection = ({
         <table className="w-full text-xs">
           <thead className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
             <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="text-left py-3 px-3 font-bold text-gray-900 dark:text-white w-24 text-xs">
+              <th className="text-left py-3 px-3 font-bold text-gray-900 dark:text-white w-40 text-xs">
                 <div className="flex items-center gap-2">
                   <CalendarIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   Date
@@ -786,27 +786,27 @@ const NutritionPlanSection = ({
                   className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-all duration-200 ${selectedDay === day ? 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 ring-2 ring-blue-200 dark:ring-blue-800' : ''}`}
                 >
                   <td className="py-2 px-3 font-bold text-gray-900 dark:text-white text-xs align-top">
-                    <div className="bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg p-3 text-center shadow-sm min-h-[120px] flex flex-col justify-start">
-                      <div>
+                    <div className="bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg p-4 text-center shadow-sm min-h-[140px] flex flex-col justify-start w-full">
+                      <div className="mb-3">
                         <div className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-1">{day}</div>
                         <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">{formatDate(dayDate)}</div>
                       </div>
-                      <div className="grid grid-cols-2 gap-1 text-xs mt-2">
-                        <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 rounded px-2 py-1">
+                      <div className="space-y-1 text-xs w-full">
+                        <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 rounded px-3 py-1.5 w-full">
                           <span className="text-red-600 dark:text-red-400 font-medium">Cal:</span> 
                           <span className="font-semibold">{dayTotal.calories}</span>
                         </div>
-                        <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1">
-                          <span className="text-blue-600 dark:text-blue-400 font-medium">P:</span> 
-                          <span className="font-semibold">{dayTotal.protein}</span>
+                        <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 rounded px-3 py-1.5 w-full">
+                          <span className="text-blue-600 dark:text-blue-400 font-medium">Protein:</span> 
+                          <span className="font-semibold">{dayTotal.protein}g</span>
                         </div>
-                        <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1">
-                          <span className="text-amber-600 dark:text-amber-400 font-medium">C:</span> 
-                          <span className="font-semibold">{dayTotal.carbs}</span>
+                        <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 w-full">
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">Carbs:</span> 
+                          <span className="font-semibold">{dayTotal.carbs}g</span>
                         </div>
-                        <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 rounded px-2 py-1">
-                          <span className="text-green-600 dark:text-green-400 font-medium">F:</span> 
-                          <span className="font-semibold">{dayTotal.fats}</span>
+                        <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 rounded px-3 py-1.5 w-full">
+                          <span className="text-green-600 dark:text-green-400 font-medium">Fats:</span> 
+                          <span className="font-semibold">{dayTotal.fats}g</span>
                         </div>
                       </div>
                     </div>
@@ -945,10 +945,10 @@ const NutritionPlanSection = ({
       </div>
 
         {/* Dashboard Row - Equal Height Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         {/* Daily Targets */}
-          <Card className="lg:col-span-3 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px]">
-            <CardHeader className="pb-4">
+          <Card className="lg:col-span-4 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px] flex flex-col">
+            <CardHeader className="pb-2 flex-shrink-0">
               <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
                 <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
                   <Target className="h-5 w-5 text-white" />
@@ -956,45 +956,75 @@ const NutritionPlanSection = ({
                 Daily Targets for {selectedDay}
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 h-full">
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-0 pb-4 flex-1 items-center">
               {dailyTargets.map((target) => {
                 const TargetIcon = target.icon;
-                const percentage = target.target > 0 ? (target.current / target.target) * 100 : 0;
+                const percentage = target.target > 0 ? Math.min((target.current / target.target) * 100, 100) : 0;
+                const isOverTarget = target.current > target.target;
                 return (
-                  <div key={target.name} className="flex flex-col items-center justify-center text-center p-2">
-                    <div className="relative w-20 h-20 flex items-center justify-center mb-2">
-                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                  <div key={target.name} className="flex flex-col items-center justify-center text-center p-1">
+                    <div className="relative w-28 h-28 flex items-center justify-center mb-2">
+                      {/* Background circle */}
+                      <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                      
+                      {/* Progress circle with gradient */}
+                      <svg className="w-full h-full transform -rotate-90 relative z-10" viewBox="0 0 36 36">
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           className="stroke-current text-gray-200 dark:text-gray-700"
-                          strokeWidth="3"
+                          strokeWidth="2.5"
                           fill="none"
                         />
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          className={`stroke-current ${target.color}`}
-                          strokeWidth="3"
+                          className={`stroke-current transition-all duration-500 ${
+                            isOverTarget 
+                              ? 'text-red-500' 
+                              : target.name === 'Calories' ? 'text-red-500' 
+                              : target.name === 'Protein' ? 'text-blue-500'
+                              : target.name === 'Carbs' ? 'text-amber-500'
+                              : 'text-green-500'
+                          }`}
+                          strokeWidth="3.5"
                           fill="none"
                           strokeDasharray={`${percentage}, 100`}
                           strokeLinecap="round"
+                          style={{
+                            filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.1))'
+                          }}
                         />
                       </svg>
-                      <div className="absolute flex flex-col items-center">
-                        <TargetIcon className="h-4 w-4 mb-1 text-gray-700 dark:text-gray-300" />
-                        <span className="text-lg font-bold text-gray-900 dark:text-white">{target.current}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">/ {target.target} {target.unit}</span>
+                      
+                      {/* Content overlay */}
+                      <div className="absolute flex flex-col items-center z-20 bg-white dark:bg-gray-800 rounded-full w-20 h-20 border-2 border-gray-100 dark:border-gray-600 shadow-sm">
+                        <TargetIcon className="h-4 w-4 mt-2 mb-1 text-gray-600 dark:text-gray-400" />
+                        <span className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{target.current}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 leading-tight">/{target.target}</span>
                       </div>
+                      
+                      {/* Percentage indicator */}
+                      <div className="absolute -top-1 -right-1 bg-white dark:bg-gray-800 rounded-full px-2 py-1 shadow-md border border-gray-200 dark:border-gray-600 z-30">
+                        <span className={`text-xs font-semibold ${
+                          isOverTarget ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'
+                        }`}>
+                          {Math.round(percentage)}%
+                        </span>
                       </div>
-                    <p className="font-semibold text-xs text-gray-800 dark:text-gray-200">{target.name}</p>
                     </div>
+                    
+                    <div className="text-center">
+                      <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">{target.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{target.unit}</p>
+                    </div>
+                  </div>
                 )
               })}
             </CardContent>
           </Card>
 
           {/* Macro Distribution */}
-          <Card className="lg:col-span-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px]">
-            <CardHeader className="pb-4">
+          <Card className="lg:col-span-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px] flex flex-col">
+            <CardHeader className="pb-2 flex-shrink-0">
               <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
                 <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
                   <Table className="h-5 w-5 text-white" />
@@ -1002,7 +1032,7 @@ const NutritionPlanSection = ({
                 Macro Distribution
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col justify-center h-full">
+            <CardContent className="flex flex-col justify-center pt-0 pb-4 flex-1">
               <MacroChart />
             </CardContent>
           </Card>
