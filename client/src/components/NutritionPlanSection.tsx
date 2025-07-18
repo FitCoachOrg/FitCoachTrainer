@@ -66,6 +66,7 @@ interface ScheduleItem {
   client_id: number;
   for_date: string;
   type: 'meal';
+  task: string;
   summary: string;
   coach_tip?: string;
   details_json: object;
@@ -151,10 +152,16 @@ const NutritionPlanSection = ({
   // State for the newly generated plan and saving status
   const [generatedPlan, setGeneratedPlan] = useState<DayPlan[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'not_approved'>('pending');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // State for inline editing
   const [editingCell, setEditingCell] = useState<{ day: string; mealType: string; field: string; } | null>(null);
   const [editValue, setEditValue] = useState<string | number>('');
+
+  // Auto-save functionality
+  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Daily targets state
   const [dailyTargets, setDailyTargets] = useState([
@@ -163,6 +170,24 @@ const NutritionPlanSection = ({
     { name: "Carbs", current: 0, target: 200, unit: "g", icon: Wheat, color: "from-amber-500 to-yellow-500" },
     { name: "Fats", current: 0, target: 70, unit: "g", icon: Droplets, color: "from-green-500 to-emerald-500" }
   ])
+
+  // --- Client Target State and Fetch/Save Logic ---
+  interface ClientTarget {
+    goal: 'calories' | 'protein' | 'carbs' | 'fats';
+    target: number;
+  }
+
+  const defaultTargets: Record<string, number> = {
+    calories: 2000,
+    protein: 150,
+    carbs: 200,
+    fats: 70,
+  };
+
+  const [clientTargets, setClientTargets] = useState<Record<string, number>>(defaultTargets);
+  const [editingTarget, setEditingTarget] = useState<string | null>(null);
+  const [targetEditValue, setTargetEditValue] = useState<string>('');
+  const [isSavingTarget, setIsSavingTarget] = useState(false);
 
   // Helper function to get date for a specific day of the week
   const getDateForDay = (dayName: string) => {
@@ -193,6 +218,118 @@ const NutritionPlanSection = ({
   const formatDate = (date: Date) => {
     return format(date, 'MMM d')
   }
+
+  // Get client meal times dynamically
+  const getClientMealTimes = async (clientId: number) => {
+    try {
+      const { data: clientData, error } = await supabase
+        .from('client')
+        .select('bf_time, lunch_time, dinner_time, snack_time')
+        .eq('client_id', clientId)
+        .single();
+
+      if (error) throw error;
+
+      return {
+        breakfast: clientData?.bf_time || '08:00:00',
+        lunch: clientData?.lunch_time || '13:00:00',
+        dinner: clientData?.dinner_time || '19:00:00',
+        snacks: clientData?.snack_time || '16:00:00',
+      };
+    } catch (error) {
+      console.error('Error fetching client meal times:', error);
+      // Return default times if error
+      return {
+        breakfast: '08:00:00',
+        lunch: '13:00:00',
+        dinner: '19:00:00',
+        snacks: '16:00:00',
+      };
+    }
+  };
+
+  // Auto-save function for user edits
+  const autoSaveToPreview = async (updatedMealItems: Record<string, Record<string, any[]>>) => {
+    if (!clientId) return;
+
+    try {
+      const mealTimes = await getClientMealTimes(clientId);
+      const recordsToInsert: ScheduleItem[] = [];
+
+      // Clear existing preview data for the week
+      const startDateString = format(planStartDate, 'yyyy-MM-dd');
+      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+
+      await supabase
+        .from('schedule_preview')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+
+      // Convert mealItems to schedule_preview format
+      Object.keys(updatedMealItems).forEach((dayKey) => {
+        const dayDate = getDateForDay(dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
+        const forDate = format(dayDate, 'yyyy-MM-dd');
+
+        Object.keys(updatedMealItems[dayKey]).forEach((mealType) => {
+          const mealData = updatedMealItems[dayKey][mealType][0];
+          if (mealData && mealData.meal) {
+            const task = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+            recordsToInsert.push({
+              client_id: clientId,
+              for_date: forDate,
+              type: 'meal',
+              task: task,
+              summary: `${task}: ${mealData.meal}`,
+              coach_tip: mealData.coach_tip,
+              details_json: {
+                calories: mealData.calories || 0,
+                protein: mealData.protein || 0,
+                carbs: mealData.carbs || 0,
+                fats: mealData.fats || 0,
+                amount: mealData.amount,
+              },
+              for_time: mealTimes[mealType as keyof typeof mealTimes],
+              icon: '🍽️', // Fork and plate emoji
+            });
+          }
+        });
+      });
+
+      if (recordsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('schedule_preview')
+          .insert(recordsToInsert);
+
+        if (error) throw error;
+        
+        setHasUnsavedChanges(false);
+        toast({ title: "Auto-saved", description: "Changes have been saved to preview.", variant: "default" });
+      }
+    } catch (error: any) {
+      console.error('Error auto-saving to preview:', error);
+      toast({
+        title: "Auto-save Error",
+        description: "Could not save changes to preview.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Debounced auto-save
+  const debouncedAutoSave = (updatedMealItems: Record<string, Record<string, any[]>>) => {
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+
+    const timeout = setTimeout(() => {
+      autoSaveToPreview(updatedMealItems);
+    }, 2000); // 2 second delay
+
+    setAutoSaveTimeout(timeout);
+  };
 
   // Effect to update the 'current' values in the daily targets display
   useEffect(() => {
@@ -274,7 +411,13 @@ const NutritionPlanSection = ({
                     }
                 }));
             }
-            toast({ title: "Success", description: "AI nutrition plan has been applied!" });
+
+            // Save to schedule_preview table
+            await saveNutritionPlanToPreview(plan, clientId, newPlanStartDate);
+            setApprovalStatus('pending');
+            setHasUnsavedChanges(false);
+            
+            toast({ title: "Success", description: "AI nutrition plan has been generated and saved to preview!" });
       } else {
              toast({ title: "Parsing Error", description: "Could not read the generated plan. Please try again.", variant: "destructive" });
           }
@@ -293,62 +436,10 @@ const NutritionPlanSection = ({
     }
   }
 
-  // Save Nutrition Plan to Supabase
-  const handleSavePlan = async () => {
-    if (!clientId || !generatedPlan) {
-      toast({
-        title: "Error",
-        description: "No plan to save or client not selected.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSaving(true);
+  // Save Nutrition Plan to schedule_preview
+  const saveNutritionPlanToPreview = async (plan: DayPlan[], clientId: number, startDate: Date) => {
     try {
-      await saveNutritionPlanToSupabase(generatedPlan, clientId, planStartDate);
-      setGeneratedPlan(null); // Clear generated plan after saving
-      toast({ title: "Plan Saved", description: "The new nutrition plan has been saved to the database." });
-      // Optionally, update mealItems state to reflect the saved plan
-      const newMealItemsData: Record<string, Record<string, any[]>> = {};
-      generatedPlan.forEach((dayPlan) => {
-        const dayKey = dayPlan.day.toLowerCase();
-        newMealItemsData[dayKey] = {
-          breakfast: dayPlan.breakfast ? [{ meal: dayPlan.breakfast.name, amount: dayPlan.breakfast.amount, ...dayPlan.breakfast }] : [],
-          lunch: dayPlan.lunch ? [{ meal: dayPlan.lunch.name, amount: dayPlan.lunch.amount, ...dayPlan.lunch }] : [],
-          dinner: dayPlan.dinner ? [{ meal: dayPlan.dinner.name, amount: dayPlan.dinner.amount, ...dayPlan.dinner }] : [],
-          snacks: dayPlan.snacks ? [{ meal: dayPlan.snacks.name, amount: dayPlan.snacks.amount, ...dayPlan.snacks }] : [],
-        };
-      });
-      setMealItems(newMealItemsData);
-    } catch (error: any) {
-      console.error("Error saving nutrition plan to Supabase:", error);
-        toast({
-        title: "Database Error",
-        description: "Could not save the nutrition plan. Please check the console for details.",
-          variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const saveNutritionPlanToSupabase = async (plan: DayPlan[], clientId: number, startDate: Date) => {
-    try {
-      const mealTimes: { [key: string]: string } = {
-        breakfast: '08:00:00',
-        lunch: '13:00:00',
-        dinner: '19:00:00',
-        snacks: '16:00:00',
-      };
-      
-      // Professional icons for each meal type
-      const mealIcons: { [key: string]: string } = {
-        breakfast: 'Coffee', // Coffee cup for breakfast
-        lunch: 'Sun', // Sun for lunch (midday meal)
-        dinner: 'Moon', // Moon for dinner (evening meal)
-        snacks: 'Apple', // Apple for snacks
-      };
+      const mealTimes = await getClientMealTimes(clientId);
       
       const recordsToInsert: ScheduleItem[] = [];
 
@@ -362,6 +453,7 @@ const NutritionPlanSection = ({
               client_id: clientId,
               for_date: forDate,
               type: 'meal',
+              task: mealType.charAt(0).toUpperCase() + mealType.slice(1),
               summary: `${mealType.charAt(0).toUpperCase() + mealType.slice(1)}: ${meal.name}`,
               coach_tip: meal.coach_tip,
               details_json: {
@@ -371,20 +463,20 @@ const NutritionPlanSection = ({
                 fats: meal.fats,
                 amount: meal.amount,
               },
-              for_time: mealTimes[mealType],
-              icon: mealIcons[mealType],
+              for_time: mealTimes[mealType as keyof typeof mealTimes],
+              icon: '🍽️', // Fork and plate emoji
             });
           }
         });
       });
 
       if (recordsToInsert.length > 0) {
-        // First, delete existing meal entries for the upcoming week
+        // First, delete existing preview entries for the upcoming week
         const startDateString = format(startDate, 'yyyy-MM-dd');
         const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
 
         const { error: deleteError } = await supabase
-          .from('schedule')
+          .from('schedule_preview')
           .delete()
           .eq('client_id', clientId)
           .eq('type', 'meal')
@@ -397,22 +489,148 @@ const NutritionPlanSection = ({
 
         // Then, insert the new records
         const { error: insertError } = await supabase
-          .from('schedule')
+          .from('schedule_preview')
           .insert(recordsToInsert);
 
         if (insertError) {
           throw insertError;
         }
-        
-        toast({ title: "Plan Saved", description: "The new nutrition plan has been saved to the database." });
       }
     } catch (error: any) {
-      console.error("Error saving nutrition plan to Supabase:", error);
+      console.error("Error saving nutrition plan to preview:", error);
+      throw error;
+    }
+  };
+
+  // Approve Nutrition Plan (Copy from schedule_preview to schedule)
+  const handleApprovePlan = async () => {
+    if (!clientId) {
       toast({
-        title: "Database Error",
-        description: "Could not save the nutrition plan. Please check the console for details.",
+        title: "Error",
+        description: "No client selected. Please select a client first.",
         variant: "destructive",
       });
+      return;
+    }
+
+    setIsApproving(true);
+    try {
+      // Fetch data from schedule_preview
+      const startDateString = format(planStartDate, 'yyyy-MM-dd');
+      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      
+      const { data: previewData, error: fetchError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+
+      if (fetchError) throw fetchError;
+
+      if (!previewData || previewData.length === 0) {
+        toast({
+          title: "No Plan to Approve",
+          description: "No nutrition plan found in preview to approve.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Delete existing approved data for the week
+      const { error: deleteError } = await supabase
+        .from('schedule')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+
+      if (deleteError) throw deleteError;
+
+      // Copy data from schedule_preview to schedule
+      const { error: insertError } = await supabase
+        .from('schedule')
+        .insert(previewData);
+
+      if (insertError) throw insertError;
+
+      setApprovalStatus('approved');
+      setHasUnsavedChanges(false);
+      toast({ 
+        title: "Plan Approved", 
+        description: "The nutrition plan has been approved and saved to the main schedule." 
+      });
+
+    } catch (error: any) {
+      console.error("Error approving nutrition plan:", error);
+      toast({
+        title: "Approval Error",
+        description: "Could not approve the nutrition plan. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  // Check approval status
+  const checkApprovalStatus = async () => {
+    if (!clientId) return;
+
+    try {
+      const startDateString = format(planStartDate, 'yyyy-MM-dd');
+      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      
+      console.log('Checking approval status for date range:', startDateString, 'to', endDateString);
+      
+      // Check if approved data exists in schedule table
+      const { data: approvedData, error: approvedError } = await supabase
+        .from('schedule')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+
+      if (approvedError) {
+        console.error('Error checking approved data:', approvedError);
+      }
+
+      console.log('Approved data found:', approvedData?.length || 0);
+
+      if (approvedData && approvedData.length > 0) {
+        console.log('Setting approval status to approved');
+        setApprovalStatus('approved');
+        return;
+      }
+
+      // Check if preview data exists
+      const { data: previewData, error: previewError } = await supabase
+        .from('schedule_preview')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+
+      if (previewError) {
+        console.error('Error checking preview data:', previewError);
+      }
+
+      console.log('Preview data found:', previewData?.length || 0);
+
+      if (previewData && previewData.length > 0) {
+        console.log('Setting approval status to not_approved');
+        setApprovalStatus('not_approved');
+      } else {
+        console.log('Setting approval status to pending');
+        setApprovalStatus('pending');
+      }
+    } catch (error) {
+      console.error('Error checking approval status:', error);
+      setApprovalStatus('pending');
     }
   };
 
@@ -422,15 +640,34 @@ const NutritionPlanSection = ({
       const startDateString = format(startDate, 'yyyy-MM-dd');
       const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
       
-      const { data, error } = await supabase
-        .from('schedule')
+      // First try to fetch from schedule_preview
+      const { data: previewData, error: previewError } = await supabase
+        .from('schedule_preview')
         .select('*')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
 
-      if (error) throw error;
+      if (previewError) throw previewError;
+
+      let data = previewData;
+      let dataSource = 'preview';
+
+      // If no preview data, try to fetch from schedule (approved data)
+      if (!data || data.length === 0) {
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from('schedule')
+          .select('*')
+          .eq('client_id', clientId)
+          .eq('type', 'meal')
+          .gte('for_date', startDateString)
+          .lte('for_date', endDateString);
+
+        if (scheduleError) throw scheduleError;
+        data = scheduleData;
+        dataSource = 'schedule';
+      }
 
       const newMealItemsData: Record<string, Record<string, any[]>> = {};
       const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -456,14 +693,27 @@ const NutritionPlanSection = ({
             }
           }
         });
-        toast({ title: "Plan Loaded", description: "Nutrition plan for the selected week has been loaded." });
+
+        // Set approval status based on data source
+        if (dataSource === 'preview') {
+          setApprovalStatus('not_approved');
+          toast({ title: "Preview Plan Loaded", description: "Nutrition plan from preview has been loaded. Changes will be auto-saved." });
+        } else if (dataSource === 'schedule') {
+          setApprovalStatus('approved');
+          toast({ title: "Approved Plan Loaded", description: "Approved nutrition plan has been loaded." });
+        } else {
+          setApprovalStatus('pending');
+          toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
+        }
       } else {
+        setApprovalStatus('pending');
         toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
       }
       setMealItems(newMealItemsData); // Always set the structure, populated or empty.
 
     } catch (error: any) {
       console.error("Error fetching nutrition plan from Supabase:", error);
+      setApprovalStatus('pending');
       toast({
         title: "Database Error",
         description: "Could not fetch the nutrition plan.",
@@ -474,6 +724,62 @@ const NutritionPlanSection = ({
       setDataLoaded(true);
     }
   };
+
+  // Fetch client targets from Supabase
+  const fetchClientTargets = async (clientId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('client_target')
+        .select('goal, target')
+        .eq('client_id', clientId);
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const newTargets = { ...defaultTargets };
+        data.forEach((row: any) => {
+          if (row.goal && row.target !== null) {
+            newTargets[row.goal] = row.target;
+          }
+        });
+        setClientTargets(newTargets);
+      } else {
+        setClientTargets(defaultTargets);
+      }
+    } catch (error) {
+      setClientTargets(defaultTargets);
+      console.error('Error fetching client targets:', error);
+    }
+  };
+
+  // Upsert (insert or update) a client target
+  const saveClientTarget = async (goal: string, value: number) => {
+    if (!clientId) return;
+    setIsSavingTarget(true);
+    const payload = { client_id: clientId, goal, target: value };
+    try {
+      console.log('Upserting client_target payload:', payload);
+      const { error } = await supabase
+        .from('client_target')
+        .upsert([
+          payload,
+        ]);
+      if (error) throw error;
+      setClientTargets((prev) => ({ ...prev, [goal]: value }));
+      toast({ title: 'Target Updated', description: `Target for ${goal} updated to ${value}.` });
+    } catch (error: any) {
+      console.error('Error saving client target:', error, JSON.stringify(error));
+      toast({ title: 'Error', description: `Could not update target for ${goal}. ${error?.message || JSON.stringify(error)}`, variant: 'destructive' });
+    } finally {
+      setIsSavingTarget(false);
+      setEditingTarget(null);
+    }
+  };
+
+  // Fetch targets on mount or when clientId changes
+  useEffect(() => {
+    if (clientId) {
+      fetchClientTargets(clientId);
+    }
+  }, [clientId]);
 
 
   // Macro Chart Component
@@ -619,6 +925,11 @@ const NutritionPlanSection = ({
                   
                   mealToUpdate[field] = finalValue;
                   setMealItems(updatedMealItems);
+                  setHasUnsavedChanges(true);
+                  
+                  // Trigger auto-save
+                  debouncedAutoSave(updatedMealItems);
+                  
                   // Manually trigger re-render of daily targets
                   setSelectedDay(selectedDay); 
                 }
@@ -824,6 +1135,81 @@ const NutritionPlanSection = ({
     )
   }
 
+  // --- Professional UI for Target Editing ---
+  const TargetEditGrid = () => {
+    const targetMeta = [
+      { key: 'calories', label: 'Calories', unit: 'kcal', color: 'from-red-500 to-orange-500', icon: Flame },
+      { key: 'protein', label: 'Protein', unit: 'g', color: 'from-sky-500 to-blue-500', icon: Beef },
+      { key: 'carbs', label: 'Carbs', unit: 'g', color: 'from-amber-500 to-yellow-500', icon: Wheat },
+      { key: 'fats', label: 'Fats', unit: 'g', color: 'from-green-500 to-emerald-500', icon: Droplets },
+    ];
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {targetMeta.map(({ key, label, unit, color, icon: Icon }) => (
+          <div key={key} className={`rounded-2xl shadow-lg bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
+            <div className="absolute top-2 right-2">
+              {editingTarget === key ? (
+                <button
+                  className="text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
+                  onClick={() => setEditingTarget(null)}
+                  title="Cancel Edit"
+                >
+                  ✖️
+                </button>
+              ) : (
+                <button
+                  className="text-gray-500 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-200"
+                  onClick={() => {
+                    setEditingTarget(key);
+                    setTargetEditValue(clientTargets[key]?.toString() || '');
+                  }}
+                  title={`Edit ${label}`}
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
+            <Icon className="h-7 w-7 mb-2 text-white drop-shadow" />
+            <div className="text-lg font-bold text-white mb-1">{label}</div>
+            {editingTarget === key ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={targetEditValue}
+                  onChange={e => setTargetEditValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget(key, val);
+                    } else if (e.key === 'Escape') {
+                      setEditingTarget(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    const val = parseInt(targetEditValue, 10);
+                    if (!isNaN(val)) saveClientTarget(key, val);
+                    else setEditingTarget(null);
+                  }}
+                  className="w-20 px-2 py-1 rounded-md border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                  autoFocus
+                  min={0}
+                  disabled={isSavingTarget}
+                />
+                <span className="text-white font-semibold">{unit}</span>
+                {isSavingTarget && editingTarget === key && <LoadingSpinner size="small" />}
+              </div>
+            ) : (
+              <div className="text-3xl font-extrabold text-white flex items-center gap-2">
+                {clientTargets[key]}
+                <span className="text-lg font-semibold">{unit}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // Data loading effect
   useEffect(() => {
     // Only fetch from the database if we are not in the middle of reviewing a newly generated plan.
@@ -831,6 +1217,29 @@ const NutritionPlanSection = ({
       fetchNutritionPlanFromSupabase(clientId, planStartDate);
     }
   }, [clientId, isActive, planStartDate, generatedPlan]);
+
+  // Check approval status when component loads or planStartDate changes
+  useEffect(() => {
+    if (clientId && isActive) {
+      checkApprovalStatus();
+    }
+  }, [clientId, isActive, planStartDate]);
+
+  // Check approval status after data is loaded
+  useEffect(() => {
+    if (dataLoaded && clientId && isActive) {
+      checkApprovalStatus();
+    }
+  }, [dataLoaded, clientId, isActive]);
+
+  // Cleanup auto-save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+      }
+    };
+  }, [autoSaveTimeout]);
 
   // Early return for loading state
   if (loading) {
@@ -870,6 +1279,37 @@ const NutritionPlanSection = ({
               <Sparkles className="h-4 w-4 text-blue-500" />
               AI-powered meal planning and macro tracking
             </p>
+            {/* Approval Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              {approvalStatus === 'approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  ✅ Approved Plan
+                </div>
+              )}
+              {approvalStatus === 'not_approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  📝 Draft Plan (Not Approved)
+                </div>
+              )}
+              {approvalStatus === 'pending' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-700">
+                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                  ⚪ No Plan
+                </div>
+              )}
+              {hasUnsavedChanges && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-300 dark:border-blue-700">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  💾 Saving Changes...
+                </div>
+              )}
+            </div>
+            {/* Debug Status (remove in production) */}
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Status: {approvalStatus} | Client: {clientId} | Date: {formatDate(planStartDate)}
+            </div>
           </div>
         </div>
 
@@ -902,25 +1342,48 @@ const NutritionPlanSection = ({
               </PopoverContent>
             </Popover>
 
-            {generatedPlan && (
-            <Button
-                onClick={handleSavePlan}
+            {/* Save Plan Button - Show when there are unsaved changes */}
+            {hasUnsavedChanges && approvalStatus === 'not_approved' && (
+              <Button
+                onClick={() => debouncedAutoSave(mealItems)}
                 disabled={isSaving}
                 size="lg"
-                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
+                className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-600 hover:from-orange-600 hover:via-red-600 hover:to-pink-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
               >
                 {isSaving ? (
                   <>
                     <LoadingSpinner size="small" />
                     <span className="ml-3">Saving...</span>
-                </>
-              ) : (
-                <>
+                  </>
+                ) : (
+                  <>
                     <Sparkles className="h-5 w-5 mr-3" />
-                    Save Plan
-                </>
-              )}
-            </Button>
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* Approve Plan Button - Show when there's preview data and not approved */}
+            {approvalStatus === 'not_approved' && (
+              <Button
+                onClick={handleApprovePlan}
+                disabled={isApproving}
+                size="lg"
+                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700"
+              >
+                {isApproving ? (
+                  <>
+                    <LoadingSpinner size="small" />
+                    <span className="ml-3">Approving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-3" />
+                    ✅ Approve Plan
+                  </>
+                )}
+              </Button>
             )}
 
             <Button
@@ -944,8 +1407,11 @@ const NutritionPlanSection = ({
         </div>
       </div>
 
-        {/* Dashboard Row - Equal Height Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+      {/* --- Editable Target Grid --- */}
+      <TargetEditGrid />
+
+      {/* Dashboard Row - Equal Height Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
         {/* Daily Targets */}
           <Card className="lg:col-span-4 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px] flex flex-col">
             <CardHeader className="pb-2 flex-shrink-0">
