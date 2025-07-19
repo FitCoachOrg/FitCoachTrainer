@@ -122,7 +122,7 @@ export const METRIC_LIBRARY: Metric[] = [
     color: "#0ea5e9",
     data: [], // Will be populated from activity_info table
     dataKey: "qty",
-    yLabel: "ml",
+    yLabel: "cups",
     activityName: "hydration",
     dataSource: "activity_info"
   },
@@ -134,7 +134,7 @@ export const METRIC_LIBRARY: Metric[] = [
     color: "#8b5cf6",
     data: [], // Will be populated from activity_info table
     dataKey: "qty",
-    yLabel: "score",
+    yLabel: "stars",
     activityName: "Sleep Quality",
     dataSource: "activity_info"
   },
@@ -146,7 +146,7 @@ export const METRIC_LIBRARY: Metric[] = [
     color: "#f59e0b",
     data: [], // Will be populated from activity_info table
     dataKey: "qty",
-    yLabel: "level",
+    yLabel: "stars",
     activityName: "Energy Level",
     dataSource: "activity_info"
   },

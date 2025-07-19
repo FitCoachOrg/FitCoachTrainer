@@ -42,6 +42,7 @@ import {
   AlertTriangle,
   Table,
   Grid3X3,
+  Settings,
   Loader2 as Loader,
   PaperclipIcon as Paperclip,
   CheckIcon as CheckMark,
@@ -94,4 +95,5 @@ export const ChevronRightIcon = ChevronRight;
 export const AlertTriangleIcon = AlertTriangle;
 export const TableIcon = Table;
 export const Grid3X3Icon = Grid3X3;
+export const SettingsIcon = Settings;
 export const LoaderIcon = Loader;

@@ -1,6 +1,8 @@
-// AI Fitness Plan Generation with OpenRouter Integration
+// AI Fitness Plan Generation with Unified LLM Service
 import { supabase } from './supabase'
-import { askOpenRouter } from './open-router-service'
+// import { askOpenRouter } from './open-router-service'
+// import { askCerebras } from './cerebras-service'
+import { askLLM } from './llm-service'
 
 /**
  * Helper function to get the next occurrence of a specific day of the week
@@ -491,13 +493,13 @@ Respond with ONLY valid JSON in this format:
   console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const aiResult = await askOpenRouter(fitnessCoachPrompt, model);
-    console.log('📊 OpenRouter Response received');
+    const aiResult = await askLLM(fitnessCoachPrompt, model || undefined);
+    console.log('📊 LLM Response received');
     console.log('✅ AI Response extracted');
     
     return {
       response: aiResult.response, // Correctly unpack the response string
-      model: aiResult.model,
+      model: aiResult.model || 'unknown',
       timestamp: new Date().toISOString(),
       fallbackModelUsed: aiResult.fallbackModelUsed,
     };

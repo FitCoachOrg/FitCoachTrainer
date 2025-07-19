@@ -33,6 +33,8 @@ interface MetricsCustomizationPanelProps {
   setSelectedKeys: (keys: string[]) => void
   timeRange: "7D" | "30D" | "90D"
   setTimeRange: (range: "7D" | "30D" | "90D") => void
+  chartType: "line" | "bar"
+  setChartType: (type: "line" | "bar") => void
   draggingId: string | null
   setDraggingId: (id: string | null) => void
   onDragEnd: (event: DragEndEvent) => void
@@ -43,6 +45,8 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
   setSelectedKeys,
   timeRange,
   setTimeRange,
+  chartType,
+  setChartType,
   draggingId,
   setDraggingId,
   onDragEnd
@@ -51,6 +55,8 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
     selectedKeys.includes(metric.key)
   )
   const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
+
+
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const value = e.target.value
@@ -73,7 +79,12 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                 <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
                   <BarChart3 className="h-5 w-5 text-white" />
                 </div>
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {selectedKeys.length}/6 metrics selected
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-lg p-1 flex shadow-md">
@@ -108,13 +119,42 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                     90D
                   </button>
                 </div>
+                <div className="bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 rounded-lg p-1 flex shadow-md">
+                  <button
+                    onClick={() => setChartType("line")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-1 ${
+                      chartType === "line" 
+                        ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    Line
+                  </button>
+                  <button
+                    onClick={() => setChartType("bar")}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-1 ${
+                      chartType === "bar" 
+                        ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-md" 
+                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Bar
+                  </button>
+                </div>
                 <select
                   id="metric-select"
                   className="border-2 border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
                   onChange={handleSelectChange}
                   value=""
+                  disabled={selectedKeys.length >= 6}
                 >
-                  <option value="">+ Add Metric (6 max)</option>
+                  <option value="">+ Add Metric ({selectedKeys.length}/6)</option>
                   {availableMetrics.map((m: any) => (
                     <option key={m.key} value={m.key}>
                       {m.label}

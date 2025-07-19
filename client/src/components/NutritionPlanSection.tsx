@@ -442,8 +442,8 @@ const NutritionPlanSection = ({
         const parsedData = JSON.parse(result.response);
         const plan: DayPlan[] = parsedData.nutrition_plan;
         if (plan) {
-          const newPlanStartDate = new Date();
-          setPlanStartDate(newPlanStartDate);
+          // Use the currently selected planStartDate instead of current date
+          const selectedPlanStartDate = planStartDate;
           setGeneratedPlan(plan);
           const newMealItemsData: Record<string, Record<string, any[]>> = {};
           plan.forEach((dayPlan) => {
@@ -468,8 +468,8 @@ const NutritionPlanSection = ({
               }
             }));
           }
-          // Save the AI-generated plan to schedule_preview with is_approved = false
-          await saveNutritionPlanToPreview(plan, clientId, newPlanStartDate);
+          // Save the AI-generated plan to schedule_preview with the selected start date
+          await saveNutritionPlanToPreview(plan, clientId, selectedPlanStartDate);
           toast({ title: "Success", description: "AI nutrition plan has been applied!" });
           // Ensure status is recalculated after generation
           await checkApprovalStatus();
@@ -497,8 +497,9 @@ const NutritionPlanSection = ({
       
       const recordsToInsert: ScheduleItem[] = [];
 
-      plan.forEach((dayPlan, dayIndex) => {
-        const forDate = format(addDays(startDate, dayIndex), 'yyyy-MM-dd');
+      plan.forEach((dayPlan) => {
+        // Use getDateForDay to map day names (Monday, Tuesday, etc.) to correct dates
+        const forDate = format(getDateForDay(dayPlan.day), 'yyyy-MM-dd');
 
         Object.keys(mealTimes).forEach(mealType => {
           const meal = dayPlan[mealType as keyof DayPlan] as Meal;
@@ -558,16 +559,49 @@ const NutritionPlanSection = ({
 
   // --- Status calculation helper ---
   const isApproved = (val: any) => val === true || val === 1 || val === 'true';
-  const getApprovalStatusFromPreview = (rows: any[]): 'approved' | 'partial_approved' | 'not_approved' | 'pending' => {
+  
+  // Enhanced status calculation that accounts for missing dates
+  const getApprovalStatusFromPreview = (rows: any[], startDate: Date): 'approved' | 'partial_approved' | 'not_approved' | 'pending' => {
     if (!rows || rows.length === 0) return 'pending';
-    // Debug log for status calculation
-    console.log('Preview rows for status:', rows);
+    
+    // Get unique days from the rows (since there are multiple meal entries per day)
+    const uniqueDays = Array.from(new Set(rows.map(row => row.for_date)));
+    const actualTotalDays = uniqueDays.length;
+    
+    // Debug logging
+    console.log('Status calculation details:');
+    console.log('Actual unique days in preview:', actualTotalDays);
+    console.log('Unique days:', uniqueDays);
+    console.log('Total rows (meal entries):', rows.length);
     console.log('is_approved types:', rows.map(r => typeof r.is_approved), 'values:', rows.map(r => r.is_approved));
-    const approvedCount = rows.filter(r => isApproved(r.is_approved)).length;
-    const total = rows.length;
-    if (approvedCount === total) return 'approved';
-    if (approvedCount > 0) return 'partial_approved';
-    return 'not_approved';
+    
+    // Check if all existing days are approved
+    const approvedDays = uniqueDays.filter(day => {
+      const dayRows = rows.filter(row => row.for_date === day);
+      const allApproved = dayRows.every(row => isApproved(row.is_approved));
+      console.log(`Day ${day}: ${dayRows.length} entries, all approved: ${allApproved}`);
+      return allApproved;
+    });
+    
+    console.log('Approved days:', approvedDays);
+    console.log('Approved days count:', approvedDays.length);
+    console.log('Total days count:', actualTotalDays);
+    
+    // If we have no approved days, it's not approved
+    if (approvedDays.length === 0) {
+      console.log('❌ Result: not_approved (no days are approved)');
+      return 'not_approved';
+    }
+    
+    // If all available days are approved, it's approved (regardless of how many days)
+    if (approvedDays.length === actualTotalDays) {
+      console.log('✅ Result: approved (all available days are approved)');
+      return 'approved';
+    }
+    
+    // If some days are approved but not all, it's partial approved
+    console.log('⚠️ Result: partial_approved (some days approved, some not)');
+    return 'partial_approved';
   };
 
   // --- Enhanced Approval Status Check ---
@@ -596,7 +630,7 @@ const NutritionPlanSection = ({
       if (scheduleError) console.error('Schedule check error:', scheduleError);
       setHasExistingSchedule(!!(scheduleData && scheduleData.length > 0));
       // Use previewData for status
-      const status = getApprovalStatusFromPreview(previewData || []);
+      const status = getApprovalStatusFromPreview(previewData || [], planStartDate);
       setApprovalStatus(status);
     } catch (error) {
       setApprovalStatus('pending');
@@ -1352,13 +1386,37 @@ const NutritionPlanSection = ({
                 </Button>
                 {/* Modal Dialog for Overwrite Confirmation */}
                 {showApproveModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-8 max-w-md w-full">
-                      <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Overwrite Existing Plan?</h2>
-                      <p className="mb-6 text-gray-700 dark:text-gray-300">A plan already exists for this week. Approving will <span className="font-bold text-red-600">overwrite</span> the current plan in production. Are you sure you want to continue?</p>
-                      <div className="flex justify-end gap-4">
-                        <Button variant="outline" onClick={() => setShowApproveModal(false)} className="border-gray-300 dark:border-gray-700">Cancel</Button>
-                        <Button onClick={doApprovePlan} className="bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold">Yes, Overwrite</Button>
+                  <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
+                    <div className="absolute top-0 left-0 w-full h-full flex items-start justify-center pt-20">
+                      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-200 scale-100 animate-in fade-in-0 zoom-in-95 border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
+                            <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                          </div>
+                          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Overwrite Existing Plan?</h2>
+                        </div>
+                        <p className="mb-8 text-gray-700 dark:text-gray-300 leading-relaxed">
+                          A plan already exists for this week. Approving will <span className="font-bold text-red-600 dark:text-red-400">overwrite</span> the current plan in production. 
+                          <br /><br />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone.</span>
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowApproveModal(false)} 
+                            className="border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={doApprovePlan} 
+                            className="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                          >
+                            Yes, Overwrite Plan
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>

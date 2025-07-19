@@ -1046,34 +1046,21 @@ const WorkoutPlanSection = ({
       return;
     }
     setIsGenerating(true);
-    setCurrentModel('qwen2.5:latest');
+    setCurrentModel('Using selected provider');
     setRetryCount(0);
     try {
       let result;
       let lastError = null;
-      const modelsToTry = [
-        'qwen2.5:latest',
-        'qwen2.5-vl-72b-instruct',
-        'qwen2.5-vl-32b-instruct',
-      ];
-      for (let i = 0; i < modelsToTry.length; i++) {
-        setCurrentModel(modelsToTry[i]);
-        setRetryCount(i);
-        try {
-          result = await generateAIWorkoutPlanForReview(numericClientId, modelsToTry[i]);
-          break;
-        } catch (err) {
-          lastError = err;
-        }
+      
+      // Use the unified LLM service with the selected provider's default model
+      try {
+        result = await generateAIWorkoutPlanForReview(numericClientId);
+        setCurrentModel('Success');
+      } catch (err) {
+        lastError = err;
+        throw err;
       }
       if (!result) throw lastError;
-      if (result.fallbackModelUsed) {
-        toast({
-          title: 'Alternate AI Model Used',
-          description: `The primary model failed. Using alternate model: ${result.aiModel}`,
-          variant: 'default',
-        });
-      }
       if (result.success) {
         toast({ title: 'AI Plan Generated', description: 'The new plan is ready for review.' });
         const aiWorkoutPlan = result.workoutPlan;

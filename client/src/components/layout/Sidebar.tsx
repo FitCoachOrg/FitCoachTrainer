@@ -62,6 +62,11 @@ const navigationItems: NavItem[] = [
     href: "/payments",
     icon: <Icons.CreditCardIcon className="h-5 w-5" />,
   },
+  {
+    name: "Admin",
+    href: "/admin",
+    icon: <Icons.SettingsIcon className="h-5 w-5" />,
+  },
 ]
 
 const secondaryNavItems: NavItem[] = [

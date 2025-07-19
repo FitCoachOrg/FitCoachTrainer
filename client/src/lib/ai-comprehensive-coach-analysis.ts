@@ -1,6 +1,7 @@
 // AI Comprehensive Coach Analysis - Automatic Analysis When Trainer Notes Are Saved
 import { supabase } from './supabase'
-import { askOpenRouter } from './open-router-service'
+// import { askOpenRouter } from './open-router-service'
+import { askCerebras } from './cerebras-service'
 
 /**
  * Interface for the comprehensive analysis response
@@ -203,7 +204,7 @@ GUIDELINES:
   console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const aiResponse = await askOpenRouter(comprehensivePrompt);
+    const aiResponse = await askCerebras(comprehensivePrompt);
     console.log('📊 OpenRouter Response received');
     console.log('✅ AI Response extracted');
     

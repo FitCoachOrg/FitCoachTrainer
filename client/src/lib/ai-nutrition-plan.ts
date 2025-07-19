@@ -1,6 +1,8 @@
-// AI Nutrition Plan Generation with OpenAI Integration
+// AI Nutrition Plan Generation with Cerebras AI Integration
 import { supabase } from './supabase';
-import { askOpenRouter, OpenRouterResponse } from './open-router-service';
+// import { askOpenRouter, OpenRouterResponse } from './open-router-service';
+// import { askCerebras } from './cerebras-service';
+import { askLLM } from './llm-service';
 
 export interface NutritionPlanResult {
   success: boolean;
@@ -156,26 +158,38 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
     console.log('🚫 Final Forbidden Ingredients:', forbiddenIngredients);
     console.log('📋 Final Dietary Restrictions:', dietaryRestrictions);
 
-    // 4. Construct optimized prompt
+    // 4. Construct optimized prompt with cleaner format
+    const clientName = clientData.cl_name || 'Client';
+    const targetWeight = clientData.cl_target_weight ? `${clientData.cl_target_weight} kg` : 'Not specified';
+    const primaryGoal = clientData.cl_primary_goal || 'General fitness';
+    const specificOutcome = clientData.specific_outcome || 'Improve overall health';
+    const goalTimeline = clientData.goal_timeline || 'Not specified';
+    const obstacles = clientData.obstacles || 'None';
+    const preferredMeals = clientData.preferred_meals_per_day || '3';
+    const dietaryPrefs = Array.isArray(dietaryPreferences) ? dietaryPreferences.join(', ') : 'None';
+    const knownAllergies = typeof allergies === 'string' && allergies.trim() ? allergies : 'None';
+    const supplements = clientData.cl_supplements || 'None';
+    const gastricIssues = clientData.cl_gastric_issues || 'None';
+
     const prompt = `You are a world-class nutritionist and chef. Create a personalized 7-day nutrition plan for a client.
-      
+
 Client Profile:
-- Name: ${clientData.cl_name}
+- Name: ${clientName}
 - Age: ${age} years
 - Weight: ${weight} kg
 - Height: ${height} cm
 - Gender: ${gender}
-- Target Weight: ${clientData.cl_target_weight || 'Not specified'} kg
-- Primary Goal: ${clientData.cl_primary_goal || 'Not specified'}
-- Specific Outcome: ${clientData.specific_outcome || 'Not specified'}
-- Goal Timeline: ${clientData.goal_timeline || 'Not specified'}
-- Obstacles: ${clientData.obstacles || 'Not specified'}
+- Target Weight: ${targetWeight}
+- Primary Goal: ${primaryGoal}
+- Specific Outcome: ${specificOutcome}
+- Goal Timeline: ${goalTimeline}
+- Obstacles: ${obstacles}
 - Activity Level: ${activityLevel}
-- Preferred Meals Per Day: ${clientData.preferred_meals_per_day || 'Not specified'}
-- Dietary Preferences: ${Array.isArray(dietaryPreferences) ? dietaryPreferences.join(', ') : 'None'}
-- Known Allergies: ${typeof allergies === 'string' ? allergies : 'None'}
-- Supplements: ${clientData.cl_supplements || 'None'}
-- Gastric Issues: ${clientData.cl_gastric_issues || 'None'}
+- Preferred Meals Per Day: ${preferredMeals}
+- Dietary Preferences: ${dietaryPrefs}
+- Known Allergies: ${knownAllergies}
+- Supplements: ${supplements}
+- Gastric Issues: ${gastricIssues}
 
 Daily Nutritional Targets:
 - Calories: ${targetCalories} kcal
@@ -224,12 +238,16 @@ The JSON structure should be:
     console.log('📤 Sending prompt to LLM:');
     console.log('='.repeat(80));
     console.log('Prompt length:', prompt.length, 'characters');
-    console.log('Prompt preview (first 500 chars):', prompt.substring(0, 500));
+    console.log('📝 COMPLETE PROMPT FOR TESTING:');
+    console.log('='.repeat(80));
+    console.log(prompt);
+    console.log('='.repeat(80));
+    console.log('📝 END OF PROMPT');
     console.log('='.repeat(80));
 
-    // 5. Call the OpenRouter API
+    // 5. Call the unified LLM service
     const startTime = Date.now();
-    const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
+    const aiResult = await askLLM(prompt);
     const endTime = Date.now();
     const generationTime = endTime - startTime;
     
@@ -244,6 +262,11 @@ The JSON structure should be:
     if (aiResult.usage) {
       console.log('🔢 Token usage:', aiResult.usage);
     }
+
+    /* Previous implementations (commented for easy reversion)
+    // const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
+    // const aiResult = await askCerebras(prompt);
+    */
 
     // 6. Validate response for forbidden ingredients
     if (forbiddenIngredients && aiResult.response) {
@@ -275,7 +298,7 @@ The JSON structure should be:
     };
 
   } catch (error: any) {
-    console.error("❌ Error generating nutrition plan with OpenRouter:", error);
+    console.error("❌ Error generating nutrition plan:", error);
     return {
       success: false,
       response: '',

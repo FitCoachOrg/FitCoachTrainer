@@ -24,27 +24,33 @@ interface WorkoutHistoryTableProps {
   loadingActivity: boolean
   activityError: string | null
   workoutCount: number
+  timeRange?: "7D" | "30D" | "90D"
 }
 
 export const WorkoutHistoryTable: React.FC<WorkoutHistoryTableProps> = ({
   activityData,
   loadingActivity,
   activityError,
-  workoutCount
+  workoutCount,
+  timeRange = "30D"
 }) => {
+  // Helper function to format time spent
+  const formatTimeSpent = (totalMinutes: number) => {
+    if (totalMinutes >= 60) {
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+    return `${totalMinutes}m`;
+  };
+
+  // Calculate total time spent
+  const totalTimeSpent = activityData.reduce((total, workout) => {
+    const duration = workout.duration ? Number(workout.duration) : 0;
+    return total + duration;
+  }, 0);
   return (
     <>
-      {/* Enhanced Workout Info Table */}
-      <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90 mb-6">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-3 text-lg">
-            <Dumbbell className="h-5 w-5 text-orange-500" />
-            <span className="text-gray-900 dark:text-white">Workouts Completed (Last 30 Days):</span>
-            <span className="ml-2 text-2xl font-bold text-orange-600 dark:text-orange-400">{workoutCount}</span>
-          </CardTitle>
-        </CardHeader>
-      </Card>
-
       <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-gray-900/90">
         <CardHeader className="pb-6">
           <CardTitle className="flex items-center gap-3 text-xl">
@@ -60,6 +66,7 @@ export const WorkoutHistoryTable: React.FC<WorkoutHistoryTableProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          
           {loadingActivity ? (
             <div className="text-center py-16">
               <LoadingSpinner />
@@ -81,46 +88,253 @@ export const WorkoutHistoryTable: React.FC<WorkoutHistoryTableProps> = ({
               <p className="text-sm text-gray-400">Complete workouts to see your history here</p>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 overflow-x-auto">
-              <table className="min-w-full text-sm text-left">
-                <thead className="bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/40 dark:to-red-900/40">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Date</th>
-                    <th className="px-4 py-3 font-semibold">Exercise</th>
-                    <th className="px-4 py-3 font-semibold">Duration (min)</th>
-                    <th className="px-4 py-3 font-semibold">Intensity</th>
-                    <th className="px-4 py-3 font-semibold">Sets</th>
-                    <th className="px-4 py-3 font-semibold">Reps</th>
-                    <th className="px-4 py-3 font-semibold">Weight</th>
-                    <th className="px-4 py-3 font-semibold">Feedback</th>
-                    <th className="px-4 py-3 font-semibold">Rest (sec)</th>
-                    <th className="px-4 py-3 font-semibold">Distance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activityData.map((w, idx) => (
-                    <tr
-                      key={w.id}
-                      className={
-                        idx % 2 === 0
-                          ? "bg-orange-50/40 dark:bg-orange-900/10"
-                          : "bg-white dark:bg-gray-900"
-                      }
-                    >
-                      <td className="px-4 py-3">{w.created_at ? new Date(w.created_at).toLocaleDateString() : ""}</td>
-                      <td className="px-4 py-3 font-semibold">{w.exercise_name}</td>
-                      <td className="px-4 py-3">{w.duration ?? ""}</td>
-                      <td className="px-4 py-3">{w.intensity ?? ""}</td>
-                      <td className="px-4 py-3">{w.sets ?? ""}</td>
-                      <td className="px-4 py-3">{w.reps ?? ""}</td>
-                      <td className="px-4 py-3">{w.weight ?? ""}</td>
-                      <td className="px-4 py-3">{w.feedback ?? ""}</td>
-                      <td className="px-4 py-3">{w.rest ?? ""}</td>
-                      <td className="px-4 py-3">{w.distance ?? ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-6">
+              {/* Workout History Card */}
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-6">
+                <div className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">Total Workouts</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{activityData.length}</div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">Time Spent</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold text-green-900 dark:text-green-100">{formatTimeSpent(totalTimeSpent)}</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  
+                  {/* Exercise Frequency Chart */}
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Exercise Frequency</h3>
+                    <div className="space-y-3">
+                      {(() => {
+                        // Calculate exercise frequency
+                        const exerciseFrequency = activityData.reduce((acc, workout) => {
+                          const exerciseName = workout.exercise_name || 'Unknown';
+                          if (!acc[exerciseName]) {
+                            acc[exerciseName] = 0;
+                          }
+                          acc[exerciseName]++;
+                          return acc;
+                        }, {});
+                        
+                        // Sort by frequency (highest first)
+                        const sortedExercises = Object.entries(exerciseFrequency)
+                          .sort(([,a], [,b]) => (b as number) - (a as number))
+                          .slice(0, 5); // Show top 5 exercises
+                        
+                        return (
+                          <>
+                            {sortedExercises.map(([exercise, count]) => {
+                              const percentage = Math.round(((count as number) / activityData.length) * 100);
+                              const barWidth = Math.max(10, percentage); // Minimum 10% width for visibility
+                              
+                              // Calculate stats for this specific exercise
+                              const exerciseWorkouts = activityData.filter(w => w.exercise_name === exercise);
+                              const avgDuration = exerciseWorkouts.filter(w => w.duration).length > 0 
+                                ? (exerciseWorkouts.filter(w => w.duration).reduce((sum, w) => sum + Number(w.duration), 0) / exerciseWorkouts.filter(w => w.duration).length).toFixed(1)
+                                : 'N/A';
+                              const avgSets = exerciseWorkouts.filter(w => w.sets).length > 0 
+                                ? (exerciseWorkouts.filter(w => w.sets).reduce((sum, w) => sum + Number(w.sets), 0) / exerciseWorkouts.filter(w => w.sets).length).toFixed(1)
+                                : 'N/A';
+                              const avgReps = exerciseWorkouts.filter(w => w.reps).length > 0 
+                                ? (exerciseWorkouts.filter(w => w.reps).reduce((sum, w) => sum + Number(w.reps), 0) / exerciseWorkouts.filter(w => w.reps).length).toFixed(1)
+                                : 'N/A';
+                              const avgWeight = exerciseWorkouts.filter(w => w.weight).length > 0 
+                                ? (exerciseWorkouts.filter(w => w.weight).reduce((sum, w) => sum + Number(w.weight), 0) / exerciseWorkouts.filter(w => w.weight).length).toFixed(1)
+                                : 'N/A';
+                              const maxWeight = exerciseWorkouts.filter(w => w.weight).length > 0 
+                                ? Math.max(...exerciseWorkouts.filter(w => w.weight).map(w => Number(w.weight)))
+                                : 'N/A';
+                              const maxReps = exerciseWorkouts.filter(w => w.reps).length > 0 
+                                ? Math.max(...exerciseWorkouts.filter(w => w.reps).map(w => Number(w.reps)))
+                                : 'N/A';
+                              const maxSets = exerciseWorkouts.filter(w => w.sets).length > 0 
+                                ? Math.max(...exerciseWorkouts.filter(w => w.sets).map(w => Number(w.sets)))
+                                : 'N/A';
+                              
+                              return (
+                                <div key={exercise} className="space-y-2">
+                                  {/* Main bar */}
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-32 text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                                      {exercise}
+                                    </div>
+                                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                                      <div 
+                                        className="bg-gradient-to-r from-orange-500 to-red-500 h-4 rounded-full transition-all duration-300"
+                                        style={{ width: `${barWidth}%` }}
+                                      />
+                                    </div>
+                                    <div className="w-16 text-sm text-gray-600 dark:text-gray-400 text-right">
+                                      {count as number} ({percentage}%)
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Individual exercise stats */}
+                                  <div className="ml-36 space-y-1">
+                                    <div className="grid grid-cols-4 gap-2 text-xs">
+                                      <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                        <span className="text-gray-500 dark:text-gray-400">Avg Dur:</span>
+                                        <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">{avgDuration}min</span>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                        <span className="text-gray-500 dark:text-gray-400">Avg Sets:</span>
+                                        <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">{avgSets}</span>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                        <span className="text-gray-500 dark:text-gray-400">Avg Reps:</span>
+                                        <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">{avgReps}</span>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-gray-800 rounded px-2 py-1">
+                                        <span className="text-gray-500 dark:text-gray-400">Avg Weight:</span>
+                                        <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">{avgWeight}kg</span>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-xs">
+                                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1 border border-blue-200 dark:border-blue-700">
+                                        <span className="text-blue-600 dark:text-blue-400">Max Weight:</span>
+                                        <span className="ml-1 font-medium text-blue-700 dark:text-blue-300">{maxWeight}kg</span>
+                                      </div>
+                                      <div className="bg-green-50 dark:bg-green-900/20 rounded px-2 py-1 border border-green-200 dark:border-green-700">
+                                        <span className="text-green-600 dark:text-green-400">Max Reps:</span>
+                                        <span className="ml-1 font-medium text-green-700 dark:text-green-300">{maxReps}</span>
+                                      </div>
+                                      <div className="bg-purple-50 dark:bg-purple-900/20 rounded px-2 py-1 border border-purple-200 dark:border-purple-700">
+                                        <span className="text-purple-600 dark:text-purple-400">Max Sets:</span>
+                                        <span className="ml-1 font-medium text-purple-700 dark:text-purple-300">{maxSets}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            
+                            {/* Stats below Exercise Frequency Chart */}
+                            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Exercise Frequency Stats</h4>
+                              <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                                  <span className="text-gray-600 dark:text-gray-400">Total Exercises:</span>
+                                  <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                                    {Object.keys(exerciseFrequency).length}
+                                  </span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                                  <span className="text-gray-600 dark:text-gray-400">Most Frequent:</span>
+                                  <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                                    {sortedExercises[0]?.[0] || 'N/A'}
+                                  </span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                                  <span className="text-gray-600 dark:text-gray-400">Top Exercise %:</span>
+                                  <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                                    {sortedExercises[0] ? Math.round(((sortedExercises[0][1] as number) / activityData.length) * 100) : 0}%
+                                  </span>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                                  <span className="text-gray-600 dark:text-gray-400">Avg Frequency:</span>
+                                  <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                                    {(activityData.length / Math.max(Object.keys(exerciseFrequency).length, 1)).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  
+                  {/* Average Statistics */}
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200/50 dark:border-gray-700/50 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Average Statistics</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(() => {
+                        // Calculate averages
+                        const validDurations = activityData.filter(w => w.duration).map(w => Number(w.duration));
+                        const validSets = activityData.filter(w => w.sets).map(w => Number(w.sets));
+                        const validReps = activityData.filter(w => w.reps).map(w => Number(w.reps));
+                        const validWeights = activityData.filter(w => w.weight).map(w => Number(w.weight));
+                        
+                        const avgDuration = validDurations.length > 0 
+                          ? (validDurations.reduce((a, b) => a + b, 0) / validDurations.length).toFixed(1)
+                          : 'N/A';
+                        const avgSets = validSets.length > 0 
+                          ? (validSets.reduce((a, b) => a + b, 0) / validSets.length).toFixed(1)
+                          : 'N/A';
+                        const avgReps = validReps.length > 0 
+                          ? (validReps.reduce((a, b) => a + b, 0) / validReps.length).toFixed(1)
+                          : 'N/A';
+                        const avgWeight = validWeights.length > 0 
+                          ? (validWeights.reduce((a, b) => a + b, 0) / validWeights.length).toFixed(1)
+                          : 'N/A';
+                        
+                        return [
+                          { label: 'Average Duration', value: `${avgDuration} min`, color: 'blue' },
+                          { label: 'Average Sets', value: avgSets, color: 'green' },
+                          { label: 'Average Reps', value: avgReps, color: 'purple' },
+                          { label: 'Average Weight', value: `${avgWeight} kg`, color: 'orange' }
+                        ];
+                      })().map((stat, index) => (
+                        <div key={index} className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-4">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">{stat.label}</p>
+                          <p className="text-xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Stats below Average Statistics */}
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Workout Performance Stats</h4>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                          <span className="text-gray-600 dark:text-gray-400">Total Workouts:</span>
+                          <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                            {activityData.length}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                          <span className="text-gray-600 dark:text-gray-400">With Duration:</span>
+                          <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                            {activityData.filter(w => w.duration).length}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                          <span className="text-gray-600 dark:text-gray-400">With Weight:</span>
+                          <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                            {activityData.filter(w => w.weight).length}
+                          </span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                          <span className="text-gray-600 dark:text-gray-400">Avg Intensity:</span>
+                          <span className="ml-1 font-semibold text-gray-900 dark:text-white">
+                            {(() => {
+                              const intensities = activityData.filter(w => w.intensity).map(w => w.intensity);
+                              const intensityCounts = intensities.reduce((acc, intensity) => {
+                                acc[intensity] = (acc[intensity] || 0) + 1;
+                                return acc;
+                              }, {});
+                              const mostCommon = Object.entries(intensityCounts).sort(([,a], [,b]) => (b as number) - (a as number))[0];
+                              return mostCommon ? mostCommon[0] : 'N/A';
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

@@ -278,23 +278,40 @@ export function ProgramsScreen({
   // Helper: Get tasks for a date in the required fixed order
   const getOrderedTasksForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
-    // Only include relevant types and tasks, in the specified order
-    const order = [
-      { type: 'meal', task: 'Breakfast' },
-      { type: 'meal', task: 'Lunch' },
-      { type: 'meal', task: 'Snacks' },
-      { type: 'workout' },
-      { type: 'meal', task: 'Dinner' },
-    ]
-    // Filter out assessment and consultation, but include custom tasks
+    
+    // Filter out assessment and consultation, but include all other tasks
     const items = scheduleItems.filter(item =>
       item.for_date === dateStr &&
       item.type !== 'assessment' &&
       item.type !== 'consultation'
     )
     
-    // Get ordered items first
-    const orderedItems = order
+    // Define the new order: custom tasks first, then meal/workout tasks
+    const customTaskOrder = [
+      { type: 'wakeup' },
+      { type: 'weight' },
+      { type: 'progresspicture' },
+      { type: 'other' },
+      { type: 'hydration' },
+    ]
+    
+    const mealWorkoutOrder = [
+      { type: 'meal', task: 'Breakfast' },
+      { type: 'meal', task: 'Lunch' },
+      { type: 'meal', task: 'Snacks' },
+      { type: 'workout' },
+      { type: 'meal', task: 'Dinner' },
+    ]
+    
+    // Get custom tasks in specified order
+    const orderedCustomItems = customTaskOrder
+      .map(({ type }) => {
+        return items.find(item => item.type === type)
+      })
+      .filter((item): item is ScheduleItem => !!item) // Type guard: remove undefined
+    
+    // Get meal/workout tasks in existing order
+    const orderedMealWorkoutItems = mealWorkoutOrder
       .map(({ type, task }) => {
         if (task) {
           return items.find(item => item.type === type && item.task === task)
@@ -305,10 +322,8 @@ export function ProgramsScreen({
       })
       .filter((item): item is ScheduleItem => !!item) // Type guard: remove undefined
     
-    // Add custom tasks at the end
-    const customItems = items.filter(item => item.task === "custom")
-    
-    return [...orderedItems, ...customItems]
+    // Combine: custom tasks first, then meal/workout tasks
+    return [...orderedCustomItems, ...orderedMealWorkoutItems]
   }
 
   // Helper to open meal edit dialog
@@ -415,25 +430,71 @@ export function ProgramsScreen({
 
     // Handle custom tasks
     if (item.task === "custom") {
+      // Define background colors based on task type
+      const getCustomTaskBackground = (type: string) => {
+        switch (type) {
+          case 'hydration':
+            return "bg-gradient-to-br from-blue-900 to-blue-800 dark:from-blue-800 dark:to-blue-700 border-blue-700 dark:border-blue-600";
+          case 'wakeup':
+            return "bg-gradient-to-br from-yellow-100 to-amber-100 dark:from-yellow-900/30 dark:to-amber-900/30 border-yellow-200 dark:border-yellow-700";
+          case 'progresspicture':
+            return "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600";
+          case 'weight':
+            return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
+          case 'other':
+            return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
+          default:
+            return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
+        }
+      };
+
+      // Define text colors based on task type
+      const getCustomTaskTextColor = (type: string) => {
+        switch (type) {
+          case 'hydration':
+            return "text-white dark:text-blue-100";
+          case 'wakeup':
+            return "text-yellow-800 dark:text-yellow-200";
+          case 'progresspicture':
+            return "text-gray-800 dark:text-gray-200";
+          case 'weight':
+            return "text-purple-700 dark:text-purple-200";
+          case 'other':
+            return "text-purple-700 dark:text-purple-200";
+          default:
+            return "text-purple-700 dark:text-purple-200";
+        }
+      };
+
+      const backgroundClasses = getCustomTaskBackground(item.type);
+      const textColorClasses = getCustomTaskTextColor(item.type);
+
       return (
         <div
           key={item.id}
-          className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl shadow-lg mb-3 cursor-pointer border border-purple-100 dark:border-purple-900 hover:scale-[1.02] hover:shadow-xl transition-all duration-200"
+          className={`p-4 ${backgroundClasses} rounded-2xl shadow-lg mb-3 cursor-pointer border hover:scale-[1.02] hover:shadow-xl transition-all duration-200`}
           onClick={() => handleEditItem(item)}
           style={{ minHeight: 100 }}
         >
           {/* Custom Task Type as Title */}
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">{getCustomTaskIcon(item.type)}</span>
-            <span className="font-extrabold text-sm md:text-base text-purple-700 dark:text-purple-200 tracking-wide uppercase break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
-              {item.type.toUpperCase()}
+            <span className={`font-extrabold text-sm md:text-base tracking-wide uppercase break-words whitespace-normal leading-tight ${textColorClasses}`} style={{ fontSize: '0.7em' }}>
+              {item.type === 'progresspicture' ? (
+                <div className="flex flex-col">
+                  <span>PROGRESS</span>
+                  <span>PICTURE</span>
+                </div>
+              ) : (
+                item.type.toUpperCase()
+              )}
             </span>
           </div>
-          <div className="border-b border-dashed border-purple-200 dark:border-purple-700 my-2" />
+          <div className={`border-b border-dashed ${item.type === 'hydration' ? 'border-blue-300 dark:border-blue-500' : item.type === 'wakeup' ? 'border-yellow-300 dark:border-yellow-600' : item.type === 'progresspicture' ? 'border-gray-400 dark:border-gray-500' : 'border-purple-200 dark:border-purple-700'} my-2`} />
           
           {/* Summary */}
           {item.summary && (
-            <div className="font-medium text-sm text-purple-900 dark:text-purple-100 mb-2 break-words whitespace-normal leading-tight">
+            <div className={`font-medium text-sm mb-2 break-words whitespace-normal leading-tight ${textColorClasses}`}>
               {item.summary}
             </div>
           )}

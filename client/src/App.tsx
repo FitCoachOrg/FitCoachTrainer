@@ -34,6 +34,7 @@ import AllProgramsPage from './pages/programs'
 import TrainerProfilePage from "./pages/TrainerProfilePage"
 import AuthCallback from "@/components/auth/AuthCallback"
 import DatePickerTestPage from "./pages/DatePickerTestPage"
+import Admin from "./pages/Admin"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -282,6 +283,16 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <TrainerProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Admin />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />

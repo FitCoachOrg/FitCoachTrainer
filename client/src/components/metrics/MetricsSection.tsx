@@ -19,10 +19,10 @@ import { DragEndEvent } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { supabase } from "@/lib/supabase"
 import { METRIC_LIBRARY, type Metric, type MetricData } from "@/lib/metrics-library"
-import { ClientStats } from "./ClientStats"
 import { MetricsCustomizationPanel } from "./MetricsCustomizationPanel"
 import { MetricsGrid } from "./MetricsGrid"
 import { WorkoutHistoryTable } from "./WorkoutHistoryTable"
+import { ProgressPicturesCard } from "./ProgressPicturesCard"
 import { SidePopup } from "@/components/ui/side-popup"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
 import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection"
@@ -73,10 +73,36 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem("selectedMetrics")
-    return saved ? JSON.parse(saved) : ["heartRate", "steps", "caloriesSpent", "exerciseTime"]
+    const initialKeys = saved ? JSON.parse(saved) : ["heartRate", "steps", "caloriesSpent", "exerciseTime"]
+    
+    // Clean up invalid keys that don't exist in METRIC_LIBRARY
+    const validKeys = initialKeys.filter((key: string) => 
+      METRIC_LIBRARY.some(metric => metric.key === key)
+    )
+    
+    console.log('🔍 MetricsSection Initial State Debug:', {
+      saved: saved,
+      initialKeys: initialKeys,
+      initialKeysLength: initialKeys.length,
+      validKeys: validKeys,
+      validKeysLength: validKeys.length,
+      invalidKeys: initialKeys.filter((key: string) => 
+        !METRIC_LIBRARY.some(metric => metric.key === key)
+      )
+    })
+    
+    // If we cleaned up invalid keys, save the cleaned version
+    if (validKeys.length !== initialKeys.length) {
+      localStorage.setItem("selectedMetrics", JSON.stringify(validKeys))
+      console.log('🧹 Cleaned up invalid metric keys and saved to localStorage')
+    }
+    
+    return validKeys
   })
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [activityData, setActivityData] = useState<any[]>([])
+  const [workoutData, setWorkoutData] = useState<any[]>([])
+  const [filteredWorkoutData, setFilteredWorkoutData] = useState<any[]>([])
   const [externalDeviceData, setExternalDeviceData] = useState<any[]>([])
   const [filteredActivityData, setFilteredActivityData] = useState<any[]>([])
   const [filteredExternalDeviceData, setFilteredExternalDeviceData] = useState<any[]>([])
@@ -85,6 +111,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
   const [workoutCount, setWorkoutCount] = useState<number>(0)
   const [dataLoaded, setDataLoaded] = useState(false)
   const [timeRange, setTimeRange] = useState<"7D" | "30D" | "90D">("30D")
+  const [chartType, setChartType] = useState<"line" | "bar">("line")
   
   // Side popup states
   const [showFitnessGoals, setShowFitnessGoals] = useState(false)
@@ -119,6 +146,14 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       setFilteredActivityData(filteredActivity);
     }
     
+    // Filter workout data if available
+    if (workoutData.length) {
+      const filteredWorkout = workoutData.filter(item => 
+        new Date(item.created_at) >= cutoffDate
+      );
+      setFilteredWorkoutData(filteredWorkout);
+    }
+    
     // Filter external device data if available
     if (externalDeviceData.length) {
       const filteredExternal = externalDeviceData.filter(item => 
@@ -126,7 +161,48 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       );
       setFilteredExternalDeviceData(filteredExternal);
     }
-  }, [activityData, externalDeviceData, timeRange]);
+  }, [activityData, workoutData, externalDeviceData, timeRange]);
+
+  // Helper function to generate complete timeline
+  const generateCompleteTimeline = () => {
+    const timeline = [];
+    const today = new Date();
+    
+    if (timeRange === "7D") {
+      // Generate last 7 days
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        const displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+        timeline.push({
+          date: displayDate,
+          fullDate: dateStr,
+          qty: null
+        });
+      }
+    } else {
+      // Generate weeks for 30D (4 weeks) or 90D (12 weeks)
+      const weeks = timeRange === "30D" ? 4 : 12;
+      for (let i = weeks - 1; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - (i * 7));
+        const startOfWeek = new Date(date);
+        startOfWeek.setDate(date.getDate() - date.getDay() + 1);
+        const monthName = startOfWeek.toLocaleString('default', { month: 'short' });
+        const weekNum = Math.ceil(startOfWeek.getDate() / 7);
+        const displayDate = `${monthName} W${weekNum}`;
+        const fullDate = startOfWeek.toISOString().split('T')[0];
+        timeline.push({
+          date: displayDate,
+          fullDate: fullDate,
+          qty: null
+        });
+      }
+    }
+    
+    return timeline;
+  };
 
   // Update metrics data from both activity_info and external_device_connect
   const updateMetricsData = useCallback(() => {
@@ -144,21 +220,24 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         // Format date based on time range
         const date = new Date(item.created_at);
         let dateStr: string;
+        let displayDate: string;
         
         if (timeRange === "7D") {
           // Daily for 7D
           dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
         } else {
           // Weekly for 30D and 90D
-          // Get the week number (approximate by dividing day of month by 7)
           const weekNum = Math.ceil(date.getDate() / 7);
           const monthName = date.toLocaleString('default', { month: 'short' });
           dateStr = `${monthName} W${weekNum}`; // e.g., "Jan W1"
+          displayDate = dateStr;
         }
         
         // Add to grouped data
         groupedData[item.activity].push({
-          date: dateStr,
+          date: displayDate,
+          fullDate: dateStr,
           qty: Number(item.qty),
           unit: item.unit,
           created_at: item.created_at
@@ -170,6 +249,10 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         if (metric.dataSource !== "activity_info") return;
         
         const activityName = metric.activityName;
+        
+        // Generate complete timeline
+        const completeTimeline = generateCompleteTimeline();
+        
         if (groupedData[activityName]) {
           // Group by date to calculate averages
           const aggregatedData: Record<string, {total: number, count: number}> = {};
@@ -182,20 +265,21 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
             aggregatedData[item.date].count += 1;
           });
           
-          // Convert to array of averages
-          const averagedData = Object.entries(aggregatedData).map(([date, values]) => {
+          // Merge with complete timeline
+          const mergedData = completeTimeline.map(timelineItem => {
+            const existingData = aggregatedData[timelineItem.date];
             return {
-              date: date,
-              qty: values.total / values.count,
-              fullDate: date // Keep for sorting
+              date: timelineItem.date,
+              qty: existingData ? Number((existingData.total / existingData.count).toFixed(1)) : null,
+              fullDate: timelineItem.fullDate
             };
           });
           
-          // Sort and format data
-          const formattedData = formatAndSortData(averagedData);
-          
           // Update the metric data
-          METRIC_LIBRARY[index].data = formattedData;
+          METRIC_LIBRARY[index].data = mergedData;
+        } else {
+          // No data for this metric, use empty timeline
+          METRIC_LIBRARY[index].data = completeTimeline;
         }
       });
     };
@@ -210,19 +294,24 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       // Group external device data by column and week
       const columnDataMap: Record<string, any[]> = {};
       
-      filteredExternalDeviceData.forEach(item => {
-        const date = new Date(item.for_date);
-        let dateStr: string;
-        
-        if (timeRange === "7D") {
-          // Daily for 7D - use exact date
-          dateStr = date.toISOString().split('T')[0];
-        } else {
-          // Weekly for 30D/90D - get start of week (Monday)
-          const startOfWeek = new Date(date);
-          startOfWeek.setDate(date.getDate() - date.getDay() + 1);
-          dateStr = startOfWeek.toLocaleDateString('default', { month: 'numeric', day: 'numeric' });
-        }
+              filteredExternalDeviceData.forEach(item => {
+          const date = new Date(item.for_date);
+          let dateStr: string;
+          let displayDate: string;
+          
+          if (timeRange === "7D") {
+            // Daily for 7D - use exact date
+            dateStr = date.toISOString().split('T')[0];
+            displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+          } else {
+            // Weekly for 30D/90D - get start of week (Monday)
+            const startOfWeek = new Date(date);
+            startOfWeek.setDate(date.getDate() - date.getDay() + 1);
+            const monthName = startOfWeek.toLocaleString('default', { month: 'short' });
+            const weekNum = Math.ceil(startOfWeek.getDate() / 7);
+            dateStr = `${monthName} W${weekNum}`;
+            displayDate = dateStr;
+          }
         
         METRIC_LIBRARY.forEach(metric => {
           if (metric.dataSource === "external_device_connect" && metric.columnName) {
@@ -232,7 +321,8 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
                 columnDataMap[columnName] = [];
               }
               columnDataMap[columnName].push({
-                date: dateStr,
+                date: displayDate,
+                fullDate: dateStr,
                 qty: Number(item[columnName]),
                 for_date: item.for_date
               });
@@ -251,55 +341,32 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           return;
         }
         
-        // Create date placeholders based on time range
-        const aggregatedData: Record<string, {total: number, count: number}> = {};
-          const today = new Date();
-            
-            if (timeRange === "7D") {
-          // Create last 7 days
-          for (let i = 6; i >= 0; i--) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            aggregatedData[dateStr] = { total: 0, count: 0 };
-          }
-            } else {
-          // Create weekly buckets (4 for 30D, 12 for 90D)
-          const weeks = timeRange === "30D" ? 4 : 12;
-          for (let i = weeks - 1; i >= 0; i--) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - (i * 7));
-            const startOfWeek = new Date(date);
-            startOfWeek.setDate(date.getDate() - date.getDay() + 1);
-            const dateStr = startOfWeek.toLocaleDateString('default', { month: 'numeric', day: 'numeric' });
-            aggregatedData[dateStr] = { total: 0, count: 0 };
-          }
-        }
+        // Generate complete timeline
+        const completeTimeline = generateCompleteTimeline();
         
         // Aggregate actual data
+        const aggregatedData: Record<string, {total: number, count: number}> = {};
         columnDataMap[columnName].forEach(item => {
           const date = item.date;
-          if (aggregatedData[date]) {
-            aggregatedData[date].total += item.qty;
-            aggregatedData[date].count += 1;
+          if (!aggregatedData[date]) {
+            aggregatedData[date] = { total: 0, count: 0 };
           }
+          aggregatedData[date].total += item.qty;
+          aggregatedData[date].count += 1;
         });
         
-        // Convert to array format
-        const formattedData = Object.entries(aggregatedData).map(([date, values]) => ({
-          date: timeRange === "7D" 
-            ? new Date(date).toLocaleDateString('default', { month: 'short', day: 'numeric' })
-            : date,
-          qty: values.count > 0 ? values.total / values.count : null,
-          fullDate: date
-        }));
-        
-        // Sort chronologically
-        METRIC_LIBRARY[index].data = formattedData.sort((a, b) => {
-          const dateA = new Date(a.fullDate);
-          const dateB = new Date(b.fullDate);
-          return dateA.getTime() - dateB.getTime();
+        // Merge with complete timeline
+        const mergedData = completeTimeline.map(timelineItem => {
+          const existingData = aggregatedData[timelineItem.date];
+          return {
+            date: timelineItem.date,
+            qty: existingData ? Number((existingData.total / existingData.count).toFixed(1)) : null,
+            fullDate: timelineItem.fullDate
+          };
         });
+        
+        // Update the metric data
+        METRIC_LIBRARY[index].data = mergedData;
       });
     };
     
@@ -353,16 +420,33 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     
     (async () => {
       try {
-        // Fetch workout_info data for the client - get all historical workout data
+        // Fetch activity_info data for the client - get all historical activity data
+        const { data: activityData, error: activityError } = await supabase
+          .from("activity_info")
+          .select("*")
+          .eq("client_id", clientId)
+          .order('created_at', { ascending: true });
+          
+        if (activityError) {
+          console.error('❌ Activity data error:', activityError);
+          throw activityError;
+        }
+        
+        setActivityData(activityData || []); // Keep using activityData state for compatibility
+        
+        // Fetch workout_info data for workout history
         const { data: workoutData, error: workoutError } = await supabase
           .from("workout_info")
           .select("*")
           .eq("client_id", clientId)
           .order('created_at', { ascending: true });
           
-        if (workoutError) throw workoutError;
-        setActivityData(workoutData || []); // Keep using activityData state for compatibility
-        console.log("Workout data loaded:", workoutData?.length || 0, "records");
+        if (workoutError) {
+          console.error('❌ Workout data error:', workoutError);
+          throw workoutError;
+        }
+        
+        setWorkoutData(workoutData || []); // New state for workout data
         
         // Fetch external device data - explicitly list all columns to ensure we get the right names
         const { data: deviceData, error: deviceError } = await supabase
@@ -387,18 +471,23 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           console.log("Available columns:", Object.keys(finalDeviceData[0]));
         }
         
-        // Fetch count of workouts in last 30 days (keeping existing functionality)
-        const sinceDate = new Date();
-        sinceDate.setDate(sinceDate.getDate() - 30);
-        const sinceISOString = sinceDate.toISOString();
-        const { count, error: countError } = await supabase
-          .from("workout_info")
-          .select("id", { count: "exact", head: true })
-          .eq("client_id", clientId)
-          .gte("created_at", sinceISOString);
-          
-        if (countError) throw countError;
-        setWorkoutCount(count || 0);
+        // Calculate workout count based on selected time range
+        const now = new Date();
+        let cutoffDate = new Date();
+        
+        // Set cutoff date based on selected time range
+        switch (timeRange) {
+          case "7D":
+            cutoffDate.setDate(now.getDate() - 7);
+            break;
+          case "30D":
+            cutoffDate.setDate(now.getDate() - 30);
+            break;
+          case "90D":
+            cutoffDate.setDate(now.getDate() - 90);
+            break;
+        }
+        
         setDataLoaded(true);
       } catch (err: any) {
         setActivityError(err.message || "Failed to fetch workout data");
@@ -411,15 +500,54 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     })();
   }, [clientId, isActive, dataLoaded]);
 
-  // Filter data whenever activity data, external device data, or time range changes
+  // Filter data whenever activity data, workout data, external device data, or time range changes
   useEffect(() => {
     filterDataByTimeRange();
-  }, [activityData, externalDeviceData, timeRange, filterDataByTimeRange]);
+  }, [activityData, workoutData, externalDeviceData, timeRange, filterDataByTimeRange]);
 
   // Update metrics data whenever filtered data changes
   useEffect(() => {
     updateMetricsData();
   }, [filteredActivityData, filteredExternalDeviceData, updateMetricsData]);
+
+  // Calculate workout count based on time range
+  useEffect(() => {
+    if (!clientId || !dataLoaded) return;
+    
+    const calculateWorkoutCount = async () => {
+      const now = new Date();
+      let cutoffDate = new Date();
+      
+      // Set cutoff date based on selected time range
+      switch (timeRange) {
+        case "7D":
+          cutoffDate.setDate(now.getDate() - 7);
+          break;
+        case "30D":
+          cutoffDate.setDate(now.getDate() - 30);
+          break;
+        case "90D":
+          cutoffDate.setDate(now.getDate() - 90);
+          break;
+      }
+      
+      const sinceISOString = cutoffDate.toISOString();
+      const { count, error: countError } = await supabase
+        .from("workout_info")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .gte("created_at", sinceISOString);
+        
+      if (countError) {
+        console.error('❌ Workout count error:', countError);
+        setWorkoutCount(0);
+      } else {
+        setWorkoutCount(count || 0);
+      }
+    };
+    
+    calculateWorkoutCount();
+  }, [clientId, timeRange, dataLoaded]);
 
   const selectedMetrics = selectedKeys
     .map((key: string) => {
@@ -443,6 +571,29 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     setDraggingId(null)
   }
 
+  // Function to clean up and reset metrics
+  const cleanupAndResetMetrics = () => {
+    const validKeys = selectedKeys.filter((key: string) => 
+      METRIC_LIBRARY.some(metric => metric.key === key)
+    )
+    
+    if (validKeys.length !== selectedKeys.length) {
+      console.log('🧹 Cleaning up invalid metric keys:', {
+        before: selectedKeys,
+        after: validKeys,
+        removed: selectedKeys.filter(key => !validKeys.includes(key))
+      })
+      
+      setSelectedKeys(validKeys)
+      localStorage.setItem("selectedMetrics", JSON.stringify(validKeys))
+    }
+  }
+
+  // Clean up on component mount
+  useEffect(() => {
+    cleanupAndResetMetrics()
+  }, [])
+
   return (
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
@@ -454,8 +605,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} />
       </div>
 
-      {/* Client Stats Section */}
-      <ClientStats clientId={clientId} isActive={isActive} />
+      {/* Client Stats Section - Removed */}
       
       {/* Enhanced Customization Panel */}
       <MetricsCustomizationPanel
@@ -463,21 +613,30 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         setSelectedKeys={setSelectedKeys}
         timeRange={timeRange}
         setTimeRange={setTimeRange}
+        chartType={chartType}
+        setChartType={setChartType}
         draggingId={draggingId}
         setDraggingId={setDraggingId}
         onDragEnd={handleDragEnd}
       />
 
       {/* Enhanced Metrics Grid */}
-      <MetricsGrid selectedKeys={selectedKeys} onDragEnd={handleDragEnd} />
+      <MetricsGrid selectedKeys={selectedKeys} onDragEnd={handleDragEnd} chartType={chartType} />
 
-      {/* Enhanced Workout History Table */}
-      <WorkoutHistoryTable
-        activityData={activityData}
-        loadingActivity={loadingActivity}
-        activityError={activityError}
-        workoutCount={workoutCount}
-      />
+      {/* Workout History and Progress Pictures Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Workout History Card */}
+        <WorkoutHistoryTable
+          activityData={filteredWorkoutData}
+          loadingActivity={loadingActivity}
+          activityError={activityError}
+          workoutCount={workoutCount}
+          timeRange={timeRange}
+        />
+        
+        {/* Progress Pictures Card */}
+        <ProgressPicturesCard clientId={clientId} />
+      </div>
 
       {/* Side Popups */}
       <SidePopup

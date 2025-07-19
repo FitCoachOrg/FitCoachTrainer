@@ -1,6 +1,7 @@
 // AI Notes Summary Generation with OpenRouter Integration
 import { supabase } from './supabase'
-import { askOpenRouter } from './open-router-service'
+// import { askOpenRouter } from './open-router-service'
+import { askCerebras } from './cerebras-service'
 
 /**
  * Function to generate AI summary and action items using OpenRouter
@@ -94,7 +95,7 @@ Guidelines:
   console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const aiResponse = await askOpenRouter(notesSummaryPrompt);
+    const aiResponse = await askCerebras(notesSummaryPrompt);
     console.log('📊 OpenRouter Response received');
     console.log('✅ AI Response extracted');
     
