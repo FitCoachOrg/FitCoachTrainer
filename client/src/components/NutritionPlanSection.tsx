@@ -126,68 +126,134 @@ const NutritionPlanSection = ({
   handleSummarizeNotes,
   isSummarizingNotes
 }: NutritionPlanSectionProps) => {
-  const [loading, setLoading] = useState(false)
-  const [dataLoaded, setDataLoaded] = useState(false)
-  
-  // Generation state
-  const [isGenerating, setIsGenerating] = useState(false)
-  
-  // Side popup states
-  const [showFitnessGoals, setShowFitnessGoals] = useState(false)
-  const [showAICoachInsights, setShowAICoachInsights] = useState(false)
-  const [showTrainerNotes, setShowTrainerNotes] = useState(false)
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false)
-  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false)
-  
-  const { toast } = useToast()
-  
-  // This state will hold the applied plan, becoming the source of truth for the UI
-  const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({})
-  const [selectedDay, setSelectedDay] = useState('Monday')
-  
-  // Plan start date state
-  const [planStartDate, setPlanStartDate] = useState<Date>(new Date())
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
-
-  // State for the newly generated plan and saving status
+  // --- All hooks at the top ---
+  const [loading, setLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showFitnessGoals, setShowFitnessGoals] = useState(false);
+  const [showAICoachInsights, setShowAICoachInsights] = useState(false);
+  const [showTrainerNotes, setShowTrainerNotes] = useState(false);
+  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false);
+  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
+  const { toast } = useToast();
+  const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({});
+  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<DayPlan[] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'not_approved'>('pending');
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'not_approved' | 'partial_approved'>('pending');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-
-  // State for inline editing
   const [editingCell, setEditingCell] = useState<{ day: string; mealType: string; field: string; } | null>(null);
   const [editValue, setEditValue] = useState<string | number>('');
-
-  // Auto-save functionality
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-
-  // Daily targets state
   const [dailyTargets, setDailyTargets] = useState([
     { name: "Calories", current: 0, target: 2000, unit: "kcal", icon: Flame, color: "from-red-500 to-orange-500" },
     { name: "Protein", current: 0, target: 150, unit: "g", icon: Beef, color: "from-sky-500 to-blue-500" },
     { name: "Carbs", current: 0, target: 200, unit: "g", icon: Wheat, color: "from-amber-500 to-yellow-500" },
     { name: "Fats", current: 0, target: 70, unit: "g", icon: Droplets, color: "from-green-500 to-emerald-500" }
-  ])
-
+  ]);
   // --- Client Target State and Fetch/Save Logic ---
-  interface ClientTarget {
-    goal: 'calories' | 'protein' | 'carbs' | 'fats';
-    target: number;
-  }
-
   const defaultTargets: Record<string, number> = {
     calories: 2000,
     protein: 150,
     carbs: 200,
     fats: 70,
   };
-
   const [clientTargets, setClientTargets] = useState<Record<string, number>>(defaultTargets);
   const [editingTarget, setEditingTarget] = useState<string | null>(null);
   const [targetEditValue, setTargetEditValue] = useState<string>('');
   const [isSavingTarget, setIsSavingTarget] = useState(false);
+  // --- Modal Dialog State ---
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
+  // --- Debug logger for approvalStatus ---
+  useEffect(() => {
+    console.log('approvalStatus changed:', approvalStatus);
+  }, [approvalStatus]);
+
+  // --- Fetch Nutrition Plan from Supabase ---
+  const fetchNutritionPlanFromSupabase = async (clientId: number, startDate: Date) => {
+    setLoading(true);
+    try {
+      const startDateString = format(startDate, 'yyyy-MM-dd');
+      const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
+      // First try to fetch from schedule_preview
+      const { data: previewData, error: previewError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      if (previewError) throw previewError;
+      let data = previewData;
+      let dataSource = 'preview';
+      // If no preview data, try to fetch from schedule (approved data)
+      if (!data || data.length === 0) {
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from('schedule')
+          .select('*')
+          .eq('client_id', clientId)
+          .eq('type', 'meal')
+          .gte('for_date', startDateString)
+          .lte('for_date', endDateString);
+        if (scheduleError) throw scheduleError;
+        data = scheduleData;
+        dataSource = 'schedule';
+      }
+      const newMealItemsData: Record<string, Record<string, any[]>> = {};
+      const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      daysOfWeek.forEach(day => {
+        newMealItemsData[day] = { breakfast: [], lunch: [], dinner: [], snacks: [] };
+      });
+      if (data && data.length > 0) {
+        data.forEach(item => {
+          const dayOfWeek = format(new Date(item.for_date), 'EEEE').toLowerCase();
+          const mealTypeMatch = item.summary.match(/^(\w+):/);
+          if (mealTypeMatch) {
+            const mealType = mealTypeMatch[1].toLowerCase();
+            const mealData = {
+              meal: item.summary.replace(/^\w+:\s*/, ''),
+              ...item.details_json,
+              amount: item.details_json.amount,
+              coach_tip: item.coach_tip
+            };
+            if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
+              newMealItemsData[dayOfWeek][mealType].push(mealData);
+            }
+          }
+        });
+        // Set approval status based on data source
+        if (dataSource === 'preview') {
+          setApprovalStatus('not_approved');
+          toast({ title: "Preview Plan Loaded", description: "Nutrition plan from preview has been loaded. Changes will be auto-saved." });
+        } else if (dataSource === 'schedule') {
+          setApprovalStatus('approved');
+          toast({ title: "Approved Plan Loaded", description: "Approved nutrition plan has been loaded." });
+        } else {
+          setApprovalStatus('pending');
+          toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
+        }
+      } else {
+        setApprovalStatus('pending');
+        toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
+      }
+      setMealItems(newMealItemsData); // Always set the structure, populated or empty.
+    } catch (error: any) {
+      console.error("Error fetching nutrition plan from Supabase:", error);
+      setApprovalStatus('pending');
+      toast({
+        title: "Database Error",
+        description: "Could not fetch the nutrition plan.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setDataLoaded(true);
+    }
+  };
 
   // Helper function to get date for a specific day of the week
   const getDateForDay = (dayName: string) => {
@@ -368,63 +434,51 @@ const NutritionPlanSection = ({
       })
       return
     }
-
     setIsGenerating(true)
     setGeneratedPlan(null); // Clear any previously generated plan
-    
     try {
       const result = await generateNutritionPlan(clientId)
-      
       if (result.success && result.response) {
-          const parsedData = JSON.parse(result.response);
-          const plan: DayPlan[] = parsedData.nutrition_plan;
-
-          if (plan) {
-            // Set the plan start date to today when generating a new plan
-            const newPlanStartDate = new Date();
-            setPlanStartDate(newPlanStartDate);
-            
-            // Hold the generated plan in state until user saves it
-            setGeneratedPlan(plan);
-
-            const newMealItemsData: Record<string, Record<string, any[]>> = {};
-            plan.forEach((dayPlan) => {
-                const dayKey = dayPlan.day.toLowerCase();
-                newMealItemsData[dayKey] = {
-                    breakfast: dayPlan.breakfast ? [{ meal: dayPlan.breakfast.name, amount: dayPlan.breakfast.amount, ...dayPlan.breakfast }] : [],
-                    lunch: dayPlan.lunch ? [{ meal: dayPlan.lunch.name, amount: dayPlan.lunch.amount, ...dayPlan.lunch }] : [],
-                    dinner: dayPlan.dinner ? [{ meal: dayPlan.dinner.name, amount: dayPlan.dinner.amount, ...dayPlan.dinner }] : [],
-                    snacks: dayPlan.snacks ? [{ meal: dayPlan.snacks.name, amount: dayPlan.snacks.amount, ...dayPlan.snacks }] : [],
-                };
-            });
-            setMealItems(newMealItemsData);
-            
-            const planTargets = plan[0]?.total;
-            if (planTargets) {
-                setDailyTargets(prev => prev.map(target => {
-                    switch(target.name) {
-                        case "Calories": return { ...target, target: planTargets.calories };
-                        case "Protein": return { ...target, target: planTargets.protein };
-                        case "Carbs": return { ...target, target: planTargets.carbs };
-                        case "Fats": return { ...target, target: planTargets.fats };
-                        default: return target;
-                    }
-                }));
-            }
-
-            // Save to schedule_preview table
-            await saveNutritionPlanToPreview(plan, clientId, newPlanStartDate);
-            setApprovalStatus('pending');
-            setHasUnsavedChanges(false);
-            
-            toast({ title: "Success", description: "AI nutrition plan has been generated and saved to preview!" });
-      } else {
-             toast({ title: "Parsing Error", description: "Could not read the generated plan. Please try again.", variant: "destructive" });
+        const parsedData = JSON.parse(result.response);
+        const plan: DayPlan[] = parsedData.nutrition_plan;
+        if (plan) {
+          const newPlanStartDate = new Date();
+          setPlanStartDate(newPlanStartDate);
+          setGeneratedPlan(plan);
+          const newMealItemsData: Record<string, Record<string, any[]>> = {};
+          plan.forEach((dayPlan) => {
+            const dayKey = dayPlan.day.toLowerCase();
+            newMealItemsData[dayKey] = {
+              breakfast: dayPlan.breakfast ? [{ meal: dayPlan.breakfast.name, amount: dayPlan.breakfast.amount, ...dayPlan.breakfast }] : [],
+              lunch: dayPlan.lunch ? [{ meal: dayPlan.lunch.name, amount: dayPlan.lunch.amount, ...dayPlan.lunch }] : [],
+              dinner: dayPlan.dinner ? [{ meal: dayPlan.dinner.name, amount: dayPlan.dinner.amount, ...dayPlan.dinner }] : [],
+              snacks: dayPlan.snacks ? [{ meal: dayPlan.snacks.name, amount: dayPlan.snacks.amount, ...dayPlan.snacks }] : [],
+            };
+          });
+          setMealItems(newMealItemsData);
+          const planTargets = plan[0]?.total;
+          if (planTargets) {
+            setDailyTargets(prev => prev.map(target => {
+              switch(target.name) {
+                case "Calories": return { ...target, target: planTargets.calories };
+                case "Protein": return { ...target, target: planTargets.protein };
+                case "Carbs": return { ...target, target: planTargets.carbs };
+                case "Fats": return { ...target, target: planTargets.fats };
+                default: return target;
+              }
+            }));
           }
+          // Save the AI-generated plan to schedule_preview with is_approved = false
+          await saveNutritionPlanToPreview(plan, clientId, newPlanStartDate);
+          toast({ title: "Success", description: "AI nutrition plan has been applied!" });
+          // Ensure status is recalculated after generation
+          await checkApprovalStatus();
+        } else {
+          toast({ title: "Parsing Error", description: "Could not read the generated plan. Please try again.", variant: "destructive" });
+        }
       } else {
-         toast({ title: "Generation Error", description: "The AI model did not return a response.", variant: "destructive" });
+        toast({ title: "Generation Error", description: "The AI model did not return a response.", variant: "destructive" });
       }
-      
     } catch (error: any) {
       toast({
         title: "Error",
@@ -502,23 +556,71 @@ const NutritionPlanSection = ({
     }
   };
 
-  // Approve Nutrition Plan (Copy from schedule_preview to schedule)
-  const handleApprovePlan = async () => {
-    if (!clientId) {
-      toast({
-        title: "Error",
-        description: "No client selected. Please select a client first.",
-        variant: "destructive",
-      });
-      return;
-    }
+  // --- Status calculation helper ---
+  const isApproved = (val: any) => val === true || val === 1 || val === 'true';
+  const getApprovalStatusFromPreview = (rows: any[]): 'approved' | 'partial_approved' | 'not_approved' | 'pending' => {
+    if (!rows || rows.length === 0) return 'pending';
+    // Debug log for status calculation
+    console.log('Preview rows for status:', rows);
+    console.log('is_approved types:', rows.map(r => typeof r.is_approved), 'values:', rows.map(r => r.is_approved));
+    const approvedCount = rows.filter(r => isApproved(r.is_approved)).length;
+    const total = rows.length;
+    if (approvedCount === total) return 'approved';
+    if (approvedCount > 0) return 'partial_approved';
+    return 'not_approved';
+  };
 
-    setIsApproving(true);
+  // --- Enhanced Approval Status Check ---
+  const checkApprovalStatus = async () => {
+    if (!clientId) return;
     try {
-      // Fetch data from schedule_preview
       const startDateString = format(planStartDate, 'yyyy-MM-dd');
       const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
-      
+      // Get all preview rows for the week
+      const { data: previewData, error: previewError } = await supabase
+        .from('schedule_preview')
+        .select('id, is_approved')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      if (previewError) console.error('Preview check error:', previewError);
+      // Get all schedule rows for the week
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      if (scheduleError) console.error('Schedule check error:', scheduleError);
+      setHasExistingSchedule(!!(scheduleData && scheduleData.length > 0));
+      // Use previewData for status
+      const status = getApprovalStatusFromPreview(previewData || []);
+      setApprovalStatus(status);
+    } catch (error) {
+      setApprovalStatus('pending');
+      console.error('Error checking approval status:', error);
+    }
+  };
+
+  // --- Approve Plan Handler with is_approved update ---
+  const handleApprovePlan = async () => {
+    if (hasExistingSchedule) {
+      setShowApproveModal(true);
+      return;
+    }
+    await doApprovePlan();
+  };
+
+  const doApprovePlan = async () => {
+    setShowApproveModal(false);
+    if (!clientId) return;
+    setIsApproving(true);
+    try {
+      const startDateString = format(planStartDate, 'yyyy-MM-dd');
+      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      // Fetch preview data
       const { data: previewData, error: fetchError } = await supabase
         .from('schedule_preview')
         .select('*')
@@ -526,19 +628,12 @@ const NutritionPlanSection = ({
         .eq('type', 'meal')
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
-
       if (fetchError) throw fetchError;
-
       if (!previewData || previewData.length === 0) {
-        toast({
-          title: "No Plan to Approve",
-          description: "No nutrition plan found in preview to approve.",
-          variant: "destructive",
-        });
+        toast({ title: "No Plan to Approve", description: "No nutrition plan found in preview to approve.", variant: "destructive" });
         return;
       }
-
-      // Delete existing approved data for the week
+      // Delete existing schedule data for the week
       const { error: deleteError } = await supabase
         .from('schedule')
         .delete()
@@ -546,182 +641,34 @@ const NutritionPlanSection = ({
         .eq('type', 'meal')
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
-
       if (deleteError) throw deleteError;
-
-      // Copy data from schedule_preview to schedule
+      // Copy preview data to schedule
+      const scheduleRows = previewData.map(({ is_approved, ...rest }) => rest);
       const { error: insertError } = await supabase
         .from('schedule')
-        .insert(previewData);
-
+        .insert(scheduleRows);
       if (insertError) throw insertError;
-
-      setApprovalStatus('approved');
+      // Set is_approved=true for all days in preview
+      const { error: updateError } = await supabase
+        .from('schedule_preview')
+        .update({ is_approved: true })
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      if (updateError) throw updateError;
       setHasUnsavedChanges(false);
-      toast({ 
-        title: "Plan Approved", 
-        description: "The nutrition plan has been approved and saved to the main schedule." 
-      });
-
+      toast({ title: "Plan Approved", description: "The nutrition plan has been approved and saved to the main schedule." });
+      // Add a short delay before refreshing status and UI
+      typeof window !== 'undefined' && setTimeout(async () => {
+        await checkApprovalStatus();
+        await fetchNutritionPlanFromSupabase(clientId, planStartDate);
+      }, 300);
     } catch (error: any) {
       console.error("Error approving nutrition plan:", error);
-      toast({
-        title: "Approval Error",
-        description: "Could not approve the nutrition plan. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Approval Error", description: "Could not approve the nutrition plan. Please try again.", variant: "destructive" });
     } finally {
       setIsApproving(false);
-    }
-  };
-
-  // Check approval status
-  const checkApprovalStatus = async () => {
-    if (!clientId) return;
-
-    try {
-      const startDateString = format(planStartDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
-      
-      console.log('Checking approval status for date range:', startDateString, 'to', endDateString);
-      
-      // Check if approved data exists in schedule table
-      const { data: approvedData, error: approvedError } = await supabase
-        .from('schedule')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('type', 'meal')
-        .gte('for_date', startDateString)
-        .lte('for_date', endDateString);
-
-      if (approvedError) {
-        console.error('Error checking approved data:', approvedError);
-      }
-
-      console.log('Approved data found:', approvedData?.length || 0);
-
-      if (approvedData && approvedData.length > 0) {
-        console.log('Setting approval status to approved');
-        setApprovalStatus('approved');
-        return;
-      }
-
-      // Check if preview data exists
-      const { data: previewData, error: previewError } = await supabase
-        .from('schedule_preview')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('type', 'meal')
-        .gte('for_date', startDateString)
-        .lte('for_date', endDateString);
-
-      if (previewError) {
-        console.error('Error checking preview data:', previewError);
-      }
-
-      console.log('Preview data found:', previewData?.length || 0);
-
-      if (previewData && previewData.length > 0) {
-        console.log('Setting approval status to not_approved');
-        setApprovalStatus('not_approved');
-      } else {
-        console.log('Setting approval status to pending');
-        setApprovalStatus('pending');
-      }
-    } catch (error) {
-      console.error('Error checking approval status:', error);
-      setApprovalStatus('pending');
-    }
-  };
-
-  const fetchNutritionPlanFromSupabase = async (clientId: number, startDate: Date) => {
-    setLoading(true);
-    try {
-      const startDateString = format(startDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
-      
-      // First try to fetch from schedule_preview
-      const { data: previewData, error: previewError } = await supabase
-        .from('schedule_preview')
-        .select('*')
-        .eq('client_id', clientId)
-        .eq('type', 'meal')
-        .gte('for_date', startDateString)
-        .lte('for_date', endDateString);
-
-      if (previewError) throw previewError;
-
-      let data = previewData;
-      let dataSource = 'preview';
-
-      // If no preview data, try to fetch from schedule (approved data)
-      if (!data || data.length === 0) {
-        const { data: scheduleData, error: scheduleError } = await supabase
-          .from('schedule')
-          .select('*')
-          .eq('client_id', clientId)
-          .eq('type', 'meal')
-          .gte('for_date', startDateString)
-          .lte('for_date', endDateString);
-
-        if (scheduleError) throw scheduleError;
-        data = scheduleData;
-        dataSource = 'schedule';
-      }
-
-      const newMealItemsData: Record<string, Record<string, any[]>> = {};
-      const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-      
-      daysOfWeek.forEach(day => {
-        newMealItemsData[day] = { breakfast: [], lunch: [], dinner: [], snacks: [] };
-      });
-
-      if (data && data.length > 0) {
-        data.forEach(item => {
-          const dayOfWeek = format(new Date(item.for_date), 'EEEE').toLowerCase();
-          const mealTypeMatch = item.summary.match(/^(\w+):/);
-          if (mealTypeMatch) {
-            const mealType = mealTypeMatch[1].toLowerCase();
-            const mealData = {
-              meal: item.summary.replace(/^\w+:\s*/, ''),
-              ...item.details_json,
-              amount: item.details_json.amount,
-              coach_tip: item.coach_tip
-            };
-            if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
-              newMealItemsData[dayOfWeek][mealType].push(mealData);
-            }
-          }
-        });
-
-        // Set approval status based on data source
-        if (dataSource === 'preview') {
-          setApprovalStatus('not_approved');
-          toast({ title: "Preview Plan Loaded", description: "Nutrition plan from preview has been loaded. Changes will be auto-saved." });
-        } else if (dataSource === 'schedule') {
-          setApprovalStatus('approved');
-          toast({ title: "Approved Plan Loaded", description: "Approved nutrition plan has been loaded." });
-        } else {
-          setApprovalStatus('pending');
-          toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
-        }
-      } else {
-        setApprovalStatus('pending');
-        toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
-      }
-      setMealItems(newMealItemsData); // Always set the structure, populated or empty.
-
-    } catch (error: any) {
-      console.error("Error fetching nutrition plan from Supabase:", error);
-      setApprovalStatus('pending');
-      toast({
-        title: "Database Error",
-        description: "Could not fetch the nutrition plan.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setDataLoaded(true);
     }
   };
 
@@ -914,6 +861,7 @@ const NutritionPlanSection = ({
                   name: 'Total'
               };
 
+              // --- On edit, set is_approved=false for that day ---
               const handleMealChange = (dayKey: string, mealType: string, field: string, value: any) => {
                 const updatedMealItems = { ...mealItems };
                 const mealToUpdate = updatedMealItems[dayKey]?.[mealType]?.[0];
@@ -927,6 +875,17 @@ const NutritionPlanSection = ({
                   setMealItems(updatedMealItems);
                   setHasUnsavedChanges(true);
                   
+                  // Set is_approved=false for this day in preview
+                  const startDateString = format(planStartDate, 'yyyy-MM-dd');
+                  const dayDate = getDateForDay(dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
+                  const forDate = format(dayDate, 'yyyy-MM-dd');
+                  supabase
+                    .from('schedule_preview')
+                    .update({ is_approved: false })
+                    .eq('client_id', clientId)
+                    .eq('type', 'meal')
+                    .eq('for_date', forDate)
+                    .then(() => checkApprovalStatus());
                   // Trigger auto-save
                   debouncedAutoSave(updatedMealItems);
                   
@@ -1287,6 +1246,12 @@ const NutritionPlanSection = ({
                   ✅ Approved Plan
                 </div>
               )}
+              {approvalStatus === 'partial_approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  📝 Partial Approval
+                </div>
+              )}
               {approvalStatus === 'not_approved' && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
@@ -1365,25 +1330,40 @@ const NutritionPlanSection = ({
             )}
 
             {/* Approve Plan Button - Show when there's preview data and not approved */}
-            {approvalStatus === 'not_approved' && (
-              <Button
-                onClick={handleApprovePlan}
-                disabled={isApproving}
-                size="lg"
-                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700"
-              >
-                {isApproving ? (
-                  <>
-                    <LoadingSpinner size="small" />
-                    <span className="ml-3">Approving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
-                  </>
+            {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') && (
+              <>
+                <Button
+                  onClick={handleApprovePlan}
+                  disabled={isApproving}
+                  size="lg"
+                  className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700"
+                >
+                  {isApproving ? (
+                    <>
+                      <LoadingSpinner size="small" />
+                      <span className="ml-3">Approving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-5 w-5 mr-3" />
+                      ✅ Approve Plan
+                    </>
+                  )}
+                </Button>
+                {/* Modal Dialog for Overwrite Confirmation */}
+                {showApproveModal && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-8 max-w-md w-full">
+                      <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Overwrite Existing Plan?</h2>
+                      <p className="mb-6 text-gray-700 dark:text-gray-300">A plan already exists for this week. Approving will <span className="font-bold text-red-600">overwrite</span> the current plan in production. Are you sure you want to continue?</p>
+                      <div className="flex justify-end gap-4">
+                        <Button variant="outline" onClick={() => setShowApproveModal(false)} className="border-gray-300 dark:border-gray-700">Cancel</Button>
+                        <Button onClick={doApprovePlan} className="bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold">Yes, Overwrite</Button>
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </Button>
+              </>
             )}
 
             <Button

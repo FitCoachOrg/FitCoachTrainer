@@ -753,14 +753,26 @@ async function approvePlan(clientId: number, planStartDate: Date) {
       return { success: false, error: deleteError.message };
     }
 
-    // 4. Insert the preview rows into schedule (remove id/created_at fields)
-    const rowsToInsert = previewRows.map(({ id, created_at, ...rest }) => rest);
+    // 4. Insert the preview rows into schedule (remove id, created_at, is_approved fields)
+    const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }) => rest);
     const { error: insertError } = await supabase
       .from('schedule')
       .insert(rowsToInsert);
     if (insertError) {
       console.error('[approvePlan] Error inserting into schedule:', insertError);
       return { success: false, error: insertError.message };
+    }
+    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    try {
+      await supabase
+        .from('schedule_preview')
+        .update({ is_approved: true })
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+    } catch (updateErr) {
+      console.warn('[approvePlan] Warning: Could not update is_approved to true after approval.', updateErr);
     }
     return { success: true };
   } catch (err: any) {
@@ -814,7 +826,9 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
           tempo: String(ex.tempo || ''),
           order: idx + 1
         }))
-      }
+      },
+      // Always set is_approved to false on insert (AI generation or save)
+      is_approved: false
     }));
     
     console.log('[savePlanToSchedulePreview] Prepared rows for database:', JSON.stringify(rows, null, 2));
@@ -853,6 +867,17 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
       console.error('[savePlanToSchedulePreview] CRITICAL: Error saving to schedule_preview:', error);
       return { success: false, error };
     }
+    // After insert, ensure all rows for this client/week are set to is_approved: false (in case of partial updates)
+    try {
+      await supabase
+        .from('schedule_preview')
+        .update({ is_approved: false })
+        .eq('client_id', clientId)
+        .gte('for_date', firstDate)
+        .lte('for_date', lastDate);
+    } catch (updateErr) {
+      console.warn('[savePlanToSchedulePreview] Warning: Could not update is_approved to false after insert.', updateErr);
+    }
     
     console.log('[savePlanToSchedulePreview] SUCCESS: Successfully inserted to schedule_preview. Rows inserted:', data?.length);
     return { success: true, data };
@@ -884,6 +909,7 @@ const WorkoutPlanSection = ({
   const [isDraftPlan, setIsDraftPlan] = useState(false); // Indicates if plan is from preview (draft)
   const [isApproving, setIsApproving] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
+  const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'pending'>('pending');
 
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
@@ -1115,6 +1141,47 @@ const WorkoutPlanSection = ({
     }
   };
 
+  // Helper to check approval status for the week
+  const checkPlanApprovalStatus = async () => {
+    if (!numericClientId || !planStartDate) return;
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    // Fetch is_approved for all days in schedule_preview
+    const { data, error } = await supabase
+      .from('schedule_preview')
+      .select('for_date, is_approved')
+      .eq('client_id', numericClientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr);
+    if (error || !data) {
+      setPlanApprovalStatus('pending');
+      return;
+    }
+    // Debug: Log which dates are approved and which are not
+    const approvedDates = data.filter((row: any) => row.is_approved === true).map((row: any) => row.for_date);
+    const notApprovedDates = data.filter((row: any) => row.is_approved !== true).map((row: any) => row.for_date);
+    console.log('[Plan Approval Debug] Approved dates:', approvedDates);
+    console.log('[Plan Approval Debug] Not approved dates:', notApprovedDates);
+    const total = data.length;
+    const approvedCount = approvedDates.length;
+    if (total === 0) {
+      setPlanApprovalStatus('pending');
+    } else if (approvedCount === total) {
+      setPlanApprovalStatus('approved');
+    } else if (approvedCount > 0) {
+      setPlanApprovalStatus('partial_approved');
+    } else {
+      setPlanApprovalStatus('pending');
+    }
+  };
+
+  // Re-check approval status whenever plan, client, or date changes
+  useEffect(() => {
+    checkPlanApprovalStatus();
+  }, [numericClientId, planStartDate, workoutPlan]);
+
   return (
     <div className="space-y-4">
       {/* Placeholder Cards Section */}
@@ -1168,10 +1235,15 @@ const WorkoutPlanSection = ({
         {/* Show plan source status */}
         {workoutPlan && (
           <div className="mb-2 flex items-center gap-4">
-            {isDraftPlan ? (
-              <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Draft Plan (Not Yet Approved)</span>
-            ) : (
+            {/* Status badge based on is_approved values */}
+            {planApprovalStatus === 'approved' && (
               <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved Plan</span>
+            )}
+            {planApprovalStatus === 'partial_approved' && (
+              <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Partial Approved</span>
+            )}
+            {planApprovalStatus === 'pending' && (
+              <span className="inline-block px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">Pending</span>
             )}
             {/* Approve button for draft plans */}
             {isDraftPlan && (
