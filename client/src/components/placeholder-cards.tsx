@@ -39,10 +39,11 @@ export function PlaceholderCard({ title, description, icon, onClick }: Placehold
   )
 }
 
-export function FitnessGoalsPlaceholder({ onClick }: { onClick: () => void }) {
+export function FitnessGoalsPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
+  const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
   return (
     <PlaceholderCard
-      title="Fitness Goals"
+      title={`${clientName} Fitness Goals`}
       description="View and manage client fitness goals"
       icon={<Target className="h-4 w-4 text-white" />}
       onClick={onClick}
@@ -50,10 +51,11 @@ export function FitnessGoalsPlaceholder({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function AICoachInsightsPlaceholder({ onClick }: { onClick: () => void }) {
+export function AICoachInsightsPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
+  const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
   return (
     <PlaceholderCard
-      title="AI Coach Insights"
+      title={`${clientName} AI Coach Insights`}
       description="View AI-powered coaching insights"
       icon={<Brain className="h-4 w-4 text-white" />}
       onClick={onClick}
@@ -61,10 +63,11 @@ export function AICoachInsightsPlaceholder({ onClick }: { onClick: () => void })
   )
 }
 
-export function TrainerNotesPlaceholder({ onClick }: { onClick: () => void }) {
+export function TrainerNotesPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
+  const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
   return (
     <PlaceholderCard
-      title="Trainer Notes"
+      title={`${clientName} Trainer Notes`}
       description="View and edit trainer notes"
       icon={<FileText className="h-4 w-4 text-white" />}
       onClick={onClick}
@@ -72,10 +75,11 @@ export function TrainerNotesPlaceholder({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function NutritionalPreferencesPlaceholder({ onClick }: { onClick: () => void }) {
+export function NutritionalPreferencesPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
+  const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
   return (
     <PlaceholderCard
-      title="Nutritional Preferences"
+      title={`${clientName} Nutritional Preferences`}
       description="View client's nutritional preferences"
       icon={<Utensils className="h-4 w-4 text-white" />}
       onClick={onClick}
@@ -83,10 +87,11 @@ export function NutritionalPreferencesPlaceholder({ onClick }: { onClick: () => 
   )
 }
 
-export function TrainingPreferencesPlaceholder({ onClick }: { onClick: () => void }) {
+export function TrainingPreferencesPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
+  const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
   return (
     <PlaceholderCard
-      title="Training Preferences"
+      title={`${clientName} Training Preferences`}
       description="View client's training preferences"
       icon={<Dumbbell className="h-4 w-4 text-white" />}
       onClick={onClick}

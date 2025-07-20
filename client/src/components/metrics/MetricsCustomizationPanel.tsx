@@ -38,6 +38,7 @@ interface MetricsCustomizationPanelProps {
   draggingId: string | null
   setDraggingId: (id: string | null) => void
   onDragEnd: (event: DragEndEvent) => void
+  client?: any
 }
 
 export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps> = ({
@@ -49,7 +50,8 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
   setChartType,
   draggingId,
   setDraggingId,
-  onDragEnd
+  onDragEnd,
+  client
 }) => {
   const selectedMetrics = METRIC_LIBRARY.filter((metric) =>
     selectedKeys.includes(metric.key)
@@ -80,7 +82,9 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                   <BarChart3 className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your Metrics Dashboard</h3>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                    Metrics Dashboard for {client?.cl_name || client?.cl_prefer_name || 'Client'}
+                  </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {selectedKeys.length}/6 metrics selected
                   </p>

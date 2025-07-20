@@ -1253,11 +1253,11 @@ const NutritionPlanSection = ({
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} />
-        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} />
+        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
+        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
       </div>
 
       {/* Enhanced Header with AI Generation */}

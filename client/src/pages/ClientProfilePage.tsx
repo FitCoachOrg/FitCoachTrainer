@@ -50,6 +50,7 @@ import {
   CalendarDays,
   Search as SearchIcon,
   Table,
+  FileText,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -82,6 +83,11 @@ import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSec
 import { StructuredTrainerNotesSection } from "@/components/StructuredTrainerNotesSection"
 import { ProgramManagementSection } from "@/components/ProgramManagementSection"
 import { ProgramsScreen } from "@/components/ProgramsScreen"
+import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
+import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
+import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
+import FitnessScoreVisualization from "@/components/fitness-score/FitnessScoreVisualization"
+import { SidePopup } from "@/components/ui/side-popup"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1321,6 +1327,14 @@ export default function ClientDashboard() {
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
+  
+  // Side popup states for placeholder cards
+  const [showFitnessGoals, setShowFitnessGoals] = useState(false)
+  const [showAICoachInsights, setShowAICoachInsights] = useState(false)
+  const [showTrainerNotes, setShowTrainerNotes] = useState(false)
+  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false)
+  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false)
+  const [showFitnessScore, setShowFitnessScore] = useState(false)
   const [todoItems, setTodoItems] = useState(
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week"
   )
@@ -1448,13 +1462,8 @@ export default function ClientDashboard() {
         let analysisData;
         try {
           if (result.aiResponse?.response) {
-            const responseStr = result.aiResponse.response;
-            const jsonMatch = responseStr.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              analysisData = JSON.parse(jsonMatch[0]);
-            } else {
-              analysisData = JSON.parse(responseStr);
-            }
+            // The response is already an object, so we can use it directly
+            analysisData = result.aiResponse.response;
           }
         } catch (parseError) {
           console.error('❌ Failed to parse AI response:', parseError);
@@ -1930,327 +1939,39 @@ export default function ClientDashboard() {
       {/* Permanent Card Sections - Only on Overview tab */}
       {activeTab === 'overview' && (
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-4 mb-8">
-            {/* Fitness Goals Section */}
-            <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
-
-            {/* AI Coach Insights Section */}
-            <div className="xl:col-span-2">
-              <Card className="bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 dark:from-purple-900/20 dark:via-indigo-900/20 dark:to-blue-900/20 border-purple-200 dark:border-purple-800 shadow-xl h-full overflow-hidden">
-                <CardHeader className="pb-4 bg-gradient-to-r from-purple-600/5 to-indigo-600/5 dark:from-purple-600/10 dark:to-indigo-600/10">
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
-                      <Brain className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">AI Coach Insights</span>
-                  </CardTitle>
-                  
-                  {/* Tab Navigation with Icons */}
-                  <div className="flex space-x-1 bg-white/80 dark:bg-gray-800/80 p-1 rounded-lg mt-4 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">
-                    {[
-                      { id: 'summary', label: 'Summary', icon: BarChart3 },
-                      { id: 'action_plan', label: 'Action Plan', icon: Target },
-                      { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
-                      { id: 'insights', label: 'Insights', icon: Brain }
-                    ].map((tab) => {
-                      const Icon = tab.icon;
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() => setAiInsightsActiveTab(tab.id as any)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                            aiInsightsActiveTab === tab.id
-                              ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-md'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {tab.label}
-                        </button>
-                      );
-                    })}
+          {/* Placeholder Cards Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
+            <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+            <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
+            <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
+            <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
+            
+            {/* Fitness Score Card */}
+            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-dashed border-blue-300 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer group hover:shadow-lg hover:scale-105" onClick={() => setShowFitnessScore(true)}>
+              <CardContent className="p-6 text-center">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="p-3 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg group-hover:shadow-xl transition-all duration-300">
+                    <BarChart3 className="h-8 w-8 text-white" />
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  {lastAIRecommendation ? (
-                    <div className="space-y-6">
-                      {/* Summary Tab */}
-                      {aiInsightsActiveTab === 'summary' && lastAIRecommendation.summary && (
-                        <div className="space-y-4">
-                          <Card className="border-l-4 border-l-blue-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
-                                <User className="h-5 w-5" />
-                                Client Status Overview
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {typeof lastAIRecommendation.summary.client_progress === 'string' 
-                                  ? lastAIRecommendation.summary.client_progress 
-                                  : 'No client status available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="border-l-4 border-l-green-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-green-600 flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5" />
-                                Progress Assessment
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {typeof lastAIRecommendation.summary.progress_assessment === 'string' 
-                                  ? lastAIRecommendation.summary.progress_assessment 
-                                  : 'No progress assessment available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          {lastAIRecommendation.summary.key_points && lastAIRecommendation.summary.key_points.length > 0 && (
-                            <Card className="border-l-4 border-l-purple-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg text-purple-600 flex items-center gap-2">
-                                  <Star className="h-5 w-5" />
-                                  Key Insights
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {lastAIRecommendation.summary.key_points.map((insight: any, index: number) => (
-                                    <li key={index} className="flex items-start gap-2">
-                                      <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                                      <span className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                        {String(insight)}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          )}
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {lastAIRecommendation.summary.challenges_identified && lastAIRecommendation.summary.challenges_identified.length > 0 && (
-                              <Card className="border-l-4 border-l-red-500 shadow-md">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-lg text-red-600 flex items-center gap-2">
-                                    <AlertTriangle className="h-5 w-5" />
-                                    Immediate Concerns
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <ul className="space-y-1">
-                                    {lastAIRecommendation.summary.challenges_identified.map((concern: any, index: number) => (
-                                      <li key={index} className="text-gray-700 dark:text-gray-300">
-                                        • {String(concern)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </CardContent>
-                              </Card>
-                            )}
-
-                            {lastAIRecommendation.summary.successes_highlighted && lastAIRecommendation.summary.successes_highlighted.length > 0 && (
-                              <Card className="border-l-4 border-l-green-500 shadow-md">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-lg text-green-600 flex items-center gap-2">
-                                    <CheckCircle className="h-5 w-5" />
-                                    Positive Developments
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <ul className="space-y-1">
-                                    {lastAIRecommendation.summary.successes_highlighted.map((development: any, index: number) => (
-                                      <li key={index} className="text-gray-700 dark:text-gray-300">
-                                        • {String(development)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </CardContent>
-                              </Card>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action Plan Tab */}
-                      {aiInsightsActiveTab === 'action_plan' && lastAIRecommendation.action_items && (
-                        <div className="space-y-6">
-                          <Card className="border-l-4 border-l-blue-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
-                                <Zap className="h-5 w-5" />
-                                Immediate Actions
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-3">
-                                {lastAIRecommendation.action_items.immediate_actions?.map((action: any, index: number) => (
-                                  <div key={index} className="flex items-start gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
-                                    <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                                      {index + 1}
-                                    </div>
-                                    <div className="flex-1">
-                                      <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                                        {typeof action === 'string' ? action : action.action}
-                                      </p>
-                                      {typeof action === 'object' && (
-                                        <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                                          {action.priority && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs">
-                                              Priority: {action.priority}
-                                            </span>
-                                          )}
-                                          {action.timeframe && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
-                                              {action.timeframe}
-                                            </span>
-                                          )}
-                                          {action.category && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
-                                              {action.category}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          {lastAIRecommendation.action_items.follow_up_items && lastAIRecommendation.action_items.follow_up_items.length > 0 && (
-                            <Card className="border-l-4 border-l-indigo-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg text-indigo-600 flex items-center gap-2">
-                                  <Calendar className="h-5 w-5" />
-                                  Follow Up Items
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-3">
-                                  {lastAIRecommendation.action_items.follow_up_items.map((action: any, index: number) => (
-                                    <div key={index} className="flex items-start gap-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200/50 dark:border-indigo-800/50">
-                                      <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                                        {index + 1}
-                                      </div>
-                                      <div className="flex-1">
-                                        <p className="font-medium text-indigo-900 dark:text-indigo-100 mb-1">
-                                          {typeof action === 'string' ? action : action.action}
-                                        </p>
-                                        {typeof action === 'object' && (
-                                          <div className="text-sm text-indigo-700 dark:text-indigo-300 space-y-1">
-                                            {action.priority && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs">
-                                                Priority: {action.priority}
-                                              </span>
-                                            )}
-                                            {action.timeframe && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs ml-2">
-                                                {action.timeframe}
-                                              </span>
-                                            )}
-                                            {action.category && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs ml-2">
-                                                {action.category}
-                                              </span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Recommendations Tab */}
-                      {aiInsightsActiveTab === 'recommendations' && lastAIRecommendation.recommendations && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Object.entries(lastAIRecommendation.recommendations).map(([key, recommendations]: [string, any]) => (
-                            <Card key={key} className="border-l-4 border-l-yellow-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg capitalize flex items-center gap-2">
-                                  <Lightbulb className="h-5 w-5 text-yellow-500" />
-                                  {key.replace('_', ' ')}
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {recommendations?.map((rec: string, index: number) => (
-                                    <li key={index} className="flex items-start gap-2">
-                                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                      <span className="text-gray-700 dark:text-gray-300 leading-relaxed">{rec}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Insights Tab */}
-                      {aiInsightsActiveTab === 'insights' && lastAIRecommendation.insights && (
-                        <div className="space-y-4">
-                          <Card className="border-l-4 border-l-purple-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-purple-600 flex items-center gap-2">
-                                <Activity className="h-5 w-5" />
-                                Engagement Level
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {lastAIRecommendation.insights.engagement_level || 'No engagement data available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {Object.entries(lastAIRecommendation.insights)
-                              .filter(([key]) => key !== 'engagement_level')
-                              .map(([key, items]: [string, any]) => (
-                                <Card key={key} className="border-l-4 border-l-blue-500 shadow-md">
-                                  <CardHeader className="pb-3">
-                                    <CardTitle className="text-lg capitalize flex items-center gap-2">
-                                      <BarChart3 className="h-5 w-5 text-blue-500" />
-                                      {key.replace('_', ' ')}
-                                    </CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <ul className="space-y-1">
-                                      {items?.map((item: string, index: number) => (
-                                        <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
-                                      ))}
-                                    </ul>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                        <Brain className="w-8 h-8 text-purple-500" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No AI Analysis Available</h3>
-                      <p className="text-gray-600 dark:text-gray-400">Generate AI analysis from your trainer notes to see insights</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                      Fitness Score
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Track progress and goal achievement probability
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <span className="text-sm font-medium">View Details</span>
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
+
+          {/* AI Coach Insights section removed - accessible via placeholder card */}
         </div>
       )}
 
@@ -2258,27 +1979,19 @@ export default function ClientDashboard() {
       <div className="space-y-8">
         {activeTab === "overview" && (
             <div className="space-y-8">
-              {/* Trainer Notes & To-Do Section */}
-            <StructuredTrainerNotesSection
-              client={client}
-              trainerNotes={trainerNotes}
-              setTrainerNotes={setTrainerNotes}
-              handleSaveTrainerNotes={handleSaveTrainerNotes}
-              isSavingNotes={isSavingNotes}
-              isEditingNotes={isEditingNotes}
-              setIsEditingNotes={setIsEditingNotes}
-              notesDraft={notesDraft}
-              setNotesDraft={setNotesDraft}
-              notesError={notesError}
-              setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-
-                
-                lastAIRecommendation={lastAIRecommendation}
-              />
-          </div>
+              {/* Fitness Score Visualization */}
+              <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
+                <CardHeader className="pb-0">
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-6 w-6 text-blue-600" />
+                    Fitness Score Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FitnessScoreVisualization clientId={clientId || 34} />
+                </CardContent>
+              </Card>
+            </div>
         )}
 
         {/* Tab Content Sections */}
@@ -2378,6 +2091,80 @@ export default function ClientDashboard() {
           summaryResponse={notesSummaryResponse}
           clientName={client?.name || client?.preferredName}
         />
+
+        {/* Side Popups for Placeholder Cards */}
+        <SidePopup
+          isOpen={showFitnessGoals}
+          onClose={() => setShowFitnessGoals(false)}
+          title="Fitness Goals"
+          icon={<Target className="h-5 w-5 text-white" />}
+        >
+          <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
+        </SidePopup>
+
+        <SidePopup
+          isOpen={showAICoachInsights}
+          onClose={() => setShowAICoachInsights(false)}
+          title="AI Coach Insights"
+          icon={<Brain className="h-5 w-5 text-white" />}
+        >
+          <AICoachInsightsSection 
+            lastAIRecommendation={lastAIRecommendation}
+            onViewFullAnalysis={() => {}}
+          />
+        </SidePopup>
+
+        <SidePopup
+          isOpen={showTrainerNotes}
+          onClose={() => setShowTrainerNotes(false)}
+          title="Trainer Notes"
+          icon={<FileText className="h-5 w-5 text-white" />}
+        >
+          <StructuredTrainerNotesSection 
+            client={client}
+            trainerNotes={trainerNotes}
+            setTrainerNotes={setTrainerNotes}
+            handleSaveTrainerNotes={handleSaveTrainerNotes}
+            isSavingNotes={isSavingNotes}
+            isEditingNotes={isEditingNotes}
+            setIsEditingNotes={setIsEditingNotes}
+            notesDraft={notesDraft}
+            setNotesDraft={setNotesDraft}
+            notesError={notesError}
+            setNotesError={setNotesError}
+            isGeneratingAnalysis={isGeneratingAnalysis}
+            handleSummarizeNotes={handleSummarizeNotes}
+            isSummarizingNotes={isSummarizingNotes}
+            lastAIRecommendation={lastAIRecommendation}
+          />
+        </SidePopup>
+
+        <SidePopup
+          isOpen={showNutritionalPreferences}
+          onClose={() => setShowNutritionalPreferences(false)}
+          title="Nutritional Preferences"
+          icon={<Utensils className="h-5 w-5 text-white" />}
+        >
+          <NutritionalPreferencesSection client={client} />
+        </SidePopup>
+
+        <SidePopup
+          isOpen={showTrainingPreferences}
+          onClose={() => setShowTrainingPreferences(false)}
+          title="Training Preferences"
+          icon={<Dumbbell className="h-5 w-5 text-white" />}
+        >
+          <TrainingPreferencesSection client={client} />
+        </SidePopup>
+
+        <SidePopup
+          isOpen={showFitnessScore}
+          onClose={() => setShowFitnessScore(false)}
+          title="Fitness Score"
+          icon={<BarChart3 className="h-5 w-5 text-white" />}
+        >
+          <FitnessScoreVisualization clientId={clientId || 34} />
+        </SidePopup>
       </div>
     </div>
   )
