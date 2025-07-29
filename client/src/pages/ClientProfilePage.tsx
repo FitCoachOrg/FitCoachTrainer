@@ -136,6 +136,7 @@ ${JSON.stringify(aiAnalysis)}
 
 import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 import { MetricsSection } from "@/components/metrics/MetricsSection"
+import ClientOverviewSection from "@/components/ClientOverviewSection"
 
 
 // Define types for AI response (matching the actual implementation)
@@ -1939,39 +1940,25 @@ export default function ClientDashboard() {
       {/* Permanent Card Sections - Only on Overview tab */}
       {activeTab === 'overview' && (
         <div className="max-w-7xl mx-auto px-6 py-6">
-          {/* Placeholder Cards Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-            <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
-            <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-            <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
-            <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
-            
-            {/* Fitness Score Card */}
-            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-dashed border-blue-300 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-600 transition-all duration-300 cursor-pointer group hover:shadow-lg hover:scale-105" onClick={() => setShowFitnessScore(true)}>
-              <CardContent className="p-6 text-center">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className="p-3 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg group-hover:shadow-xl transition-all duration-300">
-                    <BarChart3 className="h-8 w-8 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                      Fitness Score
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Track progress and goal achievement probability
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <span className="text-sm font-medium">View Details</span>
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* AI Coach Insights section removed - accessible via placeholder card */}
+          {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
+          <ClientOverviewSection
+            client={client}
+            lastAIRecommendation={lastAIRecommendation}
+            trainerNotes={trainerNotes}
+            setTrainerNotes={setTrainerNotes}
+            handleSaveTrainerNotes={handleSaveTrainerNotes}
+            isSavingNotes={isSavingNotes}
+            isEditingNotes={isEditingNotes}
+            setIsEditingNotes={setIsEditingNotes}
+            notesDraft={notesDraft}
+            setNotesDraft={setNotesDraft}
+            notesError={notesError}
+            setNotesError={setNotesError}
+            isGeneratingAnalysis={isGeneratingAnalysis}
+            handleSummarizeNotes={handleSummarizeNotes}
+            isSummarizingNotes={isSummarizingNotes}
+            refreshClientData={refreshClientData}
+          />
         </div>
       )}
 

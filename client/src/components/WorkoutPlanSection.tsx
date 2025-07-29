@@ -31,6 +31,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
 import { debounce } from 'lodash';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
 
 // Types
 interface Exercise {
@@ -716,6 +717,38 @@ interface WorkoutPlanSectionProps {
   isSummarizingNotes?: boolean;
 }
 
+// Helper to build the payload for schedule_preview
+function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_time: string, workout_id: string) {
+  return planWeek.map((day) => ({
+    client_id: clientId,
+    type: 'workout',
+    task: 'workout',
+    icon: 'dumbell',
+    summary: day.focus,
+    for_date: day.date, // Ensure this is a string in YYYY-MM-DD format
+    for_time, // Ensure this is a string in HH:MM:SS or HH:MM:SS+TZ format
+    workout_id, // Always a valid UUID
+    details_json: {
+      focus: day.focus,
+      exercises: (day.exercises || []).map((ex: any, idx: number) => ({
+        exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+        body_part: String(ex.body_part || 'Full Body'),
+        sets: String(ex.sets || '3'),
+        reps: String(ex.reps || '10'),
+        rest: String(ex.rest || ex.rest_sec || '60'),
+        weight: String(ex.weight || ex.weights || 'Bodyweight'),
+        duration: String(ex.duration || ex.duration_sec || '15'),
+        equipment: String(ex.equipment || 'None'),
+        coach_tip: String(ex.coach_tip || 'Focus on proper form'),
+        video_link: String(ex.video_link || ex.youtube_video_id || ''),
+        tempo: String(ex.tempo || ''),
+        order: idx + 1
+      }))
+    },
+    is_approved: false
+  }));
+}
+
 // Add approvePlan implementation to copy from schedule_preview to schedule
 async function approvePlan(clientId: number, planStartDate: Date) {
   try {
@@ -798,40 +831,13 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
     const for_time = clientData?.workout_time || '08:00:00';
     console.log(`[savePlanToSchedulePreview] Using workout time: ${for_time}`);
 
-    const workout_id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+    // Always use a valid UUID for workout_id
+    const workout_id = uuidv4();
 
-    const rows = planWeek.map((day) => ({
-      client_id: clientId,
-      type: 'workout',
-      task: 'workout',
-      icon: 'dumbell',
-      summary: day.focus,
-      for_date: day.date,
-      for_time,
-      workout_id,
-      details_json: {
-        focus: day.focus,
-        exercises: (day.exercises || []).map((ex: any, idx: number) => ({
-          // Standardize property names to match what the UI expects
-          exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
-          body_part: String(ex.body_part || 'Full Body'),
-          sets: String(ex.sets || '3'),
-          reps: String(ex.reps || '10'),
-          rest: String(ex.rest || ex.rest_sec || '60'), // Use 'rest'
-          weight: String(ex.weight || ex.weights || 'Bodyweight'),
-          duration: String(ex.duration || ex.duration_sec || '15'), // Use 'duration'
-          equipment: String(ex.equipment || 'None'),
-          coach_tip: String(ex.coach_tip || 'Focus on proper form'),
-          video_link: String(ex.video_link || ex.youtube_video_id || ''),
-          tempo: String(ex.tempo || ''),
-          order: idx + 1
-        }))
-      },
-      // Always set is_approved to false on insert (AI generation or save)
-      is_approved: false
-    }));
-    
-    console.log('[savePlanToSchedulePreview] Prepared rows for database:', JSON.stringify(rows, null, 2));
+    // Build the payload using the helper
+    const rows = buildSchedulePreviewRows(planWeek, clientId, for_time, workout_id);
+    // Log the outgoing payload for debugging
+    console.log('[savePlanToSchedulePreview] Prepared rows for database (payload):', JSON.stringify(rows, null, 2));
 
     // Delete any existing preview for this client and week
     const firstDate = planWeek[0]?.date;
@@ -1114,6 +1120,8 @@ const WorkoutPlanSection = ({
         } else {
           setIsDraftPlan(true);
         }
+        // Refresh approval status after generating and saving plan
+        await checkPlanApprovalStatus();
       } else {
         throw new Error(result.message || 'Unknown error');
       }
@@ -1222,15 +1230,24 @@ const WorkoutPlanSection = ({
         {/* Show plan source status */}
         {workoutPlan && (
           <div className="mb-2 flex items-center gap-4">
-            {/* Status badge based on is_approved values */}
+            {/* Status badge based on is_approved values - Updated to match Nutrition Plan UI */}
             {planApprovalStatus === 'approved' && (
-              <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Approved Plan</span>
+              <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                ✅ Approved Plan
+              </div>
             )}
             {planApprovalStatus === 'partial_approved' && (
-              <span className="inline-block px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Partial Approved</span>
+              <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                📝 Partial Approval
+              </div>
             )}
             {planApprovalStatus === 'pending' && (
-              <span className="inline-block px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">Pending</span>
+              <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                📝 Draft Plan (Not Approved)
+              </div>
             )}
             {/* Approve button for draft plans */}
             {isDraftPlan && (
@@ -1242,6 +1259,8 @@ const WorkoutPlanSection = ({
                   if (result.success) {
                     toast({ title: 'Plan Approved', description: 'The plan has been moved to production.', variant: 'default' });
                     setIsDraftPlan(false); // UI update: now approved
+                    // Refresh approval status after successful approval
+                    await checkPlanApprovalStatus();
                   } else {
                     toast({ title: 'Approval Failed', description: 'Could not approve plan.', variant: 'destructive' });
                   }
@@ -1262,7 +1281,7 @@ const WorkoutPlanSection = ({
                 )}
               </Button>
             )}
-          </div>
+            </div>
         )}
         {workoutPlan && isDraftPlan && (
           <div className="mb-2 flex items-center gap-4">
@@ -1311,6 +1330,8 @@ const WorkoutPlanSection = ({
                     };
                     console.log('[Save Changes] Setting workout plan in UI to:', dbWorkoutPlan);
                     setWorkoutPlan(dbWorkoutPlan);
+                    // Refresh approval status after saving changes
+                    await checkPlanApprovalStatus();
                   } else {
                     console.warn('[Save Changes] Error or no data after save:', error, data);
                   }

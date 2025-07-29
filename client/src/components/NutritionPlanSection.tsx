@@ -72,6 +72,7 @@ interface ScheduleItem {
   details_json: object;
   for_time: string;
   icon?: string;
+  is_approved?: boolean;
 }
 
 interface NutritionPlanSectionProps {
@@ -210,19 +211,26 @@ const NutritionPlanSection = ({
       });
       if (data && data.length > 0) {
         data.forEach(item => {
-          const dayOfWeek = format(new Date(item.for_date), 'EEEE').toLowerCase();
-          const mealTypeMatch = item.summary.match(/^(\w+):/);
-          if (mealTypeMatch) {
-            const mealType = mealTypeMatch[1].toLowerCase();
-            const mealData = {
-              meal: item.summary.replace(/^\w+:\s*/, ''),
-              ...item.details_json,
-              amount: item.details_json.amount,
-              coach_tip: item.coach_tip
-            };
-            if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
-              newMealItemsData[dayOfWeek][mealType].push(mealData);
+          try {
+            const dayOfWeek = format(new Date(item.for_date), 'EEEE').toLowerCase();
+            const mealTypeMatch = item.summary.match(/^([\w ]+):\s*/);
+            if (mealTypeMatch && mealTypeMatch[1]) {
+              const mealType = mealTypeMatch[1].toLowerCase();
+              const mealData = {
+                meal: item.summary.replace(/^[\w ]+:\s*/, ''),
+                ...item.details_json,
+                amount: item.details_json.amount,
+                coach_tip: item.coach_tip
+              };
+              if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
+                // Replace the first meal (or add if empty)
+                newMealItemsData[dayOfWeek][mealType][0] = mealData;
+              }
+            } else {
+              console.warn(`Could not parse meal type from summary: "${item.summary}"`);
             }
+          } catch (itemError) {
+            console.error(`Error processing item:`, item, itemError);
           }
         });
         // Set approval status based on data source
@@ -359,6 +367,7 @@ const NutritionPlanSection = ({
               },
               for_time: mealTimes[mealType as keyof typeof mealTimes],
               icon: '🍽️', // Fork and plate emoji
+              is_approved: false, // Set to false for new preview entries
             });
           }
         });
@@ -370,6 +379,9 @@ const NutritionPlanSection = ({
           .insert(recordsToInsert);
 
         if (error) throw error;
+        
+        // Update approval status after saving
+        await checkApprovalStatus();
         
         setHasUnsavedChanges(false);
         toast({ title: "Auto-saved", description: "Changes have been saved to preview.", variant: "default" });
@@ -520,6 +532,7 @@ const NutritionPlanSection = ({
               },
               for_time: mealTimes[mealType as keyof typeof mealTimes],
               icon: '🍽️', // Fork and plate emoji
+              is_approved: false, // Set to false for new preview entries
             });
           }
         });
@@ -550,6 +563,9 @@ const NutritionPlanSection = ({
         if (insertError) {
           throw insertError;
         }
+        
+        // Update approval status after saving
+        await checkApprovalStatus();
       }
     } catch (error: any) {
       console.error("Error saving nutrition plan to preview:", error);

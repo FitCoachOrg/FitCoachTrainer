@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import * as Icons from "@/lib/icons";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { supabase, getOAuthRedirectUrl } from "@/lib/supabase";
 import GoogleSignIn from "@/components/auth/GoogleSignIn";
 
 const FloatingDots = () => {
@@ -117,7 +117,7 @@ const LoginPage = () => {
       const { error } = await supabase.auth.signInWithOtp({
         email: formData.email.trim().toLowerCase(),
         options: {
-          emailRedirectTo: window.location.origin + '/dashboard',
+          emailRedirectTo: getOAuthRedirectUrl(),
         },
       });
 

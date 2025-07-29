@@ -75,9 +75,9 @@ const OpenRouterTest = () => {
           </div>
         )}
         {response && (
-          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md select-text cursor-text">
             <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">AI Response:</h4>
-            <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">
+            <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans select-text cursor-text">
               {response}
             </pre>
           </div>

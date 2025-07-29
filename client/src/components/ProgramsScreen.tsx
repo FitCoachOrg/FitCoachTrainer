@@ -101,6 +101,12 @@ export function ProgramsScreen({
   // Add state for custom task modal
   const [isCustomTaskModalOpen, setIsCustomTaskModalOpen] = useState(false)
 
+  // 1. Add state for meal logging
+  const [loggingMeal, setLoggingMeal] = useState<ScheduleItem | null>();
+  const [showMealEval, setShowMealEval] = useState(false);
+  const [mealEvalDesc, setMealEvalDesc] = useState("");
+  const [mealEvalPhoto, setMealEvalPhoto] = useState<File | null>(null);
+
   // Get schedule types for filter
   const scheduleTypes = ["all", "meal", "workout", "assessment", "consultation", "hydration", "wakeup", "weight", "progresspicture", "other"]
 
@@ -337,6 +343,7 @@ export function ProgramsScreen({
       protein: item.details_json?.protein || '',
       fats: item.details_json?.fats || '',
       carbs: item.details_json?.carbs || '',
+      llmOutput: item.details_json?.llmOutput || '', // Add llmOutput to form state
       ...item.details_json
     })
   }
@@ -356,6 +363,7 @@ export function ProgramsScreen({
             protein: mealEditForm.protein,
             fats: mealEditForm.fats,
             carbs: mealEditForm.carbs,
+            llmOutput: mealEditForm.llmOutput, // Save llmOutput
             ...mealEditForm
           }
         })
@@ -545,6 +553,7 @@ export function ProgramsScreen({
               <span className="px-2 py-1 rounded-full bg-pink-100 text-pink-800 text-xs font-bold dark:bg-pink-900 dark:text-pink-200">F: {item.details_json?.fats || 0}g</span>
               <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold dark:bg-green-900 dark:text-green-200">C: {item.details_json?.carbs || 0}g</span>
             </div>
+            <Button size="sm" variant="outline" onClick={() => setLoggingMeal(item)}>Log</Button>
           </div>
         );
       
@@ -859,7 +868,14 @@ export function ProgramsScreen({
 
       {/* Meal Edit Dialog */}
       <Dialog open={!!editingMeal} onOpenChange={() => setEditingMeal(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          onInteractOutside={e => {
+            if (window.getSelection()?.toString()) {
+              e.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Edit Meal</DialogTitle>
           </DialogHeader>
@@ -893,6 +909,14 @@ export function ProgramsScreen({
               <Input value={mealEditForm.carbs} onChange={e => setMealEditForm({ ...mealEditForm, carbs: e.target.value })} />
             </div>
             {/* Add more fields as needed from details_json */}
+            {mealEditForm.llmOutput && (
+              <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md select-text cursor-text">
+                <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">LLM Output:</h4>
+                <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans select-text cursor-text">
+                  {mealEditForm.llmOutput}
+                </pre>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEditingMeal(null)}>
@@ -1057,6 +1081,118 @@ export function ProgramsScreen({
           })
         }}
       />
+
+      {/* Log Meal Modal (Yes/No Step) */}
+      <Dialog open={!!loggingMeal && !showMealEval} onOpenChange={() => setLoggingMeal(null)}>
+        <DialogContent className="sm:max-w-[350px] text-center">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Log Meal</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="mb-6 text-base font-medium">Did you eat the recommended meal?</div>
+            <div className="flex justify-center gap-4">
+              <Button
+                className="px-6"
+                onClick={async () => {
+                  if (loggingMeal) {
+                    await supabase.from('meal_logs').insert({
+                      client_id: loggingMeal.client_id,
+                      for_date: loggingMeal.for_date,
+                      type: loggingMeal.type,
+                      summary: loggingMeal.summary,
+                      calories: loggingMeal.details_json?.calories,
+                      protein: loggingMeal.details_json?.protein,
+                      carbs: loggingMeal.details_json?.carbs,
+                      fats: loggingMeal.details_json?.fats,
+                      consumed: true,
+                      logged_at: new Date().toISOString(),
+                    });
+                  }
+                  setLoggingMeal(null);
+                  toast({ title: 'Logged', description: 'Meal recorded.' });
+                }}
+              >
+                Yes
+              </Button>
+              <Button
+                className="px-6"
+                variant="outline"
+                onClick={() => setShowMealEval(true)}
+              >
+                No
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Meal Evaluation Modal (Only if No) */}
+      <Dialog open={!!loggingMeal && showMealEval} onOpenChange={() => {
+        setShowMealEval(false);
+        setLoggingMeal(null);
+      }}>
+        <DialogContent className="sm:max-w-[400px] text-center">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">What did you eat?</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <input
+              type="file"
+              accept="image/*"
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              onChange={e => setMealEvalPhoto(e.target.files?.[0] || null)}
+            />
+            <textarea
+              className="w-full rounded border p-2 text-sm"
+              rows={3}
+              placeholder="Describe your meal..."
+              value={mealEvalDesc}
+              onChange={e => setMealEvalDesc(e.target.value)}
+            />
+            <div className="flex justify-center gap-4 mt-2">
+              <Button
+                className="px-6"
+                onClick={async () => {
+                  if (loggingMeal) {
+                    let photoUrl = null;
+                    if (mealEvalPhoto) {
+                      const { data, error } = await supabase.storage.from('meal-photos').upload(`meal_${Date.now()}`, mealEvalPhoto);
+                      if (!error) photoUrl = data?.path;
+                    }
+                    await supabase.from('meal_logs').insert({
+                      client_id: loggingMeal.client_id,
+                      for_date: loggingMeal.for_date,
+                      type: loggingMeal.type,
+                      summary: mealEvalDesc,
+                      photo_url: photoUrl,
+                      consumed: false,
+                      logged_at: new Date().toISOString(),
+                    });
+                  }
+                  setShowMealEval(false);
+                  setLoggingMeal(null);
+                  setMealEvalDesc("");
+                  setMealEvalPhoto(null);
+                  toast({ title: 'Logged', description: 'Meal recorded.' });
+                }}
+              >
+                Save
+              </Button>
+              <Button
+                className="px-6"
+                variant="outline"
+                onClick={() => {
+                  setShowMealEval(false);
+                  setMealEvalDesc("");
+                  setMealEvalPhoto(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

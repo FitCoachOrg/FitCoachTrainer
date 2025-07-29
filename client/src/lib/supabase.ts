@@ -5,6 +5,20 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Helper function to get the correct redirect URL for OAuth
+export function getOAuthRedirectUrl() {
+  // Check if we're in development mode
+  const isDevelopment = import.meta.env.DEV;
+  
+  if (isDevelopment) {
+    // For local development, use localhost
+    return 'http://localhost:5173/dashboard';
+  } else {
+    // For production, use the current origin
+    return `${window.location.origin}/dashboard`;
+  }
+}
+
 export async function testConnection() {
   try {
     const { data, error } = await supabase.from('client').select('id').limit(1);
