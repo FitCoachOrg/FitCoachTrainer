@@ -70,8 +70,13 @@ const Admin = () => {
       provider: 'cerebras',
       name: 'Cerebras',
       description: 'Use Cerebras AI models',
-      defaultModel: 'llama3.1-8b',
-      availableModels: ['llama3.1-8b', 'llama-4-scout-17b-16e-instruct'],
+      defaultModel: 'qwen-3-235b-a22b-instruct-2507',
+      availableModels: [
+        'qwen-3-235b-a22b-instruct-2507',
+        'llama3.1-8b',
+        'llama-4-scout-17b-16e-instruct',
+        'qwen-3-235b-a22b'
+      ],
       apiKeyEnv: 'VITE_CEREBRAS_API_KEY',
       baseUrl: 'https://api.cerebras.ai/v1',
       icon: <Bot className="h-5 w-5" />,

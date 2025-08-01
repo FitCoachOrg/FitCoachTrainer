@@ -49,12 +49,85 @@ function formatDateToYYYYMMDD(date: Date): string {
 }
 
 /**
+ * Function to assign workouts to specific days based on client's workout_days
+ * @param workoutDays - Array of workout days from LLM
+ * @param clientWorkoutDays - Client's preferred workout days
+ * @param planStartDate - Start date of the plan
+ * @returns 7-day array with workouts assigned to correct days
+ */
+function assignWorkoutsToDays(workoutDays: any[], clientWorkoutDays: any, planStartDate: Date) {
+  console.log('📅 Assigning workouts to specific days...');
+  console.log('🏋️ Workout days from LLM:', workoutDays.length);
+  console.log('📅 Client workout days:', clientWorkoutDays);
+  
+  // Create a 7-day array starting from planStartDate
+  const weekDays: Array<{
+    date: string;
+    dayName: string;
+    isWorkoutDay: boolean;
+    workout: any | null;
+  }> = [];
+  
+  for (let i = 0; i < 7; i++) {
+    const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+    const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    weekDays.push({
+      date: currentDate.toISOString().split('T')[0],
+      dayName: dayName,
+      isWorkoutDay: false,
+      workout: null
+    });
+  }
+  
+  // Parse client workout days
+  let clientDays: string[] = [];
+  if (Array.isArray(clientWorkoutDays)) {
+    clientDays = clientWorkoutDays.map((day: any) => day.toLowerCase());
+  } else if (typeof clientWorkoutDays === 'string') {
+    clientDays = clientWorkoutDays.toLowerCase().split(',').map(day => day.trim());
+  }
+  
+  console.log('📅 Parsed client workout days:', clientDays);
+  
+  // Find which days of the week match client's workout days
+  const workoutDayIndices: number[] = [];
+  weekDays.forEach((day, index) => {
+    if (clientDays.includes(day.dayName)) {
+      workoutDayIndices.push(index);
+      day.isWorkoutDay = true;
+    }
+  });
+  
+  console.log('📅 Workout day indices:', workoutDayIndices);
+  
+  // Assign workouts to the correct days
+  workoutDays.forEach((workout, index) => {
+    if (workoutDayIndices[index] !== undefined) {
+      weekDays[workoutDayIndices[index]].workout = workout;
+      console.log(`✅ Assigned workout ${index + 1} to ${weekDays[workoutDayIndices[index]].dayName}`);
+    }
+  });
+  
+  // Convert to the expected format
+  const result = weekDays.map(day => ({
+    date: day.date,
+    focus: day.workout ? day.workout.focus : 'Rest Day',
+    exercises: day.workout ? day.workout.exercises : []
+  }));
+  
+  console.log('📅 Final 7-day plan:', result);
+  return result;
+}
+
+/**
  * Function to process AI response and update workout plan dates
  * @param aiResponseText - Raw AI response text
  * @param clientId - Client ID for the workout plan
+ * @param clientWorkoutDays - Client's preferred workout days
+ * @param planStartDate - Start date of the plan
  * @returns Processed workout plan with updated dates
  */
-function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
+function processWorkoutPlanDates(aiResponseText: string, clientId: number, clientWorkoutDays?: any, planStartDate?: Date) {
   try {
     let cleanText = aiResponseText.trim();
     console.log('🔍 Processing AI response text length:', cleanText.length);
@@ -64,6 +137,13 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
     // Remove Markdown code block markers if present
     if (cleanText.startsWith('```')) {
       cleanText = cleanText.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+    }
+    
+    // Try to extract JSON from response that might contain explanatory text
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanText = jsonMatch[0];
+      console.log('🔍 Extracted JSON from response with explanatory text');
     }
     
     // Check if the JSON appears to be incomplete
@@ -180,11 +260,22 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
     }
     
     if (parsed.days && Array.isArray(parsed.days)) {
-      // Assign dates to each day based on planStartDate (to be done in UI)
-      return {
-        days: parsed.days,
-        workout_plan: parsed.days.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
-      };
+      // If we have client workout days and plan start date, assign workouts to specific days
+      if (clientWorkoutDays && planStartDate) {
+        console.log('📅 Using day assignment logic...');
+        const assignedDays = assignWorkoutsToDays(parsed.days, clientWorkoutDays, planStartDate);
+        return {
+          days: assignedDays,
+          workout_plan: assignedDays.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
+        };
+      } else {
+        // Fallback to original logic
+        console.log('📅 Using fallback day assignment...');
+        return {
+          days: parsed.days,
+          workout_plan: parsed.days.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
+        };
+      }
     }
     // fallback for legacy
     return parsed;
@@ -348,88 +439,160 @@ async function generateAIResponse(clientInfo: any, model?: string): Promise<{ re
   console.log('✅ OpenRouter API key found');
   console.log('📋 Preparing comprehensive fitness coach prompt...');
   
-  // Use the comprehensive world-class fitness coach prompt template
-  // Helper to format client's preferred workout days
+  // Enhanced client data processing
   const formatWorkoutDays = (workoutDays: any) => {
     if (!workoutDays) return 'N/A';
     if (typeof workoutDays === 'string') return workoutDays;
     if (Array.isArray(workoutDays)) return workoutDays.join(', ');
     if (typeof workoutDays === 'object') {
-      // If it's an object like {"Monday": true, "Wednesday": true, "Friday": true}
       return Object.keys(workoutDays).filter(day => workoutDays[day]).join(', ');
     }
     return 'N/A';
   };
 
-  // --- NEW AI RESPONSE SCHEMA ---
-  // The AI should return a JSON object like:
-  // {
-  //   "week": [
-  //     {
-  //       "date": "2025-06-01",
-  //       "focus": "Upper Body Strength",
-  //       "exercises": [
-  //         { "exercise_name": "Bench Press", "category": "Strength", "body_part": "Chest", "sets": 3, "reps": 10, "duration": 15, "weights": "barbell", "equipment": "Barbell", "coach_tip": "Keep elbows at 45 degrees." },
-  //         ...
-  //       ]
-  //     },
-  //     ...
-  //     {
-  //       "date": "2025-06-02",
-  //       "focus": "Rest Day",
-  //       "exercises": []
-  //     }
-  //   ]
-  // }
+  // Calculate BMI for exercise intensity guidance
+  const calculateBMI = (height: number, weight: number) => {
+    if (!height || !weight) return null;
+    const heightInMeters = height / 100;
+    return (weight / (heightInMeters * heightInMeters)).toFixed(1);
+  };
 
-  // Update the AI prompt in generateAIResponse
-  const numDays = 7; // You can make this dynamic if needed
-  const fitnessCoachPrompt = `Create a ${numDays}-day workout plan for a client with these details:
+  const bmi = calculateBMI(clientInfo.height, clientInfo.weight);
+  const isOverweight = bmi && parseFloat(bmi) > 25;
+  const isUnderweight = bmi && parseFloat(bmi) < 18.5;
 
-Goal: ${clientInfo.primaryGoal || 'General fitness'}
+  // Enhanced injury processing
+  const processInjuries = (injuries: string): { adaptations: string; forbidden: string } => {
+    if (!injuries || injuries.toLowerCase().includes('none')) {
+      return { adaptations: 'None', forbidden: 'None' };
+    }
+    
+    const injuryList = injuries.toLowerCase().split('\n').filter(i => i.trim());
+    const adaptations: string[] = [];
+    const forbidden: string[] = [];
+    
+    injuryList.forEach(injury => {
+      if (injury.includes('knee')) {
+        adaptations.push('Low-impact alternatives for knee exercises');
+        forbidden.push('heavy squats, lunges, jumping, deep knee bends');
+      }
+      if (injury.includes('back') || injury.includes('spine')) {
+        adaptations.push('Core-focused, avoid heavy deadlifts initially');
+        forbidden.push('heavy deadlifts, overhead press, bent-over rows');
+      }
+      if (injury.includes('shoulder')) {
+        adaptations.push('Focus on rotator cuff, avoid overhead movements');
+        forbidden.push('overhead press, pull-ups, heavy bench press');
+      }
+      if (injury.includes('ankle')) {
+        adaptations.push('Stability exercises, avoid high-impact cardio');
+        forbidden.push('running, jumping, plyometrics');
+      }
+    });
+    
+    return {
+      adaptations: adaptations.length > 0 ? adaptations.join('; ') : 'None',
+      forbidden: forbidden.length > 0 ? forbidden.join(', ') : 'None'
+    };
+  };
+
+  const injuryAnalysis = processInjuries(clientInfo.injuriesLimitations);
+
+  // Goal-specific training parameters
+  const getTrainingParams = (goal: string, experience: string) => {
+    const params = {
+      reps: '8-12',
+      sets: '3-4',
+      rest: '60-90s',
+      intensity: 'moderate',
+      focus: 'hypertrophy'
+    };
+    
+    if (goal?.includes('strength')) {
+      params.reps = '1-5';
+      params.sets = '4-6';
+      params.rest = '90-180s';
+      params.intensity = 'high';
+      params.focus = 'strength';
+    } else if (goal?.includes('endurance') || goal?.includes('marathon')) {
+      params.reps = '12-20';
+      params.sets = '2-3';
+      params.rest = '30-60s';
+      params.intensity = 'low';
+      params.focus = 'endurance';
+    } else if (goal?.includes('weight_loss')) {
+      params.reps = '10-15';
+      params.sets = '3-4';
+      params.rest = '45-90s';
+      params.intensity = 'moderate';
+      params.focus = 'metabolic';
+    }
+    
+    if (experience?.includes('beginner')) {
+      params.sets = Math.max(2, parseInt(params.sets.split('-')[0]) - 1) + '-' + Math.max(3, parseInt(params.sets.split('-')[1]) - 1);
+      params.rest = '90-120s';
+    }
+    
+    return params;
+  };
+
+  const trainingParams = getTrainingParams(clientInfo.primaryGoal, clientInfo.trainingExperience);
+
+  // Enhanced prompt with token optimization
+  const numDays = 7;
+  const fitnessCoachPrompt = `Create a ${numDays}-day workout plan for:
+
+CLIENT PROFILE:
+Name: ${clientInfo.name || 'Unknown'}
+Age: ${clientInfo.age || 'N/A'} years | Gender: ${clientInfo.sex || 'N/A'}
+Height: ${clientInfo.height || 'N/A'}cm | Weight: ${clientInfo.weight || 'N/A'}kg${bmi ? ` | BMI: ${bmi}` : ''}
+${isOverweight ? '⚠️ Overweight - focus on compound movements, longer rest' : ''}${isUnderweight ? '⚠️ Underweight - emphasize progressive overload' : ''}
+
+GOALS & TIMELINE:
+Primary: ${clientInfo.primaryGoal || 'General fitness'}
+Specific: ${clientInfo.specificOutcome || 'Improve health'}
+Timeline: ${clientInfo.goalTimeline || 'Not specified'}
+Obstacles: ${clientInfo.obstacles || 'None'}
+
+CRITICAL TRAINING CONSTRAINTS (MUST FOLLOW EXACTLY):
+Training Frequency: ${clientInfo.trainingDaysPerWeek || '3'} days per week
+Session Duration: ${clientInfo.trainingTimePerSession || '45'} minutes per session
+Schedule: ${formatWorkoutDays(clientInfo.workoutDays)}
+Workout Time: ${clientInfo.workoutTime || 'Not specified'}
+
+TRAINING PARAMETERS:
 Experience: ${clientInfo.trainingExperience || 'Beginner'}
-Frequency: ${clientInfo.trainingDaysPerWeek || '3'} days/week
-Duration: ${clientInfo.trainingTimePerSession || '45 min'}
-Equipment: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
-Limitations/Injuries: ${clientInfo.injuriesLimitations || 'None'}
-Workout Style: ${clientInfo.activityLevel || 'General'}
+Focus: ${trainingParams.focus} | Intensity: ${trainingParams.intensity}
+Reps: ${trainingParams.reps} | Sets: ${trainingParams.sets} | Rest: ${trainingParams.rest}
+
+EQUIPMENT & LIMITATIONS:
+Available: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
 Focus Areas: ${Array.isArray(clientInfo.focusAreas) ? clientInfo.focusAreas.join(', ') : clientInfo.focusAreas || 'Full body'}
+Injuries: ${injuryAnalysis.adaptations}
+Avoid: ${injuryAnalysis.forbidden}
 
-Client: ${clientInfo.name || 'Unknown'}, ${clientInfo.age || 'N/A'} years, ${clientInfo.sex || 'N/A'}
+LIFESTYLE FACTORS:
+Sleep: ${clientInfo.sleepHours || 'N/A'} hours | Stress: ${clientInfo.stress || 'N/A'}
+Motivation: ${clientInfo.motivationStyle || 'N/A'}
+Activity Level: ${clientInfo.activityLevel || 'General'}
 
-Guidelines:
-- Use correct training philosophy based on goal and experience level
-- Choose appropriate progression (linear, undulating, or block periodization)
-- Insert deload every 4-6 weeks with 40% volume reduction if program spans 8+ weeks
-- If timeline <6 weeks, consider short cycle without deload
-- Respect injury limitations and adjust exercises accordingly
-- Emphasize specified focus areas while maintaining balance
-- Select exercises based on: goal requirements, available time, and progression needs
-- Calculate total time: (sets × reps × duration) + rest periods = target session time
-- Include compound movements for efficiency and multi-joint exercises for time optimization
-- Use gym-standard exercise names only (e.g., "Bench Press", "Squats", "Deadlifts")
-- Include specific notes in coach_tip: tempo, progressive overload cues, RPE targets
-- Avoid generic advice - provide actionable, specific coaching cues
-- Design multiple exercises per day to achieve comprehensive training stimulus
-- Ensure proper exercise variety: compound + isolation, push + pull, upper + lower body balance
+CRITICAL REQUIREMENTS (PRIORITY 1):
+1. Create EXACTLY ${clientInfo.trainingDaysPerWeek || '3'} training days with exercises (not 7 days)
+2. TOTAL duration of ALL exercises per session MUST equal ${clientInfo.trainingTimePerSession || '45'} minutes
+3. Calculate: sum of all exercise durations = ${clientInfo.trainingTimePerSession || '45'} minutes
+4. Use available equipment only
+5. Respect injury limitations strictly
 
-Requirements:
-- Create exactly ${numDays} days
-- Each day has a focus (e.g., "Upper Body", "Cardio", "Rest Day")
-- Rest days have empty exercises array
-- Sum of all exercise durations must equal target session time
-- Use available equipment only
-- Include rest periods between sets
-- Adjust exercises based on limitations/injuries
-- Focus on specified body areas
-- Calculate exercises needed based on: session duration, sets, reps, rest periods, and goal requirements
-- Ensure sufficient volume and variety to achieve client goals within timeline
-- Include 4-8 exercises per training day for comprehensive stimulus
-- Calculate rest periods: 60-90s for strength, 30-60s for hypertrophy, 15-30s for endurance
-- Ensure sets and reps align with training goal: 1-5 reps (strength), 6-12 reps (hypertrophy), 12+ reps (endurance)
-- Balance exercise selection: compound movements first, then isolation exercises
+TRAINING GUIDELINES:
+- Include compound movements first
+- Balance push/pull, upper/lower body
+- Include specific coach tips: tempo, RPE, form cues
+- Ensure proper warm-up and cool-down within session time
+- Each exercise should have realistic duration (5-20 minutes per exercise)
 
-Respond with ONLY valid JSON in this format:
+IMPORTANT: Return ONLY valid JSON. Do not include any explanatory text, comments, or additional information before or after the JSON object.
+
+OUTPUT FORMAT - Valid JSON only:
 {
   "days": [
     {
@@ -441,7 +604,7 @@ Respond with ONLY valid JSON in this format:
           "body_part": "Chest, Shoulders, Triceps",
           "sets": 4,
           "reps": 6,
-          "duration": 45,
+          "duration": 15,
           "weights": "barbell",
           "equipment": "Barbell, Bench",
           "coach_tip": "3-1-3 tempo, RPE 7-8, retract scapula, feet flat",
@@ -453,10 +616,10 @@ Respond with ONLY valid JSON in this format:
           "body_part": "Back, Biceps",
           "sets": 3,
           "reps": 8,
-          "duration": 40,
+          "duration": 12,
           "weights": "barbell",
           "equipment": "Barbell",
-          "coach_tip": "2-1-2 tempo, RPE 7-8, keep back straight, pull to lower chest",
+          "coach_tip": "2-1-2 tempo, RPE 7-8, keep back straight",
           "rest": 90
         },
         {
@@ -465,30 +628,20 @@ Respond with ONLY valid JSON in this format:
           "body_part": "Shoulders, Triceps",
           "sets": 3,
           "reps": 8,
-          "duration": 35,
+          "duration": 10,
           "weights": "dumbbells",
           "equipment": "Dumbbells",
-          "coach_tip": "2-1-2 tempo, RPE 7-8, core tight, avoid arching back",
+          "coach_tip": "2-1-2 tempo, RPE 7-8, core tight",
           "rest": 75
-        },
-        {
-          "exercise_name": "Lat Pulldown",
-          "category": "Strength",
-          "body_part": "Back, Biceps",
-          "sets": 3,
-          "reps": 10,
-          "duration": 30,
-          "weights": "cable machine",
-          "equipment": "Cable Machine",
-          "coach_tip": "2-1-2 tempo, RPE 6-7, retract shoulder blades, wide grip",
-          "rest": 60
         }
       ]
     }
   ]
 }`;
   
-  console.log('📝 Fitness coach prompt prepared with client data');
+  console.log('📝 Enhanced fitness coach prompt prepared');
+  console.log('📊 Prompt length:', fitnessCoachPrompt.length, 'characters');
+  console.log('📊 Token estimate:', Math.ceil(fitnessCoachPrompt.length / 4), 'tokens');
   
   console.log('🚀 Sending request to OpenRouter...');
   
@@ -498,7 +651,7 @@ Respond with ONLY valid JSON in this format:
     console.log('✅ AI Response extracted');
     
     return {
-      response: aiResult.response, // Correctly unpack the response string
+      response: aiResult.response,
       model: aiResult.model || 'unknown',
       timestamp: new Date().toISOString(),
       fallbackModelUsed: aiResult.fallbackModelUsed,
@@ -984,7 +1137,12 @@ export async function generateAIWorkoutPlanForReview(clientId: number, model?: s
       
       console.log('🔄 Processing workout plan dates...');
       try {
-        const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
+        const processedWorkoutPlan = processWorkoutPlanDates(
+          aiResponse.response, 
+          clientId, 
+          clientInfo.workoutDays, 
+          new Date() // Use current date as plan start date
+        );
         console.log('✅ Date processing completed');
         console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
         console.log('📊 Workout Plan Array Length:', processedWorkoutPlan?.workout_plan?.length || 0);

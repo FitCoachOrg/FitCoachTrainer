@@ -12,7 +12,17 @@ export interface CerebrasResponse {
   raw?: any;
 }
 
-export async function askCerebras(prompt: string, model?: string): Promise<{ response: string, model: string, usage?: any, raw?: any, fallbackModelUsed?: boolean }> {
+export async function askCerebras(
+  prompt: string,
+  model?: string,
+  options?: {
+    stream?: boolean;
+    temperature?: number;
+    top_p?: number;
+    max_tokens?: number;
+    system_message?: string;
+  }
+): Promise<{ response: string, model: string, usage?: any, raw?: any, fallbackModelUsed?: boolean }> {
   if (!prompt || prompt.trim().length === 0) {
     throw new Error("Prompt cannot be empty");
   }
@@ -24,6 +34,28 @@ export async function askCerebras(prompt: string, model?: string): Promise<{ res
   const CEREBRAS_API_KEY = import.meta.env.VITE_CEREBRAS_API_KEY as string;
   if (!CEREBRAS_API_KEY) {
     throw new Error('Cerebras API key not found. Please add VITE_CEREBRAS_API_KEY to your .env file');
+  }
+
+  // Set model-specific defaults
+  let stream = options?.stream;
+  let temperature = options?.temperature;
+  let top_p = options?.top_p;
+  let max_tokens = options?.max_tokens ?? 25000;
+  let system_message = options?.system_message ?? '';
+
+  // Apply special parameters for qwen models
+  if ((model || 'qwen-3-235b-a22b-instruct-2507') === 'qwen-3-235b-a22b' || (model || 'qwen-3-235b-a22b-instruct-2507') === 'qwen-3-235b-a22b-instruct-2507') {
+    stream = stream ?? false;
+    temperature = temperature ?? 0.4;
+    top_p = top_p ?? 0.95;
+    max_tokens = max_tokens ?? 40000;
+    system_message = system_message ?? '';
+  } else {
+    stream = stream ?? false;
+    temperature = temperature ?? 0.3;
+    top_p = top_p ?? 0.9;
+    max_tokens = max_tokens ?? 25000;
+    system_message = system_message ?? '';
   }
 
   try {
@@ -41,13 +73,15 @@ export async function askCerebras(prompt: string, model?: string): Promise<{ res
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model || 'qwen-3-32b',
+        model: model || 'qwen-3-235b-a22b-instruct-2507',
         messages: [
+          { role: 'system', content: system_message },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 25000,
-        temperature: 0.3,
-        top_p: 0.9,
+        max_tokens,
+        temperature,
+        top_p,
+        stream,
       }),
       signal: controller.signal
     });
@@ -137,7 +171,7 @@ export async function askCerebras(prompt: string, model?: string): Promise<{ res
     clearTimeout(timeoutId);
     return {
       response: responseContent,
-      model: json.model || model || 'qwen-3-32b',
+      model: json.model || model || 'qwen-3-235b-a22b-instruct-2507',
       usage: json.usage,
       raw: json,
       fallbackModelUsed: false,

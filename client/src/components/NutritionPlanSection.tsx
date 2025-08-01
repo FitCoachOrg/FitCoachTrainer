@@ -24,7 +24,8 @@ import {
   Apple,
   Brain,
   FileText,
-  Dumbbell
+  Dumbbell,
+  X
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -42,6 +43,8 @@ import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSec
 import { TrainerNotesSection } from "@/components/overview/TrainerNotesSection"
 import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
 import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
+
+import { generateGroceryListFromPlan, updateGroceryItemState, categorizeGroceryItems } from "@/lib/grocery-list-service";
 
 // Types
 interface Meal {
@@ -131,6 +134,10 @@ const NutritionPlanSection = ({
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingGroceryList, setIsGeneratingGroceryList] = useState(false);
+  const [showGroceryListPopup, setShowGroceryListPopup] = useState(false);
+  const [groceryItems, setGroceryItems] = useState<{ id: string; text: string; checked: boolean }[]>([]);
+  const [groceryCategories, setGroceryCategories] = useState<{ name: string; items: { id: string; text: string; checked: boolean }[] }[]>([]);
   const [showFitnessGoals, setShowFitnessGoals] = useState(false);
   const [showAICoachInsights, setShowAICoachInsights] = useState(false);
   const [showTrainerNotes, setShowTrainerNotes] = useState(false);
@@ -149,12 +156,6 @@ const NutritionPlanSection = ({
   const [editingCell, setEditingCell] = useState<{ day: string; mealType: string; field: string; } | null>(null);
   const [editValue, setEditValue] = useState<string | number>('');
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [dailyTargets, setDailyTargets] = useState([
-    { name: "Calories", current: 0, target: 2000, unit: "kcal", icon: Flame, color: "from-red-500 to-orange-500" },
-    { name: "Protein", current: 0, target: 150, unit: "g", icon: Beef, color: "from-sky-500 to-blue-500" },
-    { name: "Carbs", current: 0, target: 200, unit: "g", icon: Wheat, color: "from-amber-500 to-yellow-500" },
-    { name: "Fats", current: 0, target: 70, unit: "g", icon: Droplets, color: "from-green-500 to-emerald-500" }
-  ]);
   // --- Client Target State and Fetch/Save Logic ---
   const defaultTargets: Record<string, number> = {
     calories: 2000,
@@ -173,6 +174,58 @@ const NutritionPlanSection = ({
   useEffect(() => {
     console.log('approvalStatus changed:', approvalStatus);
   }, [approvalStatus]);
+
+  const handleGenerateGroceryList = async () => {
+    if (!clientId) {
+      toast({
+        title: "Error",
+        description: "No client selected. Please select a client first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingGroceryList(true);
+    try {
+      const result = await generateGroceryListFromPlan(clientId, planStartDate);
+      
+      if (!result.success) {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to generate grocery list.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setGroceryItems(result.groceryItems);
+      if (result.groceryCategories) {
+        setGroceryCategories(result.groceryCategories);
+      }
+      setShowGroceryListPopup(true);
+      
+      // Show appropriate message based on data source
+      if (result.isFromDatabase) {
+        toast({
+          title: "Grocery List Loaded",
+          description: "Loaded existing grocery list from database.",
+        });
+      } else {
+        toast({
+          title: "Grocery List Generated",
+          description: "New grocery list has been generated and saved to database.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred while generating the grocery list.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingGroceryList(false);
+    }
+  };
 
   // --- Fetch Nutrition Plan from Supabase ---
   const fetchNutritionPlanFromSupabase = async (clientId: number, startDate: Date) => {
@@ -423,16 +476,6 @@ const NutritionPlanSection = ({
                 fats += meal.fats || 0;
             });
         });
-
-        setDailyTargets(prev => prev.map(target => {
-            switch(target.name) {
-                case "Calories": return { ...target, current: Math.round(calories) };
-                case "Protein": return { ...target, current: Math.round(protein) };
-                case "Carbs": return { ...target, current: Math.round(carbs) };
-                case "Fats": return { ...target, current: Math.round(fats) };
-                default: return target;
-            }
-        }));
     }
   }, [mealItems, selectedDay]);
 
@@ -468,18 +511,6 @@ const NutritionPlanSection = ({
             };
           });
           setMealItems(newMealItemsData);
-          const planTargets = plan[0]?.total;
-          if (planTargets) {
-            setDailyTargets(prev => prev.map(target => {
-              switch(target.name) {
-                case "Calories": return { ...target, target: planTargets.calories };
-                case "Protein": return { ...target, target: planTargets.protein };
-                case "Carbs": return { ...target, target: planTargets.carbs };
-                case "Fats": return { ...target, target: planTargets.fats };
-                default: return target;
-              }
-            }));
-          }
           // Save the AI-generated plan to schedule_preview with the selected start date
           await saveNutritionPlanToPreview(plan, clientId, selectedPlanStartDate);
           toast({ title: "Success", description: "AI nutrition plan has been applied!" });
@@ -778,52 +809,6 @@ const NutritionPlanSection = ({
     }
   }, [clientId]);
 
-
-  // Macro Chart Component
-  const MacroChart = () => {
-    const { protein, carbs, fats } = dailyTargets.reduce((acc, curr) => {
-        acc[curr.name.toLowerCase()] = curr.current;
-        return acc;
-    }, {} as Record<string, number>);
-
-    const total = protein + carbs + fats;
-    const proteinPercent = total > 0 ? (protein / total) * 100 : 33.3;
-    const carbsPercent = total > 0 ? (carbs / total) * 100 : 33.3;
-    const fatsPercent = total > 0 ? (fats / total) * 100 : 33.3;
-
-    return (
-      <div className="space-y-4">
-        <div className="flex h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-          <div 
-                className="bg-sky-500 h-full transition-all duration-300"
-            style={{ width: `${proteinPercent}%` }}
-          />
-          <div 
-                className="bg-amber-500 h-full transition-all duration-300"
-            style={{ width: `${carbsPercent}%` }}
-          />
-          <div 
-                className="bg-green-500 h-full transition-all duration-300"
-            style={{ width: `${fatsPercent}%` }}
-          />
-        </div>
-            <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-sky-500 rounded-full" />
-                <span>Protein: {protein}g</span>
-          </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-amber-500 rounded-full" />
-                <span>Carbs: {carbs}g</span>
-          </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span>Fats: {fats}g</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Nutrition Table Component
   const NutritionTable = () => {
@@ -1270,10 +1255,10 @@ const NutritionPlanSection = ({
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
         <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
       </div>
 
       {/* Enhanced Header with AI Generation */}
@@ -1458,6 +1443,24 @@ const NutritionPlanSection = ({
                 </>
               )}
             </Button>
+            <Button
+              onClick={handleGenerateGroceryList}
+              disabled={isGeneratingGroceryList}
+              size="lg"
+              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
+            >
+              {isGeneratingGroceryList ? (
+                <>
+                  <LoadingSpinner size="small" />
+                  <span className="ml-3">Generating...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 mr-3" />
+                  Generate Grocery List
+                </>
+              )}
+            </Button>
         </div>
       </div>
 
@@ -1466,112 +1469,21 @@ const NutritionPlanSection = ({
 
       {/* Dashboard Row - Equal Height Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
-        {/* Daily Targets */}
-          <Card className="lg:col-span-4 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px] flex flex-col">
-            <CardHeader className="pb-2 flex-shrink-0">
-              <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                  <Target className="h-5 w-5 text-white" />
-                </div>
-                Daily Targets for {selectedDay}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-0 pb-4 flex-1 items-center">
-              {dailyTargets.map((target) => {
-                const TargetIcon = target.icon;
-                const percentage = target.target > 0 ? Math.min((target.current / target.target) * 100, 100) : 0;
-                const isOverTarget = target.current > target.target;
-                return (
-                  <div key={target.name} className="flex flex-col items-center justify-center text-center p-1">
-                    <div className="relative w-28 h-28 flex items-center justify-center mb-2">
-                      {/* Background circle */}
-                      <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-700"></div>
-                      
-                      {/* Progress circle with gradient */}
-                      <svg className="w-full h-full transform -rotate-90 relative z-10" viewBox="0 0 36 36">
-                        <path
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          className="stroke-current text-gray-200 dark:text-gray-700"
-                          strokeWidth="2.5"
-                          fill="none"
-                        />
-                        <path
-                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          className={`stroke-current transition-all duration-500 ${
-                            isOverTarget 
-                              ? 'text-red-500' 
-                              : target.name === 'Calories' ? 'text-red-500' 
-                              : target.name === 'Protein' ? 'text-blue-500'
-                              : target.name === 'Carbs' ? 'text-amber-500'
-                              : 'text-green-500'
-                          }`}
-                          strokeWidth="3.5"
-                          fill="none"
-                          strokeDasharray={`${percentage}, 100`}
-                          strokeLinecap="round"
-                          style={{
-                            filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.1))'
-                          }}
-                        />
-                      </svg>
-                      
-                      {/* Content overlay */}
-                      <div className="absolute flex flex-col items-center z-20 bg-white dark:bg-gray-800 rounded-full w-20 h-20 border-2 border-gray-100 dark:border-gray-600 shadow-sm">
-                        <TargetIcon className="h-4 w-4 mt-2 mb-1 text-gray-600 dark:text-gray-400" />
-                        <span className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{target.current}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 leading-tight">/{target.target}</span>
-                      </div>
-                      
-                      {/* Percentage indicator */}
-                      <div className="absolute -top-1 -right-1 bg-white dark:bg-gray-800 rounded-full px-2 py-1 shadow-md border border-gray-200 dark:border-gray-600 z-30">
-                        <span className={`text-xs font-semibold ${
-                          isOverTarget ? 'text-red-600' : 'text-gray-700 dark:text-gray-300'
-                        }`}>
-                          {Math.round(percentage)}%
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="text-center">
-                      <p className="font-semibold text-sm text-gray-800 dark:text-gray-200">{target.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{target.unit}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </CardContent>
-          </Card>
-
-          {/* Macro Distribution */}
-          <Card className="lg:col-span-2 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl h-[300px] flex flex-col">
-            <CardHeader className="pb-2 flex-shrink-0">
-              <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
-                  <Table className="h-5 w-5 text-white" />
-                </div>
-                Macro Distribution
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col justify-center pt-0 pb-4 flex-1">
-              <MacroChart />
-            </CardContent>
-          </Card>
-        </div>
-
-          {/* Weekly Plan Table */}
-          <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl">
-            <CardHeader className="pb-4">
-              <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
-                  <Utensils className="h-5 w-5 text-white" />
-                    </div>
-                Weekly Nutrition Plan
+        {/* Weekly Plan Table */}
+        <Card className="lg:col-span-6 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-3 text-lg font-bold text-gray-900 dark:text-white">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg">
+                <Utensils className="h-5 w-5 text-white" />
+              </div>
+              Weekly Nutrition Plan
             </CardTitle>
           </CardHeader>
           <CardContent>
             <NutritionTable />
           </CardContent>
         </Card>
+      </div>
 
             <OpenRouterTest />
                   </div>
@@ -1640,6 +1552,87 @@ const NutritionPlanSection = ({
       >
         <TrainingPreferencesSection client={client} />
       </SidePopup>
+
+      {/* Grocery List Popup */}
+      {showGroceryListPopup && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="absolute top-0 left-0 w-full h-full flex items-start justify-center pt-20">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 transform transition-all duration-200 scale-100 animate-in fade-in-0 zoom-in-95 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Grocery List</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {format(planStartDate, 'MMM d')} - {format(addDays(planStartDate, 6), 'MMM d, yyyy')}
+                  </p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowGroceryListPopup(false)}
+                  className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto pr-4">
+                {groceryCategories.length > 0 ? (
+                  <div className="space-y-4">
+                    {groceryCategories.map((category) => (
+                      <div key={category.name} className="space-y-2">
+                        <h3 className="font-semibold text-lg text-gray-800 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 pb-2">
+                          {category.name}
+                        </h3>
+                        <div className="space-y-2">
+                          {category.items.map((item) => (
+                            <label key={item.id} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-2 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={item.checked}
+                                onChange={async (e) => {
+                                  const newChecked = e.target.checked;
+                                  setGroceryItems(prev => 
+                                    prev.map(prevItem => 
+                                      prevItem.id === item.id 
+                                        ? { ...prevItem, checked: newChecked }
+                                        : prevItem
+                                    )
+                                  );
+                                  
+                                  // Update in database
+                                  if (clientId) {
+                                    try {
+                                      await updateGroceryItemState(clientId, planStartDate, item.id, newChecked);
+                                    } catch (error) {
+                                      console.error('Error updating grocery item state:', error);
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to save checkbox state. Please try again.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }
+                                }}
+                                className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                              />
+                              <span className={`text-gray-700 dark:text-gray-300 ${item.checked ? 'line-through text-gray-400' : ''}`}>
+                                {item.text}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <div className="text-lg font-semibold mb-2">No grocery items found</div>
+                    <div className="text-sm">The grocery list could not be parsed properly.</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </TooltipProvider>
   )
 }

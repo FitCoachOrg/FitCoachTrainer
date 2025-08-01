@@ -1,27 +1,26 @@
-// AI Nutrition Plan Generation with Cerebras AI Integration
-import { supabase } from './supabase';
-// import { askOpenRouter, OpenRouterResponse } from './open-router-service';
-// import { askCerebras } from './cerebras-service';
-import { askLLM } from './llm-service';
+#!/usr/bin/env node
 
-export interface NutritionPlanResult {
-  success: boolean;
-  response: string;
-  message?: string; // Optional message
-  raw_prompt?: string;
-  model?: string;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-  timestamp?: string;
-  generationTime?: string;
+// Test script to show the exact LLM prompt for client_id = 34
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables');
+  process.exit(1);
 }
 
-// Function to generate nutrition plan using OpenRouter
-export async function generateNutritionPlan(clientId: number): Promise<NutritionPlanResult> {
-  console.log(`🍽️ Generating nutrition plan for client: ${clientId}`);
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+async function generatePromptForClient34() {
+  console.log('🧪 Generating LLM Prompt for Client ID = 34');
+  console.log('='.repeat(60));
+
+  const clientId = 34;
 
   try {
     // 1. Fetch client data from Supabase
@@ -31,8 +30,15 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
       .eq('client_id', clientId)
       .single();
 
-    if (error) throw new Error(`Supabase error: ${error.message}`);
-    if (!clientData) throw new Error(`Client with ID ${clientId} not found.`);
+    if (error) {
+      console.error('❌ Error fetching client data:', error);
+      return;
+    }
+
+    if (!clientData) {
+      console.error('❌ Client with ID 34 not found');
+      return;
+    }
 
     console.log('👤 Client Data:', {
       name: clientData.cl_name,
@@ -61,14 +67,14 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
       .in('goal', ['calories', 'protein', 'carbs', 'fats']);
 
     if (targetError) {
-      console.error('Error fetching client targets:', targetError);
-      throw new Error(`Failed to fetch client targets: ${targetError.message}`);
+      console.error('❌ Error fetching client targets:', targetError);
+      return;
     }
 
     // Extract targets from the fetched data
     const targetMap = new Map();
     if (targetData && targetData.length > 0) {
-      targetData.forEach((row: any) => {
+      targetData.forEach((row) => {
         if (row.goal && row.target !== null) {
           targetMap.set(row.goal, row.target);
         }
@@ -92,8 +98,8 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
     const dietaryPreferences = clientData.diet_preferences || [];
     const allergies = clientData.food_allergies || '';
     
-    const restrictionsList: string[] = [];
-    const forbiddenList: string[] = [];
+    const restrictionsList = [];
+    const forbiddenList = [];
     
     console.log('🔍 Processing dietary preferences:', dietaryPreferences);
     
@@ -152,7 +158,7 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
     console.log('🚫 Final Forbidden Ingredients:', forbiddenIngredients);
     console.log('📋 Final Dietary Restrictions:', dietaryRestrictions);
 
-    // 4. Construct optimized prompt with cleaner format
+    // 4. Construct the exact prompt that would be sent to LLM
     const clientName = clientData.cl_name || 'Client';
     const targetWeight = clientData.cl_target_weight ? `${clientData.cl_target_weight} kg` : 'Not specified';
     const primaryGoal = clientData.cl_primary_goal || 'General fitness';
@@ -229,74 +235,27 @@ The JSON structure should be:
   ]
 }`;
 
-    console.log('📤 Sending prompt to LLM:');
-    console.log('='.repeat(80));
-    console.log('Prompt length:', prompt.length, 'characters');
-    console.log('📝 COMPLETE PROMPT FOR TESTING:');
+    console.log('\n📤 EXACT LLM PROMPT FOR CLIENT ID = 34:');
     console.log('='.repeat(80));
     console.log(prompt);
     console.log('='.repeat(80));
     console.log('📝 END OF PROMPT');
     console.log('='.repeat(80));
-
-    // 5. Call the unified LLM service
-    const startTime = Date.now();
-    const aiResult = await askLLM(prompt);
-    const endTime = Date.now();
-    const generationTime = endTime - startTime;
     
-    console.log('📥 Received response from LLM:');
-    console.log('='.repeat(80));
-    console.log('Response:', aiResult.response);
-    console.log('='.repeat(80));
-    console.log(`⏱️ Generation time: ${generationTime}ms`);
-    if (aiResult.model) {
-      console.log('🤖 Model used:', aiResult.model);
-    }
-    if (aiResult.usage) {
-      console.log('🔢 Token usage:', aiResult.usage);
-    }
+    console.log('\n📊 Prompt Statistics:');
+    console.log(`- Total characters: ${prompt.length}`);
+    console.log(`- Total words: ${prompt.split(' ').length}`);
+    console.log(`- Target calories: ${targetCalories}`);
+    console.log(`- Target protein: ${targetProtein}g`);
+    console.log(`- Target carbs: ${targetCarbs}g`);
+    console.log(`- Target fats: ${targetFats}g`);
+    
+    console.log('\n✅ Prompt generated successfully!');
+    console.log('💡 You can now copy this prompt and test it directly with your LLM model.');
 
-    /* Previous implementations (commented for easy reversion)
-    // const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
-    // const aiResult = await askCerebras(prompt);
-    */
-
-    // 6. Validate response for forbidden ingredients
-    if (forbiddenIngredients && aiResult.response) {
-      const forbiddenList = forbiddenIngredients.split(',').map(item => item.trim().toLowerCase());
-      const responseLower = aiResult.response.toLowerCase();
-      
-      console.log('🔍 Checking for forbidden ingredients in response...');
-      console.log('Forbidden list:', forbiddenList);
-      
-      const foundForbidden = forbiddenList.filter(ingredient => 
-        responseLower.includes(ingredient)
-      );
-      
-      if (foundForbidden.length > 0) {
-        console.error('❌ VIOLATION DETECTED! Found forbidden ingredients:', foundForbidden);
-        console.error('Response contains forbidden items:', foundForbidden);
-      } else {
-        console.log('✅ No forbidden ingredients detected in response');
-      }
-    }
-      
-      return {
-        success: true,
-      response: aiResult.response,
-      raw_prompt: prompt,
-      model: aiResult.model,
-      usage: aiResult.usage,
-      generationTime: `${generationTime}ms`,
-    };
-
-  } catch (error: any) {
-    console.error("❌ Error generating nutrition plan:", error);
-    return {
-      success: false,
-      response: '',
-      message: `Failed to generate plan: ${error.message}`
-    };
+  } catch (error) {
+    console.error('❌ Error generating prompt:', error);
   }
-} 
+}
+
+generatePromptForClient34(); 

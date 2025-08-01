@@ -305,13 +305,24 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
       </div>
       {/* Render each day */}
       {fullWeek.map((day, dayIdx) => {
+        // Get the date and day name for this day index
+        const currentDate = new Date(planStartDate.getTime() + dayIdx * 24 * 60 * 60 * 1000);
+        const dateStr = currentDate.toISOString().slice(0, 10);
+        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+        const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
         if (!day) {
           // Plan Not Generated
           return (
             <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-yellow-50">
-              <AlertTriangle className="w-5 h-5 text-yellow-500" />
-              <span className="font-semibold">Plan Not Generated</span>
-              <span className="ml-2 text-xs text-muted-foreground">No workout plan exists for this day.</span>
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                <div>
+                  <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  <div className="font-semibold text-yellow-700">Plan Not Generated</div>
+                  <div className="text-xs text-muted-foreground">No workout plan exists for this day.</div>
+                </div>
+              </div>
             </div>
           );
         }
@@ -319,9 +330,14 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
           // Rest Day
           return (
             <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-gray-50">
-              <Bed className="w-5 h-5" />
-              <span className="font-semibold">Rest Day</span>
-              <span className="ml-2 text-xs text-muted-foreground">Enjoy your recovery!</span>
+              <div className="flex items-center gap-3">
+                <Bed className="w-5 h-5" />
+                <div>
+                  <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  <div className="font-semibold text-gray-700">Rest Day</div>
+                  <div className="text-xs text-muted-foreground">Enjoy your recovery!</div>
+                </div>
+              </div>
             </div>
           );
         }
@@ -334,7 +350,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
                   <div className="flex items-center gap-3">
                     {getFocusIcon(day.focus)}
                     <div>
-                      <div className="text-xs text-gray-500">{new Date(day.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                      <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
                       <div className="text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
                         {day.focus}
                       </div>
