@@ -36,6 +36,74 @@ interface CoachAnalysisResponse {
         expected_outcome: string
       }>
     }
+    workout_plan_changes: {
+      exercise_modifications: Array<{
+        exercise: string
+        current_approach: string
+        recommended_change: string
+        rationale: string
+        implementation_timeline: string
+      }>
+      intensity_adjustments: Array<{
+        area: string
+        current_level: string
+        recommended_level: string
+        reason: string
+      }>
+      program_structure_changes: Array<{
+        component: string
+        current_structure: string
+        recommended_structure: string
+        benefits: string
+      }>
+    }
+    nutritional_plan_changes: {
+      dietary_adjustments: Array<{
+        nutrient: string
+        current_intake: string
+        recommended_intake: string
+        food_sources: string[]
+        rationale: string
+      }>
+      meal_timing_changes: Array<{
+        meal: string
+        current_timing: string
+        recommended_timing: string
+        reason: string
+      }>
+      supplement_recommendations: Array<{
+        supplement: string
+        dosage: string
+        timing: string
+        purpose: string
+        duration: string
+      }>
+    }
+    recommendations: {
+      training_recommendations: Array<{
+        category: string
+        recommendation: string
+        priority: 'High' | 'Medium' | 'Low'
+        expected_impact: string
+      }>
+      nutrition_recommendations: Array<{
+        category: string
+        recommendation: string
+        priority: 'High' | 'Medium' | 'Low'
+        expected_impact: string
+      }>
+      lifestyle_recommendations: Array<{
+        category: string
+        recommendation: string
+        priority: 'High' | 'Medium' | 'Low'
+        expected_impact: string
+      }>
+      coaching_strategy: Array<{
+        aspect: string
+        approach: string
+        rationale: string
+      }>
+    }
     coaching_recommendations: {
       training_modifications: string[]
       communication_strategy: string[]
@@ -115,9 +183,11 @@ ${JSON.stringify(previousAnalysis, null, 2)}
 
   const comprehensivePrompt = `You are an elite fitness coach with 20+ years of experience in personal training, sports psychology, and behavior change. You have just received updated trainer notes about a client, and you need to provide a comprehensive analysis with actionable insights and next steps.
 
+IMPORTANT: Focus your analysis on the most recent 2 weeks of trainer notes data. If the notes span more than 2 weeks, only analyze the last 2 weeks of entries.
+
 ${clientContext}
 
-CURRENT TRAINER NOTES:
+CURRENT TRAINER NOTES (Last 2 weeks):
 ${trainerNotes}
 
 CURRENT TO-DO ITEMS:
@@ -125,12 +195,12 @@ ${todoItems}
 
 ${previousAnalysisContext}
 
-TASK: Provide a comprehensive coaching analysis that includes:
-1. Deep insights into the client's current state and progress
-2. Immediate and long-term action plans
-3. Specific coaching recommendations
-4. Next session planning
-5. Behavioral and psychological insights
+TASK: Provide a comprehensive coaching analysis that includes the following areas:
+
+1. ACTION PLAN (Keep existing structure)
+2. WORKOUT PLAN CHANGES (New section)
+3. NUTRITIONAL PLAN CHANGES (New section)  
+4. RECOMMENDATIONS (Enhanced section)
 
 Please provide your analysis in the following JSON format:
 
@@ -167,6 +237,94 @@ Please provide your analysis in the following JSON format:
       }
     ]
   },
+  "workout_plan_changes": {
+    "exercise_modifications": [
+      {
+        "exercise": "Specific exercise name",
+        "current_approach": "How it's currently being done",
+        "recommended_change": "What should be changed",
+        "rationale": "Why this change is needed",
+        "implementation_timeline": "When to implement"
+      }
+    ],
+    "intensity_adjustments": [
+      {
+        "area": "Cardio|Strength|Flexibility|Recovery",
+        "current_level": "Current intensity/volume",
+        "recommended_level": "Recommended intensity/volume",
+        "reason": "Why this adjustment is needed"
+      }
+    ],
+    "program_structure_changes": [
+      {
+        "component": "Workout split|Exercise selection|Progression|Recovery",
+        "current_structure": "Current approach",
+        "recommended_structure": "Recommended approach",
+        "benefits": "Expected benefits"
+      }
+    ]
+  },
+  "nutritional_plan_changes": {
+    "dietary_adjustments": [
+      {
+        "nutrient": "Protein|Carbs|Fats|Vitamins|Minerals",
+        "current_intake": "Current intake level",
+        "recommended_intake": "Recommended intake level",
+        "food_sources": ["Food 1", "Food 2", "..."],
+        "rationale": "Why this adjustment is needed"
+      }
+    ],
+    "meal_timing_changes": [
+      {
+        "meal": "Breakfast|Lunch|Dinner|Snacks|Pre-workout|Post-workout",
+        "current_timing": "Current timing approach",
+        "recommended_timing": "Recommended timing",
+        "reason": "Why this change is beneficial"
+      }
+    ],
+    "supplement_recommendations": [
+      {
+        "supplement": "Supplement name",
+        "dosage": "Recommended dosage",
+        "timing": "When to take",
+        "purpose": "Why it's recommended",
+        "duration": "How long to use"
+      }
+    ]
+  },
+  "recommendations": {
+    "training_recommendations": [
+      {
+        "category": "Exercise|Progression|Recovery|Technique",
+        "recommendation": "Specific recommendation",
+        "priority": "High|Medium|Low",
+        "expected_impact": "What this will achieve"
+      }
+    ],
+    "nutrition_recommendations": [
+      {
+        "category": "Macros|Meal timing|Hydration|Supplements",
+        "recommendation": "Specific recommendation",
+        "priority": "High|Medium|Low",
+        "expected_impact": "What this will achieve"
+      }
+    ],
+    "lifestyle_recommendations": [
+      {
+        "category": "Sleep|Stress|Recovery|Habits",
+        "recommendation": "Specific recommendation",
+        "priority": "High|Medium|Low",
+        "expected_impact": "What this will achieve"
+      }
+    ],
+    "coaching_strategy": [
+      {
+        "aspect": "Communication|Motivation|Education|Support",
+        "approach": "Recommended coaching approach",
+        "rationale": "Why this approach is effective"
+      }
+    ]
+  },
   "coaching_recommendations": {
     "training_modifications": ["Modification 1", "Modification 2", "..."],
     "communication_strategy": ["Strategy 1", "Strategy 2", "..."],
@@ -188,6 +346,7 @@ Please provide your analysis in the following JSON format:
 }
 
 GUIDELINES:
+- Focus analysis on the most recent 2 weeks of trainer notes
 - Be specific and actionable in all recommendations
 - Consider both physical and psychological aspects
 - Prioritize actions based on impact and urgency
@@ -198,25 +357,20 @@ GUIDELINES:
 - Provide practical, implementable suggestions
 - Focus on sustainable long-term progress
 - Include motivational and engagement strategies
-- Consider the client's goal timeline and current progress toward goals`;
+- Consider the client's goal timeline and current progress toward goals
+- For workout plan changes, consider current fitness level, goals, and any limitations
+- For nutritional changes, consider current eating habits, preferences, and goals
+- Ensure all recommendations are realistic and achievable for the client`;
 
   console.log('📝 Comprehensive analysis prompt prepared');
-  console.log('🚀 Sending request to OpenRouter...');
   
   try {
-    const aiResponse = await askCerebras(comprehensivePrompt);
-    console.log('📊 OpenRouter Response received');
-    console.log('✅ AI Response extracted');
-    
-    return {
-      response: aiResponse,
-      model: 'qwen/qwen3-8b:free',
-      timestamp: new Date().toISOString()
-    };
-    
+    const response = await askCerebras(comprehensivePrompt);
+    console.log('✅ AI response received');
+    return response;
   } catch (error) {
-    console.error('❌ OpenRouter API Error:', error);
-    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ Error in AI analysis:', error);
+    throw new Error(`AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

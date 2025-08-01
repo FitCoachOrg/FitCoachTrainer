@@ -2003,6 +2003,7 @@ export default function ClientDashboard() {
                 isGeneratingAnalysis={isGeneratingAnalysis}
                 handleSummarizeNotes={handleSummarizeNotes}
                 isSummarizingNotes={isSummarizingNotes}
+                setLastAIRecommendation={setLastAIRecommendation}
               />
             </CardHeader>
           </Card>
@@ -2098,6 +2099,9 @@ export default function ClientDashboard() {
           <AICoachInsightsSection 
             lastAIRecommendation={lastAIRecommendation}
             onViewFullAnalysis={() => {}}
+            client={client}
+            trainerNotes={trainerNotes}
+            setLastAIRecommendation={setLastAIRecommendation}
           />
         </SidePopup>
 
@@ -2123,6 +2127,7 @@ export default function ClientDashboard() {
             handleSummarizeNotes={handleSummarizeNotes}
             isSummarizingNotes={isSummarizingNotes}
             lastAIRecommendation={lastAIRecommendation}
+            setLastAIRecommendation={setLastAIRecommendation}
           />
         </SidePopup>
 

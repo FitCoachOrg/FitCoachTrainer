@@ -50,6 +50,7 @@ interface MetricsSectionProps {
   isGeneratingAnalysis?: boolean
   handleSummarizeNotes?: () => void
   isSummarizingNotes?: boolean
+  setLastAIRecommendation?: (analysis: any) => void
 }
 
 export const MetricsSection: React.FC<MetricsSectionProps> = ({ 
@@ -69,7 +70,8 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
   setNotesError,
   isGeneratingAnalysis,
   handleSummarizeNotes,
-  isSummarizingNotes
+  isSummarizingNotes,
+  setLastAIRecommendation
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem("selectedMetrics")
@@ -658,6 +660,9 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         <AICoachInsightsSection 
           lastAIRecommendation={lastAIRecommendation}
           onViewFullAnalysis={() => {}}
+          client={client}
+          trainerNotes={trainerNotes || ""}
+          setLastAIRecommendation={setLastAIRecommendation}
         />
       </SidePopup>
 
@@ -683,6 +688,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           handleSummarizeNotes={handleSummarizeNotes || (() => {})}
           isSummarizingNotes={isSummarizingNotes || false}
           lastAIRecommendation={lastAIRecommendation}
+          setLastAIRecommendation={setLastAIRecommendation}
         />
       </SidePopup>
 

@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Plus, Save, Trash2, Search as SearchIcon } from "lucide-react"
+import { Edit, Plus, Save, Trash2, Search as SearchIcon, Brain } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
+import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 
 // Interface for trainer notes
 interface TrainerNote {
@@ -31,6 +32,7 @@ interface TrainerNotesSectionProps {
   handleSummarizeNotes: () => void
   isSummarizingNotes: boolean
   lastAIRecommendation: any
+  setLastAIRecommendation?: (analysis: any) => void
 }
 
 export function TrainerNotesSection({ 
@@ -48,7 +50,8 @@ export function TrainerNotesSection({
   isGeneratingAnalysis,
   handleSummarizeNotes,
   isSummarizingNotes,
-  lastAIRecommendation 
+  lastAIRecommendation,
+  setLastAIRecommendation
 }: TrainerNotesSectionProps) {
   const { toast } = useToast()
   const [notes, setNotes] = useState<TrainerNote[]>([])
@@ -57,6 +60,7 @@ export function TrainerNotesSection({
   const [newNote, setNewNote] = useState({ date: new Date().toISOString().split('T')[0], notes: "" })
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState<TrainerNote | null>(null)
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
 
   // Load existing notes from trainerNotes string
   useEffect(() => {
@@ -89,6 +93,63 @@ export function TrainerNotesSection({
       setNotes([])
     }
   }, [trainerNotes])
+
+  // Helper function to get notes from last 2 weeks
+  const getRecentNotes = (allNotes: TrainerNote[]) => {
+    const twoWeeksAgo = new Date()
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+    
+    return allNotes.filter(note => {
+      const noteDate = new Date(note.date)
+      return noteDate >= twoWeeksAgo
+    })
+  }
+
+  // Helper function to generate AI analysis
+  const generateAIAnalysis = async (notesToAnalyze: TrainerNote[]) => {
+    if (!client?.client_id || !setLastAIRecommendation) return
+
+    setIsGeneratingAI(true)
+    
+    try {
+      // Convert notes to string format for AI analysis
+      const notesString = notesToAnalyze.map(note => 
+        `Date: ${note.date}\nNotes: ${note.notes}`
+      ).join('\n\n')
+
+      console.log('🤖 Generating AI analysis for recent notes...')
+      
+      const result = await performComprehensiveCoachAnalysis(
+        client.client_id,
+        notesString,
+        '' // No todo items for now
+      )
+
+      if (result.success && result.analysis) {
+        setLastAIRecommendation(result.analysis.analysis_data)
+        toast({
+          title: "AI Analysis Complete",
+          description: "Comprehensive analysis has been generated based on your recent notes.",
+        })
+      } else {
+        console.error('❌ AI analysis failed:', result.message)
+        toast({
+          title: "AI Analysis Failed",
+          description: result.message || "Failed to generate AI analysis",
+          variant: "destructive"
+        })
+      }
+    } catch (error: any) {
+      console.error('❌ Error generating AI analysis:', error)
+      toast({
+        title: "AI Analysis Error",
+        description: error.message || "Failed to generate AI analysis",
+        variant: "destructive"
+      })
+    } finally {
+      setIsGeneratingAI(false)
+    }
+  }
 
   // Save notes to database and parent component
   const saveNotesToDatabase = async (notesToSave: TrainerNote[]) => {
@@ -157,6 +218,12 @@ export function TrainerNotesSection({
         title: "Note Added",
         description: "New trainer note has been added successfully.",
       })
+
+      // Trigger AI analysis with recent notes (last 2 weeks)
+      const recentNotes = getRecentNotes(updatedNotes)
+      if (recentNotes.length > 0) {
+        await generateAIAnalysis(recentNotes)
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -184,6 +251,12 @@ export function TrainerNotesSection({
         title: "Note Updated",
         description: "Trainer note has been updated successfully.",
       })
+
+      // Trigger AI analysis with recent notes (last 2 weeks)
+      const recentNotes = getRecentNotes(updatedNotes)
+      if (recentNotes.length > 0) {
+        await generateAIAnalysis(recentNotes)
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -235,13 +308,21 @@ export function TrainerNotesSection({
               variant="outline"
               size="sm"
               onClick={() => setIsAddingNote(true)}
-              disabled={isSavingNotes || isGeneratingAnalysis}
+              disabled={isSavingNotes || isGeneratingAnalysis || isGeneratingAI}
               className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/20"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Note
             </Button>
           </CardTitle>
+          
+          {/* AI Analysis Status */}
+          {isGeneratingAI && (
+            <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 mt-2">
+              <Brain className="h-4 w-4 animate-pulse" />
+              Generating AI Analysis...
+            </div>
+          )}
         </CardHeader>
       </Card>
 
@@ -280,9 +361,13 @@ export function TrainerNotesSection({
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleAddNote} className="bg-green-600 hover:bg-green-700">
+                <Button 
+                  onClick={handleAddNote} 
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={isGeneratingAI}
+                >
                   <Save className="h-4 w-4 mr-2" />
-                  Save Note
+                  {isGeneratingAI ? "Saving..." : "Save Note"}
                 </Button>
                 <Button 
                   variant="outline" 
@@ -335,9 +420,13 @@ export function TrainerNotesSection({
                       />
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={handleUpdateNote} className="bg-blue-600 hover:bg-blue-700">
+                      <Button 
+                        onClick={handleUpdateNote} 
+                        className="bg-blue-600 hover:bg-blue-700"
+                        disabled={isGeneratingAI}
+                      >
                         <Save className="h-4 w-4 mr-2" />
-                        Update
+                        {isGeneratingAI ? "Updating..." : "Update"}
                       </Button>
                       <Button 
                         variant="outline" 
