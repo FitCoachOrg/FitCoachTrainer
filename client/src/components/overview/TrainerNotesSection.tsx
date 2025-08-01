@@ -1,12 +1,66 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Plus, Save, Trash2, Search as SearchIcon, Brain } from "lucide-react"
+import { Edit, Plus, Save, Trash2, Search as SearchIcon, Brain, Mic, MicOff, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
+
+// TypeScript declarations for Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition
+    webkitSpeechRecognition: typeof SpeechRecognition
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: (event: SpeechRecognitionEvent) => void
+  onerror: (event: SpeechRecognitionErrorEvent) => void
+  onend: () => void
+  start: () => void
+  stop: () => void
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult
+  length: number
+}
+
+interface SpeechRecognitionResult {
+  [index: number]: SpeechRecognitionAlternative
+  length: number
+  isFinal: boolean
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string
+  message: string
+}
+
+declare var SpeechRecognition: {
+  prototype: SpeechRecognition
+  new (): SpeechRecognition
+}
+
+declare var webkitSpeechRecognition: {
+  prototype: SpeechRecognition
+  new (): SpeechRecognition
+}
 
 // Interface for trainer notes
 interface TrainerNote {
@@ -61,6 +115,14 @@ export function TrainerNotesSection({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState<TrainerNote | null>(null)
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+  
+  // Voice-to-text functionality
+  const [isRecording, setIsRecording] = useState(false)
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
 
   // Load existing notes from trainerNotes string
   useEffect(() => {
@@ -126,7 +188,7 @@ export function TrainerNotesSection({
       )
 
       if (result.success && result.analysis) {
-        setLastAIRecommendation(result.analysis.analysis_data)
+        setLastAIRecommendation(result.analysis)
         toast({
           title: "AI Analysis Complete",
           description: "Comprehensive analysis has been generated based on your recent notes.",
@@ -149,6 +211,111 @@ export function TrainerNotesSection({
     } finally {
       setIsGeneratingAI(false)
     }
+  }
+
+  // Voice-to-text functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data)
+      }
+
+      mediaRecorder.onstop = async () => {
+        setIsProcessingVoice(true)
+        try {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+          const text = await convertSpeechToText(audioBlob)
+          if (text) {
+            setNewNote(prev => ({ ...prev, notes: prev.notes + (prev.notes ? '\n' : '') + text }))
+            toast({
+              title: "Voice Note Added",
+              description: "Your voice note has been converted to text and added to the notes.",
+            })
+          }
+        } catch (error: any) {
+          toast({
+            title: "Voice Recognition Failed",
+            description: error.message || "Failed to convert speech to text",
+            variant: "destructive"
+          })
+        } finally {
+          setIsProcessingVoice(false)
+        }
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      
+      // Start recording timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+
+      toast({
+        title: "Recording Started",
+        description: "Speak your notes now. Click the microphone again to stop.",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Recording Failed",
+        description: "Please allow microphone access to use voice-to-text.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+      setIsRecording(false)
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current)
+        recordingIntervalRef.current = null
+      }
+    }
+  }
+
+  const convertSpeechToText = async (audioBlob: Blob): Promise<string> => {
+    // For now, we'll use a simple approach with the Web Speech API
+    // In a production environment, you might want to use a more robust service like Google Speech-to-Text
+    
+    return new Promise((resolve, reject) => {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        reject(new Error('Speech recognition not supported in this browser'))
+        return
+      }
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const recognition = new SpeechRecognition()
+      
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.lang = 'en-US'
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript
+        resolve(transcript)
+      }
+
+      recognition.onerror = (event) => {
+        reject(new Error(`Speech recognition error: ${event.error}`))
+      }
+
+      recognition.onend = () => {
+        // Recognition ended
+      }
+
+      // Start recognition
+      recognition.start()
+    })
   }
 
   // Save notes to database and parent component
@@ -292,6 +459,13 @@ export function TrainerNotesSection({
     note.date.includes(searchQuery)
   )
 
+  // Format recording time
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   return (
     <div className="space-y-6">
       {/* Header Card */}
@@ -353,12 +527,46 @@ export function TrainerNotesSection({
               </div>
               <div>
                 <label className="text-sm font-medium text-green-800 dark:text-green-300">Notes</label>
-                <Textarea
-                  value={newNote.notes}
-                  onChange={(e) => setNewNote({ ...newNote, notes: e.target.value })}
-                  placeholder="Enter your notes..."
-                  className="mt-1 min-h-[100px]"
-                />
+                <div className="relative">
+                  <Textarea
+                    value={newNote.notes}
+                    onChange={(e) => setNewNote({ ...newNote, notes: e.target.value })}
+                    placeholder="Enter your notes or use voice-to-text..."
+                    className="mt-1 min-h-[100px] pr-12"
+                  />
+                  {/* Voice-to-text button */}
+                  <div className="absolute bottom-2 right-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isRecording ? "destructive" : "outline"}
+                      onClick={isRecording ? stopRecording : startRecording}
+                      disabled={isProcessingVoice}
+                      className={`h-8 w-8 p-0 ${
+                        isRecording 
+                          ? 'bg-red-500 hover:bg-red-600 text-white' 
+                          : 'bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {isProcessingVoice ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isRecording ? (
+                        <MicOff className="h-4 w-4" />
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {/* Recording indicator */}
+                  {isRecording && (
+                    <div className="absolute top-2 right-2">
+                      <div className="flex items-center gap-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs">
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                        {formatRecordingTime(recordingTime)}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button 

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Brain, Sparkles, Target, Calendar, TrendingUp, AlertTriangle, CheckCircle, Zap, Star, Clock, Users, BarChart3, Lightbulb, Activity, ArrowRight, MessageSquare, Settings, Dumbbell, Utensils, Heart, Timer, Award } from "lucide-react"
+import { Brain, Sparkles, Target, Calendar, TrendingUp, AlertTriangle, CheckCircle, Zap, Star, Clock, Users, BarChart3, Lightbulb, Activity, ArrowRight, MessageSquare, Settings, Dumbbell, Utensils, Heart, Timer, Award, ThumbsUp } from "lucide-react"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { useToast } from "@/hooks/use-toast"
 
@@ -230,214 +230,7 @@ export function AICoachInsightsSection({
         </CardHeader>
       </Card>
 
-      {/* Progress Assessment Card */}
-      {progressAssessment && (
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-300">
-              <BarChart3 className="h-5 w-5" />
-              Progress Assessment
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-green-100/50 dark:bg-green-900/30 rounded-lg">
-              <p className="text-sm text-green-800 dark:text-green-300 leading-relaxed">
-                {typeof progressAssessment === 'string' ? progressAssessment : 'Progress assessment available'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Workout Plan Changes Card */}
-      {Object.keys(workoutPlanChanges).length > 0 && (
-        <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-blue-200 dark:border-blue-800 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-blue-800 dark:text-blue-300">
-              <Dumbbell className="h-5 w-5" />
-              Workout Plan Changes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {workoutPlanChanges.exercise_modifications && workoutPlanChanges.exercise_modifications.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Exercise Modifications</h4>
-                  {workoutPlanChanges.exercise_modifications.map((mod: any, index: number) => (
-                    <div key={index} className="p-3 bg-blue-100/50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-start gap-2 mb-2">
-                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">{mod.exercise}</p>
-                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{mod.recommended_change}</p>
-                        </div>
-                      </div>
-                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                        <p><strong>Timeline:</strong> {mod.implementation_timeline}</p>
-                        <p><strong>Rationale:</strong> {mod.rationale}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {workoutPlanChanges.intensity_adjustments && workoutPlanChanges.intensity_adjustments.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Intensity Adjustments</h4>
-                  {workoutPlanChanges.intensity_adjustments.map((adj: any, index: number) => (
-                    <div key={index} className="p-3 bg-blue-100/50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-blue-800 dark:text-blue-300">{adj.area}</span>
-                        <Badge variant="outline" className="text-xs">{adj.recommended_level}</Badge>
-                      </div>
-                      <p className="text-xs text-blue-600 dark:text-blue-400">{adj.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Nutritional Plan Changes Card */}
-      {Object.keys(nutritionalPlanChanges).length > 0 && (
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border-orange-200 dark:border-orange-800 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-300">
-              <Utensils className="h-5 w-5" />
-              Nutritional Plan Changes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {nutritionalPlanChanges.dietary_adjustments && nutritionalPlanChanges.dietary_adjustments.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">Dietary Adjustments</h4>
-                  {nutritionalPlanChanges.dietary_adjustments.map((adj: any, index: number) => (
-                    <div key={index} className="p-3 bg-orange-100/50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-orange-800 dark:text-orange-300">{adj.nutrient}</span>
-                        <Badge variant="outline" className="text-xs">{adj.recommended_intake}</Badge>
-                      </div>
-                      <p className="text-xs text-orange-600 dark:text-orange-400 mb-2">{adj.rationale}</p>
-                      {adj.food_sources && adj.food_sources.length > 0 && (
-                        <div className="text-xs text-orange-600 dark:text-orange-400">
-                          <strong>Food Sources:</strong> {adj.food_sources.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {nutritionalPlanChanges.meal_timing_changes && nutritionalPlanChanges.meal_timing_changes.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">Meal Timing Changes</h4>
-                  {nutritionalPlanChanges.meal_timing_changes.map((timing: any, index: number) => (
-                    <div key={index} className="p-3 bg-orange-100/50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-orange-800 dark:text-orange-300">{timing.meal}</span>
-                        <Badge variant="outline" className="text-xs">{timing.recommended_timing}</Badge>
-                      </div>
-                      <p className="text-xs text-orange-600 dark:text-orange-400">{timing.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Enhanced Recommendations Card */}
-      {Object.keys(recommendations).length > 0 && (
-        <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-indigo-200 dark:border-indigo-800 shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-indigo-800 dark:text-indigo-300">
-              <Award className="h-5 w-5" />
-              Enhanced Recommendations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recommendations.training_recommendations && recommendations.training_recommendations.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                    <Dumbbell className="h-4 w-4" />
-                    Training Recommendations
-                  </h4>
-                  {recommendations.training_recommendations.map((rec: any, index: number) => (
-                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
-                        <Badge 
-                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
-                          className="text-xs"
-                        >
-                          {rec.priority}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400">{rec.expected_impact}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {recommendations.nutrition_recommendations && recommendations.nutrition_recommendations.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                    <Utensils className="h-4 w-4" />
-                    Nutrition Recommendations
-                  </h4>
-                  {recommendations.nutrition_recommendations.map((rec: any, index: number) => (
-                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
-                        <Badge 
-                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
-                          className="text-xs"
-                        >
-                          {rec.priority}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400">{rec.expected_impact}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {recommendations.lifestyle_recommendations && recommendations.lifestyle_recommendations.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                    <Heart className="h-4 w-4" />
-                    Lifestyle Recommendations
-                  </h4>
-                  {recommendations.lifestyle_recommendations.map((rec: any, index: number) => (
-                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
-                        <Badge 
-                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
-                          className="text-xs"
-                        >
-                          {rec.priority}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
-                      <p className="text-xs text-indigo-600 dark:text-indigo-400">{rec.expected_impact}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Action Plan Card */}
+      {/* Action Plan Card - Moved to top */}
       {actionItems.length > 0 && (
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 shadow-lg">
           <CardHeader className="pb-3">
@@ -493,8 +286,245 @@ export function AICoachInsightsSection({
         </Card>
       )}
 
+      {/* Progress Assessment Card */}
+      {lastAIRecommendation?.summary?.progress_assessment && (
+        <Card className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-emerald-200 dark:border-emerald-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
+              <TrendingUp className="h-5 w-5" />
+              Progress Assessment
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+              {lastAIRecommendation.summary.progress_assessment}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Key Insights Card */}
+      {lastAIRecommendation?.summary?.key_insights && lastAIRecommendation.summary.key_insights.length > 0 && (
+        <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200 dark:border-purple-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-purple-800 dark:text-purple-300">
+              <Lightbulb className="h-5 w-5" />
+              Key Insights
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {lastAIRecommendation.summary.key_insights.map((insight: string, index: number) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p className="text-sm text-purple-700 dark:text-purple-300">{insight}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Client Status Card */}
+      {lastAIRecommendation?.summary?.client_status && (
+        <Card className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 border-cyan-200 dark:border-cyan-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-cyan-800 dark:text-cyan-300">
+              <Users className="h-5 w-5" />
+              Client Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-cyan-700 dark:text-cyan-300">
+              {lastAIRecommendation.summary.client_status}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Workout Plan Changes Card */}
+      {Object.keys(workoutPlanChanges).length > 0 && (
+        <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border-blue-200 dark:border-blue-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-blue-800 dark:text-blue-300">
+              <Dumbbell className="h-5 w-5" />
+              Workout Plan Changes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {workoutPlanChanges.exercise_modifications && workoutPlanChanges.exercise_modifications.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Exercise Modifications</h4>
+                  {workoutPlanChanges.exercise_modifications.map((mod: any, index: number) => (
+                    <div key={index} className="p-3 bg-blue-100/50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-start gap-2 mb-2">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-800 dark:text-blue-300">{mod.exercise}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{mod.change}</p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                        <p><strong>Timeline:</strong> {mod.timeline}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {workoutPlanChanges.intensity_adjustments && workoutPlanChanges.intensity_adjustments.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Intensity Adjustments</h4>
+                  {workoutPlanChanges.intensity_adjustments.map((adj: any, index: number) => (
+                    <div key={index} className="p-3 bg-blue-100/50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-blue-800 dark:text-blue-300">{adj.area}</span>
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">{adj.adjustment}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Nutritional Plan Changes Card */}
+      {Object.keys(nutritionalPlanChanges).length > 0 && (
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border-orange-200 dark:border-orange-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-300">
+              <Utensils className="h-5 w-5" />
+              Nutritional Plan Changes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {nutritionalPlanChanges.dietary_adjustments && nutritionalPlanChanges.dietary_adjustments.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">Dietary Adjustments</h4>
+                  {nutritionalPlanChanges.dietary_adjustments.map((adj: any, index: number) => (
+                    <div key={index} className="p-3 bg-orange-100/50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-orange-800 dark:text-orange-300">{adj.nutrient}</span>
+                      </div>
+                      <p className="text-xs text-orange-600 dark:text-orange-400 mb-2">{adj.adjustment}</p>
+                      {adj.food_sources && (
+                        <div className="text-xs text-orange-600 dark:text-orange-400">
+                          <strong>Food Sources:</strong> {adj.food_sources}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {nutritionalPlanChanges.meal_timing_changes && nutritionalPlanChanges.meal_timing_changes.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-orange-700 dark:text-orange-400">Meal Timing Changes</h4>
+                  {nutritionalPlanChanges.meal_timing_changes.map((timing: any, index: number) => (
+                    <div key={index} className="p-3 bg-orange-100/50 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-orange-800 dark:text-orange-300">{timing.meal}</span>
+                      </div>
+                      <p className="text-xs text-orange-600 dark:text-orange-400">{timing.change}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Enhanced Recommendations Card */}
+      {Object.keys(recommendations).length > 0 && (
+        <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border-indigo-200 dark:border-indigo-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-indigo-800 dark:text-indigo-300">
+              <Award className="h-5 w-5" />
+              Enhanced Recommendations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recommendations.training_recommendations && recommendations.training_recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                    <Dumbbell className="h-4 w-4" />
+                    Training Recommendations
+                  </h4>
+                  {recommendations.training_recommendations.map((rec: any, index: number) => (
+                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
+                        <Badge 
+                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {rec.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recommendations.nutrition_recommendations && recommendations.nutrition_recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                    <Utensils className="h-4 w-4" />
+                    Nutrition Recommendations
+                  </h4>
+                  {recommendations.nutrition_recommendations.map((rec: any, index: number) => (
+                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
+                        <Badge 
+                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {rec.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recommendations.lifestyle_recommendations && recommendations.lifestyle_recommendations.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    Lifestyle Recommendations
+                  </h4>
+                  {recommendations.lifestyle_recommendations.map((rec: any, index: number) => (
+                    <div key={index} className="p-3 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{rec.category}</span>
+                        <Badge 
+                          variant={rec.priority === 'High' ? 'destructive' : rec.priority === 'Medium' ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {rec.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-indigo-700 dark:text-indigo-300 mb-2">{rec.recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Immediate Concerns Card */}
-      {immediateConcerns.length > 0 && (
+      {lastAIRecommendation?.summary?.immediate_concerns && lastAIRecommendation.summary.immediate_concerns.length > 0 && (
         <Card className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border-red-200 dark:border-red-800 shadow-lg">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-red-800 dark:text-red-300">
@@ -504,14 +534,10 @@ export function AICoachInsightsSection({
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {immediateConcerns.map((concern: any, index: number) => (
-                <div key={index} className="flex items-start gap-2 p-3 bg-red-100/50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800">
-                  <div className="flex-shrink-0 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                    !
-                  </div>
-                  <span className="text-sm text-red-800 dark:text-red-300">
-                    {typeof concern === 'string' ? concern : String(concern)}
-                  </span>
+              {lastAIRecommendation.summary.immediate_concerns.map((concern: string, index: number) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p className="text-sm text-red-700 dark:text-red-300">{concern}</p>
                 </div>
               ))}
             </div>
@@ -520,28 +546,200 @@ export function AICoachInsightsSection({
       )}
 
       {/* Positive Developments Card */}
-      {positiveDevelopments.length > 0 && (
-        <Card className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border-emerald-200 dark:border-emerald-800 shadow-lg">
+      {lastAIRecommendation?.summary?.positive_developments && lastAIRecommendation.summary.positive_developments.length > 0 && (
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-emerald-200 dark:border-emerald-800 shadow-lg">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
-              <CheckCircle className="h-5 w-5" />
+              <ThumbsUp className="h-5 w-5" />
               Positive Developments
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {positiveDevelopments.map((dev: any, index: number) => (
-                <div key={index} className="flex items-start gap-2 p-3 bg-emerald-100/50 dark:bg-emerald-900/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                  <div className="flex-shrink-0 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                    ✓
-                  </div>
-                  <span className="text-sm text-emerald-800 dark:text-emerald-300">
-                    {typeof dev === 'string' ? dev : 
-                     typeof dev === 'object' && dev.development ? dev.development :
-                     String(dev)}
-                  </span>
+              {lastAIRecommendation.summary.positive_developments.map((development: string, index: number) => (
+                <div key={index} className="flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <p className="text-sm text-green-700 dark:text-green-300">{development}</p>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Next Session Plan Card */}
+      {lastAIRecommendation?.next_session_plan && (
+        <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border-teal-200 dark:border-teal-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-teal-800 dark:text-teal-300">
+              <Calendar className="h-5 w-5" />
+              Next Session Plan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {lastAIRecommendation.next_session_plan.primary_objectives && lastAIRecommendation.next_session_plan.primary_objectives.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-400">Primary Objectives</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.next_session_plan.primary_objectives.map((objective: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-teal-700 dark:text-teal-300">{objective}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.next_session_plan.specific_exercises && lastAIRecommendation.next_session_plan.specific_exercises.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-400">Specific Exercises</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.next_session_plan.specific_exercises.map((exercise: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-teal-700 dark:text-teal-300">{exercise}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.next_session_plan.discussion_topics && lastAIRecommendation.next_session_plan.discussion_topics.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-400">Discussion Topics</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.next_session_plan.discussion_topics.map((topic: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-teal-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-teal-700 dark:text-teal-300">{topic}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Client Insights Card */}
+      {lastAIRecommendation?.client_insights && (
+        <Card className="bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-900/20 dark:to-gray-900/20 border-slate-200 dark:border-slate-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-slate-800 dark:text-slate-300">
+              <Brain className="h-5 w-5" />
+              Client Insights
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {lastAIRecommendation.client_insights.behavioral_patterns && lastAIRecommendation.client_insights.behavioral_patterns.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-400">Behavioral Patterns</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.client_insights.behavioral_patterns.map((pattern: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">{pattern}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.client_insights.engagement_level && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-400">Engagement Level</h4>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{lastAIRecommendation.client_insights.engagement_level}</p>
+                </div>
+              )}
+
+              {lastAIRecommendation.client_insights.potential_barriers && lastAIRecommendation.client_insights.potential_barriers.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-400">Potential Barriers</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.client_insights.potential_barriers.map((barrier: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">{barrier}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.client_insights.success_factors && lastAIRecommendation.client_insights.success_factors.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-400">Success Factors</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.client_insights.success_factors.map((factor: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-slate-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">{factor}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Coaching Recommendations Card */}
+      {lastAIRecommendation?.coaching_recommendations && (
+        <Card className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border-violet-200 dark:border-violet-800 shadow-lg">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-violet-800 dark:text-violet-300">
+              <MessageSquare className="h-5 w-5" />
+              Coaching Recommendations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {lastAIRecommendation.coaching_recommendations.training_modifications && lastAIRecommendation.coaching_recommendations.training_modifications.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-400">Training Modifications</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.coaching_recommendations.training_modifications.map((mod: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-violet-700 dark:text-violet-300">{mod}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.coaching_recommendations.communication_strategy && lastAIRecommendation.coaching_recommendations.communication_strategy.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-400">Communication Strategy</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.coaching_recommendations.communication_strategy.map((strategy: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-violet-700 dark:text-violet-300">{strategy}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {lastAIRecommendation.coaching_recommendations.motivation_techniques && lastAIRecommendation.coaching_recommendations.motivation_techniques.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-violet-700 dark:text-violet-400">Motivation Techniques</h4>
+                  <div className="space-y-2">
+                    {lastAIRecommendation.coaching_recommendations.motivation_techniques.map((technique: string, index: number) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-violet-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <p className="text-sm text-violet-700 dark:text-violet-300">{technique}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

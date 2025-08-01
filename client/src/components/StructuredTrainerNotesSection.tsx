@@ -68,7 +68,7 @@ export function StructuredTrainerNotesSection({
   lastAIRecommendation, 
   setLastAIRecommendation 
 }: StructuredTrainerNotesSectionProps) {
-  
+
   return (
     <TrainerNotesSection
       client={client}
