@@ -67,6 +67,43 @@ export const getCurrentProviderConfig = (): LLMConfig => {
   return LLM_CONFIGS[provider]
 }
 
+// Health check function to verify provider availability
+export const checkProviderHealth = async (provider?: LLMProvider): Promise<boolean> => {
+  const targetProvider = provider || getCurrentProvider()
+  const config = LLM_CONFIGS[targetProvider]
+  
+  console.log(`🔍 Checking health for provider: ${targetProvider}`)
+  
+  try {
+    // Check if API key exists
+    const apiKey = import.meta.env[config.apiKeyEnv]
+    if (!apiKey) {
+      console.log(`❌ No API key found for ${targetProvider}`)
+      return false
+    }
+    
+    // For local LLM, check if Ollama is running
+    if (targetProvider === 'local') {
+      const response = await fetch(`${config.baseUrl}/api/tags`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      })
+      const isHealthy = response.ok
+      console.log(`🔍 Local LLM health check: ${isHealthy ? '✅' : '❌'}`)
+      return isHealthy
+    }
+    
+    // For remote providers, just check if API key exists
+    console.log(`✅ API key found for ${targetProvider}`)
+    return true
+    
+  } catch (error) {
+    console.log(`❌ Health check failed for ${targetProvider}:`, error)
+    return false
+  }
+}
+
 // Get the currently selected model
 export const getCurrentModel = (): string => {
   const saved = localStorage.getItem('selectedLLMModel')

@@ -3,7 +3,7 @@
  * 
  * This file contains the definition of all available metrics that can be displayed
  * in the client dashboard. Each metric includes configuration for:
- * - Data source (activity_info or external_device_connect tables)
+ * - Data source (activity_info, external_device_connect, client_info, meal_info, workout_info, client_engagement_score tables)
  * - Chart type (line or bar)
  * - Visual styling (colors, icons)
  * - Data processing requirements
@@ -23,6 +23,11 @@ import {
   Zap,
   Activity,
   TrendingUp,
+  Calculator,
+  AlertTriangle,
+  Target,
+  Utensils,
+  Dumbbell,
 } from "lucide-react"
 
 // Type definitions for metrics
@@ -44,8 +49,9 @@ export interface Metric {
   dataKey: string
   yLabel: string
   activityName: string
-  dataSource: "activity_info" | "external_device_connect"
+  dataSource: "activity_info" | "external_device_connect" | "client_info" | "meal_info" | "workout_info" | "client_engagement_score"
   columnName?: string // Only for external_device_connect metrics
+  tableName?: string // For specific table references
 }
 
 /**
@@ -62,6 +68,7 @@ export interface Metric {
  * - activityName: Name used in activity_info table
  * - dataSource: Which database table to query
  * - columnName: Specific column name for external_device_connect table
+ * - tableName: Specific table name for other data sources
  */
 export const METRIC_LIBRARY: Metric[] = [
   {
@@ -199,5 +206,72 @@ export const METRIC_LIBRARY: Metric[] = [
     yLabel: "%",
     activityName: "Progress",
     dataSource: "activity_info"
+  },
+  // NEW KPIs ADDED
+  {
+    key: "bmi",
+    label: "BMI",
+    icon: Calculator,
+    type: "line",
+    color: "#059669",
+    data: [], // Will be populated from activity_info table where activity = 'BMI'
+    dataKey: "qty",
+    yLabel: "kg/m²",
+    activityName: "BMI",
+    dataSource: "activity_info"
+  },
+  {
+    key: "stress",
+    label: "Stress Level",
+    icon: AlertTriangle,
+    type: "line",
+    color: "#dc2626",
+    data: [], // Will be populated from activity_info table where activity = 'stress'
+    dataKey: "qty",
+    yLabel: "level",
+    activityName: "stress",
+    dataSource: "activity_info"
+  },
+  {
+    key: "engagementLevel",
+    label: "Engagement Level",
+    icon: Target,
+    type: "line",
+    color: "#7c3aed",
+    data: [], // Will be populated from client_engagement_score table
+    dataKey: "qty",
+    yLabel: "%",
+    activityName: "Engagement Level",
+    dataSource: "client_engagement_score",
+    tableName: "client_engagement_score",
+    columnName: "eng_score"
+  },
+  {
+    key: "calories",
+    label: "Calories Consumed",
+    icon: Utensils,
+    type: "bar",
+    color: "#f97316",
+    data: [], // Will be populated from meal_info table
+    dataKey: "qty",
+    yLabel: "kcal",
+    activityName: "Calories Consumed",
+    dataSource: "meal_info",
+    tableName: "meal_info",
+    columnName: "calories"
+  },
+  {
+    key: "workoutTime",
+    label: "Workout Time",
+    icon: Dumbbell,
+    type: "bar",
+    color: "#0891b2",
+    data: [], // Will be populated from workout_info table
+    dataKey: "qty",
+    yLabel: "min",
+    activityName: "Workout Time",
+    dataSource: "workout_info",
+    tableName: "workout_info",
+    columnName: "duration"
   },
 ] 

@@ -29,14 +29,16 @@ const TopBar: React.FC = () => {
       if (session && session.user.email) {
         const { data: trainerData, error } = await supabase
           .from("trainer")
-          .select("avatar_url, trainer_name")
+          .select("avatar_url, profile_picture_url, trainer_name")
           .eq("trainer_email", session.user.email)
           .single()
 
         if (error) {
           console.error("Error fetching trainer data:", error)
         } else if (trainerData) {
-          setAvatarUrl(trainerData.avatar_url)
+          // Use profile_picture_url if available, otherwise fall back to avatar_url
+          const profileUrl = trainerData.profile_picture_url || trainerData.avatar_url;
+          setAvatarUrl(profileUrl)
           setTrainerName(trainerData.trainer_name)
         }
       }

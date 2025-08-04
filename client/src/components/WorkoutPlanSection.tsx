@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
+import { checkProviderHealth, getCurrentProvider } from "@/lib/llm-service"
 import AIDebugPopup from "@/components/AIDebugPopup"
 import FitnessPlanOverview from "@/components/FitnessPlanOverview"
 import { SidePopup } from "@/components/ui/side-popup"
@@ -1051,10 +1052,22 @@ const WorkoutPlanSection = ({
       toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
       return;
     }
+    
     setIsGenerating(true);
-    setCurrentModel('Using selected provider');
+    setCurrentModel('Checking provider health...');
     setRetryCount(0);
+    
     try {
+      // Check LLM provider health before making request
+      const currentProvider = getCurrentProvider();
+      const isHealthy = await checkProviderHealth(currentProvider);
+      
+      if (!isHealthy) {
+        setCurrentModel('Provider unavailable');
+        throw new Error(`LLM provider (${currentProvider}) is not available. Please check your configuration in the Admin panel.`);
+      }
+      
+      setCurrentModel('Using selected provider');
       let result;
       let lastError = null;
       

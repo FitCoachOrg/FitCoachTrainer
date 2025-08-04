@@ -164,10 +164,12 @@ const Clients: React.FC = () => {
         try {
           const { data: activityInfo, error: activityError } = await supabase
             .from("activity_info")
-            .select("client_id, last_weight_time, last_excercise_input, last_sleep_info")
+            .select("client_id, activity, unit, qty, created_at")
             .in("client_id", clientIds);
           if (activityError) {
             console.error("[DEBUG] Error fetching activity info:", activityError);
+          } else {
+            console.log("[DEBUG] Activity info fetched:", activityInfo?.length || 0, "records");
           }
         } catch (activityErr) {
           console.log("[DEBUG] activity_info table might not exist or have different structure");

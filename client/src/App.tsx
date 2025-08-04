@@ -32,9 +32,15 @@ import FitnessCalendar from "./pages/Calendar-excercise"
 import SignupPage from "./pages/Signup"
 import AllProgramsPage from './pages/programs'
 import TrainerProfilePage from "./pages/TrainerProfilePage"
+import TrainerSignup from "./pages/TrainerSignup"
+import TrainerRegistration from "./pages/TrainerRegistration"
+import TrainerWelcome from "./pages/TrainerWelcome"
 import AuthCallback from "@/components/auth/AuthCallback"
 import DatePickerTestPage from "./pages/DatePickerTestPage"
 import Admin from "./pages/Admin"
+import PrivacyPolicy from "./pages/PrivacyPolicy"
+import TermsOfService from "./pages/TermsOfService"
+import Footer from "./components/layout/Footer"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -111,9 +117,10 @@ const ProtectedLayout = ({ children }: { children: React.ReactNode }) => {
 // Layout for public routes (no sidebar/topbar)
 const PublicLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      {children}
+      <main className="flex-1">{children}</main>
+      <Footer />
     </div>
   )
 }
@@ -149,6 +156,51 @@ function App() {
                     <PublicLayout>
                       <SignupPage />
                     </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/trainer-signup"
+                  element={
+                    <PublicLayout>
+                      <TrainerSignup />
+                    </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/trainer-signup/register"
+                  element={
+                    <PublicLayout>
+                      <TrainerRegistration />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/privacy-policy"
+                  element={
+                    <PublicLayout>
+                      <PrivacyPolicy />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/terms-of-service"
+                  element={
+                    <PublicLayout>
+                      <TermsOfService />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/trainer-welcome"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <TrainerWelcome />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
                   }
                 />
                 <Route

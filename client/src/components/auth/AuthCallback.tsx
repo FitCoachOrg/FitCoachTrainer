@@ -38,7 +38,7 @@ const AuthCallback: React.FC = () => {
         }
 
         if (!existingTrainer) {
-          // Create new trainer record
+          // Create basic trainer record for OAuth users
           const { error: insertError } = await supabase
             .from('trainer')
             .insert([

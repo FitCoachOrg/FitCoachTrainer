@@ -108,6 +108,11 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
   const [externalDeviceData, setExternalDeviceData] = useState<any[]>([])
   const [filteredActivityData, setFilteredActivityData] = useState<any[]>([])
   const [filteredExternalDeviceData, setFilteredExternalDeviceData] = useState<any[]>([])
+  // New state for additional data sources
+  const [mealData, setMealData] = useState<any[]>([])
+  const [filteredMealData, setFilteredMealData] = useState<any[]>([])
+  const [engagementData, setEngagementData] = useState<any[]>([])
+  const [filteredEngagementData, setFilteredEngagementData] = useState<any[]>([])
   const [loadingActivity, setLoadingActivity] = useState(false)
   const [activityError, setActivityError] = useState<string | null>(null)
   const [workoutCount, setWorkoutCount] = useState<number>(0)
@@ -163,7 +168,23 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       );
       setFilteredExternalDeviceData(filteredExternal);
     }
-  }, [activityData, workoutData, externalDeviceData, timeRange]);
+    
+    // Filter meal data if available
+    if (mealData.length) {
+      const filteredMeal = mealData.filter(item => 
+        new Date(item.created_at) >= cutoffDate
+      );
+      setFilteredMealData(filteredMeal);
+    }
+    
+    // Filter engagement data if available
+    if (engagementData.length) {
+      const filteredEngagement = engagementData.filter(item => 
+        new Date(item.for_date) >= cutoffDate
+      );
+      setFilteredEngagementData(filteredEngagement);
+    }
+  }, [activityData, workoutData, externalDeviceData, mealData, engagementData, timeRange]);
 
   // Helper function to generate complete timeline
   const generateCompleteTimeline = () => {
@@ -206,7 +227,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     return timeline;
   };
 
-  // Update metrics data from both activity_info and external_device_connect
+  // Update metrics data from multiple data sources
   const updateMetricsData = useCallback(() => {
     // Process activity_info data
     const processActivityData = () => {
@@ -296,24 +317,24 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       // Group external device data by column and week
       const columnDataMap: Record<string, any[]> = {};
       
-              filteredExternalDeviceData.forEach(item => {
-          const date = new Date(item.for_date);
-          let dateStr: string;
-          let displayDate: string;
-          
-          if (timeRange === "7D") {
-            // Daily for 7D - use exact date
-            dateStr = date.toISOString().split('T')[0];
-            displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
-          } else {
-            // Weekly for 30D/90D - get start of week (Monday)
-            const startOfWeek = new Date(date);
-            startOfWeek.setDate(date.getDate() - date.getDay() + 1);
-            const monthName = startOfWeek.toLocaleString('default', { month: 'short' });
-            const weekNum = Math.ceil(startOfWeek.getDate() / 7);
-            dateStr = `${monthName} W${weekNum}`;
-            displayDate = dateStr;
-          }
+      filteredExternalDeviceData.forEach(item => {
+        const date = new Date(item.for_date);
+        let dateStr: string;
+        let displayDate: string;
+        
+        if (timeRange === "7D") {
+          // Daily for 7D - use exact date
+          dateStr = date.toISOString().split('T')[0];
+          displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+        } else {
+          // Weekly for 30D/90D - get start of week (Monday)
+          const startOfWeek = new Date(date);
+          startOfWeek.setDate(date.getDate() - date.getDay() + 1);
+          const monthName = startOfWeek.toLocaleString('default', { month: 'short' });
+          const weekNum = Math.ceil(startOfWeek.getDate() / 7);
+          dateStr = `${monthName} W${weekNum}`;
+          displayDate = dateStr;
+        }
         
         METRIC_LIBRARY.forEach(metric => {
           if (metric.dataSource === "external_device_connect" && metric.columnName) {
@@ -372,6 +393,233 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       });
     };
     
+    // Process meal data
+    const processMealData = () => {
+      if (!filteredMealData.length) return;
+      
+      if (timeRange === "7D") {
+        // For 7D: Group by individual days and sum all meals per day
+        const dailyData: Record<string, number> = {};
+        
+        filteredMealData.forEach(item => {
+          const date = new Date(item.created_at);
+          const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          const displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+          
+          if (item.calories && !isNaN(Number(item.calories))) {
+            if (!dailyData[displayDate]) {
+              dailyData[displayDate] = 0;
+            }
+            dailyData[displayDate] += Number(item.calories);
+          }
+        });
+        
+        // Update calories metric for 7D
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "meal_info" && metric.columnName === "calories") {
+            const completeTimeline = generateCompleteTimeline();
+            
+            const mergedData = completeTimeline.map(timelineItem => {
+              const dailyTotal = dailyData[timelineItem.date];
+              return {
+                date: timelineItem.date,
+                qty: dailyTotal || null,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+        
+      } else {
+        // For 30D/90D: Calculate daily average for each week
+        const weeklyData: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        
+        filteredMealData.forEach(item => {
+          const date = new Date(item.created_at);
+          const weekNum = Math.ceil(date.getDate() / 7);
+          const monthName = date.toLocaleString('default', { month: 'short' });
+          const weekKey = `${monthName} W${weekNum}`;
+          const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          
+          if (item.calories && !isNaN(Number(item.calories))) {
+            if (!weeklyData[weekKey]) {
+              weeklyData[weekKey] = { total: 0, daysWithData: new Set() };
+            }
+            weeklyData[weekKey].total += Number(item.calories);
+            weeklyData[weekKey].daysWithData.add(dateKey);
+          }
+        });
+        
+        // Calculate daily average for each week
+        const weeklyAverages: Record<string, number> = {};
+        Object.entries(weeklyData).forEach(([weekKey, data]) => {
+          if (data.daysWithData.size > 0) {
+            weeklyAverages[weekKey] = Number((data.total / data.daysWithData.size).toFixed(1));
+          }
+        });
+        
+        // Update calories metric for 30D/90D
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "meal_info" && metric.columnName === "calories") {
+            const completeTimeline = generateCompleteTimeline();
+            
+            const mergedData = completeTimeline.map(timelineItem => {
+              const weeklyAverage = weeklyAverages[timelineItem.date];
+              return {
+                date: timelineItem.date,
+                qty: weeklyAverage || null,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+      }
+    };
+    
+    // Process workout time data
+    const processWorkoutTimeData = () => {
+      if (!filteredWorkoutData.length) return;
+      
+      if (timeRange === "7D") {
+        // For 7D: Group by individual days and calculate average workout duration per day (matching manual query)
+        const dailyData: Record<string, {total: number, count: number}> = {};
+        
+        filteredWorkoutData.forEach(item => {
+          const date = new Date(item.created_at);
+          const displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+          
+          if (item.duration && !isNaN(Number(item.duration))) {
+            if (!dailyData[displayDate]) {
+              dailyData[displayDate] = { total: 0, count: 0 };
+            }
+            dailyData[displayDate].total += Number(item.duration);
+            dailyData[displayDate].count += 1;
+          }
+        });
+        
+        // Update workout time metric for 7D
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "workout_info" && metric.columnName === "duration") {
+            const completeTimeline = generateCompleteTimeline();
+            
+            const mergedData = completeTimeline.map(timelineItem => {
+              const dayData = dailyData[timelineItem.date];
+              const dailyAverage = dayData ? Number((dayData.total / dayData.count).toFixed(1)) : null;
+              return {
+                date: timelineItem.date,
+                qty: dailyAverage,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+        
+      } else {
+        // For 30D/90D: Calculate daily average for each week
+        const weeklyData: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        
+        filteredWorkoutData.forEach(item => {
+          const date = new Date(item.created_at);
+          const weekNum = Math.ceil(date.getDate() / 7);
+          const monthName = date.toLocaleString('default', { month: 'short' });
+          const weekKey = `${monthName} W${weekNum}`;
+          const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+          
+          if (item.duration && !isNaN(Number(item.duration))) {
+            if (!weeklyData[weekKey]) {
+              weeklyData[weekKey] = { total: 0, daysWithData: new Set() };
+            }
+            weeklyData[weekKey].total += Number(item.duration);
+            weeklyData[weekKey].daysWithData.add(dateKey);
+          }
+        });
+        
+        // Calculate daily average for each week
+        const weeklyAverages: Record<string, number> = {};
+        Object.entries(weeklyData).forEach(([weekKey, data]) => {
+          if (data.daysWithData.size > 0) {
+            weeklyAverages[weekKey] = Number((data.total / data.daysWithData.size).toFixed(1));
+          }
+        });
+        
+        // Update workout time metric for 30D/90D
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "workout_info" && metric.columnName === "duration") {
+            const completeTimeline = generateCompleteTimeline();
+            
+            const mergedData = completeTimeline.map(timelineItem => {
+              const weeklyAverage = weeklyAverages[timelineItem.date];
+              return {
+                date: timelineItem.date,
+                qty: weeklyAverage || null,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+      }
+    };
+    
+    // Process engagement data
+    const processEngagementData = () => {
+      if (!filteredEngagementData.length) return;
+      
+      // Group engagement data by date
+      const groupedData: Record<string, {total: number, count: number}> = {};
+      
+      filteredEngagementData.forEach(item => {
+        const date = new Date(item.for_date);
+        let dateStr: string;
+        let displayDate: string;
+        
+        if (timeRange === "7D") {
+          dateStr = date.toISOString().split('T')[0];
+          displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+        } else {
+          const weekNum = Math.ceil(date.getDate() / 7);
+          const monthName = date.toLocaleString('default', { month: 'short' });
+          dateStr = `${monthName} W${weekNum}`;
+          displayDate = dateStr;
+        }
+        
+        if (!groupedData[displayDate]) {
+          groupedData[displayDate] = { total: 0, count: 0 };
+        }
+        
+        // Sum engagement scores for the day/period
+        if (item.eng_score && !isNaN(Number(item.eng_score))) {
+          groupedData[displayDate].total += Number(item.eng_score);
+          groupedData[displayDate].count += 1;
+        }
+      });
+      
+      // Update engagement level metric
+      METRIC_LIBRARY.forEach((metric, index) => {
+        if (metric.dataSource === "client_engagement_score" && metric.columnName === "eng_score") {
+          const completeTimeline = generateCompleteTimeline();
+          
+          const mergedData = completeTimeline.map(timelineItem => {
+            const existingData = groupedData[timelineItem.date];
+            return {
+              date: timelineItem.date,
+              qty: existingData ? Number((existingData.total / existingData.count).toFixed(1)) : null,
+              fullDate: timelineItem.fullDate
+            };
+          });
+          
+          METRIC_LIBRARY[index].data = mergedData;
+        }
+      });
+    };
+    
     // Helper function to sort and format date data consistently
     const formatAndSortData = (averagedData: any[]) => {
       // Sort by date
@@ -402,11 +650,14 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       }));
     };
     
-    // Process both data sources
+    // Process all data sources
     processActivityData();
     processExternalDeviceData();
+    processMealData();
+    processWorkoutTimeData();
+    processEngagementData();
     
-  }, [filteredActivityData, filteredExternalDeviceData, timeRange]);
+  }, [filteredActivityData, filteredExternalDeviceData, filteredMealData, filteredWorkoutData, filteredEngagementData, timeRange]);
 
   useEffect(() => {
     localStorage.setItem("selectedMetrics", JSON.stringify(selectedKeys))
@@ -473,6 +724,34 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           console.log("Available columns:", Object.keys(finalDeviceData[0]));
         }
         
+        // Fetch meal data for calories tracking
+        const { data: mealData, error: mealError } = await supabase
+          .from("meal_info")
+          .select("id, client_id, calories, created_at")
+          .eq("client_id", clientId)
+          .order('created_at', { ascending: true });
+          
+        if (mealError) {
+          console.error('❌ Meal data error:', mealError);
+        } else {
+          setMealData(mealData || []);
+          console.log("Meal data loaded:", mealData?.length || 0, "records");
+        }
+        
+        // Fetch engagement data
+        const { data: engagementData, error: engagementError } = await supabase
+          .from("client_engagement_score")
+          .select("id, client_id, eng_score, for_date")
+          .eq("client_id", clientId)
+          .order('for_date', { ascending: true });
+          
+        if (engagementError) {
+          console.error('❌ Engagement data error:', engagementError);
+        } else {
+          setEngagementData(engagementData || []);
+          console.log("Engagement data loaded:", engagementData?.length || 0, "records");
+        }
+        
         // Calculate workout count based on selected time range
         const now = new Date();
         let cutoffDate = new Date();
@@ -502,15 +781,15 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     })();
   }, [clientId, isActive, dataLoaded]);
 
-  // Filter data whenever activity data, workout data, external device data, or time range changes
+  // Filter data whenever activity data, workout data, external device data, meal data, engagement data, or time range changes
   useEffect(() => {
     filterDataByTimeRange();
-  }, [activityData, workoutData, externalDeviceData, timeRange, filterDataByTimeRange]);
+  }, [activityData, workoutData, externalDeviceData, mealData, engagementData, timeRange, filterDataByTimeRange]);
 
   // Update metrics data whenever filtered data changes
   useEffect(() => {
     updateMetricsData();
-  }, [filteredActivityData, filteredExternalDeviceData, updateMetricsData]);
+  }, [filteredActivityData, filteredExternalDeviceData, filteredMealData, filteredWorkoutData, filteredEngagementData, updateMetricsData]);
 
   // Calculate workout count based on time range
   useEffect(() => {
