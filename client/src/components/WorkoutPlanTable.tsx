@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -22,6 +22,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import WorkoutExportButton from './WorkoutExportButton';
+import WorkoutImportButton from './WorkoutImportButton';
 
 // Define the type for a single exercise item
 export interface Exercise {
@@ -51,6 +53,13 @@ interface WorkoutPlanTableProps {
   }>;
   clientId: number;
   onPlanChange: (updatedWeek: any[]) => void; // Callback to notify parent of changes
+  planStartDate: Date;
+  clientName?: string;
+  onImportSuccess?: (weekData: Array<{
+    date: string;
+    focus: string;
+    exercises: any[];
+  }>, dateRange: { start: string; end: string }) => void;
 }
 
 // Helper to get a focus icon
@@ -180,7 +189,7 @@ function getFullWeek(startDate: Date, week: any[]) {
   return days;
 }
 
-export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }: WorkoutPlanTableProps & { planStartDate: Date }) => {
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess }: WorkoutPlanTableProps) => {
   // Debug logging
   console.log('[WorkoutPlanTable] Rendering with week data:', week);
   
@@ -222,7 +231,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
       exercise: ex.exercise || ex.exercise_name || ex.name || '',
       category: ex.category || '',
       body_part: ex.body_part || ex.bodyPart || '',
-      sets: String(ex.sets ?? ''), // Always coerce sets to string
+      sets: ex.sets !== undefined && ex.sets !== null ? String(ex.sets) : '',
       reps: ex.reps ?? '',
       duration: ex.duration ?? ex.time ?? '',
       weight: ex.weight ?? ex.weights ?? '',
@@ -241,20 +250,28 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
     console.log(`[WorkoutPlanTable] handlePlanChange triggered. Day: ${dayIdx}, Ex: ${exIdx}, Field: ${field}, Value:`, value);
+    console.log(`[WorkoutPlanTable] Previous value:`, normalizedWeek[dayIdx].exercises[exIdx][field]);
+    
     const updatedWeek = [...normalizedWeek];
     const newExercises = [...updatedWeek[dayIdx].exercises];
     newExercises[exIdx] = { ...newExercises[exIdx], [field]: value };
     updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
     
+    console.log(`[WorkoutPlanTable] New value:`, newExercises[exIdx][field]);
+    
+    console.log('[WorkoutPlanTable] Setting editableWeek to:', updatedWeek);
     setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
     onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
     console.log('[WorkoutPlanTable] Called onPlanChange with updated week:', updatedWeek);
   };
 
   const handleEditClick = (dayIdx: number, exIdx: number, sets: any, reps: any) => {
+    console.log(`[WorkoutPlanTable] handleEditClick - Day: ${dayIdx}, Ex: ${exIdx}, Sets: ${sets}, Reps: ${reps}`);
+    console.log(`[WorkoutPlanTable] handleEditClick - Sets type: ${typeof sets}, Reps type: ${typeof reps}`);
     setEditIdx({ dayIdx, exIdx });
     setEditSets(sets?.toString() || '');
     setEditReps(reps?.toString() || '');
+    console.log(`[WorkoutPlanTable] handleEditClick - Set editSets to: ${sets?.toString() || ''}, editReps to: ${reps?.toString() || ''}`);
   };
   const handleSaveEdit = (onChange: (sets: string, reps: string) => void) => {
     onChange(editSets, editReps);
@@ -294,14 +311,39 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
   };
 
   // Always render 7 days, filling missing days as null
-  const fullWeek = getFullWeek(planStartDate, editableWeek);
+  // Use useMemo to recalculate when editableWeek changes
+  const fullWeek = useMemo(() => {
+    console.log('[WorkoutPlanTable] Recalculating fullWeek with editableWeek:', editableWeek);
+    const result = getFullWeek(planStartDate, editableWeek);
+    console.log('[WorkoutPlanTable] fullWeek result:', result);
+    return result;
+  }, [planStartDate, editableWeek]);
 
   return (
     <div>
-      {/* Legend for day types */}
-      <div className="mb-2 flex gap-6 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1"><Bed className="w-4 h-4" /> Rest Day</span>
-        <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Plan Not Generated</span>
+      {/* Legend and Export Button */}
+      <div className="mb-2 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex gap-6 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1"><Bed className="w-4 h-4" /> Rest Day</span>
+          <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Plan Not Generated</span>
+        </div>
+        {/* Import/Export Buttons */}
+        <div className="ml-auto flex gap-2">
+          {onImportSuccess && (
+            <WorkoutImportButton
+              clientId={clientId}
+              clientName={clientName}
+              planStartDate={planStartDate}
+              onImportSuccess={onImportSuccess}
+            />
+          )}
+          <WorkoutExportButton
+            weekData={editableWeek}
+            clientId={clientId}
+            planStartDate={planStartDate}
+            clientName={clientName}
+          />
+        </div>
       </div>
       {/* Render each day */}
       {fullWeek.map((day, dayIdx) => {
@@ -385,7 +427,9 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
                       </tr>
                     </thead>
                     <tbody>
-                      {day.exercises.map((ex: any, exIdx: number) => (
+                      {day.exercises.map((ex: any, exIdx: number) => {
+                        console.log(`[WorkoutPlanTable] Rendering exercise ${exIdx} for day ${dayIdx}:`, ex);
+                        return (
                         <tr key={exIdx} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
                           <td className="p-3">{getExerciseIcon(ex)}</td>
                           <td className="p-3 font-semibold">{ex.exercise}</td>
@@ -409,8 +453,23 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
                                     className="mt-2 bg-blue-600 text-white rounded px-3 py-1"
                                     onClick={() => {
                                       console.log(`[WorkoutPlanTable] Saving Sets/Reps. Day: ${dayIdx}, Ex: ${exIdx}`);
-                                      handlePlanChange(dayIdx, exIdx, 'sets', editSets);
-                                      handlePlanChange(dayIdx, exIdx, 'reps', editReps);
+                                      console.log(`[WorkoutPlanTable] Sets value: ${editSets}, Reps value: ${editReps}`);
+                                      console.log(`[WorkoutPlanTable] Previous exercise data:`, normalizedWeek[dayIdx].exercises[exIdx]);
+                                      
+                                      // Update both sets and reps in a single operation
+                                      const updatedWeek = [...normalizedWeek];
+                                      const newExercises = [...updatedWeek[dayIdx].exercises];
+                                      newExercises[exIdx] = { 
+                                        ...newExercises[exIdx], 
+                                        sets: editSets,
+                                        reps: editReps
+                                      };
+                                      updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
+                                      
+                                      console.log(`[WorkoutPlanTable] Updated exercise data:`, newExercises[exIdx]);
+                                      
+                                      setEditableWeek(updatedWeek);
+                                      onPlanChange(updatedWeek);
                                       setEditIdx(null);
                                     }}
                                   >Save</button>
@@ -509,7 +568,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate }
                             </Popover>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

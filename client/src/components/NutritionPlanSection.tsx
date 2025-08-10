@@ -45,6 +45,8 @@ import { NutritionalPreferencesSection } from "@/components/overview/Nutritional
 import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
 
 import { generateGroceryListFromPlan, updateGroceryItemState, categorizeGroceryItems } from "@/lib/grocery-list-service";
+import { ContentEditable } from './ui/content-editable';
+import { normalizeDateForDisplay, normalizeDateForStorage } from "@/lib/date-utils";
 
 // Types
 interface Meal {
@@ -145,17 +147,18 @@ const NutritionPlanSection = ({
   const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
   const { toast } = useToast();
   const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({});
-  const [selectedDay, setSelectedDay] = useState('Monday');
-  const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  const [selectedDay, setSelectedDay] = useState<string>('');
+  const [planStartDate, setPlanStartDate] = useState(() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - today.getDay() + 1);
+    return monday;
+  });
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [generatedPlan, setGeneratedPlan] = useState<DayPlan[] | null>(null);
+  const [generatedPlan, setGeneratedPlan] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'not_approved' | 'partial_approved'>('pending');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ day: string; mealType: string; field: string; } | null>(null);
-  const [editValue, setEditValue] = useState<string | number>('');
-  const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [approvalStatus, setApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
   // --- Client Target State and Fetch/Save Logic ---
   const defaultTargets: Record<string, number> = {
     calories: 2000,
@@ -231,9 +234,9 @@ const NutritionPlanSection = ({
   const fetchNutritionPlanFromSupabase = async (clientId: number, startDate: Date) => {
     setLoading(true);
     try {
-      const startDateString = format(startDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
-      // First try to fetch from schedule_preview
+      const startDateString = normalizeDateForStorage(format(startDate, 'yyyy-MM-dd'));
+      const endDateString = normalizeDateForStorage(format(addDays(startDate, 6), 'yyyy-MM-dd'));
+      // Fetch from schedule_preview ONLY
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
         .select('*')
@@ -244,19 +247,7 @@ const NutritionPlanSection = ({
       if (previewError) throw previewError;
       let data = previewData;
       let dataSource = 'preview';
-      // If no preview data, try to fetch from schedule (approved data)
-      if (!data || data.length === 0) {
-        const { data: scheduleData, error: scheduleError } = await supabase
-          .from('schedule')
-          .select('*')
-          .eq('client_id', clientId)
-          .eq('type', 'meal')
-          .gte('for_date', startDateString)
-          .lte('for_date', endDateString);
-        if (scheduleError) throw scheduleError;
-        data = scheduleData;
-        dataSource = 'schedule';
-      }
+      // No fallback to schedule table - only use schedule_preview
       const newMealItemsData: Record<string, Record<string, any[]>> = {};
       const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
       daysOfWeek.forEach(day => {
@@ -265,7 +256,9 @@ const NutritionPlanSection = ({
       if (data && data.length > 0) {
         data.forEach(item => {
           try {
-            const dayOfWeek = format(new Date(item.for_date), 'EEEE').toLowerCase();
+            // Use timezone-aware date conversion to prevent date mismatches
+            const normalizedDate = normalizeDateForDisplay(item.for_date);
+            const dayOfWeek = format(new Date(normalizedDate + 'T00:00:00'), 'EEEE').toLowerCase();
             const mealTypeMatch = item.summary.match(/^([\w ]+):\s*/);
             if (mealTypeMatch && mealTypeMatch[1]) {
               const mealType = mealTypeMatch[1].toLowerCase();
@@ -290,9 +283,6 @@ const NutritionPlanSection = ({
         if (dataSource === 'preview') {
           setApprovalStatus('not_approved');
           toast({ title: "Preview Plan Loaded", description: "Nutrition plan from preview has been loaded. Changes will be auto-saved." });
-        } else if (dataSource === 'schedule') {
-          setApprovalStatus('approved');
-          toast({ title: "Approved Plan Loaded", description: "Approved nutrition plan has been loaded." });
         } else {
           setApprovalStatus('pending');
           toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
@@ -382,29 +372,32 @@ const NutritionPlanSection = ({
     try {
       const mealTimes = await getClientMealTimes(clientId);
       const recordsToInsert: ScheduleItem[] = [];
+      const recordsToUpdate: Array<ScheduleItem & { id: number }> = [];
 
-      // Clear existing preview data for the week
-      const startDateString = format(planStartDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      // Get existing preview data for the week
+      const startDateString = normalizeDateForStorage(format(planStartDate, 'yyyy-MM-dd'));
+      const endDateString = normalizeDateForStorage(format(addDays(planStartDate, 6), 'yyyy-MM-dd'));
 
-      await supabase
+      const { data: existingData, error: fetchError } = await supabase
         .from('schedule_preview')
-        .delete()
+        .select('*')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
 
+      if (fetchError) throw fetchError;
+
       // Convert mealItems to schedule_preview format
       Object.keys(updatedMealItems).forEach((dayKey) => {
         const dayDate = getDateForDay(dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
-        const forDate = format(dayDate, 'yyyy-MM-dd');
+        const forDate = normalizeDateForStorage(format(dayDate, 'yyyy-MM-dd'));
 
         Object.keys(updatedMealItems[dayKey]).forEach((mealType) => {
           const mealData = updatedMealItems[dayKey][mealType][0];
           if (mealData && mealData.meal) {
             const task = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-            recordsToInsert.push({
+            const newRecord: ScheduleItem = {
               client_id: clientId,
               for_date: forDate,
               type: 'meal',
@@ -421,45 +414,60 @@ const NutritionPlanSection = ({
               for_time: mealTimes[mealType as keyof typeof mealTimes],
               icon: '🍽️', // Fork and plate emoji
               is_approved: false, // Set to false for new preview entries
-            });
+            };
+
+            // Check if record already exists for this day and meal type
+            const existingRecord = existingData?.find(record => 
+              record.for_date === forDate && 
+              record.task === task
+            );
+
+            if (existingRecord) {
+              // Update existing record
+              recordsToUpdate.push({
+                ...newRecord,
+                id: existingRecord.id
+              });
+            } else {
+              // Insert new record
+              recordsToInsert.push(newRecord);
+            }
           }
         });
       });
 
+      // Update existing records
+      if (recordsToUpdate.length > 0) {
+        for (const record of recordsToUpdate) {
+          const { id, ...updateData } = record;
+          const { error: updateError } = await supabase
+            .from('schedule_preview')
+            .update(updateData)
+            .eq('id', id);
+          if (updateError) throw updateError;
+        }
+      }
+
+      // Insert new records
       if (recordsToInsert.length > 0) {
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from('schedule_preview')
           .insert(recordsToInsert);
-
-        if (error) throw error;
-        
-        // Update approval status after saving
-        await checkApprovalStatus();
-        
-        setHasUnsavedChanges(false);
-        toast({ title: "Auto-saved", description: "Changes have been saved to preview.", variant: "default" });
+        if (insertError) throw insertError;
       }
+      
+      // Update approval status after saving
+      await checkApprovalStatus();
+      
+              toast({ title: "Changes Saved", description: "Changes have been saved to preview.", variant: "default" });
     } catch (error: any) {
       console.error('Error auto-saving to preview:', error);
       toast({
-        title: "Auto-save Error",
+        title: "Save Error",
         description: "Could not save changes to preview.",
         variant: "destructive",
       });
     }
-  };
-
-  // Debounced auto-save
-  const debouncedAutoSave = (updatedMealItems: Record<string, Record<string, any[]>>) => {
-    if (autoSaveTimeout) {
-      clearTimeout(autoSaveTimeout);
-    }
-
-    const timeout = setTimeout(() => {
-      autoSaveToPreview(updatedMealItems);
-    }, 2000); // 2 second delay
-
-    setAutoSaveTimeout(timeout);
   };
 
   // Effect to update the 'current' values in the daily targets display
@@ -542,7 +550,7 @@ const NutritionPlanSection = ({
 
       plan.forEach((dayPlan) => {
         // Use getDateForDay to map day names (Monday, Tuesday, etc.) to correct dates
-        const forDate = format(getDateForDay(dayPlan.day), 'yyyy-MM-dd');
+        const forDate = normalizeDateForStorage(format(getDateForDay(dayPlan.day), 'yyyy-MM-dd'));
 
         Object.keys(mealTimes).forEach(mealType => {
           const meal = dayPlan[mealType as keyof DayPlan] as Meal;
@@ -571,8 +579,8 @@ const NutritionPlanSection = ({
 
       if (recordsToInsert.length > 0) {
         // First, delete existing preview entries for the upcoming week
-        const startDateString = format(startDate, 'yyyy-MM-dd');
-        const endDateString = format(addDays(startDate, 6), 'yyyy-MM-dd');
+        const startDateString = normalizeDateForStorage(format(startDate, 'yyyy-MM-dd'));
+        const endDateString = normalizeDateForStorage(format(addDays(startDate, 6), 'yyyy-MM-dd'));
 
         const { error: deleteError } = await supabase
           .from('schedule_preview')
@@ -655,8 +663,8 @@ const NutritionPlanSection = ({
   const checkApprovalStatus = async () => {
     if (!clientId) return;
     try {
-      const startDateString = format(planStartDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      const startDateString = normalizeDateForStorage(format(planStartDate, 'yyyy-MM-dd'));
+      const endDateString = normalizeDateForStorage(format(addDays(planStartDate, 6), 'yyyy-MM-dd'));
       // Get all preview rows for the week
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
@@ -699,8 +707,8 @@ const NutritionPlanSection = ({
     if (!clientId) return;
     setIsApproving(true);
     try {
-      const startDateString = format(planStartDate, 'yyyy-MM-dd');
-      const endDateString = format(addDays(planStartDate, 6), 'yyyy-MM-dd');
+      const startDateString = normalizeDateForStorage(format(planStartDate, 'yyyy-MM-dd'));
+      const endDateString = normalizeDateForStorage(format(addDays(planStartDate, 6), 'yyyy-MM-dd'));
       // Fetch preview data
       const { data: previewData, error: fetchError } = await supabase
         .from('schedule_preview')
@@ -738,12 +746,14 @@ const NutritionPlanSection = ({
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
       if (updateError) throw updateError;
-      setHasUnsavedChanges(false);
       toast({ title: "Plan Approved", description: "The nutrition plan has been approved and saved to the main schedule." });
-      // Add a short delay before refreshing status and UI
+      // Force refresh after approval
       typeof window !== 'undefined' && setTimeout(async () => {
         await checkApprovalStatus();
         await fetchNutritionPlanFromSupabase(clientId, planStartDate);
+        // Force re-render by updating state
+        setMealItems({ ...mealItems });
+        setSelectedDay(selectedDay);
       }, 300);
     } catch (error: any) {
       console.error("Error approving nutrition plan:", error);
@@ -908,12 +918,11 @@ const NutritionPlanSection = ({
                   
                   mealToUpdate[field] = finalValue;
                   setMealItems(updatedMealItems);
-                  setHasUnsavedChanges(true);
                   
                   // Set is_approved=false for this day in preview
                   const startDateString = format(planStartDate, 'yyyy-MM-dd');
                   const dayDate = getDateForDay(dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
-                  const forDate = format(dayDate, 'yyyy-MM-dd');
+                  const forDate = normalizeDateForStorage(format(dayDate, 'yyyy-MM-dd'));
                   supabase
                     .from('schedule_preview')
                     .update({ is_approved: false })
@@ -922,95 +931,30 @@ const NutritionPlanSection = ({
                     .eq('for_date', forDate)
                     .then(() => checkApprovalStatus());
                   // Trigger auto-save
-                  debouncedAutoSave(updatedMealItems);
+                  autoSaveToPreview(updatedMealItems);
                   
                   // Manually trigger re-render of daily targets
                   setSelectedDay(selectedDay); 
                 }
               };
 
-              const handleEdit = (dayKey: string, mealType: string, field: string, currentValue: string | number) => {
-                setEditingCell({ day: dayKey, mealType, field });
-                setEditValue(currentValue);
-              };
 
-              const handleSaveEdit = () => {
-                if (editingCell) {
-                  handleMealChange(editingCell.day, editingCell.mealType, editingCell.field, editValue);
-                  setEditingCell(null);
-                }
-              };
 
               const renderEditableCell = (value: string | number, dayKey: string, mealType: string, field: string) => {
-                const isEditing = editingCell?.day === dayKey && editingCell?.mealType === mealType && editingCell?.field === field;
+                const handleSave = (newValue: string) => {
+                  handleMealChange(dayKey, mealType, field, newValue);
+                };
 
-                if (isEditing) {
-                  // Special handling for meal names (longer text)
-                  if (field === 'meal') {
-              return (
-                      <div className="relative">
-                        <textarea
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={handleSaveEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSaveEdit();
-                            } else if (e.key === 'Escape') {
-                              setEditingCell(null);
-                            }
-                          }}
-                          autoFocus
-                          rows={2}
-                          className="w-full bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-md px-2 py-1 text-sm font-medium text-gray-900 dark:text-white shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 resize-none"
-                          style={{ minWidth: '120px' }}
-                        />
-                        <div className="absolute -top-8 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded shadow-lg">
-                          Press Enter to save, Esc to cancel
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // For numeric fields and amounts
-                  return (
-                    <div className="relative">
-                      <input
-                        type={typeof value === 'number' ? 'number' : 'text'}
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={handleSaveEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSaveEdit();
-                          } else if (e.key === 'Escape') {
-                            setEditingCell(null);
-                          }
-                        }}
-                        autoFocus
-                        className="w-full bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-md px-2 py-1 text-sm font-medium text-gray-900 dark:text-white shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-                        style={{ minWidth: field === 'amount' ? '80px' : '60px' }}
-                      />
-                      <div className="absolute -top-6 left-0 bg-blue-500 text-white text-xs px-2 py-1 rounded shadow-lg">
-                        Press Enter to save, Esc to cancel
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Non-editing state
                 return (
-                  <div 
-                    onClick={() => handleEdit(dayKey, mealType, field, value)} 
-                    className="cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded px-2 py-1 transition-all duration-200 group relative"
-                    title="Click to edit"
-                  >
-                    <span className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {value}
-                    </span>
-                    <div className="absolute inset-0 bg-blue-500/10 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                  </div>
+                  <ContentEditable
+                    value={value}
+                    onSave={handleSave}
+                    className="font-medium"
+                    minWidth={field === 'meal' ? '120px' : '60px'}
+                    multiline={field === 'meal'}
+                    numeric={['calories', 'protein', 'carbs', 'fats'].includes(field)}
+                    placeholder="Click to edit"
+                  />
                 );
               };
 
@@ -1025,11 +969,11 @@ const NutritionPlanSection = ({
                 return (
                   <td className="py-2 px-3 align-top">
                     {mealData ? (
-                      <div className={`rounded-lg p-3 border-l-4 ${mealTypeColors[mealType as keyof typeof mealTypeColors]} shadow-sm hover:shadow-md transition-all duration-200 min-h-[120px]`}>
+                      <div className={`rounded-lg p-3 border-l-4 ${mealTypeColors[mealType as keyof typeof mealTypeColors]} shadow-sm hover:shadow-lg transition-all duration-200 min-h-[120px] group/card`}>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-center gap-1.5 mb-2">
-                              <div className="font-semibold text-gray-900 dark:text-white text-sm flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900 dark:text-white text-sm flex-1 min-w-0 group/edit-title">
                                 {renderEditableCell(mealData.meal, dayKey, mealType, 'meal')}
                               </div>
                               {mealData.coach_tip && <Lightbulb className="h-4 w-4 text-blue-500 flex-shrink-0" />}
@@ -1038,7 +982,7 @@ const NutritionPlanSection = ({
                           {mealData.coach_tip && <TooltipContent><p className="max-w-xs">{mealData.coach_tip}</p></TooltipContent>}
                         </Tooltip>
                         {mealData.amount && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-2 bg-white/50 dark:bg-gray-800/50 rounded px-2 py-1 group">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-2 bg-white/50 dark:bg-gray-800/50 rounded px-2 py-1 group/amount">
                             <span className="text-gray-500 dark:text-gray-400 mr-1">📏</span>
                             <span className="group-hover:bg-gray-200 dark:group-hover:bg-gray-700 rounded px-1 transition-colors">
                               {renderEditableCell(mealData.amount, dayKey, mealType, 'amount')}
@@ -1046,27 +990,27 @@ const NutritionPlanSection = ({
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-1 text-xs">
-                          <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 rounded px-2 py-1 group">
+                          <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/20 rounded px-2 py-1 group/nutrient hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
                             <span className="text-red-600 dark:text-red-400 font-medium">Cal:</span> 
-                            <span className="font-semibold group-hover:bg-red-100 dark:group-hover:bg-red-900/30 rounded px-1 transition-colors">
+                            <span className="font-semibold group-hover:bg-red-200 dark:group-hover:bg-red-900/40 rounded px-1 transition-colors">
                               {renderEditableCell(mealData.calories, dayKey, mealType, 'calories')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1 group">
+                          <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1 group/nutrient hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors">
                             <span className="text-blue-600 dark:text-blue-400 font-medium">P:</span> 
-                            <span className="font-semibold group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 rounded px-1 transition-colors">
+                            <span className="font-semibold group-hover:bg-blue-200 dark:group-hover:bg-blue-900/40 rounded px-1 transition-colors">
                               {renderEditableCell(mealData.protein, dayKey, mealType, 'protein')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1 group">
+                          <div className="flex justify-between items-center bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1 group/nutrient hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
                             <span className="text-amber-600 dark:text-amber-400 font-medium">C:</span> 
-                            <span className="font-semibold group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 rounded px-1 transition-colors">
+                            <span className="font-semibold group-hover:bg-amber-200 dark:group-hover:bg-amber-900/40 rounded px-1 transition-colors">
                               {renderEditableCell(mealData.carbs, dayKey, mealType, 'carbs')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 rounded px-2 py-1 group">
+                          <div className="flex justify-between items-center bg-green-50 dark:bg-green-900/20 rounded px-2 py-1 group/nutrient hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
                             <span className="text-green-600 dark:text-green-400 font-medium">F:</span> 
-                            <span className="font-semibold group-hover:bg-green-100 dark:group-hover:bg-green-900/30 rounded px-1 transition-colors">
+                            <span className="font-semibold group-hover:bg-green-200 dark:group-hover:bg-green-900/40 rounded px-1 transition-colors">
                               {renderEditableCell(mealData.fats, dayKey, mealType, 'fats')}
                             </span>
                           </div>
@@ -1138,10 +1082,10 @@ const NutritionPlanSection = ({
       { key: 'fats', label: 'Fats', unit: 'g', color: 'from-green-500 to-emerald-500', icon: Droplets },
     ];
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {targetMeta.map(({ key, label, unit, color, icon: Icon }) => (
-          <div key={key} className={`rounded-2xl shadow-lg bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
-            <div className="absolute top-2 right-2">
+          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-3 flex flex-col items-center relative`}>
+            <div className="absolute top-1.5 right-1.5">
               {editingTarget === key ? (
                 <button
                   className="text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
@@ -1163,10 +1107,10 @@ const NutritionPlanSection = ({
                 </button>
               )}
             </div>
-            <Icon className="h-7 w-7 mb-2 text-white drop-shadow" />
-            <div className="text-lg font-bold text-white mb-1">{label}</div>
+            <Icon className="h-5 w-5 mb-1.5 text-white drop-shadow" />
+            <div className="text-sm font-bold text-white mb-1">{label}</div>
             {editingTarget === key ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   value={targetEditValue}
@@ -1184,18 +1128,18 @@ const NutritionPlanSection = ({
                     if (!isNaN(val)) saveClientTarget(key, val);
                     else setEditingTarget(null);
                   }}
-                  className="w-20 px-2 py-1 rounded-md border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                  className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
                   autoFocus
                   min={0}
                   disabled={isSavingTarget}
                 />
-                <span className="text-white font-semibold">{unit}</span>
+                <span className="text-white font-semibold text-sm">{unit}</span>
                 {isSavingTarget && editingTarget === key && <LoadingSpinner size="small" />}
               </div>
             ) : (
-              <div className="text-3xl font-extrabold text-white flex items-center gap-2">
+              <div className="text-2xl font-extrabold text-white flex items-center gap-1.5">
                 {clientTargets[key]}
-                <span className="text-lg font-semibold">{unit}</span>
+                <span className="text-sm font-semibold">{unit}</span>
               </div>
             )}
           </div>
@@ -1226,15 +1170,6 @@ const NutritionPlanSection = ({
     }
   }, [dataLoaded, clientId, isActive]);
 
-  // Cleanup auto-save timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimeout) {
-        clearTimeout(autoSaveTimeout);
-      }
-    };
-  }, [autoSaveTimeout]);
-
   // Early return for loading state
   if (loading) {
     return (
@@ -1261,6 +1196,19 @@ const NutritionPlanSection = ({
         <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
       </div>
 
+      {/* Client Nutritional Targets Section */}
+      <div className="mb-8">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
+          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          {client?.name || 'Client'} Nutritional Targets
+        </h3>
+        <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
+          <CardContent className="p-6">
+            <TargetEditGrid />
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Enhanced Header with AI Generation */}
       <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
         <div className="flex items-center gap-6">
@@ -1268,7 +1216,7 @@ const NutritionPlanSection = ({
             <Utensils className="h-8 w-8 text-white" />
           </div>
           <div>
-            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Nutrition Plan</h3>
+            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 whitespace-nowrap">Nutritional Planning and Management</h3>
             <p className="text-base text-gray-600 dark:text-gray-400 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-blue-500" />
               AI-powered meal planning and macro tracking
@@ -1299,12 +1247,6 @@ const NutritionPlanSection = ({
                   ⚪ No Plan
                 </div>
               )}
-              {hasUnsavedChanges && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-300 dark:border-blue-700">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  💾 Saving Changes...
-                </div>
-              )}
             </div>
             {/* Debug Status (remove in production) */}
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -1313,17 +1255,65 @@ const NutritionPlanSection = ({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
-            {/* Plan Start Date Calendar Button */}
+
+
+        {/* Modal Dialog for Overwrite Confirmation */}
+        {showApproveModal && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
+            <div className="absolute top-0 left-0 w-full h-full flex items-start justify-center pt-20">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-200 scale-100 animate-in fade-in-0 zoom-in-95 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
+                    <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Overwrite Existing Plan?</h2>
+                </div>
+                <p className="mb-8 text-gray-700 dark:text-gray-300 leading-relaxed">
+                  A plan already exists for this week. Approving will <span className="font-bold text-red-600 dark:text-red-400">overwrite</span> the current plan in production. 
+                  <br /><br />
+                  <span className="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone.</span>
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowApproveModal(false)} 
+                    className="border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={doApprovePlan} 
+                    className="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    Yes, Overwrite Plan
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Process Flow Controls - Single Row Above Table */}
+      <div className="mb-6">
+        <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Process Flow:</div>
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Step 1: Select Plan Start Date */}
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+              1
+            </div>
             <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   size="lg"
-                  className="flex items-center gap-3 text-sm border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 shadow-lg"
+                  className="flex items-center gap-3 text-sm border-2 border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 shadow-lg min-w-[200px]"
                 >
                   <CalendarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="font-semibold text-blue-900 dark:text-blue-100">Plan starts: {formatDate(planStartDate)}</span>
+                  <span className="font-semibold text-blue-900 dark:text-blue-100">Select Start Date: {formatDate(planStartDate)}</span>
                   <ChevronDown className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </Button>
               </PopoverTrigger>
@@ -1341,95 +1331,18 @@ const NutritionPlanSection = ({
                 />
               </PopoverContent>
             </Popover>
+          </div>
 
-            {/* Save Plan Button - Show when there are unsaved changes */}
-            {hasUnsavedChanges && approvalStatus === 'not_approved' && (
-              <Button
-                onClick={() => debouncedAutoSave(mealItems)}
-                disabled={isSaving}
-                size="lg"
-                className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-600 hover:from-orange-600 hover:via-red-600 hover:to-pink-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
-              >
-                {isSaving ? (
-                  <>
-                    <LoadingSpinner size="small" />
-                    <span className="ml-3">Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Approve Plan Button - Show when there's preview data and not approved */}
-            {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') && (
-              <>
-                <Button
-                  onClick={handleApprovePlan}
-                  disabled={isApproving}
-                  size="lg"
-                  className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700"
-                >
-                  {isApproving ? (
-                    <>
-                      <LoadingSpinner size="small" />
-                      <span className="ml-3">Approving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-5 w-5 mr-3" />
-                      ✅ Approve Plan
-                    </>
-                  )}
-                </Button>
-                {/* Modal Dialog for Overwrite Confirmation */}
-                {showApproveModal && (
-                  <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
-                    <div className="absolute top-0 left-0 w-full h-full flex items-start justify-center pt-20">
-                      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-200 scale-100 animate-in fade-in-0 zoom-in-95 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/30">
-                            <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
-                          </div>
-                          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Overwrite Existing Plan?</h2>
-                        </div>
-                        <p className="mb-8 text-gray-700 dark:text-gray-300 leading-relaxed">
-                          A plan already exists for this week. Approving will <span className="font-bold text-red-600 dark:text-red-400">overwrite</span> the current plan in production. 
-                          <br /><br />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">This action cannot be undone.</span>
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-3 justify-end">
-                          <Button 
-                            variant="outline" 
-                            onClick={() => setShowApproveModal(false)} 
-                            className="border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                          >
-                            Cancel
-                          </Button>
-                          <Button 
-                            onClick={doApprovePlan} 
-                            className="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                          >
-                            Yes, Overwrite Plan
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
+          {/* Step 2: Generate New Plan */}
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+              2
+            </div>
             <Button
               onClick={handleGeneratePlan}
               disabled={isGenerating}
               size="lg"
-              className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
+              className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
             >
               {isGenerating ? (
                 <>
@@ -1443,11 +1356,45 @@ const NutritionPlanSection = ({
                 </>
               )}
             </Button>
+          </div>
+
+          {/* Step 3: Approve Plan */}
+          {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') && (
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+                3
+              </div>
+              <Button
+                onClick={handleApprovePlan}
+                disabled={isApproving}
+                size="lg"
+                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700 min-w-[200px]"
+              >
+                {isApproving ? (
+                  <>
+                    <LoadingSpinner size="small" />
+                    <span className="ml-3">Approving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-3" />
+                    ✅ Approve Plan
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Step 4: Generate Grocery List */}
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+              {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') ? '4' : '3'}
+            </div>
             <Button
               onClick={handleGenerateGroceryList}
               disabled={isGeneratingGroceryList}
               size="lg"
-              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300"
+              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
             >
               {isGeneratingGroceryList ? (
                 <>
@@ -1461,11 +1408,9 @@ const NutritionPlanSection = ({
                 </>
               )}
             </Button>
+          </div>
         </div>
       </div>
-
-      {/* --- Editable Target Grid --- */}
-      <TargetEditGrid />
 
       {/* Dashboard Row - Equal Height Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">

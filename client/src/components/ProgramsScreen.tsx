@@ -101,14 +101,20 @@ export function ProgramsScreen({
   // Add state for custom task modal
   const [isCustomTaskModalOpen, setIsCustomTaskModalOpen] = useState(false)
 
-  // 1. Add state for meal logging
-  const [loggingMeal, setLoggingMeal] = useState<ScheduleItem | null>();
-  const [showMealEval, setShowMealEval] = useState(false);
-  const [mealEvalDesc, setMealEvalDesc] = useState("");
-  const [mealEvalPhoto, setMealEvalPhoto] = useState<File | null>(null);
+  // Add state for scope selection and confirmation modals
+  const [showScopeSelection, setShowScopeSelection] = useState(false)
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'edit' | 'delete' | null>(null)
+  const [scopeSelection, setScopeSelection] = useState<'single' | 'future' | null>(null)
+
+  // 1. Add state for meal logging - COMMENTED OUT FOR TRAINER DASHBOARD
+  // const [loggingMeal, setLoggingMeal] = useState<ScheduleItem | null>();
+  // const [showMealEval, setShowMealEval] = useState(false);
+  // const [mealEvalDesc, setMealEvalDesc] = useState("");
+  // const [mealEvalPhoto, setMealEvalPhoto] = useState<File | null>(null);
 
   // Get schedule types for filter
-  const scheduleTypes = ["all", "meal", "workout", "assessment", "consultation", "hydration", "wakeup", "weight", "progresspicture", "other"]
+  const scheduleTypes = ["all", "meal", "workout", "assessment", "consultation", "hydration", "wakeup", "weight", "progresspicture", "bedtime", "other"]
 
   // Fetch schedule data from Supabase
   const fetchScheduleData = async () => {
@@ -130,6 +136,13 @@ export function ProgramsScreen({
       const startDate = getViewStartDate()
       const endDate = getViewEndDate()
       
+      console.log('[ProgramsScreen] Date range:', {
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
+        viewMode,
+        currentDate: format(currentDate, 'yyyy-MM-dd')
+      });
+      
       query = query
         .gte('for_date', format(startDate, 'yyyy-MM-dd'))
         .lte('for_date', format(endDate, 'yyyy-MM-dd'))
@@ -138,6 +151,16 @@ export function ProgramsScreen({
 
       if (error) throw error
 
+      console.log('[ProgramsScreen] Database query result:', data);
+      console.log('[ProgramsScreen] Query error:', error);
+      console.log('[ProgramsScreen] Query details:', {
+        clientId,
+        selectedType,
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
+        viewMode
+      });
+      
       setScheduleItems(data || [])
     } catch (error: any) {
       console.error("Error fetching schedule data:", error)
@@ -159,7 +182,16 @@ export function ProgramsScreen({
   // After scheduleItems is loaded, log the array
   useEffect(() => {
     console.log('[ProgramsScreen] scheduleItems loaded:', scheduleItems);
-  }, [scheduleItems]);
+    console.log('[ProgramsScreen] Selected type filter:', selectedType);
+    
+    // Log bedtime tasks specifically
+    const bedtimeTasks = scheduleItems.filter(item => item.type === 'bedtime');
+    console.log('[ProgramsScreen] Bedtime tasks found:', bedtimeTasks);
+    
+    // Log custom tasks
+    const customTasks = scheduleItems.filter(item => item.task === 'custom');
+    console.log('[ProgramsScreen] Custom tasks found:', customTasks);
+  }, [scheduleItems, selectedType]);
 
   // Get start date for current view
   const getViewStartDate = () => {
@@ -210,34 +242,124 @@ export function ProgramsScreen({
     })
   }
 
-  // Handle save edited item
+  // Handle save edited item with scope selection
   const handleSaveEdit = async () => {
     if (!editingItem) return
 
+    // Show scope selection modal
+    setPendingAction('edit')
+    setShowScopeSelection(true)
+  }
+
+  // Handle scope selection for edit
+  const handleEditWithScope = async (scope: 'single' | 'future') => {
+    if (!editingItem) return
+
     try {
-      const { error } = await supabase
-        .from('schedule')
-        .update({
-          summary: editForm.summary,
-          coach_tip: editForm.coach_tip,
-          for_time: convertLocalTimeToUTC(editForm.for_time) // Convert local to UTC for storage
+      if (scope === 'single') {
+        // Update just this occurrence
+        const { error } = await supabase
+          .from('schedule')
+          .update({
+            summary: editForm.summary,
+            coach_tip: editForm.coach_tip,
+            for_time: convertLocalTimeToUTC(editForm.for_time)
+          })
+          .eq('id', editingItem.id)
+
+        if (error) throw error
+
+        toast({
+          title: "Success",
+          description: "Schedule item updated successfully"
         })
-        .eq('id', editingItem.id)
+      } else {
+        // Update all future occurrences
+        const { error } = await supabase
+          .from('schedule')
+          .update({
+            summary: editForm.summary,
+            coach_tip: editForm.coach_tip,
+            for_time: convertLocalTimeToUTC(editForm.for_time)
+          })
+          .eq('client_id', editingItem.client_id)
+          .eq('type', editingItem.type)
+          .gte('for_date', editingItem.for_date)
 
-      if (error) throw error
+        if (error) throw error
 
-      toast({
-        title: "Success",
-        description: "Schedule item updated successfully"
-      })
+        toast({
+          title: "Success",
+          description: "All future occurrences updated successfully"
+        })
+      }
 
       setEditingItem(null)
+      setShowScopeSelection(false)
+      setPendingAction(null)
       fetchScheduleData() // Refresh data
     } catch (error: any) {
       console.error("Error updating schedule item:", error)
       toast({
         title: "Error",
         description: "Failed to update schedule item",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Handle delete with scope selection
+  const handleDelete = () => {
+    if (!editingItem) return
+
+    setPendingAction('delete')
+    setShowDeleteConfirmation(true)
+  }
+
+  // Handle delete with scope
+  const handleDeleteWithScope = async (scope: 'single' | 'future') => {
+    if (!editingItem) return
+
+    try {
+      if (scope === 'single') {
+        // Delete just this occurrence
+        const { error } = await supabase
+          .from('schedule')
+          .delete()
+          .eq('id', editingItem.id)
+
+        if (error) throw error
+
+        toast({
+          title: "Success",
+          description: "Schedule item deleted successfully"
+        })
+      } else {
+        // Delete all future occurrences
+        const { error } = await supabase
+          .from('schedule')
+          .delete()
+          .eq('client_id', editingItem.client_id)
+          .eq('type', editingItem.type)
+          .gte('for_date', editingItem.for_date)
+
+        if (error) throw error
+
+        toast({
+          title: "Success",
+          description: "All future occurrences deleted successfully"
+        })
+      }
+
+      setEditingItem(null)
+      setShowDeleteConfirmation(false)
+      setPendingAction(null)
+      fetchScheduleData() // Refresh data
+    } catch (error: any) {
+      console.error("Error deleting schedule item:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete schedule item",
         variant: "destructive"
       })
     }
@@ -284,6 +406,8 @@ export function ProgramsScreen({
   // Helper: Get tasks for a date in the required fixed order
   const getOrderedTasksForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
+    // console.log(`[ProgramsScreen] Getting tasks for date: ${dateStr}`);
+    // console.log(`[ProgramsScreen] Current date object:`, date);
     
     // Filter out assessment and consultation, but include all other tasks
     const items = scheduleItems.filter(item =>
@@ -292,13 +416,20 @@ export function ProgramsScreen({
       item.type !== 'consultation'
     )
     
+    // Debug: Log items for this date (commented out for cleaner console)
+    // console.log(`[ProgramsScreen] Items for date ${dateStr}:`, items);
+    // console.log(`[ProgramsScreen] Bedtime items for date ${dateStr}:`, items.filter(item => item.type === 'bedtime'));
+    // console.log(`[ProgramsScreen] Wakeup items for date ${dateStr}:`, items.filter(item => item.type === 'wakeup'));
+    // console.log(`[ProgramsScreen] All task types for date ${dateStr}:`, items.map(item => item.type));
+    // console.log(`[ProgramsScreen] All items with task field:`, items.map(item => ({ type: item.type, task: item.task, summary: item.summary })));
+    
     // Define the new order: custom tasks first, then meal/workout tasks
     const customTaskOrder = [
       { type: 'wakeup' },
       { type: 'weight' },
       { type: 'progresspicture' },
-      { type: 'other' },
       { type: 'hydration' },
+      { type: 'other' },
     ]
     
     const mealWorkoutOrder = [
@@ -307,14 +438,19 @@ export function ProgramsScreen({
       { type: 'meal', task: 'Snacks' },
       { type: 'workout' },
       { type: 'meal', task: 'Dinner' },
+      { type: 'bedtime' },
     ]
     
     // Get custom tasks in specified order
     const orderedCustomItems = customTaskOrder
       .map(({ type }) => {
-        return items.find(item => item.type === type)
+        const found = items.find(item => item.type === type)
+        // console.log(`[ProgramsScreen] Looking for ${type}:`, found ? 'FOUND' : 'NOT FOUND')
+        return found
       })
       .filter((item): item is ScheduleItem => !!item) // Type guard: remove undefined
+    
+    // console.log(`[ProgramsScreen] Ordered custom items:`, orderedCustomItems.map(item => item.type));
     
     // Get meal/workout tasks in existing order
     const orderedMealWorkoutItems = mealWorkoutOrder
@@ -329,7 +465,15 @@ export function ProgramsScreen({
       .filter((item): item is ScheduleItem => !!item) // Type guard: remove undefined
     
     // Combine: custom tasks first, then meal/workout tasks
-    return [...orderedCustomItems, ...orderedMealWorkoutItems]
+    const result = [...orderedCustomItems, ...orderedMealWorkoutItems]
+    
+    // Debug: Log final ordered result (commented out for cleaner console)
+    // console.log(`[ProgramsScreen] Ordered tasks for date ${dateStr}:`, result);
+    // console.log(`[ProgramsScreen] Bedtime tasks in result:`, result.filter(item => item.type === 'bedtime'));
+    // console.log(`[ProgramsScreen] Wakeup tasks in result:`, result.filter(item => item.type === 'wakeup'));
+    // console.log(`[ProgramsScreen] All task types in result:`, result.map(item => item.type));
+    
+    return result
   }
 
   // Helper to open meal edit dialog
@@ -414,7 +558,7 @@ export function ProgramsScreen({
       case 'breakfast': return '☀️';
       case 'lunch': return '🥪';
       case 'snacks': return '🍎';
-      case 'dinner': return '🌙';
+      case 'dinner': return '🍽️';
       default: return '��️';
     }
   }
@@ -423,11 +567,30 @@ export function ProgramsScreen({
   const getCustomTaskIcon = (type: string) => {
     switch (type) {
       case 'hydration': return '💧';
-      case 'wakeup': return '🛏️';
+      case 'wakeup': return '🌅';
       case 'weight': return '⚖️';
       case 'progresspicture': return '📸';
+      case 'bedtime': return '🌙';
       case 'other': return '🔔';
       default: return '📝';
+    }
+  }
+
+  // Helper to get an icon for workout types
+  const getWorkoutIcon = (workoutType: string | undefined) => {
+    switch ((workoutType || '').toLowerCase()) {
+      case 'strength': return '💪';
+      case 'cardio': return '🏃';
+      case 'yoga': return '🧘';
+      case 'pilates': return '🤸';
+      case 'hiit': return '⚡';
+      case 'running': return '🏃‍♂️';
+      case 'cycling': return '🚴';
+      case 'swimming': return '🏊';
+      case 'weightlifting': return '🏋️';
+      case 'crossfit': return '🔥';
+      case 'workout': return '🏋️';
+      default: return '🏋️';
     }
   }
 
@@ -436,44 +599,46 @@ export function ProgramsScreen({
   const TaskCard = ({ item }: { item: ScheduleItem }) => {
     if (!item) return null;
 
-    // Handle custom tasks
-    if (item.task === "custom") {
+    // Style as custom if task is 'custom' OR type is 'wakeup' OR type is 'bedtime'
+    if (item.task === "custom" || item.type === "wakeup" || item.type === "bedtime") {
       // Define background colors based on task type
       const getCustomTaskBackground = (type: string) => {
         switch (type) {
           case 'hydration':
             return "bg-gradient-to-br from-blue-900 to-blue-800 dark:from-blue-800 dark:to-blue-700 border-blue-700 dark:border-blue-600";
           case 'wakeup':
-            return "bg-gradient-to-br from-yellow-100 to-amber-100 dark:from-yellow-900/30 dark:to-amber-900/30 border-yellow-200 dark:border-yellow-700";
+            return "bg-gradient-to-br from-orange-100 to-red-100 dark:from-orange-900/30 dark:to-red-900/30 border-orange-200 dark:border-orange-700";
           case 'progresspicture':
             return "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600";
           case 'weight':
             return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
+          case 'bedtime':
+            return "bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 border-indigo-200 dark:border-indigo-700";
           case 'other':
             return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
           default:
             return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
         }
       };
-
       // Define text colors based on task type
       const getCustomTaskTextColor = (type: string) => {
         switch (type) {
           case 'hydration':
             return "text-white dark:text-blue-100";
           case 'wakeup':
-            return "text-yellow-800 dark:text-yellow-200";
+            return "text-orange-800 dark:text-orange-200";
           case 'progresspicture':
             return "text-gray-800 dark:text-gray-200";
           case 'weight':
             return "text-purple-700 dark:text-purple-200";
+          case 'bedtime':
+            return "text-indigo-700 dark:text-indigo-200";
           case 'other':
             return "text-purple-700 dark:text-purple-200";
           default:
             return "text-purple-700 dark:text-purple-200";
         }
       };
-
       const backgroundClasses = getCustomTaskBackground(item.type);
       const textColorClasses = getCustomTaskTextColor(item.type);
 
@@ -498,7 +663,7 @@ export function ProgramsScreen({
               )}
             </span>
           </div>
-          <div className={`border-b border-dashed ${item.type === 'hydration' ? 'border-blue-300 dark:border-blue-500' : item.type === 'wakeup' ? 'border-yellow-300 dark:border-yellow-600' : item.type === 'progresspicture' ? 'border-gray-400 dark:border-gray-500' : 'border-purple-200 dark:border-purple-700'} my-2`} />
+          <div className={`border-b border-dashed ${item.type === 'hydration' ? 'border-blue-300 dark:border-blue-500' : item.type === 'wakeup' ? 'border-orange-300 dark:border-orange-600' : item.type === 'progresspicture' ? 'border-gray-400 dark:border-gray-500' : item.type === 'bedtime' ? 'border-indigo-300 dark:border-indigo-600' : 'border-purple-200 dark:border-purple-700'} my-2`} />
           
           {/* Summary */}
           {item.summary && (
@@ -534,6 +699,7 @@ export function ProgramsScreen({
             style={{ minHeight: 120 }}
           >
             <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg">{getMealIcon(item.task)}</span>
               <span className="font-extrabold text-sm md:text-base text-yellow-700 dark:text-yellow-200 tracking-wide uppercase break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>{item.task}</span>
             </div>
             <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-1" />
@@ -553,7 +719,8 @@ export function ProgramsScreen({
               <span className="px-2 py-1 rounded-full bg-pink-100 text-pink-800 text-xs font-bold dark:bg-pink-900 dark:text-pink-200">F: {item.details_json?.fats || 0}g</span>
               <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold dark:bg-green-900 dark:text-green-200">C: {item.details_json?.carbs || 0}g</span>
             </div>
-            <Button size="sm" variant="outline" onClick={() => setLoggingMeal(item)}>Log</Button>
+            {/* Log button commented out for trainer dashboard - meal logging should only be available to clients */}
+            {/* <Button size="sm" variant="outline" onClick={() => setLoggingMeal(item)}>Log</Button> */}
           </div>
         );
       
@@ -566,8 +733,11 @@ export function ProgramsScreen({
             style={{ minHeight: 100 }}
           >
             {/* Focus/Title - all caps, same as meal card */}
-            <div className="mb-3 font-extrabold text-sm md:text-base text-blue-900 dark:text-blue-100 tracking-wide uppercase break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
-              {(item.details_json?.focus || item.summary || 'Workout').toUpperCase()}
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-lg">{getWorkoutIcon(item.details_json?.focus || 'workout')}</span>
+              <span className="font-extrabold text-sm md:text-base text-blue-900 dark:text-blue-100 tracking-wide uppercase break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
+                {(item.details_json?.focus || item.summary || 'Workout').toUpperCase()}
+              </span>
             </div>
             {/* Divider */}
             <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-2" />
@@ -855,12 +1025,118 @@ export function ProgramsScreen({
             </div>
           </div>
           <div className="flex justify-end gap-2">
+            <Button 
+              variant="destructive" 
+              onClick={handleDelete}
+              className="mr-auto"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
             <Button variant="outline" onClick={() => setEditingItem(null)}>
               Cancel
             </Button>
             <Button onClick={handleSaveEdit}>
               <Save className="h-4 w-4 mr-2" />
               Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scope Selection Modal */}
+      <Dialog open={showScopeSelection} onOpenChange={setShowScopeSelection}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingAction === 'edit' ? 'Edit Scope' : 'Delete Scope'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {pendingAction === 'edit' 
+                ? 'Do you want to apply these changes to just this occurrence or all future occurrences?' 
+                : 'Do you want to delete just this occurrence or all future occurrences?'}
+            </p>
+            <div className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start h-auto p-4"
+                onClick={() => handleEditWithScope('single')}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">Just this occurrence</div>
+                  <div className="text-sm text-gray-500">
+                    {pendingAction === 'edit' 
+                      ? 'Update only this specific event' 
+                      : 'Delete only this specific event'}
+                  </div>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start h-auto p-4"
+                onClick={() => handleEditWithScope('future')}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">All future occurrences</div>
+                  <div className="text-sm text-gray-500">
+                    {pendingAction === 'edit' 
+                      ? 'Update this and all future events of this type' 
+                      : 'Delete this and all future events of this type'}
+                  </div>
+                </div>
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setShowScopeSelection(false)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Are you sure you want to delete this item? This action cannot be undone.
+            </p>
+            <div className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start h-auto p-4"
+                onClick={() => handleDeleteWithScope('single')}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">Just this occurrence</div>
+                  <div className="text-sm text-gray-500">
+                    Delete only this specific event
+                  </div>
+                </div>
+              </Button>
+              <Button 
+                variant="destructive" 
+                className="w-full justify-start h-auto p-4"
+                onClick={() => handleDeleteWithScope('future')}
+              >
+                <div className="text-left">
+                  <div className="font-semibold">All future occurrences</div>
+                  <div className="text-sm text-gray-500">
+                    Delete this and all future events of this type
+                  </div>
+                </div>
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setShowDeleteConfirmation(false)}>
+              Cancel
             </Button>
           </div>
         </DialogContent>
@@ -1082,8 +1358,8 @@ export function ProgramsScreen({
         }}
       />
 
-      {/* Log Meal Modal (Yes/No Step) */}
-      <Dialog open={!!loggingMeal && !showMealEval} onOpenChange={() => setLoggingMeal(null)}>
+      {/* Log Meal Modal (Yes/No Step) - COMMENTED OUT FOR TRAINER DASHBOARD */}
+      {/* <Dialog open={!!loggingMeal && !showMealEval} onOpenChange={() => setLoggingMeal(null)}>
         <DialogContent className="sm:max-w-[350px] text-center">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Log Meal</DialogTitle>
@@ -1124,10 +1400,10 @@ export function ProgramsScreen({
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
 
-      {/* Meal Evaluation Modal (Only if No) */}
-      <Dialog open={!!loggingMeal && showMealEval} onOpenChange={() => {
+      {/* Meal Evaluation Modal (Only if No) - COMMENTED OUT FOR TRAINER DASHBOARD */}
+      {/* <Dialog open={!!loggingMeal && showMealEval} onOpenChange={() => {
         setShowMealEval(false);
         setLoggingMeal(null);
       }}>
@@ -1192,7 +1468,7 @@ export function ProgramsScreen({
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
     </div>
   )
 } 

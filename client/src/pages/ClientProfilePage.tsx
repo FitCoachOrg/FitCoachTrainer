@@ -66,7 +66,7 @@ import {
   Cell,
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1301,9 +1301,27 @@ const PageLoading = () => {
 // Enhanced Main Component
 export default function ClientDashboard() {
   const params = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const clientId = params.id && !isNaN(Number(params.id)) ? Number(params.id) : undefined;
   console.log("params:", params, "clientId:", clientId);
-  const [activeTab, setActiveTab] = useState("metrics")
+  
+  // Get initial tab from URL params or localStorage, default to "metrics"
+  const getInitialTab = () => {
+    // First check URL parameters
+    const urlParams = new URLSearchParams(location.search);
+    const tabFromUrl = urlParams.get('tab');
+    if (tabFromUrl) return tabFromUrl;
+    
+    // Then check localStorage
+    const savedTab = localStorage.getItem(`client-${clientId}-activeTab`);
+    if (savedTab) return savedTab;
+    
+    // Default to metrics
+    return "metrics";
+  };
+  
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [clientImageUrl, setClientImageUrl] = useState<string | null>(null);
@@ -1340,8 +1358,28 @@ export default function ClientDashboard() {
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week"
   )
   const [isEditingTodo, setIsEditingTodo] = useState(false)
-  const navigate = useNavigate()
   const [aiInsightsActiveTab, setAiInsightsActiveTab] = useState<'summary' | 'action_plan' | 'recommendations' | 'insights'>('summary')
+
+  // Save active tab to localStorage and update URL when tab changes
+  useEffect(() => {
+    if (clientId && activeTab) {
+      // Save to localStorage
+      localStorage.setItem(`client-${clientId}-activeTab`, activeTab);
+      
+      // Update URL without causing a page reload
+      const urlParams = new URLSearchParams(location.search);
+      urlParams.set('tab', activeTab);
+      navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
+    }
+  }, [activeTab, clientId, location.pathname, location.search, navigate]);
+
+  // Reset tab state when clientId changes
+  useEffect(() => {
+    if (clientId) {
+      const newInitialTab = getInitialTab();
+      setActiveTab(newInitialTab);
+    }
+  }, [clientId, location.search]);
 
   // Handler for client selection from sidebar
   const handleClientSelect = (selectedClientId: number) => {

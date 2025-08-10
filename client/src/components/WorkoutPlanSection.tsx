@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 
@@ -29,10 +29,13 @@ import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSectio
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
 import { debounce } from 'lodash';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
+import WorkoutExportButton from './WorkoutExportButton';
+import WorkoutImportButton from './WorkoutImportButton';
+import { normalizeDateForStorage, createDateFromString } from '../lib/date-utils';
 
 // Types
 interface Exercise {
@@ -640,6 +643,8 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => (
   </Dialog>
 ) 
 
+
+
 // --- Comprehensive Normalization function for all AI models ---
 function normalizeExercise(ex: any): any {
   // Handle all possible variations of property names from different AI models
@@ -653,8 +658,8 @@ function normalizeExercise(ex: any): any {
     // Body part variations
     body_part: ex.body_part || ex.bodyPart || ex.body_parts || ex.target_area || ex.muscle_group || '',
     
-    // Sets variations
-    sets: String(ex.sets ?? ex.set_count ?? ex.number_of_sets ?? ''),
+    // Sets variations - ensure we preserve the actual value
+    sets: ex.sets !== undefined && ex.sets !== null ? String(ex.sets) : String(ex.set_count ?? ex.number_of_sets ?? ''),
     
     // Reps variations
     reps: ex.reps ?? ex.repetitions ?? ex.rep_count ?? ex.number_of_reps ?? '',
@@ -687,7 +692,7 @@ function normalizeExercise(ex: any): any {
     exercise: normalized.exercise || 'Unknown Exercise',
     category: normalized.category || 'Strength',
     body_part: normalized.body_part || 'Full Body',
-    sets: normalized.sets || '3',
+    sets: normalized.sets && String(normalized.sets).trim() !== '' ? String(normalized.sets) : '3',
     reps: normalized.reps || '10',
     duration: normalized.duration || '15',
     weight: normalized.weight || 'Bodyweight',
@@ -716,6 +721,7 @@ interface WorkoutPlanSectionProps {
   isGeneratingAnalysis?: boolean;
   handleSummarizeNotes?: () => void;
   isSummarizingNotes?: boolean;
+  onDateChange?: (newDate: Date) => void;
 }
 
 // Helper to build the payload for schedule_preview
@@ -726,7 +732,7 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
     task: 'workout',
     icon: 'dumbell',
     summary: day.focus,
-    for_date: day.date, // Ensure this is a string in YYYY-MM-DD format
+    for_date: normalizeDateForStorage(day.date), // Normalize date for UTC storage
     for_time, // Ensure this is a string in HH:MM:SS or HH:MM:SS+TZ format
     workout_id, // Always a valid UUID
     details_json: {
@@ -734,7 +740,7 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
       exercises: (day.exercises || []).map((ex: any, idx: number) => ({
         exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
         body_part: String(ex.body_part || 'Full Body'),
-        sets: String(ex.sets || '3'),
+        sets: ex.sets && ex.sets.toString().trim() !== '' ? String(ex.sets) : '3',
         reps: String(ex.reps || '10'),
         rest: String(ex.rest || ex.rest_sec || '60'),
         weight: String(ex.weight || ex.weights || 'Bodyweight'),
@@ -839,55 +845,106 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
     const rows = buildSchedulePreviewRows(planWeek, clientId, for_time, workout_id);
     // Log the outgoing payload for debugging
     console.log('[savePlanToSchedulePreview] Prepared rows for database (payload):', JSON.stringify(rows, null, 2));
+    
+    // Debug: Check sets values in the payload
+    rows.forEach((row, rowIdx) => {
+      if (row.details_json && row.details_json.exercises) {
+        row.details_json.exercises.forEach((ex: any, exIdx: number) => {
+          console.log(`[savePlanToSchedulePreview] Row ${rowIdx}, Exercise ${exIdx} sets value:`, ex.sets);
+        });
+      }
+    });
 
-    // Delete any existing preview for this client and week
+    // Get the date range for this week
     const firstDate = planWeek[0]?.date;
     const lastDate = planWeek[planWeek.length - 1]?.date;
     if (!firstDate || !lastDate) {
       console.error('[savePlanToSchedulePreview] Invalid date range in planWeek.', {firstDate, lastDate});
       return { success: false, error: 'Invalid date range' };
     }
-    
-    console.log(`[savePlanToSchedulePreview] Deleting existing preview for client ${clientId} between ${firstDate} and ${lastDate}`);
-    const { error: deleteError } = await supabase
+
+    // Get existing preview data for this client and week
+    const { data: existingData, error: fetchError } = await supabase
       .from('schedule_preview')
-      .delete()
+      .select('*')
       .eq('client_id', clientId)
+      .eq('type', 'workout')
       .gte('for_date', firstDate)
       .lte('for_date', lastDate);
 
-    if (deleteError) {
-      console.error('[savePlanToSchedulePreview] Error deleting old preview:', deleteError);
-      // Don't stop; try to insert anyway, as it might be a non-critical issue (e.g., nothing to delete)
-    } else {
-      console.log('[savePlanToSchedulePreview] Successfully deleted old preview entries.');
+    if (fetchError) {
+      console.error('[savePlanToSchedulePreview] Error fetching existing data:', fetchError);
+      return { success: false, error: fetchError.message };
     }
 
-    // Insert new rows
-    console.log('[savePlanToSchedulePreview] Inserting new rows into schedule_preview.');
-    const { error, data } = await supabase
-      .from('schedule_preview')
-      .insert(rows)
-      .select(); // Use .select() to get the inserted data back
+    console.log(`[savePlanToSchedulePreview] Found ${existingData?.length || 0} existing records`);
 
-    if (error) {
-      console.error('[savePlanToSchedulePreview] CRITICAL: Error saving to schedule_preview:', error);
-      return { success: false, error };
+    // Prepare records for insertion and update
+    const recordsToInsert: any[] = [];
+    const recordsToUpdate: Array<any & { id: number }> = [];
+
+    rows.forEach((newRow) => {
+      // Check if record already exists for this date
+      const existingRecord = existingData?.find(record => 
+        record.for_date === newRow.for_date && 
+        record.type === 'workout'
+      );
+
+      if (existingRecord) {
+        // Update existing record
+        recordsToUpdate.push({
+          ...newRow,
+          id: existingRecord.id
+        });
+      } else {
+        // Insert new record
+        recordsToInsert.push(newRow);
+      }
+    });
+
+    // Update existing records
+    if (recordsToUpdate.length > 0) {
+      console.log(`[savePlanToSchedulePreview] Updating ${recordsToUpdate.length} existing records`);
+      for (const record of recordsToUpdate) {
+        const { id, ...updateData } = record;
+        const { error: updateError } = await supabase
+          .from('schedule_preview')
+          .update(updateData)
+          .eq('id', id);
+        if (updateError) {
+          console.error('[savePlanToSchedulePreview] Error updating record:', updateError);
+          return { success: false, error: updateError.message };
+        }
+      }
     }
-    // After insert, ensure all rows for this client/week are set to is_approved: false (in case of partial updates)
+
+    // Insert new records
+    if (recordsToInsert.length > 0) {
+      console.log(`[savePlanToSchedulePreview] Inserting ${recordsToInsert.length} new records`);
+      const { error: insertError } = await supabase
+        .from('schedule_preview')
+        .insert(recordsToInsert);
+      if (insertError) {
+        console.error('[savePlanToSchedulePreview] Error inserting new records:', insertError);
+        return { success: false, error: insertError.message };
+      }
+    }
+
+    // Set is_approved to false for all affected days
     try {
       await supabase
         .from('schedule_preview')
         .update({ is_approved: false })
         .eq('client_id', clientId)
+        .eq('type', 'workout')
         .gte('for_date', firstDate)
         .lte('for_date', lastDate);
     } catch (updateErr) {
-      console.warn('[savePlanToSchedulePreview] Warning: Could not update is_approved to false after insert.', updateErr);
+      console.warn('[savePlanToSchedulePreview] Warning: Could not update is_approved to false after save.', updateErr);
     }
     
-    console.log('[savePlanToSchedulePreview] SUCCESS: Successfully inserted to schedule_preview. Rows inserted:', data?.length);
-    return { success: true, data };
+    console.log('[savePlanToSchedulePreview] SUCCESS: Successfully saved to schedule_preview');
+    return { success: true };
   } catch (err: any) {
     console.error('[savePlanToSchedulePreview] CATCH BLOCK: An unexpected error occurred:', err);
     return { success: false, error: err.message };
@@ -916,10 +973,416 @@ const WorkoutPlanSection = ({
   const [isDraftPlan, setIsDraftPlan] = useState(false); // Indicates if plan is from preview (draft)
   const [isApproving, setIsApproving] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
-  const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'pending'>('pending');
+  const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
 
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
+
+  // --- Workout Target Edit Grid Component ---
+  const WorkoutTargetEditGrid = () => {
+    const [editingTarget, setEditingTarget] = useState<string | null>(null);
+    const [targetEditValue, setTargetEditValue] = useState<string>('');
+    const [isSavingTarget, setIsSavingTarget] = useState(false);
+    
+    // Parse workout days from client data
+    const parseWorkoutDays = (workoutDays: any): string => {
+      if (!workoutDays) return 'Not set';
+      if (typeof workoutDays === 'string') {
+        // Convert short day names to full names for better display
+        const dayMapping: { [key: string]: string } = {
+          'mon': 'Monday',
+          'tue': 'Tuesday', 
+          'wed': 'Wednesday',
+          'thu': 'Thursday',
+          'fri': 'Friday',
+          'sat': 'Saturday',
+          'sun': 'Sunday'
+        };
+        return workoutDays.split(',').map(day => {
+          const trimmed = day.trim().toLowerCase();
+          return dayMapping[trimmed] || day.trim();
+        }).join(', ');
+      }
+      if (Array.isArray(workoutDays)) {
+        return workoutDays.map(day => {
+          const dayMapping: { [key: string]: string } = {
+            'mon': 'Monday',
+            'tue': 'Tuesday', 
+            'wed': 'Wednesday',
+            'thu': 'Thursday',
+            'fri': 'Friday',
+            'sat': 'Saturday',
+            'sun': 'Sunday'
+          };
+          const trimmed = day.toLowerCase();
+          return dayMapping[trimmed] || day;
+        }).join(', ');
+      }
+      if (typeof workoutDays === 'object') {
+        return Object.keys(workoutDays).filter(day => workoutDays[day]).join(', ');
+      }
+      return 'Not set';
+    };
+
+    // Format workout time for display
+    const formatWorkoutTime = (workoutTime: any): string => {
+      if (!workoutTime) return 'Not set';
+      if (typeof workoutTime === 'string') {
+        // Handle time format like "08:00:00" or "08:00"
+        const timeMatch = workoutTime.match(/(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+          const hour = parseInt(timeMatch[1]);
+          const minute = timeMatch[2];
+          const ampm = hour >= 12 ? 'PM' : 'AM';
+          const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+          return `${displayHour}:${minute} ${ampm}`;
+        }
+        return workoutTime;
+      }
+      return 'Not set';
+    };
+
+    // Format training time per session for display
+    const formatTrainingTime = (trainingTime: any): string => {
+      if (!trainingTime) return 'Not set';
+      if (typeof trainingTime === 'string' || typeof trainingTime === 'number') {
+        const time = parseInt(trainingTime.toString());
+        if (time === 1) return '1 minute';
+        return `${time} minutes`;
+      }
+      return 'Not set';
+    };
+
+    // Save workout target to client table
+    const saveWorkoutTarget = async (field: string, value: any) => {
+      console.log(`[WorkoutTargetEditGrid] saveWorkoutTarget called with field: ${field}, value: ${value}`);
+      if (!numericClientId) {
+        console.log(`[WorkoutTargetEditGrid] No numericClientId, aborting save`);
+        return;
+      }
+      setIsSavingTarget(true);
+      try {
+        console.log(`[WorkoutTargetEditGrid] Updating client ${numericClientId} with ${field}: ${value}`);
+        const { error } = await supabase
+          .from('client')
+          .update({ [field]: value })
+          .eq('client_id', numericClientId);
+        
+        if (error) {
+          console.error(`[WorkoutTargetEditGrid] Database error:`, error);
+          throw error;
+        }
+        console.log(`[WorkoutTargetEditGrid] Successfully saved ${field} to database`);
+        toast({ title: 'Target Updated', description: `Workout ${field.replace('_', ' ')} updated successfully.` });
+      } catch (error: any) {
+        console.error('Error saving workout target:', error);
+        toast({ title: 'Error', description: `Could not update workout ${field.replace('_', ' ')}. ${error?.message || JSON.stringify(error)}`, variant: 'destructive' });
+      } finally {
+        setIsSavingTarget(false);
+        setEditingTarget(null);
+      }
+    };
+
+    // Memoize the target meta to prevent unnecessary re-renders
+    const targetMeta = useMemo(() => [
+      { 
+        key: 'workout_days', 
+        label: 'Target Days of the Week', 
+        value: parseWorkoutDays(client?.workout_days),
+        icon: CalendarDays,
+        color: 'from-blue-500 to-indigo-500',
+        type: 'days'
+      },
+      { 
+        key: 'cl_primary_goal', 
+        label: 'Primary Goal', 
+        value: client?.cl_primary_goal || 'Not set',
+        icon: Target,
+        color: 'from-green-500 to-emerald-500',
+        type: 'text'
+      },
+      { 
+        key: 'specific_outcome', 
+        label: 'Specific Outcome', 
+        value: client?.specific_outcome || 'Not set',
+        icon: Target,
+        color: 'from-purple-500 to-pink-500',
+        type: 'text'
+      },
+      { 
+        key: 'goal_timeline', 
+        label: 'Timeline', 
+        value: client?.goal_timeline || 'Not set',
+        icon: Clock,
+        color: 'from-orange-500 to-red-500',
+        type: 'text'
+      },
+      { 
+        key: 'injuries_limitations', 
+        label: 'Limitations & Constraints', 
+        value: client?.injuries_limitations || 'Not set',
+        icon: FileText,
+        color: 'from-yellow-500 to-orange-500',
+        type: 'textarea'
+      },
+      { 
+        key: 'training_time_per_session', 
+        label: 'Minutes per Workout', 
+        value: formatTrainingTime(client?.training_time_per_session),
+        icon: Clock,
+        color: 'from-indigo-500 to-purple-500',
+        type: 'number'
+      }
+    ], [client?.workout_days, client?.cl_primary_goal, client?.specific_outcome, client?.goal_timeline, client?.injuries_limitations, client?.training_time_per_session]);
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {targetMeta.map(({ key, label, value, icon: Icon, color, type }) => (
+          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
+            <div className="absolute top-2 right-2">
+              {editingTarget === key ? (
+                <button
+                  className="text-white hover:text-gray-200"
+                  onClick={() => setEditingTarget(null)}
+                  title="Cancel Edit"
+                >
+                  ✖️
+                </button>
+              ) : (
+                <button
+                  className="text-white/80 hover:text-white"
+                  onClick={() => {
+                    console.log(`[WorkoutTargetEditGrid] Starting edit for ${key}`);
+                    setEditingTarget(key);
+                    if (key === 'workout_days') {
+                      const value = parseWorkoutDays(client?.workout_days);
+                      console.log(`[WorkoutTargetEditGrid] Setting workout_days value: ${value}`);
+                      setTargetEditValue(value);
+                    } else if (key === 'training_time_per_session') {
+                      const value = client?.training_time_per_session?.toString() || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting training_time_per_session value: ${value}`);
+                      setTargetEditValue(value);
+                    } else if (key === 'cl_primary_goal') {
+                      const value = client?.cl_primary_goal || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting cl_primary_goal value: ${value}`);
+                      setTargetEditValue(value);
+                    } else if (key === 'specific_outcome') {
+                      const value = client?.specific_outcome || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting specific_outcome value: ${value}`);
+                      setTargetEditValue(value);
+                    } else if (key === 'goal_timeline') {
+                      const value = client?.goal_timeline || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting goal_timeline value: ${value}`);
+                      setTargetEditValue(value);
+                    } else if (key === 'injuries_limitations') {
+                      const value = client?.injuries_limitations || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting injuries_limitations value: ${value}`);
+                      setTargetEditValue(value);
+                    } else {
+                      const value = client?.workout_time || '';
+                      console.log(`[WorkoutTargetEditGrid] Setting workout_time value: ${value}`);
+                      setTargetEditValue(value);
+                    }
+                  }}
+                  title={`Edit ${label}`}
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
+            {type !== 'days' && <Icon className="h-6 w-6 mb-2 text-white drop-shadow" />}
+            <div className="text-sm font-bold text-white mb-2">{label}</div>
+            {editingTarget === key ? (
+              <div className="flex items-center gap-2 w-full">
+                {type === 'time' ? (
+                  <input
+                    type="time"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveWorkoutTarget(key, targetEditValue);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
+                    autoFocus
+                    disabled={isSavingTarget}
+                  />
+                ) : type === 'number' ? (
+                  <div className="flex items-center gap-2 w-full">
+                    <input
+                      type="number"
+                      value={targetEditValue}
+                      onChange={e => {
+                        console.log(`[WorkoutTargetEditGrid] Number input changed for ${key}: ${e.target.value}`);
+                        setTargetEditValue(e.target.value);
+                      }}
+                                          onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingTarget(null);
+                      }
+                    }}
+                      onBlur={() => {
+                        if (targetEditValue) saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
+                        else setEditingTarget(null);
+                      }}
+                      className="w-20 px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
+                      autoFocus
+                      disabled={isSavingTarget}
+                      min="15"
+                      max="180"
+                      placeholder="45"
+                    />
+                    <span className="text-white text-sm font-semibold">min</span>
+                  </div>
+                ) : type === 'textarea' ? (
+                  <textarea
+                    value={targetEditValue}
+                    onChange={e => {
+                      console.log(`[WorkoutTargetEditGrid] Textarea changed for ${key}: ${e.target.value}`);
+                      setTargetEditValue(e.target.value);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && e.ctrlKey) {
+                        e.preventDefault();
+                        saveWorkoutTarget(key, targetEditValue);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow resize-none"
+                    autoFocus
+                    disabled={isSavingTarget}
+                    placeholder="Enter limitations and constraints..."
+                    rows={3}
+                  />
+                ) : type === 'days' ? (
+                  <div className="w-full">
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
+                        const isSelected = targetEditValue.toLowerCase().includes(day.toLowerCase());
+                        return (
+                          <button
+                            key={day}
+                            onClick={() => {
+                              const currentDays = targetEditValue.split(',').map(d => d.trim()).filter(d => d);
+                              if (isSelected) {
+                                const newDays = currentDays.filter(d => !d.toLowerCase().includes(day.toLowerCase()));
+                                setTargetEditValue(newDays.join(', '));
+                              } else {
+                                const newDays = [...currentDays, day];
+                                setTargetEditValue(newDays.join(', '));
+                              }
+                            }}
+                            className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
+                              isSelected 
+                                ? 'bg-white text-blue-600 shadow-lg' 
+                                : 'bg-white/20 text-white hover:bg-white/30'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      type="text"
+                      value={targetEditValue}
+                      onChange={e => {
+                        console.log(`[WorkoutTargetEditGrid] Days input changed for ${key}: ${e.target.value}`);
+                        setTargetEditValue(e.target.value);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          saveWorkoutTarget(key, targetEditValue);
+                        } else if (e.key === 'Escape') {
+                          setEditingTarget(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
+                        else setEditingTarget(null);
+                      }}
+                      className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
+                      autoFocus
+                      disabled={isSavingTarget}
+                      placeholder="e.g., Monday, Wednesday, Friday"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={targetEditValue}
+                    onChange={e => {
+                      console.log(`[WorkoutTargetEditGrid] Text input changed for ${key}: ${e.target.value}`);
+                      setTargetEditValue(e.target.value);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveWorkoutTarget(key, targetEditValue);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
+                    autoFocus
+                    disabled={isSavingTarget}
+                    placeholder="e.g., Monday, Wednesday, Friday"
+                  />
+                )}
+                {isSavingTarget && editingTarget === key && (
+                  <div className="text-white text-sm">Saving...</div>
+                )}
+              </div>
+            ) : (
+              <div className="text-lg font-bold text-white text-center">
+                {type === 'days' && value !== 'Not set' ? (
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {value.split(',').map((day: string, index: number) => (
+                      <span key={index} className="px-2 py-1 bg-white/20 rounded-full text-sm">
+                        {day.trim()}
+                      </span>
+                    ))}
+                  </div>
+                ) : type === 'textarea' ? (
+                  <div className="text-sm text-white text-left max-h-20 overflow-y-auto">
+                    {value.length > 100 ? `${value.substring(0, 100)}...` : value}
+                  </div>
+                ) : (
+                  <div className="text-sm text-white text-center">
+                    {value.length > 50 ? `${value.substring(0, 50)}...` : value}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   const fetchPlan = async () => {
     console.log('[WorkoutPlanSection] fetchPlan triggered.');
@@ -934,20 +1397,25 @@ const WorkoutPlanSection = ({
     const endDateStr = format(endDate, 'yyyy-MM-dd');
     console.log(`[WorkoutPlanSection] Fetching plan for client ${numericClientId} from ${startDateStr} to ${endDateStr}`);
 
-    // 1. Try schedule_preview first
+    // 1. Try schedule_preview first - but search for ANY data for this client, not just the fixed range
     let { data, error } = await supabase
       .from('schedule_preview')
       .select('*')
       .eq('client_id', numericClientId)
       .eq('type', 'workout')
-      .gte('for_date', startDateStr)
-      .lte('for_date', endDateStr)
       .order('for_date', { ascending: true });
+    
+    console.log('[WorkoutPlanSection] All schedule_preview data for client:', data?.map(d => ({ date: d.for_date, summary: d.summary })));
     
     console.log('[WorkoutPlanSection] Fetched from schedule_preview. Data length:', data?.length, 'Error:', error);
 
     if (data && data.length > 0) {
       setIsDraftPlan(true);
+      // Filter data to the requested date range
+      data = data.filter(workout => 
+        workout.for_date >= startDateStr && workout.for_date <= endDateStr
+      );
+      console.log('[WorkoutPlanSection] Filtered data for date range. Data length:', data?.length);
     } else {
       // 2. Fallback to schedule
       console.log('[WorkoutPlanSection] No data in schedule_preview, falling back to schedule.');
@@ -972,7 +1440,11 @@ const WorkoutPlanSection = ({
         const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
         const dateStr = format(currentDate, 'yyyy-MM-dd');
         
-        const dayData = data?.find(workout => workout.for_date === dateStr);
+        // Find matching data by comparing normalized dates
+        const dayData = data?.find(workout => {
+          const normalizedWorkoutDate = normalizeDateForStorage(workout.for_date);
+          return normalizedWorkoutDate === dateStr;
+        });
         let planDay = {
             date: dateStr,
             focus: 'Rest Day',
@@ -982,6 +1454,11 @@ const WorkoutPlanSection = ({
             planDay.focus = dayData.summary || 'Workout';
             // Use the comprehensive normalizeExercise function here
             planDay.exercises = dayData.details_json.exercises.map(normalizeExercise);
+            
+            // Debug: Check sets values after normalization
+            planDay.exercises.forEach((ex: any, exIdx: number) => {
+              console.log(`[fetchPlan] Day ${i}, Exercise ${exIdx} sets value after normalization:`, ex.sets);
+            });
         }
         weekDates.push(planDay);
       }
@@ -1000,11 +1477,23 @@ const WorkoutPlanSection = ({
   // Debounced save function for autosaving inline edits
   const debouncedSave = debounce(async (updatedPlan: WeekDay[]) => {
     console.log('[WorkoutPlanSection] Debounced save triggered with updated plan:', updatedPlan);
+    
+    // Debug: Check sets values before saving
+    updatedPlan.forEach((day, dayIdx) => {
+      day.exercises.forEach((ex, exIdx) => {
+        if (ex.sets !== undefined) {
+          console.log(`[WorkoutPlanSection] Before save - Day ${dayIdx}, Exercise ${exIdx} sets value:`, ex.sets);
+        }
+      });
+    });
+    
     setIsSavingEdits(true);
     const result = await savePlanToSchedulePreview(updatedPlan, numericClientId, planStartDate);
     setIsSavingEdits(false);
     if (result.success) {
       toast({ title: 'Changes saved', description: 'Your edits have been saved to the draft.' });
+      // Check approval status after saving to update the approve button
+      await checkPlanApprovalStatus();
       // DO NOT REFETCH HERE. The local state is the source of truth during editing.
       // fetchPlan(); 
     } else {
@@ -1014,6 +1503,16 @@ const WorkoutPlanSection = ({
 
   const handlePlanChange = (updatedWeek: WeekDay[]) => {
     console.log('[WorkoutPlanSection] handlePlanChange received updated week:', updatedWeek);
+    
+    // Debug: Check if sets values are being preserved
+    updatedWeek.forEach((day, dayIdx) => {
+      day.exercises.forEach((ex, exIdx) => {
+        if (ex.sets !== undefined) {
+          console.log(`[WorkoutPlanSection] Day ${dayIdx}, Exercise ${exIdx} sets value:`, ex.sets);
+        }
+      });
+    });
+    
     // Update the state immediately for a responsive UI
     setWorkoutPlan(currentPlan => {
       if (!currentPlan) return null;
@@ -1021,6 +1520,67 @@ const WorkoutPlanSection = ({
     });
     // Trigger the debounced save
     debouncedSave(updatedWeek);
+  };
+
+  const handleImportSuccess = async (weekData: Array<{
+    date: string;
+    focus: string;
+    exercises: any[];
+  }>, dateRange: { start: string; end: string }) => {
+    console.log('[WorkoutPlanSection] Import successful, updating workout plan:', weekData);
+    console.log('[WorkoutPlanSection] Date range from CSV:', dateRange);
+    
+    // Save the imported plan to schedule_preview first
+    try {
+      // Use proper timezone handling for the start date
+      const normalizedStartDate = createDateFromString(dateRange.start);
+      await savePlanToSchedulePreview(weekData, numericClientId, normalizedStartDate);
+      console.log('[WorkoutPlanSection] Successfully saved imported plan to database');
+      
+      // Update the workout plan with imported data immediately
+      const hasAnyWorkouts = weekData.some(day => day.exercises && day.exercises.length > 0);
+      console.log('[WorkoutPlanSection] Calculated hasAnyWorkouts:', hasAnyWorkouts);
+      console.log('[WorkoutPlanSection] Week data for calculation:', weekData.map(day => ({ date: day.date, exerciseCount: day.exercises?.length || 0 })));
+      
+      const importedWorkoutPlan = {
+        week: weekData,
+        hasAnyWorkouts: hasAnyWorkouts,
+        planStartDate: dateRange.start,
+        planEndDate: dateRange.end
+      };
+      
+      console.log('[WorkoutPlanSection] Setting workout plan state:', importedWorkoutPlan);
+      setWorkoutPlan(importedWorkoutPlan);
+      
+      // Set as draft plan since it's imported
+      setIsDraftPlan(true);
+      
+      // Check approval status after importing
+      await checkPlanApprovalStatus();
+      
+      // Update the calendar to show the imported date range
+      if (dateRange.start && dateRange.end) {
+        const newStartDate = new Date(dateRange.start);
+        console.log('[WorkoutPlanSection] Updating calendar to show imported date range:', dateRange.start, 'to', dateRange.end);
+        // Update the parent component's date state if available
+        if (props.onDateChange) {
+          props.onDateChange(newStartDate);
+        }
+      }
+      
+      toast({ 
+        title: 'Import Successful', 
+        description: `Workout plan has been imported for ${dateRange.start} to ${dateRange.end}.` 
+      });
+      
+    } catch (error) {
+      console.error('Error saving imported plan:', error);
+      toast({ 
+        title: 'Import Warning', 
+        description: 'Plan imported but failed to save to database. Please try again.',
+        variant: 'destructive'
+      });
+    }
   };
 
   // Fetch workout plan for client and date
@@ -1073,7 +1633,7 @@ const WorkoutPlanSection = ({
       
       // Use the unified LLM service with the selected provider's default model
       try {
-        result = await generateAIWorkoutPlanForReview(numericClientId);
+        result = await generateAIWorkoutPlanForReview(numericClientId, undefined, planStartDate);
         setCurrentModel('Success');
       } catch (err) {
         lastError = err;
@@ -1121,9 +1681,8 @@ const WorkoutPlanSection = ({
         };
         console.log('✅ Setting AI-generated workout plan:', newWorkoutPlan);
         setWorkoutPlan(newWorkoutPlan);
-        if (week.length > 0) {
-          setPlanStartDate(new Date(week[0].date));
-        }
+        // Don't override the user's selected plan start date
+        // The plan start date should remain as the user selected it
         setHasAIGeneratedPlan(true); // Mark that AI generated data is now available
         // Immediately save to schedule_preview
         console.log('[DEBUG] Calling savePlanToSchedulePreview...');
@@ -1155,45 +1714,100 @@ const WorkoutPlanSection = ({
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
     const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
-    // Fetch is_approved for all days in schedule_preview
-    const { data, error } = await supabase
-      .from('schedule_preview')
-      .select('for_date, is_approved')
-      .eq('client_id', numericClientId)
-      .eq('type', 'workout')
-      .gte('for_date', startDateStr)
-      .lte('for_date', endDateStr);
-    if (error || !data) {
-      setPlanApprovalStatus('pending');
-      return;
-    }
-    // Debug: Log which dates are approved and which are not
-    const approvedDates = data.filter((row: any) => row.is_approved === true).map((row: any) => row.for_date);
-    const notApprovedDates = data.filter((row: any) => row.is_approved !== true).map((row: any) => row.for_date);
-    console.log('[Plan Approval Debug] Approved dates:', approvedDates);
-    console.log('[Plan Approval Debug] Not approved dates:', notApprovedDates);
-    const total = data.length;
-    const approvedCount = approvedDates.length;
-    if (total === 0) {
-      setPlanApprovalStatus('pending');
-    } else if (approvedCount === total) {
-      setPlanApprovalStatus('approved');
-    } else if (approvedCount > 0) {
+    
+    try {
+      // Get all preview rows for the week
+      const { data: previewData, error: previewError } = await supabase
+        .from('schedule_preview')
+        .select('id, for_date, is_approved')
+        .eq('client_id', numericClientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      if (previewError) {
+        console.error('Preview check error:', previewError);
+        setPlanApprovalStatus('pending');
+        return;
+      }
+      
+      // Get all schedule rows for the week
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('id')
+        .eq('client_id', numericClientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      if (scheduleError) {
+        console.error('Schedule check error:', scheduleError);
+      }
+      
+      // Use the same logic as nutrition plan
+      if (!previewData || previewData.length === 0) {
+        setPlanApprovalStatus('pending');
+        return;
+      }
+      
+      // Get unique days from the rows (since there are multiple workout entries per day)
+      const uniqueDays = Array.from(new Set(previewData.map(row => row.for_date)));
+      const actualTotalDays = uniqueDays.length;
+      
+      // Debug logging
+      console.log('[Workout Plan Approval Debug] Status calculation details:');
+      console.log('Actual unique days in preview:', actualTotalDays);
+      console.log('Unique days:', uniqueDays);
+      console.log('Total rows (workout entries):', previewData.length);
+      console.log('is_approved types:', previewData.map(r => typeof r.is_approved), 'values:', previewData.map(r => r.is_approved));
+      
+      // Check if all existing days are approved
+      const approvedDays = uniqueDays.filter(day => {
+        const dayRows = previewData.filter(row => row.for_date === day);
+        const allApproved = dayRows.every(row => row.is_approved === true);
+        console.log(`Day ${day}: ${dayRows.length} entries, all approved: ${allApproved}`);
+        return allApproved;
+      });
+      
+      console.log('Approved days:', approvedDays);
+      console.log('Approved days count:', approvedDays.length);
+      console.log('Total days count:', actualTotalDays);
+      
+      // If we have no approved days, it's not approved
+      if (approvedDays.length === 0) {
+        console.log('❌ Result: not_approved (no days are approved)');
+        setPlanApprovalStatus('not_approved');
+        return;
+      }
+      
+      // If all available days are approved, it's approved (regardless of how many days)
+      if (approvedDays.length === actualTotalDays) {
+        console.log('✅ Result: approved (all available days are approved)');
+        setPlanApprovalStatus('approved');
+        return;
+      }
+      
+      // If some days are approved but not all, it's partial approved
+      console.log('⚠️ Result: partial_approved (some days approved, some not)');
       setPlanApprovalStatus('partial_approved');
-    } else {
+      
+    } catch (error) {
+      console.error('Error checking approval status:', error);
       setPlanApprovalStatus('pending');
     }
   };
 
   // Re-check approval status whenever plan, client, or date changes
   useEffect(() => {
-    checkPlanApprovalStatus();
+    if (numericClientId && planStartDate) {
+      checkPlanApprovalStatus();
+    }
   }, [numericClientId, planStartDate, workoutPlan]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {/* Placeholder Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
         <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
         <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
@@ -1201,76 +1815,159 @@ const WorkoutPlanSection = ({
         <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
       </div>
 
-      {/* Date Picker at the top */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-        <div className="grid gap-2 w-full sm:w-auto">
-          <Label htmlFor="date-select">Plan Start Date</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className="w-full sm:w-[280px] justify-start text-left font-normal"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(planStartDate, "PPP")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={planStartDate}
-                onSelect={(date) => date && setPlanStartDate(date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+      {/* Client Goals & Preferences Section */}
+      <div className="mb-8">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
+          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          {client?.name || 'Client'} Goals & Workout Preferences
+        </h3>
+        <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
+          <CardContent className="p-6">
+            <WorkoutTargetEditGrid />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Header with AI Generation */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+        <div className="flex items-center gap-6">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 shadow-xl">
+            <Dumbbell className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 whitespace-nowrap">Workout Planning and Management</h3>
+            <p className="text-base text-gray-600 dark:text-gray-400 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-blue-500" />
+              AI-powered workout planning and exercise tracking
+            </p>
+            {/* Approval Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              {planApprovalStatus === 'approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  ✅ Approved Plan
+                </div>
+              )}
+              {planApprovalStatus === 'partial_approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  📝 Partial Approval
+                </div>
+              )}
+              {planApprovalStatus === 'not_approved' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  📝 Draft Plan (Not Approved)
+                </div>
+              )}
+              {planApprovalStatus === 'pending' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-700">
+                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                  ⚪ No Plan
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="ml-auto pt-4 sm:pt-0">
-          <Button onClick={handleGeneratePlan} disabled={isGenerating || !numericClientId}>
-            {isGenerating ? (
-              <>
-                <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}
-              </>
-            ) : (
-              "Generate with AI"
-            )}
-          </Button>
+
+        {/* Import/Export Buttons - Moved to header area */}
+        <div className="flex items-center gap-3">
+          {/* Import Button - Always available */}
+          <WorkoutImportButton
+            clientId={numericClientId}
+            clientName={client?.name}
+            planStartDate={planStartDate}
+            onImportSuccess={handleImportSuccess}
+            disabled={isGenerating}
+          />
+          {/* Export Button - Only show when there's workout data */}
+          {workoutPlan && workoutPlan.hasAnyWorkouts && (
+            <WorkoutExportButton
+              weekData={workoutPlan.week}
+              clientId={numericClientId}
+              planStartDate={planStartDate}
+              clientName={client?.name}
+              disabled={isGenerating}
+            />
+          )}
         </div>
       </div>
-      {/* Plan Table or Empty State */}
-      <div>
-        {/* Show plan source status */}
-        {workoutPlan && (
-          <div className="mb-2 flex items-center gap-4">
-            {/* Status badge based on is_approved values - Updated to match Nutrition Plan UI */}
-            {planApprovalStatus === 'approved' && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                ✅ Approved Plan
+
+      {/* Step-by-Step Workflow */}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-2xl p-6 shadow-xl">
+        <h4 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-3">
+          <BarChart3 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          Workout Plan Workflow
+        </h4>
+        
+        <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+          {/* Step 1: Select Plan Start Date */}
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+              1
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="date-select" className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan Start Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className="w-full sm:w-[280px] justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(planStartDate, "PPP")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={planStartDate}
+                    onSelect={(date) => date && setPlanStartDate(date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* Step 2: Generate Workout Plan */}
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+              2
+            </div>
+            <Button
+              onClick={handleGeneratePlan}
+              disabled={isGenerating || !numericClientId}
+              size="lg"
+              className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+            >
+              {isGenerating ? (
+                <>
+                  <Sparkles className="h-5 w-5 mr-3 animate-spin" />
+                  <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 mr-3" />
+                  Generate Workout Plan
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Step 3: Approve Plan */}
+          {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+                3
               </div>
-            )}
-            {planApprovalStatus === 'partial_approved' && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                📝 Partial Approval
-              </div>
-            )}
-            {planApprovalStatus === 'pending' && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
-                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                📝 Draft Plan (Not Approved)
-              </div>
-            )}
-            {/* Approve button for draft plans */}
-            {isDraftPlan && (
               <Button
                 onClick={async () => {
                   setIsApproving(true);
                   const result = await approvePlan(numericClientId, planStartDate);
                   setIsApproving(false);
                   if (result.success) {
-                    toast({ title: 'Plan Approved', description: 'The plan has been moved to production.', variant: 'default' });
+                    toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
                     setIsDraftPlan(false); // UI update: now approved
                     // Refresh approval status after successful approval
                     await checkPlanApprovalStatus();
@@ -1279,23 +1976,28 @@ const WorkoutPlanSection = ({
                   }
                 }}
                 disabled={isApproving}
-                className="ml-2 bg-green-600 hover:bg-green-700 text-white"
+                size="lg"
+                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700 min-w-[200px]"
               >
                 {isApproving ? (
                   <>
-                    <CheckCircle className="w-4 h-4 mr-2 animate-spin" />
-                    Approving...
+                    <CheckCircle className="h-5 w-5 mr-3 animate-spin" />
+                    <span className="ml-3">Approving...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Approve Plan
+                    <CheckCircle className="h-5 w-5 mr-3" />
+                    ✅ Approve Plan
                   </>
                 )}
               </Button>
-            )}
             </div>
-        )}
+          )}
+        </div>
+      </div>
+
+      {/* Plan Table or Empty State */}
+      <div>
         {workoutPlan && isDraftPlan && (
           <div className="mb-2 flex items-center gap-4">
             <Button
@@ -1379,14 +2081,16 @@ const WorkoutPlanSection = ({
                 7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
               </h3>
               <div className="grid grid-cols-7 gap-2 text-sm">
-                {workoutPlan.week?.map((day: WeekDay, index: number) => (
+                {workoutPlan.week?.map((day: WeekDay, index: number) => {
+                  console.log(`[7-Day Overview] Day ${index}: date=${day.date}, focus=${day.focus}, exercises=${day.exercises.length}`);
+                  return (
                   <div key={day.date} className={`p-2 rounded text-center ${
                     day.exercises.length > 0 
                       ? 'bg-green-100 text-green-800 border border-green-200' 
                       : 'bg-gray-100 text-gray-600 border border-gray-200'
                   }`}>
                     <div className="font-medium">{day.focus}</div>
-                    <div className="text-xs">{format(new Date(day.date), "MMM d")}</div>
+                    <div className="text-xs">{format(parseISO(day.date), "MMM d")}</div>
                     <div className="text-xs mt-1">
                       {day.exercises.length > 0 
                         ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` 
@@ -1394,7 +2098,8 @@ const WorkoutPlanSection = ({
                       }
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             </Card>
 
@@ -1404,7 +2109,9 @@ const WorkoutPlanSection = ({
                 week={workoutPlan.week}
                 clientId={numericClientId}
                 onPlanChange={handlePlanChange}
-                planStartDate={planStartDate} // Pass planStartDate as required by WorkoutPlanTable
+                planStartDate={planStartDate}
+                clientName={client?.name}
+                onImportSuccess={handleImportSuccess}
               />
             ) : (
               <Card className="flex flex-col items-center justify-center h-32 text-center">

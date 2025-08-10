@@ -20,8 +20,8 @@ import { convertLocalTimeToUTC } from "@/lib/timezone-utils"
 
 // Task type definitions
 interface CustomTask {
-  taskType: "water" | "sleep" | "weight" | "progress" | "other"
-  frequency: "daily" | "weekly" | "monthly" | "quarterly"
+  taskType: "water" | "sleep" | "weight" | "progress" | "bedtime" | "other"
+  frequency: "daily" | "weekly" | "monthly"
   time: string
   dayOfWeek?: number // 0-6 (Sunday-Saturday)
   dayOfMonth?: number // 1-31
@@ -41,6 +41,7 @@ const taskTypeOptions = [
   { value: "sleep", label: "Sleep Data", icon: Bed, description: "Monitor sleep patterns and quality" },
   { value: "weight", label: "Weight", icon: WeightIcon, description: "Track weight measurements" },
   { value: "progress", label: "Progress Picture", icon: Camera, description: "Take progress photos" },
+  { value: "bedtime", label: "Bedtime", icon: Bed, description: "Set bedtime reminder for consistent sleep schedule" },
   { value: "other", label: "Other Event/Notification", icon: Bell, description: "Custom reminder or event" }
 ]
 
@@ -48,8 +49,7 @@ const taskTypeOptions = [
 const frequencyOptions = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" }
+  { value: "monthly", label: "Monthly" }
 ]
 
 // Day of week options
@@ -101,7 +101,7 @@ export function AddCustomTaskModal({
   const [taskData, setTaskData] = useState<CustomTask>({
     taskType: "water",
     frequency: "daily",
-    time: "09:00",
+    time: "21:00", // Default to 9:00 PM
     programName: "",
     coachMessage: ""
   })
@@ -126,6 +126,7 @@ export function AddCustomTaskModal({
       case "sleep": return "custom"
       case "weight": return "custom"
       case "progress": return "custom"
+      case "bedtime": return "custom"
       case "other": return "custom"
       default: return "custom"
     }
@@ -138,6 +139,7 @@ export function AddCustomTaskModal({
       case "sleep": return "wakeup"
       case "weight": return "weight"
       case "progress": return "progresspicture"
+      case "bedtime": return "bedtime"
       case "other": return "other"
       default: return "other"
     }
@@ -150,6 +152,7 @@ export function AddCustomTaskModal({
       case "sleep": return "bed"
       case "weight": return "weight-scale"
       case "progress": return "camera"
+      case "bedtime": return "bed"
       case "other": return "bell"
       default: return "bell"
     }
@@ -181,14 +184,7 @@ export function AddCustomTaskModal({
             shouldAdd = true
           }
           break
-        case "quarterly":
-          if (dayOfMonth !== undefined && currentDate.getDate() === dayOfMonth) {
-            const month = currentDate.getMonth()
-            if (month === 0 || month === 3 || month === 6 || month === 9) { // Jan, Apr, Jul, Oct
-              shouldAdd = true
-            }
-          }
-          break
+
       }
 
       if (shouldAdd) {
@@ -239,7 +235,7 @@ export function AddCustomTaskModal({
         summary: taskData.programName,
         type: getTaskType(taskData.taskType),
         for_date: format(date, 'yyyy-MM-dd'),
-        for_time: convertLocalTimeToUTC(taskData.time), // Convert local time to UTC for storage
+        for_time: taskData.time, // Store time as-is for now to avoid timezone issues
         icon: getTaskIconName(taskData.taskType),
         coach_tip: taskData.coachMessage || taskData.otherDetails || getTaskDisplayName(taskData.taskType),
         details_json: {
@@ -252,10 +248,41 @@ export function AddCustomTaskModal({
         }
       }))
 
-      // Insert into database
+      // Check for existing entries to avoid duplicates
+      const existingEntries = await supabase
+        .from('schedule')
+        .select('for_date, type')
+        .eq('client_id', clientId)
+        .in('type', [getTaskType(taskData.taskType)])
+
+      if (existingEntries.error) {
+        console.error('Error checking existing entries:', existingEntries.error)
+        throw new Error(existingEntries.error.message)
+      }
+
+      // Filter out dates that already have entries
+      const existingDates = new Set(
+        existingEntries.data?.map(entry => `${entry.for_date}-${entry.type}`) || []
+      )
+
+      const newEntries = scheduleEntries.filter(entry => {
+        const key = `${entry.for_date}-${entry.type}`
+        return !existingDates.has(key)
+      })
+
+      if (newEntries.length === 0) {
+        toast({
+          title: "No New Entries to Add",
+          description: "All selected dates already have entries for this task type.",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Insert only new entries
       const { data, error } = await supabase
         .from('schedule')
-        .insert(scheduleEntries)
+        .insert(newEntries)
 
       if (error) {
         console.error('Error inserting schedule entries:', error)
@@ -264,14 +291,14 @@ export function AddCustomTaskModal({
 
       toast({
         title: "Custom Task Added Successfully",
-        description: `Added ${scheduleEntries.length} entries for ${taskData.programName}`,
+        description: `Added ${newEntries.length} entries for ${taskData.programName}${scheduleEntries.length > newEntries.length ? ` (${scheduleEntries.length - newEntries.length} entries already existed)` : ''}`,
       })
 
       // Reset form and close modal
       setTaskData({
         taskType: "water",
         frequency: "daily",
-        time: "09:00",
+        time: "21:00", // Keep default at 9:00 PM
         programName: "",
         coachMessage: ""
       })
@@ -281,11 +308,21 @@ export function AddCustomTaskModal({
 
     } catch (error: any) {
       console.error('Error adding custom task:', error)
-      toast({
-        title: "Error Adding Custom Task",
-        description: error.message || "Failed to add custom task. Please try again.",
-        variant: "destructive"
-      })
+      
+      // Handle specific constraint violation
+      if (error.message && error.message.includes('duplicate key value violates unique constraint')) {
+        toast({
+          title: "Duplicate Entries Found",
+          description: "Some entries already exist for this task type. Please try again or modify the existing entries.",
+          variant: "destructive"
+        })
+      } else {
+        toast({
+          title: "Error Adding Custom Task",
+          description: error.message || "Failed to add custom task. Please try again.",
+          variant: "destructive"
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -399,7 +436,15 @@ export function AddCustomTaskModal({
                           ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                           : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
                       )}
-                      onClick={() => setTaskData(prev => ({ ...prev, taskType: option.value as any }))}
+                      onClick={() => {
+                        const newTaskType = option.value as any;
+                        setTaskData(prev => ({ 
+                          ...prev, 
+                          taskType: newTaskType,
+                          // Set default time to 9:00 PM for bedtime
+                          time: newTaskType === "bedtime" ? "21:00" : prev.time
+                        }))
+                      }}
                     >
                       <IconComponent className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                       <div className="flex-1">

@@ -12,6 +12,7 @@ import { Calendar as CalendarIcon, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { supabase } from "@/lib/supabase" // Assuming supabase client is here
 import { WorkoutPlanTable } from "@/components/WorkoutPlanTable"
+import WorkoutExportButton from "@/components/WorkoutExportButton"
 import DatePickerTest from "@/components/DatePickerTest"
 
 // NOTE FOR THE DEVELOPER:
@@ -241,7 +242,19 @@ const FitnessPlansPage = () => {
             </Card>
           ) : workoutPlan ? (
             // Replace the placeholder with the real component
-            <WorkoutPlanTable week={workoutPlan} clientId={selectedClientId} />
+            <WorkoutPlanTable 
+              week={workoutPlan} 
+              clientId={selectedClientId} 
+              onPlanChange={() => {}} // Add empty function for now
+              planStartDate={planStartDate}
+              clientName={clients.find(c => c.id === selectedClientId)?.name}
+              onImportSuccess={(weekData, dateRange) => {
+                // Update the calendar to show the imported date range
+                if (dateRange.start) {
+                  setPlanStartDate(new Date(dateRange.start));
+                }
+              }}
+            />
           ) : (
             <Card className="flex flex-col items-center justify-center h-64 text-center">
                <h3 className="text-lg font-semibold">No Workout Plan Found</h3>

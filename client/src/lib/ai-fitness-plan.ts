@@ -68,6 +68,8 @@ function assignWorkoutsToDays(workoutDays: any[], clientWorkoutDays: any, planSt
     workout: any | null;
   }> = [];
   
+  console.log('📅 Plan start date for week generation:', planStartDate);
+  
   for (let i = 0; i < 7; i++) {
     const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
     const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
@@ -94,10 +96,12 @@ function assignWorkoutsToDays(workoutDays: any[], clientWorkoutDays: any, planSt
         clientDays = match[1].split(',').map(day => day.trim().toLowerCase());
       }
     } else {
+      // Handle comma-separated format like "Monday, Wednesday, Friday"
       clientDays = clientWorkoutDays.toLowerCase().split(',').map(day => day.trim());
     }
   }
   
+  console.log('📅 Raw client workout days:', clientWorkoutDays);
   console.log('📅 Parsed client workout days:', clientDays);
   
   // Create a mapping from short day names to full day names
@@ -115,23 +119,57 @@ function assignWorkoutsToDays(workoutDays: any[], clientWorkoutDays: any, planSt
   const fullClientDays = clientDays.map(day => dayNameMapping[day] || day);
   console.log('📅 Full client workout days:', fullClientDays);
   
+  // Also handle full day names that might be passed
+  const fullDayNameMapping: { [key: string]: string } = {
+    'monday': 'monday',
+    'tuesday': 'tuesday', 
+    'wednesday': 'wednesday',
+    'thursday': 'thursday',
+    'friday': 'friday',
+    'saturday': 'saturday',
+    'sunday': 'sunday'
+  };
+  
+  // Convert any day names to lowercase for comparison
+  const normalizedClientDays = fullClientDays.map(day => {
+    const normalized = day.toLowerCase().trim();
+    return fullDayNameMapping[normalized] || normalized;
+  });
+  console.log('📅 Normalized client workout days:', normalizedClientDays);
+  
   // Find which days of the week match client's workout days
   const workoutDayIndices: number[] = [];
   weekDays.forEach((day, index) => {
-    if (fullClientDays.includes(day.dayName)) {
+    if (normalizedClientDays.includes(day.dayName)) {
       workoutDayIndices.push(index);
       day.isWorkoutDay = true;
       console.log(`✅ Found workout day: ${day.dayName} at index ${index}`);
+    } else {
+      console.log(`❌ Day ${day.dayName} not in client preferences: ${normalizedClientDays.join(', ')}`);
     }
   });
   
   console.log('📅 Workout day indices:', workoutDayIndices);
   
   // Assign workouts to the correct days
-  workoutDays.forEach((workout, index) => {
-    if (workoutDayIndices[index] !== undefined) {
-      weekDays[workoutDayIndices[index]].workout = workout;
-      console.log(`✅ Assigned workout ${index + 1} to ${weekDays[workoutDayIndices[index]].dayName}`);
+  // First, let's log what we're working with
+  console.log('📅 Available workouts to assign:', workoutDays.length);
+  console.log('📅 Client workout day indices:', workoutDayIndices);
+  
+  // Create a mapping of workout index to the actual day index
+  const workoutAssignment = workoutDayIndices.slice(0, workoutDays.length).map((dayIndex, workoutIndex) => ({
+    workoutIndex,
+    dayIndex,
+    dayName: weekDays[dayIndex].dayName
+  }));
+  
+  console.log('📅 Workout assignment mapping:', workoutAssignment);
+  
+  // Assign workouts to the correct days
+  workoutAssignment.forEach(({ workoutIndex, dayIndex, dayName }) => {
+    if (workoutDays[workoutIndex]) {
+      weekDays[dayIndex].workout = workoutDays[workoutIndex];
+      console.log(`✅ Assigned workout ${workoutIndex + 1} to ${dayName} (day index ${dayIndex})`);
     }
   });
   
@@ -415,7 +453,14 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number, clien
       // If we have client workout days and plan start date, assign workouts to specific days
       if (clientWorkoutDays && planStartDate) {
         console.log('📅 Using day assignment logic...');
+        console.log('📅 Client workout days:', clientWorkoutDays);
+        console.log('📅 Plan start date:', planStartDate);
+        console.log('📅 Parsed days from AI:', parsed.days.length);
+        console.log('📅 First parsed day:', parsed.days[0]);
+        
         const assignedDays = assignWorkoutsToDays(parsed.days, clientWorkoutDays, planStartDate);
+        console.log('📅 Assigned days result:', assignedDays);
+        
         return {
           days: assignedDays,
           workout_plan: assignedDays.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
@@ -423,6 +468,8 @@ function processWorkoutPlanDates(aiResponseText: string, clientId: number, clien
       } else {
         // Fallback to original logic
         console.log('📅 Using fallback day assignment...');
+        console.log('📅 Client workout days:', clientWorkoutDays);
+        console.log('📅 Plan start date:', planStartDate);
         return {
           days: parsed.days,
           workout_plan: parsed.days.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
@@ -1218,7 +1265,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
  * This version does NOT automatically save to Supabase - allows for review and editing first
  * @param clientId - The ID of the client to fetch data for
  */
-export async function generateAIWorkoutPlanForReview(clientId: number, model?: string) {
+export async function generateAIWorkoutPlanForReview(clientId: number, model?: string, planStartDate?: Date) {
   console.log('🤖 Starting AI workout plan generation for REVIEW for client:', clientId);
   console.log('📊 Target Table: client');
   console.log('🔍 Query Parameters:', { client_id: clientId });
@@ -1390,11 +1437,15 @@ export async function generateAIWorkoutPlanForReview(clientId: number, model?: s
       console.log('='.repeat(60));
       
       try {
+        console.log('📅 About to process workout plan dates...');
+        console.log('📅 Client workout days being passed:', clientInfo.workoutDays);
+        console.log('📅 Plan start date being passed:', planStartDate || new Date());
+        
         const processedWorkoutPlan = processWorkoutPlanDates(
           aiResponse.response, 
           clientId, 
           clientInfo.workoutDays, 
-          new Date() // Use current date as plan start date
+          planStartDate || new Date() // Use passed plan start date or current date
         );
         console.log('✅ Date processing completed');
         console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
