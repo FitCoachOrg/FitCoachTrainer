@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/hooks/use-auth"
 
 // Import the real AI workout plan generator
 import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
@@ -30,7 +31,10 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO } from 'date-fns';
+import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
+import WeeklyPlanHeader from './WeeklyPlanHeader';
 import { debounce } from 'lodash';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
 import WorkoutExportButton from './WorkoutExportButton';
@@ -739,6 +743,7 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
       focus: day.focus,
       exercises: (day.exercises || []).map((ex: any, idx: number) => ({
         exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+        category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
         body_part: String(ex.body_part || 'Full Body'),
         sets: ex.sets && ex.sets.toString().trim() !== '' ? String(ex.sets) : '3',
         reps: String(ex.reps || '10'),
@@ -974,6 +979,156 @@ const WorkoutPlanSection = ({
   const [isApproving, setIsApproving] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
+
+  // Save Plan for Future (template) state
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [templateTags, setTemplateTags] = useState<string[]>([]);
+  const [templateTagInput, setTemplateTagInput] = useState('');
+  const [templateName, setTemplateName] = useState('');
+  const [generatedTemplateJson, setGeneratedTemplateJson] = useState<any | null>(null);
+  const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const { trainer } = useAuth();
+  // DnD sensors for reordering the 7-day header boxes
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // Sortable day box wrapper that preserves the existing UI but makes it draggable
+  const SortableDayHeaderBox = ({ id, children }: { id: string; children: React.ReactNode }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const style: React.CSSProperties = {
+      transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      transition,
+      opacity: isDragging ? 0.8 : 1,
+      cursor: 'grab'
+    };
+    return (
+      <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+        {children}
+      </div>
+    );
+  };
+
+  const handleHeaderDayDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !workoutPlan) return;
+    const activeIndex = parseInt(String(active.id).replace('hdr-', ''), 10);
+    const overIndex = parseInt(String(over.id).replace('hdr-', ''), 10);
+
+    // Reorder current week array according to the new order
+    const currentWeek = workoutPlan.week || [];
+    const reordered = arrayMove(currentWeek, activeIndex, overIndex);
+
+    // Reassign dates sequentially from planStartDate to keep a continuous 7-day block
+    const updatedWeek = reordered.map((day, idx) => {
+      const newDate = new Date(planStartDate.getTime() + idx * 24 * 60 * 60 * 1000);
+      const newDateStr = format(newDate, 'yyyy-MM-dd');
+      return { ...day, date: newDateStr };
+    });
+
+    // Use existing handler to update state and persist
+    handlePlanChange(updatedWeek as any);
+  };
+
+  // Add tag on Enter/comma
+  const handleAddTemplateTag = () => {
+    const value = templateTagInput.trim();
+    if (!value) return;
+    if (!templateTags.includes(value)) setTemplateTags(prev => [...prev, value]);
+    setTemplateTagInput('');
+  };
+
+  const removeTemplateTag = (t: string) => setTemplateTags(prev => prev.filter(x => x !== t));
+
+  const buildWeeklyTemplateJson = (week: WeekDay[], tags: string[]) => {
+    const toWeekdayKey = (dateStr: string) => {
+      const d = new Date(dateStr);
+      const idx = d.getDay(); // 0=Sun..6=Sat
+      return ['sun','mon','tue','wed','thu','fri','sat'][idx] as 'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat';
+    };
+    const days_by_weekday: Record<'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat', any> = {
+      sun: { focus: 'Workout', exercises: [] },
+      mon: { focus: 'Workout', exercises: [] },
+      tue: { focus: 'Workout', exercises: [] },
+      wed: { focus: 'Workout', exercises: [] },
+      thu: { focus: 'Workout', exercises: [] },
+      fri: { focus: 'Workout', exercises: [] },
+      sat: { focus: 'Workout', exercises: [] },
+    };
+    (week || []).forEach((day) => {
+      const key = toWeekdayKey(day.date);
+      days_by_weekday[key] = {
+        focus: day.focus,
+        exercises: (day.exercises || []).map((ex: any) => ({
+          exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+          category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
+          body_part: String(ex.body_part || 'Full Body'),
+          sets: String(ex.sets ?? ''),
+          reps: String(ex.reps ?? ''),
+          duration: String(ex.duration ?? ex.time ?? ''),
+          weight: String(ex.weight ?? ex.weights ?? ''),
+          equipment: String(ex.equipment ?? ''),
+          coach_tip: String(ex.coach_tip ?? ''),
+          rest: String(ex.rest ?? ''),
+          video_link: String(ex.video_link ?? '')
+        }))
+      };
+    });
+    return { tags, days_by_weekday };
+  };
+
+  const handleGenerateTemplate = () => {
+    if (!workoutPlan?.week) return;
+    const json = buildWeeklyTemplateJson(workoutPlan.week, templateTags);
+    setGeneratedTemplateJson(json);
+    setIsSaveTemplateOpen(false);
+    setIsTemplatePreviewOpen(true);
+    toast({ title: 'Template Ready', description: 'Weekly workout plan template generated.' });
+  };
+
+  const handleSaveTemplateToLibrary = async () => {
+    try {
+      if (!trainer?.id) {
+        toast({ title: 'Not Signed In', description: 'Trainer account not detected. Please sign in again.', variant: 'destructive' });
+        return;
+      }
+      if (!templateName.trim()) {
+        toast({ title: 'Template Name Required', description: 'Please provide a name for this template.', variant: 'destructive' });
+        return;
+      }
+      if (!workoutPlan?.week || workoutPlan.week.length === 0) {
+        toast({ title: 'No Plan Found', description: 'Generate or load a plan before saving.', variant: 'destructive' });
+        return;
+      }
+      const payload: any = {
+        trainer_id: trainer.id,
+        name: templateName.trim(),
+        tags: templateTags,
+        template_json: generatedTemplateJson ?? buildWeeklyTemplateJson(workoutPlan.week, templateTags),
+      };
+
+      setIsSavingTemplate(true);
+      const { error } = await supabase.from('workout_plan_templates').insert(payload);
+      if (error) {
+        console.error('Error saving template:', error);
+        toast({ title: 'Save Failed', description: error.message || 'Could not save template.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Template Saved', description: 'Plan template saved to your library.' });
+      setTemplateName('');
+      setTemplateTags([]);
+      setGeneratedTemplateJson(null);
+      setIsTemplatePreviewOpen(false);
+      setIsSaveTemplateOpen(false);
+    } catch (err: any) {
+      console.error('Unexpected error saving template:', err);
+      toast({ title: 'Save Failed', description: err.message || 'Unexpected error occurred.', variant: 'destructive' });
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
 
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
@@ -2077,31 +2232,75 @@ const WorkoutPlanSection = ({
           <div className="space-y-4">
             {/* 7-Day Overview Header */}
             <Card className="p-4">
-              <h3 className="text-lg font-semibold mb-3">
-                7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
-              </h3>
-              <div className="grid grid-cols-7 gap-2 text-sm">
-                {workoutPlan.week?.map((day: WeekDay, index: number) => {
-                  console.log(`[7-Day Overview] Day ${index}: date=${day.date}, focus=${day.focus}, exercises=${day.exercises.length}`);
-                  return (
-                  <div key={day.date} className={`p-2 rounded text-center ${
-                    day.exercises.length > 0 
-                      ? 'bg-green-100 text-green-800 border border-green-200' 
-                      : 'bg-gray-100 text-gray-600 border border-gray-200'
-                  }`}>
-                    <div className="font-medium">{day.focus}</div>
-                    <div className="text-xs">{format(parseISO(day.date), "MMM d")}</div>
-                    <div className="text-xs mt-1">
-                      {day.exercises.length > 0 
-                        ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` 
-                        : 'Rest day'
-                      }
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold">
+                  7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
+                </h3>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => { setTemplateTags([]); setTemplateTagInput(''); setIsSaveTemplateOpen(true); }}>
+                  <Save className="h-4 w-4" /> Save Plan for Future
+                </Button>
+              </div>
+              <WeeklyPlanHeader
+                week={workoutPlan.week}
+                planStartDate={planStartDate}
+                onReorder={handlePlanChange}
+                onPlanChange={handlePlanChange}
+              />
+            </Card>
+
+            {/* Save Plan Template Modal */}
+            <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Save Weekly Plan Template</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Template Name</Label>
+                    <Input
+                      placeholder="e.g., 4-Week Strength Kickoff"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Add Tags</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        placeholder="Type a tag (e.g., Strength, Goal, Client name)"
+                        value={templateTagInput}
+                        onChange={(e) => setTemplateTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ',') {
+                            e.preventDefault();
+                            handleAddTemplateTag();
+                          }
+                        }}
+                      />
+                      <Button onClick={handleAddTemplateTag} type="button" variant="secondary">Add</Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {templateTags.map(t => (
+                        <Badge key={t} variant="secondary" className="flex items-center gap-1">
+                          {t}
+                          <button className="text-xs" onClick={() => removeTemplateTag(t)}>✕</button>
+                        </Badge>
+                      ))}
+                      {templateTags.length === 0 && (
+                        <span className="text-xs text-muted-foreground">No tags added</span>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-              </div>
-            </Card>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setIsSaveTemplateOpen(false)}>Cancel</Button>
+                    <Button onClick={handleGenerateTemplate}>Preview JSON</Button>
+                    <Button onClick={handleSaveTemplateToLibrary} disabled={isSavingTemplate}>
+                      {isSavingTemplate ? 'Saving...' : 'Save to Library'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Workout Plan Table */}
             {workoutPlan.hasAnyWorkouts ? (
@@ -2124,6 +2323,21 @@ const WorkoutPlanSection = ({
                 </Button>
               </Card>
             )}
+
+            {/* Template JSON Popup */}
+            <Dialog open={isTemplatePreviewOpen} onOpenChange={setIsTemplatePreviewOpen}>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Weekly Plan Template (JSON)</DialogTitle>
+                </DialogHeader>
+                <div className="text-xs whitespace-pre-wrap break-words max-h-[70vh] overflow-auto">
+                  {generatedTemplateJson ? JSON.stringify(generatedTemplateJson, null, 2) : ''}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button onClick={() => setIsTemplatePreviewOpen(false)}>Close</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         ) : (
           <Card className="flex flex-col items-center justify-center h-64 text-center">

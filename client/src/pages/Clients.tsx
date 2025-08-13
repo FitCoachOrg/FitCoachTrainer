@@ -98,10 +98,10 @@ const Clients: React.FC = () => {
         }
         const trainerId = trainerRows[0].id;
 
-        // Get client ids and status from trainer_client_web
+        // Get client ids, status, and cl_email from trainer_client_web
         const { data: relationshipData, error: relationshipError } = await supabase
           .from("trainer_client_web")
-          .select("client_id, status")
+          .select("client_id, status, cl_email")
           .eq("trainer_id", trainerId);
           
         
@@ -122,26 +122,45 @@ const Clients: React.FC = () => {
         });
         setClientStatuses(statusMap);
         
-        // Only proceed if we have valid client IDs
-        if (clientIds.length === 0) {
-          setClients([]);
-          setLoading(false);
-          return;
+        // Fetch client rows if we have any concrete client IDs
+        let clientData: any[] = [];
+        if (clientIds.length > 0) {
+          const { data, error: clientError } = await supabase
+            .from("client")
+            .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
+            .in("client_id", clientIds);
+          if (clientError) throw clientError;
+          clientData = data || [];
         }
-        
-        // Get client names and merge with status
-        const { data: clientData, error: clientError } = await supabase
-          .from("client")
-          .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
-          .in("client_id", clientIds);
-        if (clientError) throw clientError;
-        
+
         // Merge client data with status
         const clientsWithStatus = (clientData || []).map(client => ({
           ...client,
           status: statusMap[client.client_id] || 'pending'
         }));
-        setClients(clientsWithStatus);
+
+        // Build a set of client_ids that we already have concrete rows for
+        const presentClientIds = new Set((clientData || []).map((c: any) => c.client_id));
+
+        // Include pending relationships that do not yet have a client row (either missing client_id or no matching client row)
+        const pendingInvites = (relationshipData || [])
+          .filter((rel: any) => (rel.status || '').toLowerCase() === 'pending')
+          .filter((rel: any) => !rel.client_id || !presentClientIds.has(rel.client_id))
+          .map((rel: any, idx: number) => ({
+            client_id: rel.client_id && typeof rel.client_id === 'number' ? rel.client_id : (-1000 - idx),
+            cl_name: rel.cl_email || 'Pending Invite',
+            last_checkIn: undefined,
+            last_active: undefined,
+            current_streak: null,
+            longest_streak: null,
+            active_session: null,
+            status: 'pending' as const
+          }));
+
+        setClients([...
+          clientsWithStatus,
+          ...pendingInvites
+        ]);
         
         // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
         const { data: allActivity, error: allActivityError } = await supabase
@@ -680,7 +699,11 @@ const Clients: React.FC = () => {
                           className={`$${
                             index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
                           } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
-                          onClick={() => navigate(`/client/${client.client_id}`)}
+                          onClick={() => {
+                            if (client.client_id && client.client_id > 0) {
+                              navigate(`/client/${client.client_id}`)
+                            }
+                          }}
                         >
                           <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
                             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">

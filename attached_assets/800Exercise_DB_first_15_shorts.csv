@@ -1,0 +1,16 @@
+rowid,exercise_name,youtube_video_id,youtube_url,title,channel,duration_seconds,tags_matched,matched_tag,selection_reason
+1,3/4 Sit-Up,swOyWKk7Oko,https://www.youtube.com/shorts/swOyWKk7Oko,How to Do：SIT-UPS,Leap Fitness,46,FALSE,,<=60s+positives+channel-quality+weak-title
+2,90/90 Hamstring,lMWb7ZQLCjc,https://www.youtube.com/shorts/lMWb7ZQLCjc,90/90 Hamstring Stretch,The Strength Guys,50,FALSE,,title-match+<=60s+positives
+3,Ab Crunch Machine,mnRhbUB3Fjs,https://www.youtube.com/shorts/mnRhbUB3Fjs,AB CRUNCH MACHINE 💪🏼 // Strengthen your abs using this classic machine! #absworkout #planetfitness,KevTheTrainer,19,TRUE,ab crunch machine,tag-match+title-match+<=60s+positives+channel-quality
+4,Ab Roller,iN2nQkBh8x4,https://www.youtube.com/shorts/iN2nQkBh8x4,How To Use Ab Roller Wheel For Six Pack Abs,Abdellah Boughazoual,18,TRUE,ab roller,tag-match+title-match+shorts-signal+<=60s+positives+negatives+channel-quality
+5,Adductor,fwpMYCWdUNY,https://www.youtube.com/shorts/fwpMYCWdUNY,How to PROPERLY Use The Adductor Machine (STOP THIS),Colossus Fitness,19,FALSE,,title-match+<=60s+positives+negatives+channel-quality
+6,Adductor/Groin,In0ePDaDETc,https://www.youtube.com/shorts/In0ePDaDETc,How To Fix Groin Pain (Adductor Strain),Squat University,60,FALSE,,title-match+<=60s+positives+negatives+channel-quality
+7,Advanced Kettlebell Windmill,H8fmeaq8ewI,https://www.youtube.com/shorts/H8fmeaq8ewI,Advanced Kettlebell Windmill Exercise,Christopher Edghill,52,TRUE,advanced kettlebell windmill,tag-match+title-match+<=60s+negatives+no-positive-signal
+8,Air Bike,qlN2UunTBuA,https://www.youtube.com/shorts/qlN2UunTBuA,Air Bike Exercise Form & Tutorial Guide (30 Seconds) - FlexXP,FlexXP,18,TRUE,air bike,tag-match+title-match+<=60s+positives
+9,All Fours Quad Stretch,681vzw6aXZo,https://www.youtube.com/shorts/681vzw6aXZo,mistake leg extensions,RaD Gym Exercise ,12,FALSE,,<=60s+positives+weak-title
+10,Alternate Hammer Curl,oSpqtLHhJkA,https://www.youtube.com/shorts/oSpqtLHhJkA,"Alternate Hammer Curl, Tutorial, Exercise Video, Workout, SEXioFIT",SEXioFIT,33,TRUE,alternate hammer curl,tag-match+title-match+<=60s+positives+negatives
+11,Alternate Heel Touchers,hWbUlkb5Ms4,https://www.youtube.com/shorts/hWbUlkb5Ms4,How To Bench Press With Perfect Technique (5 Steps),Jeff Nippard,51,FALSE,,<=60s+positives+channel-quality+weak-title
+12,Alternate Incline Dumbbell Curl,cv94zLJo2Mk,https://www.youtube.com/shorts/cv94zLJo2Mk,Alternate Incline Dumbbell Curl - How to do this exercise exactly,Health Hunt,70,TRUE,alternate incline dumbbell curl,tag-match+title-match+positives+negatives+channel-quality+>60s-penalty
+13,Alternate Leg Diagonal Bound,q9hcAZBlBf4,https://www.youtube.com/shorts/q9hcAZBlBf4,Bounding Forward and Side,Emplify Health by Gundersen,61,FALSE,,<=60s+channel-quality+weak-title+no-positive-signal
+14,Alternating Cable Shoulder Press,RoLdoKk-FkM,https://www.youtube.com/shorts/RoLdoKk-FkM,How to - Alternating Cable Shoulder Press,U.S. Forces Fitness,45,FALSE,,title-match+<=60s+positives+negatives+channel-quality
+15,Alternating Deltoid Raise,OtoLOqToiaE,https://www.youtube.com/shorts/OtoLOqToiaE,"Alternating Deltoid Raise, Tutorial, Exercise Video, Workout, SEXioFIT",SEXioFIT,40,TRUE,alternating deltoid raise,tag-match+title-match+<=60s+positives+negatives

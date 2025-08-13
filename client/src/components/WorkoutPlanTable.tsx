@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { format } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -12,8 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +24,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import WorkoutExportButton from './WorkoutExportButton';
 import WorkoutImportButton from './WorkoutImportButton';
+import ExercisePickerModal from './ExercisePickerModal';
 
 // Define the type for a single exercise item
 export interface Exercise {
@@ -60,6 +61,9 @@ interface WorkoutPlanTableProps {
     focus: string;
     exercises: any[];
   }>, dateRange: { start: string; end: string }) => void;
+  // New flags for template mode (read/write local only, no DB persistence)
+  isTemplateMode?: boolean;
+  hideDates?: boolean;
 }
 
 // Helper to get a focus icon
@@ -182,14 +186,14 @@ function getFullWeek(startDate: Date, week: any[]) {
   const days = [];
   for (let i = 0; i < 7; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().slice(0, 10);
+    const dateStr = format(date, 'yyyy-MM-dd');
     const day = week.find((d) => d && d.date === dateStr);
     days.push(day || null);
   }
   return days;
 }
 
-export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess }: WorkoutPlanTableProps) => {
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false }: WorkoutPlanTableProps) => {
   // Debug logging
   console.log('[WorkoutPlanTable] Rendering with week data:', week);
   
@@ -203,10 +207,18 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   const [editRest, setEditRest] = useState('');
   const [editWeightIdx, setEditWeightIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
   const [editWeight, setEditWeight] = useState('');
+  const [editCoachTipIdx, setEditCoachTipIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [editCoachTip, setEditCoachTip] = useState('');
   // Accordion open panels state
   const [openPanels, setOpenPanels] = useState<string[]>([]);
   // State for delete confirmation
   const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
+
+  // State for exercise picker modal
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [pickerDayIdx, setPickerDayIdx] = useState<number | null>(null);
+  const [pickerDateStr, setPickerDateStr] = useState<string | null>(null);
+
 
   // Local copy of the week for editing
   const [editableWeek, setEditableWeek] = useState(week);
@@ -285,18 +297,20 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     if (!window.confirm('Are you sure you want to delete all workouts for this day?')) return;
     const day = editableWeek[dayIdx];
     try {
-      // Delete the row from schedule_preview for this client and date
-      console.log(`[Delete Day] Deleting row for clientId ${clientId}, date ${day.date}`);
-      const { error } = await supabase
-        .from('schedule_preview')
-        .delete()
-        .eq('client_id', clientId)
-        .eq('for_date', day.date)
-        .eq('type', 'workout');
-      if (error) {
-        console.error('[Delete Day] Error deleting row:', error);
-        toast({ title: 'Delete Failed', description: 'Could not delete the day from the database.', variant: 'destructive' });
-        return;
+      if (!isTemplateMode) {
+        // Delete the row from schedule_preview for this client and date
+        console.log(`[Delete Day] Deleting row for clientId ${clientId}, date ${day.date}`);
+        const { error } = await supabase
+          .from('schedule_preview')
+          .delete()
+          .eq('client_id', clientId)
+          .eq('for_date', day.date)
+          .eq('type', 'workout');
+        if (error) {
+          console.error('[Delete Day] Error deleting row:', error);
+          toast({ title: 'Delete Failed', description: 'Could not delete the day from the database.', variant: 'destructive' });
+          return;
+        }
       }
       // Remove the day from local state
       const updatedWeek = editableWeek.map((d, idx) => idx === dayIdx ? { ...d, exercises: [] } : d);
@@ -319,8 +333,103 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     return result;
   }, [planStartDate, editableWeek]);
 
+
+  // Helper: persist updated exercises array for a given date to schedule_preview
+  const persistExercisesForDate = async (dateStr: string, exercises: any[], summaryFallback: string = 'Workout') => {
+    try {
+      if (isTemplateMode) return; // no DB writes in template mode
+      const { data: existingRows, error: fetchErr } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('for_date', dateStr)
+        .eq('type', 'workout');
+      if (fetchErr) throw fetchErr;
+      if (existingRows && existingRows.length > 0) {
+        const row = existingRows[0];
+        const details = row.details_json || {};
+        const { error: updErr } = await supabase
+          .from('schedule_preview')
+          .update({ details_json: { ...details, exercises }, summary: row.summary || summaryFallback })
+          .eq('id', row.id);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase.from('schedule_preview').insert({
+          client_id: clientId,
+          type: 'workout',
+          for_date: dateStr,
+          details_json: { exercises },
+          summary: summaryFallback,
+        });
+        if (insErr) throw insErr;
+      }
+    } catch (err) {
+      console.error('[Persist Exercises] Failed:', err);
+    }
+  };
+
+  const openPickerForDay = (dayIdx: number, dateStr: string) => {
+    setPickerDayIdx(dayIdx);
+    setPickerDateStr(dateStr);
+    setIsPickerOpen(true);
+  };
+
+  const handleSelectExercise = async (selected: any) => {
+    if (pickerDayIdx == null || !pickerDateStr) return;
+    const targetDate = pickerDateStr;
+
+    // Build normalized exercise from exercises_raw
+    const newExercise = {
+      exercise: selected.exercise_name,
+      category: selected.category || '',
+      body_part: selected.target_muscle || selected.primary_muscle || '',
+      sets: '',
+      reps: '',
+      duration: '',
+      weight: '',
+      equipment: selected.equipment || '',
+      coach_tip: '',
+      video_link: selected.video_link || '',
+      date: targetDate,
+    } as any;
+
+    // Update local state (ensure day exists)
+    const updatedWeek = [...editableWeek];
+    const existingDay = updatedWeek.find((d) => d && d.date === targetDate);
+    if (existingDay) {
+      existingDay.exercises = [...(existingDay.exercises || []), newExercise];
+    } else {
+      // If day missing, create it with default focus
+      updatedWeek.push({ date: targetDate, focus: 'Workout', exercises: [newExercise] });
+      // Keep array sorted by date
+      updatedWeek.sort((a: any, b: any) => a.date.localeCompare(b.date));
+    }
+    setEditableWeek(updatedWeek);
+    onPlanChange(updatedWeek);
+
+    // Persist to schedule_preview
+    const exercisesForDate = (existingDay ? existingDay.exercises : [newExercise]);
+    await persistExercisesForDate(targetDate, exercisesForDate, existingDay?.focus || 'Workout');
+
+    setIsPickerOpen(false);
+    setPickerDayIdx(null);
+    setPickerDateStr(null);
+  };
+
+  const handleDeleteExercise = async (dayIdx: number, exIdx: number) => {
+    const day = editableWeek[dayIdx];
+    const newExercises = [...(day.exercises || [])];
+    newExercises.splice(exIdx, 1);
+    const updatedWeek = [...editableWeek];
+    updatedWeek[dayIdx] = { ...day, exercises: newExercises };
+    setEditableWeek(updatedWeek);
+    onPlanChange(updatedWeek);
+    await persistExercisesForDate(day.date, newExercises, day.focus || 'Workout');
+  };
+
   return (
     <div>
+      
       {/* Legend and Export Button */}
       <div className="mb-2 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex gap-6 text-sm text-muted-foreground">
@@ -360,10 +469,19 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-yellow-500" />
                 <div>
-                  <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  {hideDates ? (
+                    <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
+                  ) : (
+                    <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  )}
                   <div className="font-semibold text-yellow-700">Plan Not Generated</div>
                   <div className="text-xs text-muted-foreground">No workout plan exists for this day.</div>
                 </div>
+              </div>
+              <div className="ml-auto">
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
+                  <PlusCircle className="h-4 w-4" /> Add Exercise
+                </Button>
               </div>
             </div>
           );
@@ -375,10 +493,19 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
               <div className="flex items-center gap-3">
                 <Bed className="w-5 h-5" />
                 <div>
-                  <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  {hideDates ? (
+                    <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
+                  ) : (
+                    <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                  )}
                   <div className="font-semibold text-gray-700">Rest Day</div>
                   <div className="text-xs text-muted-foreground">Enjoy your recovery!</div>
                 </div>
+              </div>
+              <div className="ml-auto">
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
+                  <PlusCircle className="h-4 w-4" /> Add Exercise
+                </Button>
               </div>
             </div>
           );
@@ -388,26 +515,35 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
           <Accordion key={day.date} type="multiple" value={openPanels} onValueChange={setOpenPanels} className="w-full">
             <AccordionItem value={day.date}>
               <AccordionTrigger>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full justify-between">
+                <div className="flex items-center gap-3 w-full justify-between">
                   <div className="flex items-center gap-3">
                     {getFocusIcon(day.focus)}
                     <div>
-                      <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                      {hideDates ? (
+                        <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
+                      ) : (
+                        <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
+                      )}
                       <div className="text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
                         {day.focus}
                       </div>
                     </div>
                   </div>
-                  {/* Delete Day Button */}
-                  <button
-                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
-                    title="Delete all workouts for this day"
-                    onClick={async e => { e.stopPropagation(); await handleDeleteDay(dayIdx); }}
-                  >
-                    <Trash2 className="h-4 w-4" /> Delete Day
-                  </button>
                 </div>
               </AccordionTrigger>
+              {/* Actions outside of the trigger to avoid nested buttons */}
+              <div className="flex items-center gap-2 justify-end py-2">
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
+                  <PlusCircle className="h-4 w-4" /> Add Exercise
+                </Button>
+                <button
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
+                  title="Delete all workouts for this day"
+                  onClick={async () => { await handleDeleteDay(dayIdx); }}
+                >
+                  <Trash2 className="h-4 w-4" /> Delete Day
+                </button>
+              </div>
               <AccordionContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -424,6 +560,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         <th className="text-left p-3">Equipment</th>
                         <th className="text-left p-3">Coach Tip</th>
                         <th className="text-left p-3">Video Link</th>
+                        <th className="text-right p-3 w-8"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -547,25 +684,65 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                             </Popover>
                           </td>
                           <td className="p-3">{ex.equipment}</td>
-                          <td className="p-3 text-sm text-gray-600 dark:text-gray-400">{ex.coach_tip}</td>
                           <td className="p-3">
-                            <Popover>
+                            <Popover open={editCoachTipIdx?.dayIdx === dayIdx && editCoachTipIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditCoachTipIdx(null); }}>
                               <PopoverTrigger asChild>
-                                <button className="flex items-center gap-1 text-blue-500 underline">
-                                  <Link2 className="h-4 w-4" />
-                                  {ex.video_link}
+                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditCoachTipIdx({ dayIdx, exIdx }); setEditCoachTip(ex.coach_tip?.toString() || ''); }}>
+                                  {(ex.coach_tip ?? '').length > 0 ? ((ex.coach_tip as string).slice(0, 24) + (((ex.coach_tip as string).length > 24) ? '…' : '')) : '—'}
+                                  <span className="ml-1 text-xs">✎</span>
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-64">
-                                <input 
-                                  type="text" 
-                                  className="border rounded px-2 py-1 w-full" 
-                                  placeholder="Paste video link here" 
-                                  value={ex.video_link || ''} 
-                                  onChange={e => handlePlanChange(dayIdx, exIdx, 'video_link', e.target.value)} 
-                                />
+                              <PopoverContent className="w-72">
+                                <div className="flex flex-col gap-2">
+                                  <label className="text-xs">Coach Tip</label>
+                                  <textarea rows={4} value={editCoachTip} onChange={e => setEditCoachTip(e.target.value)} className="border rounded px-2 py-1" />
+                                  <button 
+                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
+                                    onClick={async () => {
+                                      const updatedWeek = [...normalizedWeek];
+                                      const newExercises = [...updatedWeek[dayIdx].exercises];
+                                      newExercises[exIdx] = { ...newExercises[exIdx], coach_tip: editCoachTip };
+                                      updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
+                                      setEditableWeek(updatedWeek);
+                                      onPlanChange(updatedWeek);
+                                      await persistExercisesForDate(updatedWeek[dayIdx].date, newExercises, updatedWeek[dayIdx].focus || 'Workout');
+                                      setEditCoachTipIdx(null);
+                                    }}
+                                  >Save</button>
+                                </div>
                               </PopoverContent>
                             </Popover>
+                          </td>
+                          <td className="p-3">
+                            {ex.video_link ? (
+                              <div className="flex items-center gap-2">
+                                <a href={ex.video_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-500 underline">
+                                  <Link2 className="h-4 w-4" />
+                                  <span>video-link</span>
+                                </a>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="text-xs text-muted-foreground underline">edit</button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-64">
+                                    <input 
+                                      type="text" 
+                                      className="border rounded px-2 py-1 w-full" 
+                                      placeholder="Paste video link here" 
+                                      value={ex.video_link || ''} 
+                                      onChange={e => handlePlanChange(dayIdx, exIdx, 'video_link', e.target.value)} 
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right">
+                            <button title="Delete" className="text-gray-400 hover:text-red-600 transition-colors" onClick={() => handleDeleteExercise(dayIdx, exIdx)}>
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </td>
                         </tr>
                         );
@@ -578,6 +755,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
           </Accordion>
         );
       })}
+      <ExercisePickerModal
+        open={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onSelect={handleSelectExercise}
+      />
     </div>
   );
 }; 

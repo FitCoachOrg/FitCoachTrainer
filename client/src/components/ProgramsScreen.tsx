@@ -114,7 +114,7 @@ export function ProgramsScreen({
   // const [mealEvalPhoto, setMealEvalPhoto] = useState<File | null>(null);
 
   // Get schedule types for filter
-  const scheduleTypes = ["all", "meal", "workout", "assessment", "consultation", "hydration", "wakeup", "weight", "progresspicture", "bedtime", "other"]
+  const scheduleTypes = ["all", "meal", "workout", "assessment", "consultation", "hydration", "wakeup", "weight", "progresspicture", "bedtime", "body_measurement", "other"]
 
   // Fetch schedule data from Supabase
   const fetchScheduleData = async () => {
@@ -427,6 +427,7 @@ export function ProgramsScreen({
     const customTaskOrder = [
       { type: 'wakeup' },
       { type: 'weight' },
+      { type: 'body_measurement' },
       { type: 'progresspicture' },
       { type: 'hydration' },
       { type: 'other' },
@@ -442,13 +443,14 @@ export function ProgramsScreen({
     ]
     
     // Get custom tasks in specified order
-    const orderedCustomItems = customTaskOrder
+    let orderedCustomItems = customTaskOrder
       .map(({ type }) => {
         const found = items.find(item => item.type === type)
         // console.log(`[ProgramsScreen] Looking for ${type}:`, found ? 'FOUND' : 'NOT FOUND')
         return found
       })
       .filter((item): item is ScheduleItem => !!item) // Type guard: remove undefined
+    // Since we now create one row per date for body_measurement, no need to append multiples
     
     // console.log(`[ProgramsScreen] Ordered custom items:`, orderedCustomItems.map(item => item.type));
     
@@ -569,6 +571,7 @@ export function ProgramsScreen({
       case 'hydration': return '💧';
       case 'wakeup': return '🌅';
       case 'weight': return '⚖️';
+      case 'body_measurement': return '📏';
       case 'progresspicture': return '📸';
       case 'bedtime': return '🌙';
       case 'other': return '🔔';
@@ -600,7 +603,7 @@ export function ProgramsScreen({
     if (!item) return null;
 
     // Style as custom if task is 'custom' OR type is 'wakeup' OR type is 'bedtime'
-    if (item.task === "custom" || item.type === "wakeup" || item.type === "bedtime") {
+    if (item.task === "custom" || item.type === "wakeup" || item.type === "bedtime" || item.type === 'body_measurement') {
       // Define background colors based on task type
       const getCustomTaskBackground = (type: string) => {
         switch (type) {
@@ -612,6 +615,8 @@ export function ProgramsScreen({
             return "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 border-gray-300 dark:border-gray-600";
           case 'weight':
             return "bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-100 dark:border-purple-900";
+          case 'body_measurement':
+            return "bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-100 dark:border-emerald-900";
           case 'bedtime':
             return "bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 border-indigo-200 dark:border-indigo-700";
           case 'other':
@@ -631,6 +636,8 @@ export function ProgramsScreen({
             return "text-gray-800 dark:text-gray-200";
           case 'weight':
             return "text-purple-700 dark:text-purple-200";
+          case 'body_measurement':
+            return "text-emerald-700 dark:text-emerald-200";
           case 'bedtime':
             return "text-indigo-700 dark:text-indigo-200";
           case 'other':

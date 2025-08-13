@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Droplet, Bed, Camera, Bell, Clock } from "lucide-react"
+import { CalendarIcon, Droplet, Bed, Camera, Bell, Clock, Ruler } from "lucide-react"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faWeightScale } from '@fortawesome/free-solid-svg-icons'
 import { format, addDays, addWeeks, addMonths, addQuarters, setDay, setDate } from "date-fns"
@@ -20,7 +21,7 @@ import { convertLocalTimeToUTC } from "@/lib/timezone-utils"
 
 // Task type definitions
 interface CustomTask {
-  taskType: "water" | "sleep" | "weight" | "progress" | "bedtime" | "other"
+  taskType: "water" | "sleep" | "weight" | "progress" | "bedtime" | "other" | "body_measurement"
   frequency: "daily" | "weekly" | "monthly"
   time: string
   dayOfWeek?: number // 0-6 (Sunday-Saturday)
@@ -40,6 +41,7 @@ const taskTypeOptions = [
   { value: "water", label: "Water Intake", icon: Droplet, description: "Track daily water consumption" },
   { value: "sleep", label: "Sleep Data", icon: Bed, description: "Monitor sleep patterns and quality" },
   { value: "weight", label: "Weight", icon: WeightIcon, description: "Track weight measurements" },
+  { value: "body_measurement", label: "Body Measurements", icon: Ruler, description: "Track hips, waist, biceps, and thighs" },
   { value: "progress", label: "Progress Picture", icon: Camera, description: "Take progress photos" },
   { value: "bedtime", label: "Bedtime", icon: Bed, description: "Set bedtime reminder for consistent sleep schedule" },
   { value: "other", label: "Other Event/Notification", icon: Bell, description: "Custom reminder or event" }
@@ -106,6 +108,14 @@ export function AddCustomTaskModal({
     coachMessage: ""
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showMeasurementsModal, setShowMeasurementsModal] = useState(false)
+  const [measurementSelections, setMeasurementSelections] = useState({ hip: true, waist: true, bicep: true, thigh: true })
+
+  // When closing the measurements selection, jump straight to Frequency (Step 2)
+  const handleMeasurementsDone = () => {
+    setShowMeasurementsModal(false)
+    setCurrentStep((prev) => (prev < 2 ? 2 : prev))
+  }
 
   // Helper function to get task icon
   const getTaskIcon = (taskType: string) => {
@@ -125,6 +135,7 @@ export function AddCustomTaskModal({
       case "water": return "custom"
       case "sleep": return "custom"
       case "weight": return "custom"
+      case "body_measurement": return "custom"
       case "progress": return "custom"
       case "bedtime": return "custom"
       case "other": return "custom"
@@ -138,6 +149,7 @@ export function AddCustomTaskModal({
       case "water": return "hydration"
       case "sleep": return "wakeup"
       case "weight": return "weight"
+      case "body_measurement": return "body_measurement"
       case "progress": return "progresspicture"
       case "bedtime": return "bedtime"
       case "other": return "other"
@@ -151,6 +163,7 @@ export function AddCustomTaskModal({
       case "water": return "droplet"
       case "sleep": return "bed"
       case "weight": return "weight-scale"
+      case "body_measurement": return "ruler"
       case "progress": return "camera"
       case "bedtime": return "bed"
       case "other": return "bell"
@@ -229,24 +242,61 @@ export function AddCustomTaskModal({
       }
 
       // Prepare schedule entries
-      const scheduleEntries = dates.map(date => ({
-        client_id: clientId,
-        task: getTaskSummary(taskData.taskType, taskData.otherDetails),
-        summary: taskData.programName,
-        type: getTaskType(taskData.taskType),
-        for_date: format(date, 'yyyy-MM-dd'),
-        for_time: taskData.time, // Store time as-is for now to avoid timezone issues
-        icon: getTaskIconName(taskData.taskType),
-        coach_tip: taskData.coachMessage || taskData.otherDetails || getTaskDisplayName(taskData.taskType),
-        details_json: {
-          task_type: taskData.taskType,
-          frequency: taskData.frequency,
-          program_name: taskData.programName,
-          custom_details: taskData.otherDetails,
-          original_local_time: taskData.time, // Store original local time for reference
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Store user's timezone
+      let scheduleEntries: any[] = []
+      if (taskData.taskType === 'body_measurement') {
+        const selected: string[] = []
+        if (measurementSelections.hip) selected.push('hip')
+        if (measurementSelections.waist) selected.push('waist')
+        if (measurementSelections.bicep) selected.push('bicep')
+        if (measurementSelections.thigh) selected.push('thigh')
+
+        if (selected.length === 0) {
+          toast({ title: 'Select at least one measurement', description: 'Please include hips, waist, or biceps.', variant: 'destructive' })
+          setIsSubmitting(false)
+          return
         }
-      }))
+
+        // Single schedule row per date with selected measurements in details_json
+        dates.forEach(date => {
+          scheduleEntries.push({
+            client_id: clientId,
+            task: 'custom',
+            summary: taskData.programName || 'Body Measurements',
+            type: 'body_measurement',
+            for_date: format(date, 'yyyy-MM-dd'),
+            for_time: convertLocalTimeToUTC(taskData.time),
+            icon: getTaskIconName(taskData.taskType),
+            coach_tip: taskData.coachMessage || getTaskDisplayName(taskData.taskType),
+            details_json: {
+              task_type: taskData.taskType,
+              frequency: taskData.frequency,
+              program_name: taskData.programName,
+              selected_measurements: selected, // ['hip','waist','bicep']
+              original_local_time: taskData.time,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            }
+          })
+        })
+      } else {
+        scheduleEntries = dates.map(date => ({
+          client_id: clientId,
+          task: getTaskSummary(taskData.taskType, taskData.otherDetails),
+          summary: taskData.programName,
+          type: getTaskType(taskData.taskType),
+          for_date: format(date, 'yyyy-MM-dd'),
+          for_time: taskData.time, // Store time as-is for now to avoid timezone issues
+          icon: getTaskIconName(taskData.taskType),
+          coach_tip: taskData.coachMessage || taskData.otherDetails || getTaskDisplayName(taskData.taskType),
+          details_json: {
+            task_type: taskData.taskType,
+            frequency: taskData.frequency,
+            program_name: taskData.programName,
+            custom_details: taskData.otherDetails,
+            original_local_time: taskData.time, // Store original local time for reference
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Store user's timezone
+          }
+        }))
+      }
 
       // Check for existing entries to avoid duplicates
       const existingEntries = await supabase
@@ -262,7 +312,7 @@ export function AddCustomTaskModal({
 
       // Filter out dates that already have entries
       const existingDates = new Set(
-        existingEntries.data?.map(entry => `${entry.for_date}-${entry.type}`) || []
+        existingEntries.data?.map((entry: any) => `${entry.for_date}-${entry.type}`) || []
       )
 
       const newEntries = scheduleEntries.filter(entry => {
@@ -302,6 +352,7 @@ export function AddCustomTaskModal({
         programName: "",
         coachMessage: ""
       })
+      setMeasurementSelections({ hip: true, waist: true, bicep: true, thigh: true })
       setCurrentStep(1)
       onTaskAdded()
       onClose()
@@ -411,6 +462,7 @@ export function AddCustomTaskModal({
   const needsDayDateSelection = taskData.frequency === "weekly" || taskData.frequency === "monthly" || taskData.frequency === "quarterly"
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -444,6 +496,9 @@ export function AddCustomTaskModal({
                           // Set default time to 9:00 PM for bedtime
                           time: newTaskType === "bedtime" ? "21:00" : prev.time
                         }))
+                        if (option.value === 'body_measurement') {
+                          setShowMeasurementsModal(true)
+                        }
                       }}
                     >
                       <IconComponent className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -649,5 +704,59 @@ export function AddCustomTaskModal({
         </div>
       </DialogContent>
     </Dialog>
+    <BodyMeasurementSelectionModal
+      open={showMeasurementsModal}
+      onClose={handleMeasurementsDone}
+      selections={measurementSelections}
+      onChange={setMeasurementSelections}
+    />
+    </>
   )
 } 
+
+// Inline modal to select which measurements to include when Body Measurements is chosen
+interface BodyMeasurementSelectionModalProps {
+  open: boolean
+  onClose: () => void
+  selections: { hip: boolean; waist: boolean; bicep: boolean }
+  onChange: (s: { hip: boolean; waist: boolean; bicep: boolean }) => void
+}
+
+export function BodyMeasurementSelectionModal({
+  open,
+  onClose,
+  selections,
+  onChange,
+}: BodyMeasurementSelectionModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold">Select measurements</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex items-center space-x-3">
+            <Checkbox id="hip" checked={selections.hip} onCheckedChange={(v: any) => onChange({ ...selections, hip: Boolean(v) })} />
+            <Label htmlFor="hip">Hips</Label>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Checkbox id="waist" checked={selections.waist} onCheckedChange={(v: any) => onChange({ ...selections, waist: Boolean(v) })} />
+            <Label htmlFor="waist">Waist</Label>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Checkbox id="bicep" checked={selections.bicep} onCheckedChange={(v: any) => onChange({ ...selections, bicep: Boolean(v) })} />
+            <Label htmlFor="bicep">Biceps</Label>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Checkbox id="thigh" checked={selections.thigh} onCheckedChange={(v: any) => onChange({ ...selections, thigh: Boolean(v) })} />
+            <Label htmlFor="thigh">Thighs</Label>
+          </div>
+          <p className="text-xs text-gray-500">Uncheck any measurement you do not want to collect.</p>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={onClose}>Done</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
