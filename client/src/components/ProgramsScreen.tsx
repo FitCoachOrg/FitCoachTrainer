@@ -29,13 +29,9 @@ import {
   Dumbbell,
   Plus
 } from "lucide-react"
-import { SidePopup } from "@/components/ui/side-popup"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
-import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection"
-import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSection"
-import { TrainerNotesSection } from "@/components/overview/TrainerNotesSection"
-import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
-import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSection"
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
+import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { AddCustomTaskModal } from "./add-custom-task-modal"
 import { convertUTCToLocalTime, convertLocalTimeToUTC } from "@/lib/timezone-utils"
 
@@ -83,12 +79,36 @@ export function ProgramsScreen({
     for_time: ""
   })
   
-  // Side popup states
-  const [showFitnessGoals, setShowFitnessGoals] = useState(false)
-  const [showAICoachInsights, setShowAICoachInsights] = useState(false)
-  const [showTrainerNotes, setShowTrainerNotes] = useState(false)
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false)
-  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false)
+  // Unified popup state
+  const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
+  // Trainer notes state for popup
+  const [trainerNotesState, setTrainerNotesState] = useState<string>("")
+
+  useEffect(() => {
+    const loadTrainerNotes = async () => {
+      try {
+        if (!clientId) return
+        const { data: sessionData } = await supabase.auth.getSession()
+        const trainerEmail = sessionData?.session?.user?.email
+        if (!trainerEmail) return
+        const { data: trainerData } = await supabase
+          .from('trainer')
+          .select('id')
+          .eq('trainer_email', trainerEmail)
+          .single()
+        const trainerId = trainerData?.id
+        if (!trainerId) return
+        const { data } = await supabase
+          .from('trainer_client_web')
+          .select('trainer_notes')
+          .eq('trainer_id', trainerId)
+          .eq('client_id', clientId)
+          .single()
+        setTrainerNotesState(data?.trainer_notes || "")
+      } catch {}
+    }
+    loadTrainerNotes()
+  }, [clientId])
 
   // Add state for meal edit dialog
   const [editingMeal, setEditingMeal] = useState<ScheduleItem | null>(null)
@@ -903,11 +923,11 @@ export function ProgramsScreen({
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
       </div>
 
       {/* Calendar Section */}
@@ -1284,70 +1304,30 @@ export function ProgramsScreen({
         </DialogContent>
       </Dialog>
 
-      {/* Side Popups */}
-      <SidePopup
-        isOpen={showFitnessGoals}
-        onClose={() => setShowFitnessGoals(false)}
-        title="Fitness Goals"
-        icon={<Target className="h-5 w-5 text-white" />}
-      >
-        <FitnessGoalsSection client={client} onGoalsSaved={onGoalsSaved} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showAICoachInsights}
-        onClose={() => setShowAICoachInsights(false)}
-        title="AI Coach Insights"
-        icon={<Brain className="h-5 w-5 text-white" />}
-      >
-        <AICoachInsightsSection 
-          lastAIRecommendation={lastAIRecommendation}
-          onViewFullAnalysis={onViewFullAnalysis || (() => {})}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainerNotes}
-        onClose={() => setShowTrainerNotes(false)}
-        title="Trainer Notes"
-        icon={<Edit3 className="h-5 w-5 text-white" />}
-      >
-        <TrainerNotesSection 
-          client={client}
-          trainerNotes=""
-          setTrainerNotes={() => {}}
-          handleSaveTrainerNotes={() => {}}
-          isSavingNotes={false}
-          isEditingNotes={false}
-          setIsEditingNotes={() => {}}
-          notesDraft=""
-          setNotesDraft={() => {}}
-          notesError={null}
-          setNotesError={() => {}}
-          isGeneratingAnalysis={false}
-          handleSummarizeNotes={() => {}}
-          isSummarizingNotes={false}
-          lastAIRecommendation={lastAIRecommendation}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showNutritionalPreferences}
-        onClose={() => setShowNutritionalPreferences(false)}
-        title="Nutritional Preferences"
-        icon={<Utensils className="h-5 w-5 text-white" />}
-      >
-        <NutritionalPreferencesSection client={client} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainingPreferences}
-        onClose={() => setShowTrainingPreferences(false)}
-        title="Training Preferences"
-        icon={<Dumbbell className="h-5 w-5 text-white" />}
-      >
-        <TrainingPreferencesSection client={client} />
-      </SidePopup>
+      {/* Unified Popup Host */}
+      <TrainerPopupHost
+        openKey={openPopup}
+        onClose={() => setOpenPopup(null)}
+        context={{
+          client,
+          onGoalsSaved,
+          lastAIRecommendation,
+          onViewFullAnalysis,
+          trainerNotes: trainerNotesState,
+          setTrainerNotes: setTrainerNotesState,
+          handleSaveTrainerNotes: () => {},
+          isSavingNotes: false,
+          isEditingNotes: false,
+          setIsEditingNotes: () => {},
+          notesDraft: trainerNotesState,
+          setNotesDraft: setTrainerNotesState,
+          notesError: null,
+          setNotesError: () => {},
+          isGeneratingAnalysis: false,
+          handleSummarizeNotes: () => {},
+          isSummarizingNotes: false
+        }}
+      />
 
       {/* Custom Task Modal */}
       <AddCustomTaskModal

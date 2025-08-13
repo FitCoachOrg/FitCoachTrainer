@@ -4,44 +4,15 @@ import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Utensils, AlertTriangle, Coffee, Sun, Moon, Apple } from "lucide-react"
+import { formatLocalTime } from "@/utils/datetime"
 
 interface NutritionalPreferencesSectionProps {
   client: any
 }
 
 export function NutritionalPreferencesSection({ client }: NutritionalPreferencesSectionProps) {
-  // Helper function to format time
-  // Supabase times may be stored/returned in UTC. Convert to user's local timezone for display.
-  const formatTime = (time: string | null) => {
-    if (!time) return "Not set"
-    try {
-      const trimmed = String(time).trim()
-      const isPlainTime = /^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)
-      let dateObj: Date
-      if (isPlainTime) {
-        // Treat plain HH:mm or HH:mm:ss as UTC and convert to local
-        const withSeconds = trimmed.length === 5 ? `${trimmed}:00` : trimmed
-        dateObj = new Date(`1970-01-01T${withSeconds}Z`)
-      } else if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed) && !/[zZ]|[\+\-]\d{2}:?\d{2}$/.test(trimmed)) {
-        // ISO without timezone: assume UTC
-        dateObj = new Date(`${trimmed}Z`)
-      } else {
-        // Let Date parse as-is (handles Z or timezone offsets)
-        dateObj = new Date(trimmed)
-        if (isNaN(dateObj.getTime())) {
-          // Fallback: treat as UTC time-of-day
-          dateObj = new Date(`1970-01-01T${trimmed}Z`)
-        }
-      }
-      return dateObj.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      })
-    } catch {
-      return time
-    }
-  }
+  // Helper function to format time consistently
+  const formatTime = (time: string | null) => formatLocalTime(time)
 
   // Helper function to render array of preferences
   const renderPreferences = (preferences: string[] | null) => {

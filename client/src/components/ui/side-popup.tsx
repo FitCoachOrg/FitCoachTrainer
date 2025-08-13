@@ -4,7 +4,7 @@ import React, { useEffect } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
+// Using native scrolling here for maximum reliability across screens
 
 interface SidePopupProps {
   isOpen: boolean
@@ -37,7 +37,7 @@ export function SidePopup({ isOpen, onClose, title, children, icon }: SidePopupP
       />
       
       {/* Side Popup */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col">
+      <div className="fixed right-0 top-0 h-screen w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col">
         <CardHeader className="border-b border-gray-200 dark:border-gray-700 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -61,11 +61,11 @@ export function SidePopup({ isOpen, onClose, title, children, icon }: SidePopupP
           </div>
         </CardHeader>
         
-        <ScrollArea className="flex-1">
-          <CardContent className="p-6">
+        <div className="flex-1 overflow-y-auto min-h-0 h-full">
+          <div className="p-6 pr-2 pb-24 h-full">
             {children}
-          </CardContent>
-        </ScrollArea>
+          </div>
+        </div>
       </div>
     </>
   )

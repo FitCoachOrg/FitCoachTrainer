@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -196,7 +197,7 @@ export function AICoachInsightsSection({
   const nutritionalPlanChanges = getNutritionalPlanChanges()
 
   return (
-    <div className="h-full overflow-y-auto space-y-6 pr-2">
+    <div className="space-y-6">
       {/* Header Card */}
       <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-purple-200 dark:border-purple-800 shadow-xl">
         <CardHeader className="pb-4">

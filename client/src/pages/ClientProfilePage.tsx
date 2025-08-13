@@ -87,7 +87,8 @@ import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceh
 import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
 import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
 import FitnessScoreVisualization from "@/components/fitness-score/FitnessScoreVisualization"
-import { SidePopup } from "@/components/ui/side-popup"
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
+import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1347,12 +1348,8 @@ export default function ClientDashboard() {
   const [notesError, setNotesError] = useState<string | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
   
-  // Side popup states for placeholder cards
-  const [showFitnessGoals, setShowFitnessGoals] = useState(false)
-  const [showAICoachInsights, setShowAICoachInsights] = useState(false)
-  const [showTrainerNotes, setShowTrainerNotes] = useState(false)
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false)
-  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false)
+  // Unified popup state for placeholder cards
+  const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
   const [showFitnessScore, setShowFitnessScore] = useState(false)
   const [todoItems, setTodoItems] = useState(
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week"
@@ -2118,83 +2115,40 @@ export default function ClientDashboard() {
           clientName={client?.name || client?.preferredName}
         />
 
-        {/* Side Popups for Placeholder Cards */}
-        <SidePopup
-          isOpen={showFitnessGoals}
-          onClose={() => setShowFitnessGoals(false)}
-          title="Fitness Goals"
-          icon={<Target className="h-5 w-5 text-white" />}
-        >
-          <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
-        </SidePopup>
+        {/* Unified Popup Host */}
+        <TrainerPopupHost
+          openKey={openPopup}
+          onClose={() => setOpenPopup(null)}
+          context={{
+            client,
+            onGoalsSaved: refreshClientData,
+            lastAIRecommendation,
+            onViewFullAnalysis: () => {},
+            trainerNotes,
+            setTrainerNotes,
+            handleSaveTrainerNotes,
+            isSavingNotes,
+            isEditingNotes,
+            setIsEditingNotes,
+            notesDraft,
+            setNotesDraft,
+            notesError,
+            setNotesError,
+            isGeneratingAnalysis,
+            handleSummarizeNotes,
+            isSummarizingNotes,
+            setLastAIRecommendation
+          }}
+        />
 
-        <SidePopup
-          isOpen={showAICoachInsights}
-          onClose={() => setShowAICoachInsights(false)}
-          title="AI Coach Insights"
-          icon={<Brain className="h-5 w-5 text-white" />}
-        >
-          <AICoachInsightsSection 
-            lastAIRecommendation={lastAIRecommendation}
-            onViewFullAnalysis={() => {}}
-            client={client}
-            trainerNotes={trainerNotes}
-            setLastAIRecommendation={setLastAIRecommendation}
-          />
-        </SidePopup>
-
-        <SidePopup
-          isOpen={showTrainerNotes}
-          onClose={() => setShowTrainerNotes(false)}
-          title="Trainer Notes"
-          icon={<FileText className="h-5 w-5 text-white" />}
-        >
-          <StructuredTrainerNotesSection 
-            client={client}
-            trainerNotes={trainerNotes}
-            setTrainerNotes={setTrainerNotes}
-            handleSaveTrainerNotes={handleSaveTrainerNotes}
-            isSavingNotes={isSavingNotes}
-            isEditingNotes={isEditingNotes}
-            setIsEditingNotes={setIsEditingNotes}
-            notesDraft={notesDraft}
-            setNotesDraft={setNotesDraft}
-            notesError={notesError}
-            setNotesError={setNotesError}
-            isGeneratingAnalysis={isGeneratingAnalysis}
-            handleSummarizeNotes={handleSummarizeNotes}
-            isSummarizingNotes={isSummarizingNotes}
-            lastAIRecommendation={lastAIRecommendation}
-            setLastAIRecommendation={setLastAIRecommendation}
-          />
-        </SidePopup>
-
-        <SidePopup
-          isOpen={showNutritionalPreferences}
-          onClose={() => setShowNutritionalPreferences(false)}
-          title="Nutritional Preferences"
-          icon={<Utensils className="h-5 w-5 text-white" />}
-        >
-          <NutritionalPreferencesSection client={client} />
-        </SidePopup>
-
-        <SidePopup
-          isOpen={showTrainingPreferences}
-          onClose={() => setShowTrainingPreferences(false)}
-          title="Training Preferences"
-          icon={<Dumbbell className="h-5 w-5 text-white" />}
-        >
-          <TrainingPreferencesSection client={client} />
-        </SidePopup>
-
-        <SidePopup
-          isOpen={showFitnessScore}
+        <TrainerPopupHost
+          openKey={showFitnessScore ? 'fitnessGoals' : null}
           onClose={() => setShowFitnessScore(false)}
-          title="Fitness Score"
-          icon={<BarChart3 className="h-5 w-5 text-white" />}
-        >
-          <FitnessScoreVisualization clientId={clientId || 34} />
-        </SidePopup>
+          context={{
+            client,
+            onGoalsSaved: () => {},
+          }}
+        />
       </div>
     </div>
   )

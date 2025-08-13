@@ -3,7 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards";
 import { BarChart3, TrendingUp, Target, Brain, FileText, Utensils, Dumbbell } from "lucide-react";
 import FitnessScoreVisualization from "@/components/fitness-score/FitnessScoreVisualization";
-import { SidePopup } from "@/components/ui/side-popup";
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost";
+import { type PopupKey } from "@/components/popups/trainer-popups.config";
 import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection";
 import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSection";
 import { StructuredTrainerNotesSection } from "@/components/StructuredTrainerNotesSection";
@@ -48,22 +49,18 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   refreshClientData,
 }) => {
   // Local state for popups
-  const [showFitnessGoals, setShowFitnessGoals] = React.useState(false);
-  const [showAICoachInsights, setShowAICoachInsights] = React.useState(false);
-  const [showTrainerNotes, setShowTrainerNotes] = React.useState(false);
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = React.useState(false);
-  const [showTrainingPreferences, setShowTrainingPreferences] = React.useState(false);
+  const [openPopup, setOpenPopup] = React.useState<PopupKey | null>(null);
   const [showFitnessScore, setShowFitnessScore] = React.useState(false);
 
   return (
     <>
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
         {/* Fitness Score Card removed as requested */}
       </div>
       {/* Fitness Score Visualization */}
@@ -72,66 +69,30 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
           <FitnessScoreVisualization clientId={client?.client_id || 34} />
         </CardContent>
       </Card>
-      {/* Side Popups for Placeholder Cards */}
-      <SidePopup
-        isOpen={showFitnessGoals}
-        onClose={() => setShowFitnessGoals(false)}
-        title="Fitness Goals"
-        icon={<Target className="h-5 w-5 text-white" />}
-      >
-        <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
-      </SidePopup>
-      <SidePopup
-        isOpen={showAICoachInsights}
-        onClose={() => setShowAICoachInsights(false)}
-        title="AI Coach Insights"
-        icon={<Brain className="h-5 w-5 text-white" />}
-      >
-        <AICoachInsightsSection 
-          lastAIRecommendation={lastAIRecommendation}
-          onViewFullAnalysis={() => {}}
-        />
-      </SidePopup>
-      <SidePopup
-        isOpen={showTrainerNotes}
-        onClose={() => setShowTrainerNotes(false)}
-        title="Trainer Notes"
-        icon={<FileText className="h-5 w-5 text-white" />}
-      >
-        <StructuredTrainerNotesSection 
-          client={client}
-          trainerNotes={trainerNotes}
-          setTrainerNotes={setTrainerNotes}
-          handleSaveTrainerNotes={handleSaveTrainerNotes}
-          isSavingNotes={isSavingNotes}
-          isEditingNotes={isEditingNotes}
-          setIsEditingNotes={setIsEditingNotes}
-          notesDraft={notesDraft}
-          setNotesDraft={setNotesDraft}
-          notesError={notesError}
-          setNotesError={setNotesError}
-          isGeneratingAnalysis={isGeneratingAnalysis}
-          handleSummarizeNotes={handleSummarizeNotes}
-          isSummarizingNotes={isSummarizingNotes}
-          lastAIRecommendation={lastAIRecommendation}
-        />
-      </SidePopup>
-      <SidePopup
-        isOpen={showNutritionalPreferences}
-        onClose={() => setShowNutritionalPreferences(false)}
-        title="Nutritional Preferences"
-        icon={<Utensils className="h-5 w-5 text-white" />}
-      >
-        <NutritionalPreferencesSection client={client} />
-      </SidePopup>
-      <SidePopup
-        isOpen={showTrainingPreferences}
-        onClose={() => setShowTrainingPreferences(false)}
-        title="Training Preferences"
-        icon={<Dumbbell className="h-5 w-5 text-white" />}
-      >
-        <TrainingPreferencesSection client={client} />
-      </SidePopup>
+      {/* Unified Popup Host */}
+      <TrainerPopupHost
+        openKey={openPopup}
+        onClose={() => setOpenPopup(null)}
+        context={{
+          client,
+          onGoalsSaved: refreshClientData,
+          lastAIRecommendation,
+          onViewFullAnalysis: () => {},
+          trainerNotes,
+          setTrainerNotes,
+          handleSaveTrainerNotes,
+          isSavingNotes,
+          isEditingNotes,
+          setIsEditingNotes,
+          notesDraft,
+          setNotesDraft,
+          notesError,
+          setNotesError,
+          isGeneratingAnalysis,
+          handleSummarizeNotes,
+          isSummarizingNotes
+        }}
+      />
       {/* Remove the SidePopup for Fitness Score as well: */}
       {/* <SidePopup
         isOpen={showFitnessScore}

@@ -20,7 +20,8 @@ import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
 import { checkProviderHealth, getCurrentProvider } from "@/lib/llm-service"
 import AIDebugPopup from "@/components/AIDebugPopup"
 import FitnessPlanOverview from "@/components/FitnessPlanOverview"
-import { SidePopup } from "@/components/ui/side-popup"
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
+import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
 import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection"
 import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSection"
@@ -969,11 +970,7 @@ const WorkoutPlanSection = ({
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [showFitnessGoals, setShowFitnessGoals] = useState(false);
-  const [showAICoachInsights, setShowAICoachInsights] = useState(false);
-  const [showTrainerNotes, setShowTrainerNotes] = useState(false);
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false);
-  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
+  const [openPopup, setOpenPopup] = useState<PopupKey | null>(null);
   const [hasAIGeneratedPlan, setHasAIGeneratedPlan] = useState(false); // Add this flag
   const [isDraftPlan, setIsDraftPlan] = useState(false); // Indicates if plan is from preview (draft)
   const [isApproving, setIsApproving] = useState(false);
@@ -1963,11 +1960,11 @@ const WorkoutPlanSection = ({
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
       </div>
 
       {/* Client Goals & Preferences Section */}
@@ -2347,70 +2344,28 @@ const WorkoutPlanSection = ({
         )}
       </div>
 
-      {/* Side Popups */}
-      <SidePopup
-        isOpen={showFitnessGoals}
-        onClose={() => setShowFitnessGoals(false)}
-        title="Fitness Goals"
-        icon={<Target className="h-5 w-5 text-white" />}
-      >
-        <FitnessGoalsSection client={client} onGoalsSaved={() => {}} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showAICoachInsights}
-        onClose={() => setShowAICoachInsights(false)}
-        title="AI Coach Insights"
-        icon={<Brain className="h-5 w-5 text-white" />}
-      >
-        <AICoachInsightsSection 
-          lastAIRecommendation={props.lastAIRecommendation}
-          onViewFullAnalysis={() => {}}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainerNotes}
-        onClose={() => setShowTrainerNotes(false)}
-        title="Trainer Notes"
-        icon={<FileText className="h-5 w-5 text-white" />}
-      >
-        <TrainerNotesSection 
-          client={client}
-          trainerNotes={props.trainerNotes || ""}
-          setTrainerNotes={props.setTrainerNotes || (() => {})}
-          handleSaveTrainerNotes={props.handleSaveTrainerNotes || (() => {})}
-          isSavingNotes={props.isSavingNotes || false}
-          isEditingNotes={props.isEditingNotes || false}
-          setIsEditingNotes={props.setIsEditingNotes || (() => {})}
-          notesDraft={props.notesDraft || ""}
-          setNotesDraft={props.setNotesDraft || (() => {})}
-          notesError={props.notesError || null}
-          setNotesError={props.setNotesError || (() => {})}
-          isGeneratingAnalysis={props.isGeneratingAnalysis || false}
-          handleSummarizeNotes={props.handleSummarizeNotes || (() => {})}
-          isSummarizingNotes={props.isSummarizingNotes || false}
-          lastAIRecommendation={props.lastAIRecommendation}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showNutritionalPreferences}
-        onClose={() => setShowNutritionalPreferences(false)}
-        title="Nutritional Preferences"
-        icon={<Utensils className="h-5 w-5 text-white" />}
-      >
-        <NutritionalPreferencesSection client={client} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainingPreferences}
-        onClose={() => setShowTrainingPreferences(false)}
-        title="Training Preferences"
-        icon={<Dumbbell className="h-5 w-5 text-white" />}
-      >
-        <TrainingPreferencesSection client={client} />
-      </SidePopup>
+      {/* Unified Popup Host */}
+      <TrainerPopupHost
+        openKey={openPopup}
+        onClose={() => setOpenPopup(null)}
+        context={{
+          client,
+          lastAIRecommendation: props.lastAIRecommendation,
+          trainerNotes: props.trainerNotes || "",
+          setTrainerNotes: props.setTrainerNotes || (() => {}),
+          handleSaveTrainerNotes: props.handleSaveTrainerNotes || (() => {}),
+          isSavingNotes: props.isSavingNotes || false,
+          isEditingNotes: props.isEditingNotes || false,
+          setIsEditingNotes: props.setIsEditingNotes || (() => {}),
+          notesDraft: props.notesDraft || "",
+          setNotesDraft: props.setNotesDraft || (() => {}),
+          notesError: props.notesError || null,
+          setNotesError: props.setNotesError || (() => {}),
+          isGeneratingAnalysis: props.isGeneratingAnalysis || false,
+          handleSummarizeNotes: props.handleSummarizeNotes || (() => {}),
+          isSummarizingNotes: props.isSummarizingNotes || false
+        }}
+      />
     </div>
   );
 };

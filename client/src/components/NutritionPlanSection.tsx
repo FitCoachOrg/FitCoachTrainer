@@ -36,7 +36,8 @@ import { format, addDays } from "date-fns"
 import { generateNutritionPlan, NutritionPlanResult } from "@/lib/ai-nutrition-plan"
 import { supabase } from "@/lib/supabase"
 import OpenRouterTest from "./OpenRouterTest"
-import { SidePopup } from "@/components/ui/side-popup"
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
+import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
 import { FitnessGoalsSection } from "@/components/overview/FitnessGoalsSection"
 import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSection"
@@ -140,11 +141,7 @@ const NutritionPlanSection = ({
   const [showGroceryListPopup, setShowGroceryListPopup] = useState(false);
   const [groceryItems, setGroceryItems] = useState<{ id: string; text: string; checked: boolean }[]>([]);
   const [groceryCategories, setGroceryCategories] = useState<{ name: string; items: { id: string; text: string; checked: boolean }[] }[]>([]);
-  const [showFitnessGoals, setShowFitnessGoals] = useState(false);
-  const [showAICoachInsights, setShowAICoachInsights] = useState(false);
-  const [showTrainerNotes, setShowTrainerNotes] = useState(false);
-  const [showNutritionalPreferences, setShowNutritionalPreferences] = useState(false);
-  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
+  const [openPopup, setOpenPopup] = useState<PopupKey | null>(null);
   const { toast } = useToast();
   const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({});
   const [selectedDay, setSelectedDay] = useState<string>('');
@@ -1189,11 +1186,11 @@ const NutritionPlanSection = ({
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setShowFitnessGoals(true)} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setShowTrainingPreferences(true)} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setShowNutritionalPreferences(true)} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setShowTrainerNotes(true)} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setShowAICoachInsights(true)} client={client} />
+        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
       </div>
 
       {/* Client Nutritional Targets Section */}
@@ -1433,70 +1430,28 @@ const NutritionPlanSection = ({
             <OpenRouterTest />
                   </div>
 
-      {/* Side Popups */}
-      <SidePopup
-        isOpen={showFitnessGoals}
-        onClose={() => setShowFitnessGoals(false)}
-        title="Fitness Goals"
-        icon={<Target className="h-5 w-5 text-white" />}
-      >
-        <FitnessGoalsSection client={client} onGoalsSaved={() => {}} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showAICoachInsights}
-        onClose={() => setShowAICoachInsights(false)}
-        title="AI Coach Insights"
-        icon={<Brain className="h-5 w-5 text-white" />}
-      >
-        <AICoachInsightsSection 
-          lastAIRecommendation={lastAIRecommendation}
-          onViewFullAnalysis={() => {}}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainerNotes}
-        onClose={() => setShowTrainerNotes(false)}
-        title="Trainer Notes"
-        icon={<FileText className="h-5 w-5 text-white" />}
-      >
-        <TrainerNotesSection 
-          client={client}
-          trainerNotes={trainerNotes || ""}
-          setTrainerNotes={setTrainerNotes || (() => {})}
-          handleSaveTrainerNotes={handleSaveTrainerNotes || (() => {})}
-          isSavingNotes={isSavingNotes || false}
-          isEditingNotes={isEditingNotes || false}
-          setIsEditingNotes={setIsEditingNotes || (() => {})}
-          notesDraft={notesDraft || ""}
-          setNotesDraft={setNotesDraft || (() => {})}
-          notesError={notesError || null}
-          setNotesError={setNotesError || (() => {})}
-          isGeneratingAnalysis={isGeneratingAnalysis || false}
-          handleSummarizeNotes={handleSummarizeNotes || (() => {})}
-          isSummarizingNotes={isSummarizingNotes || false}
-          lastAIRecommendation={lastAIRecommendation}
-        />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showNutritionalPreferences}
-        onClose={() => setShowNutritionalPreferences(false)}
-        title="Nutritional Preferences"
-        icon={<Utensils className="h-5 w-5 text-white" />}
-      >
-        <NutritionalPreferencesSection client={client} />
-      </SidePopup>
-
-      <SidePopup
-        isOpen={showTrainingPreferences}
-        onClose={() => setShowTrainingPreferences(false)}
-        title="Training Preferences"
-        icon={<Dumbbell className="h-5 w-5 text-white" />}
-      >
-        <TrainingPreferencesSection client={client} />
-      </SidePopup>
+      {/* Unified Popup Host */}
+      <TrainerPopupHost
+        openKey={openPopup}
+        onClose={() => setOpenPopup(null)}
+        context={{
+          client,
+          lastAIRecommendation,
+          trainerNotes: trainerNotes || "",
+          setTrainerNotes: setTrainerNotes || (() => {}),
+          handleSaveTrainerNotes: handleSaveTrainerNotes || (() => {}),
+          isSavingNotes: isSavingNotes || false,
+          isEditingNotes: isEditingNotes || false,
+          setIsEditingNotes: setIsEditingNotes || (() => {}),
+          notesDraft: notesDraft || "",
+          setNotesDraft: setNotesDraft || (() => {}),
+          notesError: notesError || null,
+          setNotesError: setNotesError || (() => {}),
+          isGeneratingAnalysis: isGeneratingAnalysis || false,
+          handleSummarizeNotes: handleSummarizeNotes || (() => {}),
+          isSummarizingNotes: isSummarizingNotes || false
+        }}
+      />
 
       {/* Grocery List Popup */}
       {showGroceryListPopup && (
