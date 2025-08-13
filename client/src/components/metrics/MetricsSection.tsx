@@ -236,8 +236,17 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       // Group activity data by activity type
       const groupedData: Record<string, any[]> = {};
       filteredActivityData.forEach(item => {
-        if (!groupedData[item.activity]) {
-          groupedData[item.activity] = [];
+        // Normalize certain measurement names and typos while preserving others
+        const raw = String(item.activity || '').toLowerCase().trim();
+        let keyForGrouping: string;
+        if (["hip", "waist", "waste", "bicep", "thigh", "thight"].includes(raw)) {
+          const normalized = raw === "waste" ? "waist" : raw === "thight" ? "thigh" : raw;
+          keyForGrouping = normalized; // use lowercase canonical for measurements
+        } else {
+          keyForGrouping = item.activity; // keep original for other metrics that rely on exact labels
+        }
+        if (!groupedData[keyForGrouping]) {
+          groupedData[keyForGrouping] = [];
         }
         
         // Format date based on time range
@@ -258,7 +267,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         }
         
         // Add to grouped data
-        groupedData[item.activity].push({
+        groupedData[keyForGrouping].push({
           date: displayDate,
           fullDate: dateStr,
           qty: Number(item.qty),
@@ -270,6 +279,36 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       // Update metrics from activity_info
       METRIC_LIBRARY.forEach((metric, index) => {
         if (metric.dataSource !== "activity_info") return;
+        
+        // Special handling for derived Hips/Waist ratio
+        if (metric.key === "hipsWaistRatio") {
+          const completeTimeline = generateCompleteTimeline();
+          // Aggregate hip and waist values by period
+          const aggregate = (arr: any[] | undefined) => {
+            const out: Record<string, { total: number, count: number }> = {};
+            (arr || []).forEach(item => {
+              if (!out[item.date]) out[item.date] = { total: 0, count: 0 };
+              out[item.date].total += item.qty;
+              out[item.date].count += 1;
+            });
+            return out;
+          };
+          const hipAgg = aggregate(groupedData["hip"]);
+          const waistAgg = aggregate(groupedData["waist"]);
+          const mergedData = completeTimeline.map(timelineItem => {
+            const h = hipAgg[timelineItem.date];
+            const w = waistAgg[timelineItem.date];
+            let ratio: number | null = null;
+            if (h && w && w.count > 0) {
+              const hipAvg = h.total / h.count;
+              const waistAvg = w.total / w.count;
+              if (waistAvg > 0) ratio = Number((hipAvg / waistAvg).toFixed(3));
+            }
+            return { date: timelineItem.date, qty: ratio, fullDate: timelineItem.fullDate };
+          });
+          METRIC_LIBRARY[index].data = mergedData;
+          return;
+        }
         
         const activityName = metric.activityName;
         

@@ -56,7 +56,9 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
   const selectedMetrics = METRIC_LIBRARY.filter((metric) =>
     selectedKeys.includes(metric.key)
   )
-  const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key))
+  // Exclude certain metrics from being shown in the dropdown
+  const hiddenFromDropdown = new Set<string>(["progress"]) // Progress Improvement hidden from add list
+  const availableMetrics = METRIC_LIBRARY.filter((m) => !selectedKeys.includes(m.key) && !hiddenFromDropdown.has(m.key))
 
 
 

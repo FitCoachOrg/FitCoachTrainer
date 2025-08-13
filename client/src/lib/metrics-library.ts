@@ -28,6 +28,8 @@ import {
   Target,
   Utensils,
   Dumbbell,
+  Ruler,
+  Divide,
 } from "lucide-react"
 
 // Type definitions for metrics
@@ -81,6 +83,67 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "kg",
     activityName: "weight",
+    dataSource: "activity_info"
+  },
+  // Body measurements (inches)
+  {
+    key: "hipCircumference",
+    label: "Hips",
+    icon: Ruler,
+    type: "line",
+    color: "#0ea5e9",
+    data: [],
+    dataKey: "qty",
+    yLabel: "in",
+    activityName: "hip",
+    dataSource: "activity_info"
+  },
+  {
+    key: "waistCircumference",
+    label: "Waist",
+    icon: Ruler,
+    type: "line",
+    color: "#22c55e",
+    data: [],
+    dataKey: "qty",
+    yLabel: "in",
+    activityName: "waist",
+    dataSource: "activity_info"
+  },
+  {
+    key: "bicepCircumference",
+    label: "Bicep",
+    icon: Ruler,
+    type: "line",
+    color: "#f59e0b",
+    data: [],
+    dataKey: "qty",
+    yLabel: "in",
+    activityName: "bicep",
+    dataSource: "activity_info"
+  },
+  {
+    key: "thighCircumference",
+    label: "Thigh",
+    icon: Ruler,
+    type: "line",
+    color: "#ef4444",
+    data: [],
+    dataKey: "qty",
+    yLabel: "in",
+    activityName: "thigh",
+    dataSource: "activity_info"
+  },
+  {
+    key: "hipsWaistRatio",
+    label: "Hips/Waist Ratio",
+    icon: Divide,
+    type: "line",
+    color: "#a855f7",
+    data: [],
+    dataKey: "qty",
+    yLabel: "ratio",
+    activityName: "hipsWaistRatio",
     dataSource: "activity_info"
   },
   {
