@@ -220,6 +220,15 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
 
   // Update metrics data from multiple data sources
   const updateMetricsData = useCallback(() => {
+    // Helper to coerce values like "20", "20.5", or "20 g" to numbers
+    const toNumber = (value: any): number => {
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') {
+        const match = value.match(/-?\d+(?:\.\d+)?/);
+        return match ? Number(match[0]) : NaN;
+      }
+      return NaN;
+    };
     // Process activity_info data
     const processActivityData = () => {
       if (!filteredActivityData.length) return;
@@ -267,7 +276,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         });
       });
       
-      // Update metrics from activity_info
+        // Update metrics from activity_info
       METRIC_LIBRARY.forEach((metric, index) => {
         if (metric.dataSource !== "activity_info") return;
         
@@ -301,20 +310,23 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           return;
         }
         
-        const activityName = metric.activityName;
+          const activityName = metric.activityName;
         
         // Generate complete timeline
         const completeTimeline = generateCompleteTimeline();
         
-        if (groupedData[activityName]) {
+          if (groupedData[activityName]) {
           // Group by date to calculate averages
-          const aggregatedData: Record<string, {total: number, count: number}> = {};
+            const aggregatedData: Record<string, {total: number, count: number}> = {};
           
           groupedData[activityName].forEach(item => {
             if (!aggregatedData[item.date]) {
               aggregatedData[item.date] = { total: 0, count: 0 };
             }
-            aggregatedData[item.date].total += item.qty;
+              // Convert hydration cups to mL (240 mL per cup) for waterIntake value
+              aggregatedData[item.date].total += (metric.key === 'waterIntake')
+                ? ((item.qty ?? 0) * 240)
+                : (item.qty ?? 0);
             aggregatedData[item.date].count += 1;
           });
           
@@ -323,7 +335,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
             const existingData = aggregatedData[timelineItem.date];
             return {
               date: timelineItem.date,
-              qty: existingData ? Number((existingData.total / existingData.count).toFixed(1)) : null,
+                qty: existingData ? Number((existingData.total / existingData.count).toFixed(1)) : null,
               fullDate: timelineItem.fullDate
             };
           });
@@ -423,37 +435,49 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       });
     };
     
-    // Process meal data
+    // Process meal data (Calories, Protein, Carbs, Fat)
     const processMealData = () => {
       if (!filteredMealData.length) return;
       
       if (timeRange === "7D") {
         // For 7D: Group by individual days and sum all meals per day
-        const dailyData: Record<string, number> = {};
+        const dailyCalories: Record<string, number> = {};
+        const dailyProtein: Record<string, number> = {};
+        const dailyCarbs: Record<string, number> = {};
+        const dailyFat: Record<string, number> = {};
         
         filteredMealData.forEach(item => {
           const date = new Date(item.created_at);
           const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
           const displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
           
-          if (item.calories && !isNaN(Number(item.calories))) {
-            if (!dailyData[displayDate]) {
-              dailyData[displayDate] = 0;
+          const add = (map: Record<string, number>, value: any) => {
+            const numeric = toNumber(value);
+            if (!isNaN(numeric)) {
+              if (!map[displayDate]) map[displayDate] = 0;
+              map[displayDate] += numeric;
             }
-            dailyData[displayDate] += Number(item.calories);
-          }
+          };
+          add(dailyCalories, item.calories);
+          add(dailyProtein, item.protein);
+          add(dailyCarbs, item.carbs);
+          add(dailyFat, item.fat);
         });
         
-        // Update calories metric for 7D
+        // Update 7D nutrition metrics
         METRIC_LIBRARY.forEach((metric, index) => {
-          if (metric.dataSource === "meal_info" && metric.columnName === "calories") {
+          if (metric.dataSource === "meal_info" && ["calories", "protein", "carbs", "fat"].includes(String(metric.columnName))) {
             const completeTimeline = generateCompleteTimeline();
             
             const mergedData = completeTimeline.map(timelineItem => {
-              const dailyTotal = dailyData[timelineItem.date];
+              let dailyTotal: number | null = null;
+              if (metric.columnName === "calories") dailyTotal = dailyCalories[timelineItem.date] ?? null;
+              if (metric.columnName === "protein") dailyTotal = dailyProtein[timelineItem.date] ?? null;
+              if (metric.columnName === "carbs") dailyTotal = dailyCarbs[timelineItem.date] ?? null;
+              if (metric.columnName === "fat") dailyTotal = dailyFat[timelineItem.date] ?? null;
               return {
                 date: timelineItem.date,
-                qty: dailyTotal || null,
+                qty: dailyTotal ?? null,
                 fullDate: timelineItem.fullDate
               };
             });
@@ -464,7 +488,10 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         
       } else {
         // For 30D/90D: Calculate daily average for each week
-        const weeklyData: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        const weeklyCalories: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        const weeklyProtein: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        const weeklyCarbs: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        const weeklyFat: Record<string, {total: number, daysWithData: Set<string>}> = {};
         
         filteredMealData.forEach(item => {
           const date = new Date(item.created_at);
@@ -473,33 +500,49 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           const weekKey = `${monthName} W${weekNum}`;
           const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
           
-          if (item.calories && !isNaN(Number(item.calories))) {
-            if (!weeklyData[weekKey]) {
-              weeklyData[weekKey] = { total: 0, daysWithData: new Set() };
+          const add = (map: Record<string, { total: number, daysWithData: Set<string> }>, value: any) => {
+            const numeric = toNumber(value);
+            if (!isNaN(numeric)) {
+              if (!map[weekKey]) map[weekKey] = { total: 0, daysWithData: new Set() };
+              map[weekKey].total += numeric;
+              map[weekKey].daysWithData.add(dateKey);
             }
-            weeklyData[weekKey].total += Number(item.calories);
-            weeklyData[weekKey].daysWithData.add(dateKey);
-          }
+          };
+          add(weeklyCalories, item.calories);
+          add(weeklyProtein, item.protein);
+          add(weeklyCarbs, item.carbs);
+          add(weeklyFat, item.fat);
         });
         
-        // Calculate daily average for each week
-        const weeklyAverages: Record<string, number> = {};
-        Object.entries(weeklyData).forEach(([weekKey, data]) => {
-          if (data.daysWithData.size > 0) {
-            weeklyAverages[weekKey] = Number((data.total / data.daysWithData.size).toFixed(1));
-          }
-        });
+        // Calculate daily average for each week per nutrient
+        const calcAvg = (map: Record<string, { total: number, daysWithData: Set<string> }>) => {
+          const out: Record<string, number> = {};
+          Object.entries(map).forEach(([weekKey, data]) => {
+            if (data.daysWithData.size > 0) {
+              out[weekKey] = Number((data.total / data.daysWithData.size).toFixed(1));
+            }
+          });
+          return out;
+        };
+        const weeklyAvgCalories = calcAvg(weeklyCalories);
+        const weeklyAvgProtein = calcAvg(weeklyProtein);
+        const weeklyAvgCarbs = calcAvg(weeklyCarbs);
+        const weeklyAvgFat = calcAvg(weeklyFat);
         
-        // Update calories metric for 30D/90D
+        // Update nutrition metrics for 30D/90D
         METRIC_LIBRARY.forEach((metric, index) => {
-          if (metric.dataSource === "meal_info" && metric.columnName === "calories") {
+          if (metric.dataSource === "meal_info" && ["calories", "protein", "carbs", "fat"].includes(String(metric.columnName))) {
             const completeTimeline = generateCompleteTimeline();
             
             const mergedData = completeTimeline.map(timelineItem => {
-              const weeklyAverage = weeklyAverages[timelineItem.date];
+              let weeklyAverage: number | null = null;
+              if (metric.columnName === "calories") weeklyAverage = weeklyAvgCalories[timelineItem.date] ?? null;
+              if (metric.columnName === "protein") weeklyAverage = weeklyAvgProtein[timelineItem.date] ?? null;
+              if (metric.columnName === "carbs") weeklyAverage = weeklyAvgCarbs[timelineItem.date] ?? null;
+              if (metric.columnName === "fat") weeklyAverage = weeklyAvgFat[timelineItem.date] ?? null;
               return {
                 date: timelineItem.date,
-                qty: weeklyAverage || null,
+                qty: weeklyAverage ?? null,
                 fullDate: timelineItem.fullDate
               };
             });
@@ -510,13 +553,13 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       }
     };
     
-    // Process workout time data
+    // Process workout metrics (time and number of exercises)
     const processWorkoutTimeData = () => {
       if (!filteredWorkoutData.length) return;
       
       if (timeRange === "7D") {
         // For 7D: Group by individual days and calculate average workout duration per day (matching manual query)
-        const dailyData: Record<string, {total: number, count: number}> = {};
+        const dailyData: Record<string, {totalDuration: number, count: number, exerciseCount: number}> = {};
         
         filteredWorkoutData.forEach(item => {
           const date = new Date(item.created_at);
@@ -524,11 +567,16 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           
           if (item.duration && !isNaN(Number(item.duration))) {
             if (!dailyData[displayDate]) {
-              dailyData[displayDate] = { total: 0, count: 0 };
+              dailyData[displayDate] = { totalDuration: 0, count: 0, exerciseCount: 0 };
             }
-            dailyData[displayDate].total += Number(item.duration);
+            dailyData[displayDate].totalDuration += Number(item.duration);
             dailyData[displayDate].count += 1;
           }
+          // Count each row as an exercise entry for the day
+          if (!dailyData[displayDate]) {
+            dailyData[displayDate] = { totalDuration: 0, count: 0, exerciseCount: 0 };
+          }
+          dailyData[displayDate].exerciseCount += 1;
         });
         
         // Update workout time metric for 7D
@@ -538,7 +586,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
             
             const mergedData = completeTimeline.map(timelineItem => {
               const dayData = dailyData[timelineItem.date];
-              const dailyAverage = dayData ? Number((dayData.total / dayData.count).toFixed(1)) : null;
+              const dailyAverage = dayData && dayData.count > 0 ? Number((dayData.totalDuration / dayData.count).toFixed(1)) : null;
               return {
                 date: timelineItem.date,
                 qty: dailyAverage,
@@ -549,10 +597,44 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
             METRIC_LIBRARY[index].data = mergedData;
           }
         });
+
+        // Update number of exercises metric for 7D (daily count)
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "workout_info" && metric.columnName === "count") {
+            const completeTimeline = generateCompleteTimeline();
+            const mergedData = completeTimeline.map(timelineItem => {
+              const dayData = dailyData[timelineItem.date];
+              const count = dayData ? dayData.exerciseCount : null;
+              return {
+                date: timelineItem.date,
+                qty: count,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+
+        // Update workout logins (same as number of exercises) for 7D
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.key === "workoutLogins") {
+            const completeTimeline = generateCompleteTimeline();
+            const mergedData = completeTimeline.map(timelineItem => {
+              const dayData = dailyData[timelineItem.date];
+              const count = dayData ? dayData.exerciseCount : null;
+              return {
+                date: timelineItem.date,
+                qty: count,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
         
       } else {
         // For 30D/90D: Calculate daily average for each week
-        const weeklyData: Record<string, {total: number, daysWithData: Set<string>}> = {};
+        const weeklyData: Record<string, {totalDuration: number, daysWithData: Set<string>, exerciseCount: number}> = {};
         
         filteredWorkoutData.forEach(item => {
           const date = new Date(item.created_at);
@@ -563,18 +645,22 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           
           if (item.duration && !isNaN(Number(item.duration))) {
             if (!weeklyData[weekKey]) {
-              weeklyData[weekKey] = { total: 0, daysWithData: new Set() };
+              weeklyData[weekKey] = { totalDuration: 0, daysWithData: new Set(), exerciseCount: 0 };
             }
-            weeklyData[weekKey].total += Number(item.duration);
+            weeklyData[weekKey].totalDuration += Number(item.duration);
             weeklyData[weekKey].daysWithData.add(dateKey);
           }
+          if (!weeklyData[weekKey]) {
+            weeklyData[weekKey] = { totalDuration: 0, daysWithData: new Set(), exerciseCount: 0 };
+          }
+          weeklyData[weekKey].exerciseCount += 1;
         });
         
         // Calculate daily average for each week
         const weeklyAverages: Record<string, number> = {};
         Object.entries(weeklyData).forEach(([weekKey, data]) => {
           if (data.daysWithData.size > 0) {
-            weeklyAverages[weekKey] = Number((data.total / data.daysWithData.size).toFixed(1));
+            weeklyAverages[weekKey] = Number((data.totalDuration / data.daysWithData.size).toFixed(1));
           }
         });
         
@@ -592,6 +678,44 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
               };
             });
             
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+
+        // Update number of exercises metric for 30D/90D: daily average count per week
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.dataSource === "workout_info" && metric.columnName === "count") {
+            const completeTimeline = generateCompleteTimeline();
+            const mergedData = completeTimeline.map(timelineItem => {
+              const week = weeklyData[timelineItem.date];
+              const avgCount = week && week.daysWithData.size > 0
+                ? Number((week.exerciseCount / week.daysWithData.size).toFixed(1))
+                : null;
+              return {
+                date: timelineItem.date,
+                qty: avgCount,
+                fullDate: timelineItem.fullDate
+              };
+            });
+            METRIC_LIBRARY[index].data = mergedData;
+          }
+        });
+
+        // Update workout logins for 30D/90D: daily average count per week
+        METRIC_LIBRARY.forEach((metric, index) => {
+          if (metric.key === "workoutLogins") {
+            const completeTimeline = generateCompleteTimeline();
+            const mergedData = completeTimeline.map(timelineItem => {
+              const week = weeklyData[timelineItem.date];
+              const avgCount = week && week.daysWithData.size > 0
+                ? Number((week.exerciseCount / week.daysWithData.size).toFixed(1))
+                : null;
+              return {
+                date: timelineItem.date,
+                qty: avgCount,
+                fullDate: timelineItem.fullDate
+              };
+            });
             METRIC_LIBRARY[index].data = mergedData;
           }
         });
@@ -649,6 +773,148 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         }
       });
     };
+
+    // Process engagement-like logins from other tables
+    const processEngagementLogins = () => {
+      // Meal logins: count rows per day/week in filteredMealData
+      if (filteredMealData.length) {
+        if (timeRange === "7D") {
+          const daily: Record<string, number> = {};
+          filteredMealData.forEach(item => {
+            const date = new Date(item.created_at);
+            const label = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+            daily[label] = (daily[label] || 0) + 1;
+          });
+          METRIC_LIBRARY.forEach((metric, index) => {
+            if (metric.key === 'mealLogins') {
+              const timeline = generateCompleteTimeline();
+              METRIC_LIBRARY[index].data = timeline.map(t => ({ date: t.date, qty: daily[t.date] ?? null, fullDate: t.fullDate }));
+            }
+          });
+        } else {
+          const weekly: Record<string, { total: number, days: Set<string> }> = {};
+          filteredMealData.forEach(item => {
+            const date = new Date(item.created_at);
+            const weekNum = Math.ceil(date.getDate() / 7);
+            const monthName = date.toLocaleString('default', { month: 'short' });
+            const weekKey = `${monthName} W${weekNum}`;
+            const dateKey = date.toISOString().split('T')[0];
+            if (!weekly[weekKey]) weekly[weekKey] = { total: 0, days: new Set() };
+            weekly[weekKey].total += 1;
+            weekly[weekKey].days.add(dateKey);
+          });
+          METRIC_LIBRARY.forEach((metric, index) => {
+            if (metric.key === 'mealLogins') {
+              const timeline = generateCompleteTimeline();
+              METRIC_LIBRARY[index].data = timeline.map(t => {
+                const w = weekly[t.date];
+                const avg = w && w.days.size > 0 ? Number((w.total / w.days.size).toFixed(1)) : null;
+                return { date: t.date, qty: avg, fullDate: t.fullDate };
+              });
+            }
+          });
+        }
+      }
+
+      // Hydration logins: count rows where activity='hydration' in filteredActivityData
+      if (filteredActivityData.length) {
+        const hydration = filteredActivityData.filter(i => String(i.activity || '').toLowerCase().trim() === 'hydration');
+        if (hydration.length) {
+          if (timeRange === '7D') {
+            const daily: Record<string, number> = {};
+            hydration.forEach(item => {
+              const date = new Date(item.created_at);
+              const label = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+              daily[label] = (daily[label] || 0) + 1;
+            });
+            METRIC_LIBRARY.forEach((metric, index) => {
+              if (metric.key === 'hydrationLogins') {
+                const timeline = generateCompleteTimeline();
+                METRIC_LIBRARY[index].data = timeline.map(t => ({ date: t.date, qty: daily[t.date] ?? null, fullDate: t.fullDate }));
+              }
+            });
+          } else {
+            const weekly: Record<string, { total: number, days: Set<string> }> = {};
+            hydration.forEach(item => {
+              const date = new Date(item.created_at);
+              const weekNum = Math.ceil(date.getDate() / 7);
+              const monthName = date.toLocaleString('default', { month: 'short' });
+              const weekKey = `${monthName} W${weekNum}`;
+              const dateKey = date.toISOString().split('T')[0];
+              if (!weekly[weekKey]) weekly[weekKey] = { total: 0, days: new Set() };
+              weekly[weekKey].total += 1;
+              weekly[weekKey].days.add(dateKey);
+            });
+            METRIC_LIBRARY.forEach((metric, index) => {
+              if (metric.key === 'hydrationLogins') {
+                const timeline = generateCompleteTimeline();
+                METRIC_LIBRARY[index].data = timeline.map(t => {
+                  const w = weekly[t.date];
+                  const avg = w && w.days.size > 0 ? Number((w.total / w.days.size).toFixed(1)) : null;
+                  return { date: t.date, qty: avg, fullDate: t.fullDate };
+                });
+              }
+            });
+          }
+        }
+      }
+
+      // Wakeup Logins: derive from three related activities in activity_info
+      // Activities considered: Sleep Quality, Sleep Duration, Energy Level
+      // Count total entries across these per day/week, then divide by 3
+      if (filteredActivityData.length) {
+        const normalizedActivities = new Set([
+          'sleep quality',
+          'sleep duration',
+          'energy level',
+        ]);
+        const wakeGroup = filteredActivityData.filter(i =>
+          normalizedActivities.has(String(i.activity || '').toLowerCase().trim())
+        );
+        if (wakeGroup.length) {
+          if (timeRange === '7D') {
+            const daily: Record<string, number> = {};
+            wakeGroup.forEach(item => {
+              const date = new Date(item.created_at);
+              const label = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+              daily[label] = (daily[label] || 0) + 1;
+            });
+            METRIC_LIBRARY.forEach((metric, index) => {
+              if (metric.key === 'wakeupLogins') {
+                const timeline = generateCompleteTimeline();
+                METRIC_LIBRARY[index].data = timeline.map(t => ({
+                  date: t.date,
+                  qty: daily[t.date] != null ? Number((daily[t.date] / 3).toFixed(1)) : null,
+                  fullDate: t.fullDate
+                }));
+              }
+            });
+          } else {
+            const weekly: Record<string, { total: number, days: Set<string> }> = {};
+            wakeGroup.forEach(item => {
+              const date = new Date(item.created_at);
+              const weekNum = Math.ceil(date.getDate() / 7);
+              const monthName = date.toLocaleString('default', { month: 'short' });
+              const weekKey = `${monthName} W${weekNum}`;
+              const dateKey = date.toISOString().split('T')[0];
+              if (!weekly[weekKey]) weekly[weekKey] = { total: 0, days: new Set() };
+              weekly[weekKey].total += 1;
+              weekly[weekKey].days.add(dateKey);
+            });
+            METRIC_LIBRARY.forEach((metric, index) => {
+              if (metric.key === 'wakeupLogins') {
+                const timeline = generateCompleteTimeline();
+                METRIC_LIBRARY[index].data = timeline.map(t => {
+                  const w = weekly[t.date];
+                  const avg = w && w.days.size > 0 ? Number(((w.total / 3) / w.days.size).toFixed(1)) : null;
+                  return { date: t.date, qty: avg, fullDate: t.fullDate };
+                });
+              }
+            });
+          }
+        }
+      }
+    };
     
     // Helper function to sort and format date data consistently
     const formatAndSortData = (averagedData: any[]) => {
@@ -686,6 +952,16 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     processMealData();
     processWorkoutTimeData();
     processEngagementData();
+    processEngagementLogins();
+
+    // Ensure every metric has at least a baseline timeline (so charts render axes)
+    const baselineTimeline = generateCompleteTimeline();
+    METRIC_LIBRARY.forEach((metric, index) => {
+      const current = METRIC_LIBRARY[index].data;
+      if (!current || current.length === 0) {
+        METRIC_LIBRARY[index].data = baselineTimeline;
+      }
+    });
     
   }, [filteredActivityData, filteredExternalDeviceData, filteredMealData, filteredWorkoutData, filteredEngagementData, timeRange]);
 
@@ -754,10 +1030,10 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           console.log("Available columns:", Object.keys(finalDeviceData[0]));
         }
         
-        // Fetch meal data for calories tracking
+        // Fetch meal data for nutrition tracking
         const { data: mealData, error: mealError } = await supabase
           .from("meal_info")
-          .select("id, client_id, calories, created_at")
+          .select("id, client_id, calories, protein, carbs, fat, created_at")
           .eq("client_id", clientId)
           .order('created_at', { ascending: true });
           

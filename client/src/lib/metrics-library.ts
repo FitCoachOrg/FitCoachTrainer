@@ -54,6 +54,10 @@ export interface Metric {
   dataSource: "activity_info" | "external_device_connect" | "client_info" | "meal_info" | "workout_info" | "client_engagement_score"
   columnName?: string // Only for external_device_connect metrics
   tableName?: string // For specific table references
+  /** Optional category used for grouping and category-based selection in the UI */
+  category?: string
+  /** Optional multiple categories for a metric to belong to several groups */
+  categories?: string[]
 }
 
 /**
@@ -83,7 +87,9 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "kg",
     activityName: "weight",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    category: "Body Metrics",
+    categories: ["Body Metrics", "Outcome/Results"]
   },
   // Body measurements (inches)
   {
@@ -96,7 +102,9 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "in",
     activityName: "hip",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    category: "Body Metrics",
+    categories: ["Body Metrics", "Outcome/Results"]
   },
   {
     key: "waistCircumference",
@@ -108,7 +116,9 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "in",
     activityName: "waist",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    category: "Body Metrics",
+    categories: ["Body Metrics"]
   },
   {
     key: "bicepCircumference",
@@ -120,7 +130,9 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "in",
     activityName: "bicep",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    category: "Body Metrics",
+    categories: ["Body Metrics", "Outcome/Results"]
   },
   {
     key: "thighCircumference",
@@ -132,7 +144,9 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "in",
     activityName: "thigh",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    category: "Body Metrics",
+    categories: ["Body Metrics"]
   },
   {
     key: "hipsWaistRatio",
@@ -144,11 +158,12 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "ratio",
     activityName: "hipsWaistRatio",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    categories: ["Outcome/Results"]
   },
   {
     key: "sleep",
-    label: "Sleep",
+    label: "Sleep Hours",
     icon: Clock,
     type: "bar",
     color: "#14b8a6",
@@ -156,7 +171,8 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "h",
     activityName: "Sleep Duration",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    categories: ["Sleep Quality Data"]
   },
   {
     key: "heartRate",
@@ -192,13 +208,27 @@ export const METRIC_LIBRARY: Metric[] = [
     color: "#0ea5e9",
     data: [], // Will be populated from activity_info table
     dataKey: "qty",
-    yLabel: "cups",
+    yLabel: "mL",
     activityName: "hydration",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    categories: ["Nutritional and Hydration"]
+  },
+  {
+    key: "hydrationLogins",
+    label: "Hydration Logins",
+    icon: Droplet,
+    type: "bar",
+    color: "#22d3ee",
+    data: [],
+    dataKey: "qty",
+    yLabel: "count",
+    activityName: "hydration",
+    dataSource: "activity_info",
+    categories: ["Engagement"]
   },
   {
     key: "sleepQuality",
-    label: "Sleep Quality",
+    label: "Sleep Quality (Average Stars)",
     icon: Moon,
     type: "line",
     color: "#8b5cf6",
@@ -206,11 +236,12 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "stars",
     activityName: "Sleep Quality",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    categories: ["Sleep Quality Data"]
   },
   {
     key: "energyLevel",
-    label: "Energy Level",
+    label: "Morning Energy",
     icon: Zap,
     type: "line",
     color: "#f59e0b",
@@ -218,7 +249,23 @@ export const METRIC_LIBRARY: Metric[] = [
     dataKey: "qty",
     yLabel: "stars",
     activityName: "Energy Level",
-    dataSource: "activity_info"
+    dataSource: "activity_info",
+    categories: ["Sleep Quality Data"]
+  },
+  {
+    key: "mealLogins",
+    label: "Meal Logins",
+    icon: Utensils,
+    type: "bar",
+    color: "#34d399",
+    data: [],
+    dataKey: "qty",
+    yLabel: "count",
+    activityName: "Meal Logins",
+    dataSource: "meal_info",
+    tableName: "meal_info",
+    columnName: "count",
+    categories: ["Engagement"]
   },
   {
     key: "caloriesSpent",
@@ -257,6 +304,19 @@ export const METRIC_LIBRARY: Metric[] = [
     yLabel: "%",
     activityName: "Workout Adherence",
     dataSource: "activity_info"
+  },
+  {
+    key: "wakeupLogins",
+    label: "Wakeup Logins",
+    icon: Clock,
+    type: "bar",
+    color: "#fbbf24",
+    data: [],
+    dataKey: "qty",
+    yLabel: "count",
+    activityName: "wakeup",
+    dataSource: "activity_info",
+    categories: ["Engagement"]
   },
   {
     key: "progress",
@@ -307,11 +367,27 @@ export const METRIC_LIBRARY: Metric[] = [
     activityName: "Engagement Level",
     dataSource: "client_engagement_score",
     tableName: "client_engagement_score",
-    columnName: "eng_score"
+    columnName: "eng_score",
+    categories: ["Engagement"]
+  },
+  {
+    key: "workoutLogins",
+    label: "Workout Logins",
+    icon: Activity,
+    type: "bar",
+    color: "#7dd3fc",
+    data: [], // Computed count from workout_info
+    dataKey: "qty",
+    yLabel: "count",
+    activityName: "Workout Logins",
+    dataSource: "workout_info",
+    tableName: "workout_info",
+    columnName: "count",
+    categories: ["Engagement"]
   },
   {
     key: "calories",
-    label: "Calories Consumed",
+    label: "Calories Intake",
     icon: Utensils,
     type: "bar",
     color: "#f97316",
@@ -321,7 +397,53 @@ export const METRIC_LIBRARY: Metric[] = [
     activityName: "Calories Consumed",
     dataSource: "meal_info",
     tableName: "meal_info",
-    columnName: "calories"
+    columnName: "calories",
+    categories: ["Nutritional and Hydration"]
+  },
+  {
+    key: "proteinIntake",
+    label: "Protein Intake",
+    icon: Utensils,
+    type: "bar",
+    color: "#16a34a",
+    data: [], // From meal_info.protein
+    dataKey: "qty",
+    yLabel: "g",
+    activityName: "Protein Intake",
+    dataSource: "meal_info",
+    tableName: "meal_info",
+    columnName: "protein",
+    categories: ["Nutritional and Hydration"]
+  },
+  {
+    key: "fatIntake",
+    label: "Fats Intake",
+    icon: Utensils,
+    type: "bar",
+    color: "#a16207",
+    data: [], // From meal_info.fat
+    dataKey: "qty",
+    yLabel: "g",
+    activityName: "Fats Intake",
+    dataSource: "meal_info",
+    tableName: "meal_info",
+    columnName: "fat",
+    categories: ["Nutritional and Hydration"]
+  },
+  {
+    key: "carbsIntake",
+    label: "Carbs Intake",
+    icon: Utensils,
+    type: "bar",
+    color: "#2563eb",
+    data: [], // From meal_info.carbs
+    dataKey: "qty",
+    yLabel: "g",
+    activityName: "Carbs Intake",
+    dataSource: "meal_info",
+    tableName: "meal_info",
+    columnName: "carbs",
+    categories: ["Nutritional and Hydration"]
   },
   {
     key: "workoutTime",
@@ -335,6 +457,22 @@ export const METRIC_LIBRARY: Metric[] = [
     activityName: "Workout Time",
     dataSource: "workout_info",
     tableName: "workout_info",
-    columnName: "duration"
+    columnName: "duration",
+    categories: ["Workouts"]
+  },
+  {
+    key: "numExercises",
+    label: "Number of Exercises",
+    icon: Activity,
+    type: "bar",
+    color: "#06b6d4",
+    data: [], // Will be computed from workout_info table as a count
+    dataKey: "qty",
+    yLabel: "count",
+    activityName: "Number of Exercises",
+    dataSource: "workout_info",
+    tableName: "workout_info",
+    columnName: "count",
+    categories: ["Workouts"]
   },
 ] 
