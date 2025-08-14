@@ -73,19 +73,14 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
     const category = e.target.value
     if (!category) return
 
-    const remainingSlots = 6 - selectedKeys.length
-    if (remainingSlots <= 0) return
-
+    // Reset charts and load only metrics from the selected category (up to 6)
     const metricsInCategory = METRIC_LIBRARY
       .filter((m) => m.category === category || (Array.isArray(m.categories) && m.categories.includes(category)))
-      .filter((m) => !selectedKeys.includes(m.key))
       .filter((m) => !hiddenFromDropdown.has(m.key))
-      .slice(0, remainingSlots)
+      .slice(0, 6)
       .map((m) => m.key)
 
-    if (metricsInCategory.length > 0) {
-      setSelectedKeys([...selectedKeys, ...metricsInCategory])
-    }
+    setSelectedKeys(metricsInCategory)
   }
 
   function handleRemove(key: string) {
@@ -177,7 +172,6 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                   className="border-2 border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm bg-white dark:bg-gray-800 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 transition-all duration-300"
                   onChange={handleCategorySelectChange}
                   value=""
-                  disabled={selectedKeys.length >= 6}
                   aria-label="Add all metrics by category"
                 >
                   <option value="">+ Add Category</option>

@@ -167,29 +167,21 @@ export const ProgressPicturesCard: React.FC<ProgressPicturesCardProps> = ({ clie
                   <p className="text-sm text-gray-400">Progress pictures will appear here</p>
                 </div>
               ) : (
-                <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
-                  {progressPictures.map((picture, index) => {
-                    const progressInfo = getProgressInfo(picture.name)
-                    return (
-                      <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">{progressInfo.week}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(picture.created_at)}</p>
-                          </div>
-                          <a 
-                            href={picture.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-orange-500 hover:text-orange-600 text-sm font-medium"
-                          >
-                            View Full
-                          </a>
-                        </div>
-                        <div className="relative w-full h-48 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
-                          <img 
-                            src={picture.url} 
-                            alt={progressInfo.week}
+                <div className="max-h-96 overflow-y-auto pr-2">
+                  <div className="grid grid-cols-4 gap-3">
+                    {progressPictures.map((picture, index) => (
+                      <a
+                        key={index}
+                        href={picture.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                        title={new Date(picture.created_at).toLocaleString()}
+                      >
+                        <div className="relative w-full aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden">
+                          <img
+                            src={picture.url}
+                            alt="Progress"
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement
@@ -198,9 +190,9 @@ export const ProgressPicturesCard: React.FC<ProgressPicturesCardProps> = ({ clie
                             }}
                           />
                         </div>
-                      </div>
-                    )
-                  })}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
