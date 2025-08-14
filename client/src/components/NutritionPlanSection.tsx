@@ -145,14 +145,43 @@ const NutritionPlanSection = ({
   const { toast } = useToast();
   const [mealItems, setMealItems] = useState<Record<string, Record<string, any[]>>>({});
   const [selectedDay, setSelectedDay] = useState<string>('');
-  const [planStartDate, setPlanStartDate] = useState(() => {
-    const today = new Date();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - today.getDay() + 1);
-    return monday;
-  });
+  const [planStartDate, setPlanStartDate] = useState(() => new Date());
+  const [planStartDay, setPlanStartDay] = useState<string>('Sunday');
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<any>(null);
+  // Load client's plan_start_day and align UI
+  useEffect(() => {
+    async function loadPlanStartDay() {
+      try {
+        if (!clientId) return;
+        const { data, error } = await supabase
+          .from('client')
+          .select('plan_start_day')
+          .eq('client_id', clientId)
+          .single();
+        if (!error && data?.plan_start_day) {
+          setPlanStartDay(data.plan_start_day);
+          const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+          const targetIdx = weekdays.indexOf(String(data.plan_start_day));
+          const now = new Date();
+          const delta = (targetIdx - now.getDay() + 7) % 7;
+          const aligned = new Date(now);
+          aligned.setDate(now.getDate() + delta);
+          setPlanStartDate(aligned);
+        }
+      } catch (e) {
+        console.error('Failed to load plan_start_day', e);
+      }
+    }
+    loadPlanStartDay();
+  }, [clientId]);
+
+  // Helper to disable non-start-day dates
+  const isDisabledDate = (date: Date) => {
+    const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    return weekdays[date.getDay()] !== planStartDay;
+  };
+
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
@@ -303,28 +332,26 @@ const NutritionPlanSection = ({
     }
   };
 
-  // Helper function to get date for a specific day of the week
+  // Helper: get date for a specific weekday within the selected week window
   const getDateForDay = (dayName: string) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    const dayIndex = days.indexOf(dayName)
-    const currentDayIndex = planStartDate.getDay()
-    const daysToAdd = (dayIndex - currentDayIndex + 7) % 7
+    const targetIdx = days.indexOf(dayName)
+    const baseIdx = planStartDate.getDay()
+    const daysToAdd = (targetIdx - baseIdx + 7) % 7
     const targetDate = new Date(planStartDate)
     targetDate.setDate(planStartDate.getDate() + daysToAdd)
     return targetDate
   }
 
-  // Get the week days starting from the plan start date
+  // Weekday labels starting from the chosen planStartDay
   const getWeekDays = () => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    const startDayIndex = planStartDate.getDay()
-    const weekDays = []
-    
+    const startDayIndex = days.indexOf(planStartDay)
+    const weekDays: string[] = []
     for (let i = 0; i < 7; i++) {
       const dayIndex = (startDayIndex + i) % 7
       weekDays.push(days[dayIndex])
     }
-    
     return weekDays
   }
 
@@ -1318,8 +1345,9 @@ const NutritionPlanSection = ({
                 <Calendar
                   mode="single"
                   selected={planStartDate}
+                  disabled={isDisabledDate}
                   onSelect={(date) => {
-                    if (date) {
+                    if (date && !isDisabledDate(date)) {
                       setPlanStartDate(date);
                       setIsDatePickerOpen(false);
                     }

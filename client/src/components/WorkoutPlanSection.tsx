@@ -964,6 +964,8 @@ const WorkoutPlanSection = ({
 }: WorkoutPlanSectionProps) => {
   const { toast } = useToast();
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  // Plan start weekday persisted in client table; default Sunday
+  const [planStartDay, setPlanStartDay] = useState<string>(client?.plan_start_day || 'Sunday');
   const [isFetchingPlan, setIsFetchingPlan] = useState(false);
   const [workoutPlan, setWorkoutPlan] = useState<WeeklyWorkoutPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1129,6 +1131,35 @@ const WorkoutPlanSection = ({
 
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
+
+  // Sync planStartDay from client prop and keep planStartDate aligned
+  useEffect(() => {
+    const dayFromClient = client?.plan_start_day as string | undefined;
+    if (dayFromClient && dayFromClient !== planStartDay) {
+      setPlanStartDay(dayFromClient);
+      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const targetIdx = weekdays.indexOf(dayFromClient);
+      const now = new Date();
+      const delta = (targetIdx - now.getDay() + 7) % 7;
+      const aligned = new Date(now);
+      aligned.setDate(now.getDate() + delta);
+      setPlanStartDate(aligned);
+    }
+  }, [client?.plan_start_day]);
+
+  // Always align selected date to the selected start weekday
+  useEffect(() => {
+    const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const targetIdx = weekdays.indexOf(planStartDay);
+    if (targetIdx === -1) return;
+    if (weekdays[planStartDate.getDay()] !== planStartDay) {
+      const base = new Date();
+      const delta = (targetIdx - base.getDay() + 7) % 7;
+      const aligned = new Date(base);
+      aligned.setDate(base.getDate() + delta);
+      setPlanStartDate(aligned);
+    }
+  }, [planStartDay]);
 
   // --- Workout Target Edit Grid Component ---
   const WorkoutTargetEditGrid = () => {
@@ -1742,7 +1773,7 @@ const WorkoutPlanSection = ({
       return;
     }
     fetchPlan();
-  }, [numericClientId, planStartDate, hasAIGeneratedPlan]);
+  }, [numericClientId, planStartDate, planStartDay, hasAIGeneratedPlan]);
 
   // Reset AI generated plan flag when client changes
   useEffect(() => {
@@ -2052,19 +2083,54 @@ const WorkoutPlanSection = ({
           Workout Plan Workflow
         </h4>
         
-        <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+        <div className="flex flex-row flex-wrap gap-6 items-center">
           {/* Step 1: Select Plan Start Date */}
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               1
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="date-select" className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan Start Date</Label>
+            <div className="flex flex-row items-center gap-3">
+              {/* Step 1: Plan Start Day */}
+              <div className="flex items-center gap-2">
+                <Label className="text-sm text-gray-700 dark:text-gray-300">Plan Start Day</Label>
+                <Select
+                  value={planStartDay}
+                  onValueChange={async (val) => {
+                    try {
+                      setPlanStartDay(val);
+                      if (numericClientId) {
+                        await supabase.from('client').update({ plan_start_day: val }).eq('client_id', numericClientId);
+                      }
+                      // Move planStartDate to the next occurrence of selected weekday
+                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                      const targetIdx = weekdays.indexOf(val);
+                      const d = new Date();
+                      const delta = (targetIdx - d.getDay() + 7) % 7;
+                      const next = new Date(d);
+                      next.setDate(d.getDate() + delta);
+                      setPlanStartDate(next);
+                    } catch (e) {
+                      console.error('Failed to save plan_start_day', e);
+                      toast({ title: 'Save failed', description: 'Could not save Plan Start Day', variant: 'destructive' });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Step 1: Plan Start Date */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
-                    className="w-full sm:w-[280px] justify-start text-left font-normal"
+                    className="w-full sm:w-[220px] justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {format(planStartDate, "PPP")}
@@ -2074,7 +2140,18 @@ const WorkoutPlanSection = ({
                   <Calendar
                     mode="single"
                     selected={planStartDate}
-                    onSelect={(date) => date && setPlanStartDate(date)}
+                    // Disable all dates that are not the chosen weekday
+                    disabled={(date: Date) => {
+                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                      return weekdays[date.getDay()] !== planStartDay;
+                    }}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                      if (weekdays[date.getDay()] === planStartDay) {
+                        setPlanStartDate(date);
+                      }
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
