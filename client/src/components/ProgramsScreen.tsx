@@ -33,6 +33,7 @@ import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceh
 import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
 import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { AddCustomTaskModal } from "./add-custom-task-modal"
+  import { NewCustomerOnboardingModal } from "@/components/new-customer-onboarding-modal"
 import { convertUTCToLocalTime, convertLocalTimeToUTC } from "@/lib/timezone-utils"
 
 
@@ -120,6 +121,8 @@ export function ProgramsScreen({
 
   // Add state for custom task modal
   const [isCustomTaskModalOpen, setIsCustomTaskModalOpen] = useState(false)
+  // Add state for onboarding modal
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
 
   // Add state for scope selection and confirmation modals
   const [showScopeSelection, setShowScopeSelection] = useState(false)
@@ -999,6 +1002,16 @@ export function ProgramsScreen({
                 <Plus className="h-4 w-4 mr-2" />
                 Add Custom Tasks
               </Button>
+
+              {/* New Customer Onboarding Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsOnboardingOpen(true)}
+                className="border-green-500 text-green-600 hover:bg-green-50 dark:border-green-400 dark:text-green-400 dark:hover:bg-green-900/20"
+              >
+                New Customer Onboarding
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1342,6 +1355,18 @@ export function ProgramsScreen({
             title: "Custom Task Added",
             description: "Your custom task has been successfully added to the schedule.",
           })
+        }}
+      />
+
+      {/* New Customer Onboarding Modal */}
+      <NewCustomerOnboardingModal
+        clientId={clientId || 1}
+        clientName={client?.cl_name || client?.cl_prefer_name || "Client"}
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onCompleted={() => {
+          fetchScheduleData()
+          toast({ title: "Success", description: "Onboarding programs added to schedule." })
         }}
       />
 
