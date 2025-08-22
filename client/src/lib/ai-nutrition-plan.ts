@@ -21,7 +21,9 @@ export interface NutritionPlanResult {
 
 // Function to generate nutrition plan using OpenRouter
 export async function generateNutritionPlan(clientId: number): Promise<NutritionPlanResult> {
-  console.log(`🍽️ Generating nutrition plan for client: ${clientId}`);
+  console.log('🥗 === NUTRITION PLAN GENERATION START ===');
+  console.log('👤 Client ID:', clientId);
+  console.log('📅 Generation started at:', new Date().toISOString());
 
   try {
     // 1. Fetch client data from Supabase
@@ -245,10 +247,10 @@ The JSON structure should be:
     const endTime = Date.now();
     const generationTime = endTime - startTime;
     
-    console.log('📥 Received response from LLM:');
-    console.log('='.repeat(80));
-    console.log('Response:', aiResult.response);
-    console.log('='.repeat(80));
+    console.log('📥 === LLM RESPONSE RECEIVED ===');
+    console.log('📋 Nutrition plan received from LLM:');
+    console.log('📄 Raw LLM response:');
+    console.log(aiResult.response);
     console.log(`⏱️ Generation time: ${generationTime}ms`);
     if (aiResult.model) {
       console.log('🤖 Model used:', aiResult.model);
@@ -256,6 +258,12 @@ The JSON structure should be:
     if (aiResult.usage) {
       console.log('🔢 Token usage:', aiResult.usage);
     }
+    
+    // Simple text format for easy copying
+    console.log('\n📋 === NUTRITION PLAN (COPY-PASTE FORMAT) ===');
+    console.log('NUTRITION_PLAN:');
+    console.log(aiResult.response);
+    console.log('END_NUTRITION_PLAN');
 
     /* Previous implementations (commented for easy reversion)
     // const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
@@ -282,8 +290,14 @@ The JSON structure should be:
       }
     }
       
-      return {
-        success: true,
+    console.log('✅ === NUTRITION PLAN GENERATED ===');
+    console.log('📊 Nutrition plan generation completed successfully');
+    console.log('🔢 Response length:', aiResult.response.length, 'characters');
+    console.log('⏱️ Total generation time:', generationTime, 'ms');
+    console.log('🏁 === NUTRITION PLAN GENERATION COMPLETE ===');
+    
+    return {
+      success: true,
       response: aiResult.response,
       raw_prompt: prompt,
       model: aiResult.model,

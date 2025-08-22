@@ -45,7 +45,7 @@ import { TrainerNotesSection } from "@/components/overview/TrainerNotesSection"
 import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
 import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
 
-import { generateGroceryListFromPlan, updateGroceryItemState, categorizeGroceryItems } from "@/lib/grocery-list-service";
+import { generateGroceryListFromPlan, updateGroceryItemState, categorizeGroceryItems, checkGroceryListExists } from "@/lib/grocery-list-service";
 import { ContentEditable } from './ui/content-editable';
 import { normalizeDateForDisplay, normalizeDateForStorage } from "@/lib/date-utils";
 
@@ -200,13 +200,47 @@ const NutritionPlanSection = ({
   // --- Modal Dialog State ---
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
+  const [isShiftHeld, setIsShiftHeld] = useState(false);
+  const [showGroceryListConfirmModal, setShowGroceryListConfirmModal] = useState(false);
   // --- Debug logger for approvalStatus ---
   useEffect(() => {
     console.log('approvalStatus changed:', approvalStatus);
   }, [approvalStatus]);
 
-  const handleGenerateGroceryList = async () => {
+  // --- Track Shift key for force regeneration ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftHeld(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftHeld(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  const handleGenerateGroceryList = async (event?: React.MouseEvent) => {
+    // Check if Shift key is held down for force regeneration
+    const forceRegenerate = event?.shiftKey || false;
+    
+    console.log('🛒 === GROCERY LIST BUTTON CLICKED ===');
+    console.log('👤 Client ID:', clientId);
+    console.log('📅 Plan Start Date:', planStartDate.toISOString().split('T')[0]);
+    console.log('🔄 Force Regenerate:', forceRegenerate);
+    
     if (!clientId) {
+      console.log('❌ No client ID found');
       toast({
         title: "Error",
         description: "No client selected. Please select a client first.",
@@ -215,9 +249,112 @@ const NutritionPlanSection = ({
       return;
     }
 
+    // Check if grocery list already exists (unless forcing regeneration)
+    if (!forceRegenerate) {
+      const hasExistingList = await checkGroceryListExists(clientId, planStartDate);
+      if (hasExistingList) {
+        console.log('📋 Grocery list already exists - showing confirmation dialog');
+        setShowGroceryListConfirmModal(true);
+        return;
+      }
+    }
+
+    console.log('🔄 Starting grocery list generation...');
     setIsGeneratingGroceryList(true);
     try {
-      const result = await generateGroceryListFromPlan(clientId, planStartDate);
+      console.log('📞 Calling generateGroceryListFromPlan...');
+      const result = await generateGroceryListFromPlan(clientId, planStartDate, forceRegenerate);
+      console.log('📥 Result received:', result);
+      
+      if (!result.success) {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to generate grocery list.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('✅ Setting grocery list data...');
+      setGroceryItems(result.groceryItems);
+      if (result.groceryCategories) {
+        setGroceryCategories(result.groceryCategories);
+      }
+      setShowGroceryListPopup(true);
+      
+      // Show appropriate message based on data source
+      if (result.isFromDatabase) {
+        console.log('📋 Loaded existing grocery list from database');
+        toast({
+          title: "Grocery List Loaded",
+          description: "Loaded existing grocery list from database.",
+        });
+      } else {
+        console.log('🆕 Generated new grocery list');
+        toast({
+          title: "Grocery List Generated",
+          description: "New grocery list has been generated and saved to database.",
+        });
+      }
+    } catch (error: any) {
+      console.log('❌ Error in grocery list generation:', error);
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred while generating the grocery list.",
+        variant: "destructive",
+      });
+    } finally {
+      console.log('🏁 Grocery list generation completed');
+      setIsGeneratingGroceryList(false);
+    }
+  };
+
+  // Handle confirmation dialog actions
+  const handleLoadExistingGroceryList = async () => {
+    setShowGroceryListConfirmModal(false);
+    setIsGeneratingGroceryList(true);
+    
+    try {
+      console.log('📋 Loading existing grocery list...');
+      const result = await generateGroceryListFromPlan(clientId!, planStartDate, false);
+      
+      if (!result.success) {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to load grocery list.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setGroceryItems(result.groceryItems);
+      if (result.groceryCategories) {
+        setGroceryCategories(result.groceryCategories);
+      }
+      setShowGroceryListPopup(true);
+      
+      toast({
+        title: "Grocery List Loaded",
+        description: "Loaded existing grocery list from database.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred while loading the grocery list.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingGroceryList(false);
+    }
+  };
+
+  const handleForceRegenerateGroceryList = async () => {
+    setShowGroceryListConfirmModal(false);
+    setIsGeneratingGroceryList(true);
+    
+    try {
+      console.log('🔄 Force regenerating grocery list...');
+      const result = await generateGroceryListFromPlan(clientId!, planStartDate, true);
       
       if (!result.success) {
         toast({
@@ -234,18 +371,10 @@ const NutritionPlanSection = ({
       }
       setShowGroceryListPopup(true);
       
-      // Show appropriate message based on data source
-      if (result.isFromDatabase) {
-        toast({
-          title: "Grocery List Loaded",
-          description: "Loaded existing grocery list from database.",
-        });
-      } else {
-        toast({
-          title: "Grocery List Generated",
-          description: "New grocery list has been generated and saved to database.",
-        });
-      }
+      toast({
+        title: "Grocery List Generated",
+        description: "New grocery list has been generated and saved to database.",
+      });
     } catch (error: any) {
       toast({
         title: "Error",
@@ -564,6 +693,11 @@ const NutritionPlanSection = ({
 
   // Save Nutrition Plan to schedule_preview
   const saveNutritionPlanToPreview = async (plan: DayPlan[], clientId: number, startDate: Date) => {
+    console.log('💾 === SAVING NUTRITION PLAN TO DATABASE ===');
+    console.log('👤 Client ID:', clientId);
+    console.log('📅 Start Date:', startDate.toISOString().split('T')[0]);
+    console.log('📊 Plan days:', plan.length);
+    
     try {
       const mealTimes = await getClientMealTimes(clientId);
       
@@ -624,6 +758,11 @@ const NutritionPlanSection = ({
           throw insertError;
         }
         
+        console.log('✅ === NUTRITION PLAN SAVED ===');
+        console.log('📊 Records saved:', recordsToInsert.length);
+        console.log('📋 Meal types saved:', [...new Set(recordsToInsert.map(r => r.task))]);
+        console.log('📅 Date range:', `${startDate.toISOString().split('T')[0]} to ${format(addDays(startDate, 6), 'yyyy-MM-dd')}`);
+        
         // Update approval status after saving
         await checkApprovalStatus();
       }
@@ -649,6 +788,7 @@ const NutritionPlanSection = ({
     console.log('Actual unique days in preview:', actualTotalDays);
     console.log('Unique days:', uniqueDays);
     console.log('Total rows (meal entries):', rows.length);
+    console.log('Sample row data:', rows.slice(0, 3).map(r => ({ id: r.id, for_date: r.for_date, is_approved: r.is_approved })));
     console.log('is_approved types:', rows.map(r => typeof r.is_approved), 'values:', rows.map(r => r.is_approved));
     
     // Check if all existing days are approved
@@ -689,7 +829,7 @@ const NutritionPlanSection = ({
       // Get all preview rows for the week
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
-        .select('id, is_approved')
+        .select('id, is_approved, for_date')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
@@ -1418,7 +1558,12 @@ const NutritionPlanSection = ({
               onClick={handleGenerateGroceryList}
               disabled={isGeneratingGroceryList}
               size="lg"
-              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+              className={`${
+                isShiftHeld 
+                  ? 'bg-gradient-to-r from-red-500 to-purple-500 hover:from-red-600 hover:to-purple-600' 
+                  : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
+              } text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]`}
+              title="Hold Shift while clicking to force regenerate (ignore cached version)"
             >
               {isGeneratingGroceryList ? (
                 <>
@@ -1428,7 +1573,7 @@ const NutritionPlanSection = ({
               ) : (
                 <>
                   <Sparkles className="h-5 w-5 mr-3" />
-                  Generate Grocery List
+                  {isShiftHeld ? '🔄 Force Generate' : 'Generate Grocery List'}
                 </>
               )}
             </Button>
@@ -1555,6 +1700,70 @@ const NutritionPlanSection = ({
                     <div className="text-sm">The grocery list could not be parsed properly.</div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grocery List Confirmation Dialog */}
+      {showGroceryListConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="absolute top-0 left-0 w-full h-full flex items-start justify-center pt-32">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-200 scale-100 animate-in fade-in-0 zoom-in-95 border border-gray-200 dark:border-gray-700">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900 mb-4">
+                  <Sparkles className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Grocery List Already Exists
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  A grocery list for this week already exists. Would you like to load the existing list or generate a new one?
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={handleLoadExistingGroceryList}
+                    disabled={isGeneratingGroceryList}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    {isGeneratingGroceryList ? (
+                      <>
+                        <LoadingSpinner size="small" />
+                        <span className="ml-2">Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        📋 Load Existing
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleForceRegenerateGroceryList}
+                    disabled={isGeneratingGroceryList}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+                  >
+                    {isGeneratingGroceryList ? (
+                      <>
+                        <LoadingSpinner size="small" />
+                        <span className="ml-2">Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        🔄 Generate New
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <Button
+                  onClick={() => setShowGroceryListConfirmModal(false)}
+                  variant="ghost"
+                  className="mt-4 w-full"
+                  disabled={isGeneratingGroceryList}
+                >
+                  Cancel
+                </Button>
               </div>
             </div>
           </div>

@@ -44,6 +44,7 @@ interface GroceryListResult {
   groceryCategories?: GroceryCategory[];
   error?: string;
   isFromDatabase?: boolean;
+  hasExistingList?: boolean;
 }
 
 /**
@@ -197,6 +198,32 @@ export const fetchNutritionPlanData = async (clientId: number, startDate: Date):
 };
 
 /**
+ * Checks if a grocery list exists for the given client and week
+ * @param clientId - Client ID
+ * @param weekStart - Start of the week (Monday)
+ * @returns Promise<boolean> - Whether a grocery list exists
+ */
+export const checkGroceryListExists = async (clientId: number, weekStart: Date): Promise<boolean> => {
+  const weekStartString = format(weekStart, 'yyyy-MM-dd');
+  
+  const { data, error } = await supabase
+    .from('grocery_list')
+    .select('client_id')
+    .eq('client_id', clientId)
+    .eq('week_start', weekStartString)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') { // No rows returned
+      return false;
+    }
+    throw new Error(`Database error: ${error.message}`);
+  }
+
+  return !!data;
+};
+
+/**
  * Fetches existing grocery list from database
  * @param clientId - Client ID
  * @param weekStart - Start of the week (Monday)
@@ -314,34 +341,41 @@ export const updateGroceryItemState = async (clientId: number, weekStart: Date, 
  */
 export const generateGroceryListFromPlan = async (
   clientId: number, 
-  startDate: Date
+  startDate: Date,
+  forceRegenerate: boolean = false
 ): Promise<GroceryListResult> => {
   try {
     // Use the selected start date directly as week start
     const weekStart = startDate;
     
-    // Check if grocery list already exists
-    const existingGroceryList = await fetchExistingGroceryList(clientId, weekStart);
-    
-    if (existingGroceryList) {
-      // Return existing data from database
-      const items: GroceryItem[] = [];
-      existingGroceryList.categories.forEach(category => {
-        category.items.forEach(item => {
-          items.push({
-            id: item.id,
-            text: item.text,
-            checked: item.checked || false
+    // Check if grocery list already exists (unless forcing regeneration)
+    if (!forceRegenerate) {
+      const existingGroceryList = await fetchExistingGroceryList(clientId, weekStart);
+      
+      if (existingGroceryList) {
+        console.log('📋 Found existing grocery list in database');
+        // Return existing data from database
+        const items: GroceryItem[] = [];
+        existingGroceryList.categories.forEach(category => {
+          category.items.forEach(item => {
+            items.push({
+              id: item.id,
+              text: item.text,
+              checked: item.checked || false
+            });
           });
         });
-      });
-      
-      return {
-        success: true,
-        groceryItems: items,
-        groceryCategories: existingGroceryList.categories,
-        isFromDatabase: true
-      };
+        
+        return {
+          success: true,
+          groceryItems: items,
+          groceryCategories: existingGroceryList.categories,
+          isFromDatabase: true,
+          hasExistingList: true
+        };
+      }
+    } else {
+      console.log('🔄 Force regeneration requested - ignoring existing grocery list');
     }
 
     // Fetch nutrition plan data from database
@@ -358,19 +392,55 @@ export const generateGroceryListFromPlan = async (
     // Transform data into DayPlan format
     const nutritionPlan = transformScheduleDataToDayPlan(scheduleData);
     
-    // Generate grocery list using LLM
-    const groceryListJson = await generateGroceryList(nutritionPlan);
+    // Fetch client dietary preferences
+    const { data: clientData, error: clientError } = await supabase
+      .from('client')
+      .select('diet_preferences, food_allergies')
+      .eq('client_id', clientId)
+      .single();
+    
+    if (clientError) {
+      console.error('Error fetching client dietary preferences:', clientError);
+      // Continue without dietary preferences if there's an error
+    }
+    
+    const dietaryPreferences = clientData?.diet_preferences || [];
+    const allergies = clientData?.food_allergies || '';
+    
+    console.log('🥬 Client dietary preferences for grocery list:', {
+      preferences: dietaryPreferences,
+      allergies: allergies
+    });
+    
+    console.log('🥬 === GROCERY LIST GENERATION START ===');
+    console.log('📅 Week:', weekStart.toISOString().split('T')[0]);
+    console.log('👤 Client ID:', clientId);
+    console.log('🥗 Dietary Preferences:', dietaryPreferences);
+    console.log('🚫 Allergies:', allergies);
+    
+    // Generate grocery list using LLM with dietary preferences
+    const groceryListJson = await generateGroceryList(nutritionPlan, dietaryPreferences, allergies);
+    
+    console.log('✅ === PLAN GENERATED ===');
+    console.log('📊 Nutrition plan processed successfully');
+    console.log('🔢 Total meal days:', nutritionPlan.length);
     
     // Parse the LLM JSON response with preserved categories
     const groceryListData = parseGroceryListJsonWithCategories(groceryListJson);
     
     if (!groceryListData || groceryListData.categories.length === 0) {
+      console.log('❌ === PARSING FAILED ===');
+      console.log('Failed to parse grocery list from LLM response');
       return {
         success: false,
         groceryItems: [],
         error: "Failed to parse grocery list from LLM response."
       };
     }
+    
+    console.log('✅ === GROCERY LIST PARSED ===');
+    console.log('📋 Categories:', groceryListData.categories.map(c => c.name));
+    console.log('🔢 Total items:', groceryListData.categories.reduce((sum, cat) => sum + cat.items.length, 0));
 
     // Flatten items for the component
     const groceryItems: GroceryItem[] = [];
@@ -386,6 +456,30 @@ export const generateGroceryListFromPlan = async (
 
     // Store in database with preserved category structure
     await storeGroceryList(clientId, weekStart, groceryListData);
+    
+    console.log('💾 === GROCERY LIST SAVED ===');
+    console.log('✅ Grocery list saved to database successfully');
+    console.log('📊 Final grocery list summary:');
+    console.log('📋 Categories:', groceryListData.categories.map(c => c.name));
+    groceryListData.categories.forEach(category => {
+      console.log(`  ${category.name}: ${category.items.length} items`);
+      category.items.forEach(item => {
+        console.log(`    - ${item.text}`);
+      });
+    });
+    
+    // Simple text format for easy copying
+    console.log('\n📋 === FINAL GROCERY LIST (COPY-PASTE FORMAT) ===');
+    console.log('FINAL_GROCERY_LIST:');
+    groceryListData.categories.forEach(category => {
+      console.log(`${category.name}:`);
+      category.items.forEach(item => {
+        console.log(`  - ${item.text}`);
+      });
+    });
+    console.log('END_FINAL_GROCERY_LIST');
+    
+    console.log('🏁 === GROCERY LIST GENERATION COMPLETE ===');
     
     return {
       success: true,
