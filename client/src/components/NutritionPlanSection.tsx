@@ -185,6 +185,7 @@ const NutritionPlanSection = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
+  const [isApprovalInProgress, setIsApprovalInProgress] = useState(false);
   // --- Client Target State and Fetch/Save Logic ---
   const defaultTargets: Record<string, number> = {
     calories: 2000,
@@ -305,22 +306,18 @@ const NutritionPlanSection = ({
             console.error(`Error processing item:`, item, itemError);
           }
         });
-        // Set approval status based on data source
+        // Don't set approval status here - let checkApprovalStatus handle it
         if (dataSource === 'preview') {
-          setApprovalStatus('not_approved');
           toast({ title: "Preview Plan Loaded", description: "Nutrition plan from preview has been loaded. Changes will be auto-saved." });
         } else {
-          setApprovalStatus('pending');
           toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
         }
       } else {
-        setApprovalStatus('pending');
         toast({ title: "No Plan Found", description: "No nutrition plan found for the selected week. You can generate a new one." });
       }
       setMealItems(newMealItemsData); // Always set the structure, populated or empty.
     } catch (error: any) {
       console.error("Error fetching nutrition plan from Supabase:", error);
-      setApprovalStatus('pending');
       toast({
         title: "Database Error",
         description: "Could not fetch the nutrition plan.",
@@ -730,6 +727,7 @@ const NutritionPlanSection = ({
     setShowApproveModal(false);
     if (!clientId) return;
     setIsApproving(true);
+    setIsApprovalInProgress(true);
     try {
       const startDateString = normalizeDateForStorage(format(planStartDate, 'yyyy-MM-dd'));
       const endDateString = normalizeDateForStorage(format(addDays(planStartDate, 6), 'yyyy-MM-dd'));
@@ -771,19 +769,20 @@ const NutritionPlanSection = ({
         .lte('for_date', endDateString);
       if (updateError) throw updateError;
       toast({ title: "Plan Approved", description: "The nutrition plan has been approved and saved to the main schedule." });
-      // Force refresh after approval
-      typeof window !== 'undefined' && setTimeout(async () => {
+      // Update status immediately after approval
+      setApprovalStatus('approved');
+      // Force refresh after approval with a small delay to ensure database consistency
+      setTimeout(async () => {
         await checkApprovalStatus();
         await fetchNutritionPlanFromSupabase(clientId, planStartDate);
-        // Force re-render by updating state
-        setMealItems({ ...mealItems });
-        setSelectedDay(selectedDay);
-      }, 300);
+        setIsApprovalInProgress(false);
+      }, 100);
     } catch (error: any) {
       console.error("Error approving nutrition plan:", error);
       toast({ title: "Approval Error", description: "Could not approve the nutrition plan. Please try again.", variant: "destructive" });
     } finally {
       setIsApproving(false);
+      setIsApprovalInProgress(false);
     }
   };
 
@@ -1174,25 +1173,25 @@ const NutritionPlanSection = ({
 
   // Data loading effect
   useEffect(() => {
-    // Only fetch from the database if we are not in the middle of reviewing a newly generated plan.
-    if (clientId && isActive && !generatedPlan) {
+    // Only fetch from the database if we are not in the middle of reviewing a newly generated plan or approving
+    if (clientId && isActive && !generatedPlan && !isApprovalInProgress) {
       fetchNutritionPlanFromSupabase(clientId, planStartDate);
     }
-  }, [clientId, isActive, planStartDate, generatedPlan]);
+  }, [clientId, isActive, planStartDate, generatedPlan, isApprovalInProgress]);
 
   // Check approval status when component loads or planStartDate changes
   useEffect(() => {
-    if (clientId && isActive) {
+    if (clientId && isActive && !isApprovalInProgress) {
       checkApprovalStatus();
     }
-  }, [clientId, isActive, planStartDate]);
+  }, [clientId, isActive, planStartDate, isApprovalInProgress]);
 
   // Check approval status after data is loaded
   useEffect(() => {
-    if (dataLoaded && clientId && isActive) {
+    if (dataLoaded && clientId && isActive && !isApprovalInProgress) {
       checkApprovalStatus();
     }
-  }, [dataLoaded, clientId, isActive]);
+  }, [dataLoaded, clientId, isActive, isApprovalInProgress]);
 
   // Early return for loading state
   if (loading) {
