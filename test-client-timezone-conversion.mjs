@@ -1,121 +1,27 @@
-/**
- * Timezone Utilities for Supabase Integration
- * 
- * This module handles the conversion between local timezone and UTC for Supabase storage.
- * Supabase stores timestamps in UTC, but users input times in their local timezone.
- * 
- * Key functions:
- * - convertLocalTimeToUTC: Converts local time to UTC for storage
- * - convertUTCToLocalTime: Converts UTC time to local time for display
- * - getLocalTimezone: Gets the user's local timezone
- * - formatTimeForDisplay: Formats time for user display
- * - convertTimeBetweenTimezones: Converts time between different timezones
- */
+import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
 
-/**
- * Convert local time to UTC for Supabase storage
- * @param localTime - Time string in format "HH:mm" (local timezone)
- * @returns UTC time string in format "HH:mm"
- */
-export function convertLocalTimeToUTC(localTime: string): string {
-  try {
-    const [hours, minutes] = localTime.split(':').map(Number)
-    
-    // Create a date object in local timezone
-    const localDate = new Date()
-    localDate.setHours(hours, minutes, 0, 0)
-    
-    // Convert to UTC
-    const utcHours = localDate.getUTCHours()
-    const utcMinutes = localDate.getUTCMinutes()
-    
-    return `${utcHours.toString().padStart(2, '0')}:${utcMinutes.toString().padStart(2, '0')}`
-  } catch (error) {
-    console.error('Error converting local time to UTC:', error)
-    return localTime // Fallback to original time
-  }
+// Load environment variables
+const envPath = '.env'
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8')
+  envContent.split('\n').forEach(line => {
+    const [key, value] = line.split('=')
+    if (key && value) {
+      process.env[key.trim()] = value.trim()
+    }
+  })
 }
 
-/**
- * Convert UTC time from Supabase to local time for display
- * @param utcTime - Time string in format "HH:mm" (UTC)
- * @returns Local time string in format "HH:mm"
- */
-export function convertUTCToLocalTime(utcTime: string): string {
-  try {
-    const [hours, minutes] = utcTime.split(':').map(Number)
-    
-    // Create a UTC date object
-    const utcDate = new Date()
-    utcDate.setUTCHours(hours, minutes, 0, 0)
-    
-    // Convert to local time
-    const localHours = utcDate.getHours()
-    const localMinutes = utcDate.getMinutes()
-    
-    return `${localHours.toString().padStart(2, '0')}:${localMinutes.toString().padStart(2, '0')}`
-  } catch (error) {
-    console.error('Error converting UTC time to local:', error)
-    return utcTime // Fallback to original time
-  }
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables')
+  process.exit(1)
 }
 
-/**
- * Convert time from one timezone to another
- * @param time - Time string in format "HH:mm"
- * @param fromTimezone - Source timezone (IANA identifier)
- * @param toTimezone - Target timezone (IANA identifier)
- * @returns Converted time string in format "HH:mm"
- */
-export function convertTimeBetweenTimezones(
-  time: string, 
-  fromTimezone: string, 
-  toTimezone: string
-): string {
-  try {
-    const [hours, minutes] = time.split(':').map(Number)
-    
-    // Create a date object in the source timezone
-    const sourceDate = new Date()
-    sourceDate.setHours(hours, minutes, 0, 0)
-    
-    // Get the time in the source timezone
-    const sourceTimeString = sourceDate.toLocaleString('en-US', { 
-      timeZone: fromTimezone,
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-    
-    // Create a new date object with the source time
-    const [sourceHours, sourceMinutes] = sourceTimeString.split(':').map(Number)
-    const dateWithSourceTime = new Date()
-    dateWithSourceTime.setHours(sourceHours, sourceMinutes, 0, 0)
-    
-    // Convert to target timezone
-    const targetTimeString = dateWithSourceTime.toLocaleString('en-US', {
-      timeZone: toTimezone,
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-    
-    return targetTimeString
-  } catch (error) {
-    console.error('Error converting time between timezones:', error)
-    return time // Fallback to original time
-  }
-}
-
-/**
- * Convert time from a specific timezone to UTC for storage
- * @param time - Time string in format "HH:mm"
- * @param timezone - Source timezone (IANA identifier)
- * @returns UTC time string in format "HH:mm"
- */
-export function convertTimezoneTimeToUTC(time: string, timezone: string): string {
-  return convertTimeBetweenTimezones(time, timezone, 'UTC')
-}
+const supabase = createClient(supabaseUrl, supabaseKey)
 
 /**
  * Convert time from client's timezone to UTC for storage
@@ -124,12 +30,12 @@ export function convertTimezoneTimeToUTC(time: string, timezone: string): string
  * @param clientTimezone - Client's timezone (IANA identifier)
  * @returns UTC time string in format "HH:mm"
  */
-export function convertClientTimeToUTC(time: string, clientTimezone: string): string {
+function convertClientTimeToUTC(time, clientTimezone) {
   try {
     const [hours, minutes] = time.split(':').map(Number)
     
     // Common timezone offsets (in hours) - positive means ahead of UTC
-    const timezoneOffsets: Record<string, number> = {
+    const timezoneOffsets = {
       // North America
       'America/New_York': -5, // EST (UTC-5)
       'America/Chicago': -6,  // CST (UTC-6)
@@ -239,12 +145,12 @@ export function convertClientTimeToUTC(time: string, clientTimezone: string): st
  * @param clientTimezone - Client's timezone (IANA identifier)
  * @returns Time string in client's timezone format "HH:mm"
  */
-export function convertUTCToClientTime(utcTime: string, clientTimezone: string): string {
+function convertUTCToClientTime(utcTime, clientTimezone) {
   try {
     const [hours, minutes] = utcTime.split(':').map(Number)
     
     // Common timezone offsets (in hours) - positive means ahead of UTC
-    const timezoneOffsets: Record<string, number> = {
+    const timezoneOffsets = {
       // North America
       'America/New_York': -5, // EST (UTC-5)
       'America/Chicago': -6,  // CST (UTC-6)
@@ -348,114 +254,121 @@ export function convertUTCToClientTime(utcTime: string, clientTimezone: string):
   }
 }
 
-/**
- * Convert UTC time to a specific timezone for display
- * @param utcTime - Time string in format "HH:mm" (UTC)
- * @param timezone - Target timezone (IANA identifier)
- * @returns Time string in target timezone format "HH:mm"
- */
-export function convertUTCToTimezoneTime(utcTime: string, timezone: string): string {
-  return convertTimeBetweenTimezones(utcTime, 'UTC', timezone)
-}
+async function testClientTimezoneConversion() {
+  console.log('🧪 Testing Client Timezone Conversion')
+  console.log('=' .repeat(50))
 
-/**
- * Get the user's local timezone
- * @returns Timezone string (e.g., "America/New_York")
- */
-export function getLocalTimezone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone
-}
-
-/**
- * Format time for display with timezone indicator
- * @param time - Time string in format "HH:mm"
- * @param includeTimezone - Whether to include timezone info
- * @param timezone - Optional timezone to display (defaults to local)
- * @returns Formatted time string
- */
-export function formatTimeForDisplay(
-  time: string, 
-  includeTimezone: boolean = false, 
-  timezone?: string
-): string {
-  if (!includeTimezone) {
-    return time
-  }
-  
-  const displayTimezone = timezone || getLocalTimezone()
-  return `${time} (${displayTimezone})`
-}
-
-/**
- * Validate time string format
- * @param time - Time string to validate
- * @returns Whether the time format is valid
- */
-export function isValidTimeFormat(time: string): boolean {
-  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-  return timeRegex.test(time)
-}
-
-/**
- * Get current local time in HH:mm format
- * @returns Current local time string
- */
-export function getCurrentLocalTime(): string {
-  const now = new Date()
-  return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-}
-
-/**
- * Get current time in a specific timezone
- * @param timezone - Target timezone (IANA identifier)
- * @returns Current time in target timezone format "HH:mm"
- */
-export function getCurrentTimezoneTime(timezone: string): string {
   try {
-    const now = new Date()
-    return now.toLocaleString('en-US', {
-      timeZone: timezone,
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
+    // Test the specific example: IST 8:00 AM should convert to UTC 2:30 AM
+    console.log('\n1️⃣ Testing IST to UTC conversion (Example from requirement)...')
+    
+    const istTime = '08:00' // 8:00 AM IST
+    const istTimezone = 'Asia/Kolkata' // IST timezone
+    
+    const utcTime = convertClientTimeToUTC(istTime, istTimezone)
+    const convertedBack = convertUTCToClientTime(utcTime, istTimezone)
+    
+    console.log(`   IST Time: ${istTime} (8:00 AM IST)`)
+    console.log(`   UTC Time: ${utcTime} (should be 2:30 AM UTC)`)
+    console.log(`   Converted Back: ${convertedBack} (should be 8:00 AM IST)`)
+    
+    if (utcTime === '02:30' && convertedBack === '08:00') {
+      console.log('   ✅ IST to UTC conversion working correctly!')
+    } else {
+      console.log('   ❌ IST to UTC conversion failed')
+    }
+
+    // Test other common timezones
+    console.log('\n2️⃣ Testing other common timezones...')
+    
+    const testCases = [
+      { timezone: 'America/New_York', time: '09:00', expectedUTC: '14:00' }, // EST (UTC-5)
+      { timezone: 'Europe/London', time: '14:00', expectedUTC: '14:00' }, // GMT (UTC+0)
+      { timezone: 'Asia/Tokyo', time: '20:00', expectedUTC: '11:00' }, // JST (UTC+9)
+      { timezone: 'Australia/Sydney', time: '18:00', expectedUTC: '08:00' }, // AEST (UTC+10)
+    ]
+    
+    testCases.forEach(({ timezone, time, expectedUTC }) => {
+      const utcResult = convertClientTimeToUTC(time, timezone)
+      const convertedBack = convertUTCToClientTime(utcResult, timezone)
+      
+      console.log(`   ${timezone}: ${time} → UTC: ${utcResult} → ${timezone}: ${convertedBack}`)
+      
+      if (convertedBack === time) {
+        console.log('   ✅ Conversion successful')
+      } else {
+        console.log('   ❌ Conversion failed')
+      }
     })
+
+    // Test with actual client data
+    console.log('\n3️⃣ Testing with actual client data...')
+    
+    const { data: clients, error: clientError } = await supabase
+      .from('client')
+      .select('client_id, cl_name, timezone')
+      .limit(3)
+
+    if (clientError) {
+      console.error('❌ Error fetching clients:', clientError)
+      return
+    }
+
+    if (!clients || clients.length === 0) {
+      console.log('❌ No clients found in database')
+      return
+    }
+
+    console.log(`📊 Found ${clients.length} clients:`)
+    
+    clients.forEach((client, index) => {
+      console.log(`\n   Client ${index + 1}: ${client.cl_name}`)
+      console.log(`   Timezone: ${client.timezone || 'Not set'}`)
+      
+      if (client.timezone) {
+        const testTime = '10:00'
+        const utcTime = convertClientTimeToUTC(testTime, client.timezone)
+        const convertedBack = convertUTCToClientTime(utcTime, client.timezone)
+        
+        console.log(`   Test: ${testTime} → UTC: ${utcTime} → ${client.timezone}: ${convertedBack}`)
+        
+        if (convertedBack === testTime) {
+          console.log('   ✅ Conversion successful')
+        } else {
+          console.log('   ❌ Conversion failed')
+        }
+      } else {
+        console.log('   ⚠️  No timezone set - using UTC')
+      }
+    })
+
+    // Test edge cases
+    console.log('\n4️⃣ Testing edge cases...')
+    
+    const edgeCases = [
+      { time: '00:00', timezone: 'Asia/Kolkata' }, // Midnight IST
+      { time: '23:59', timezone: 'America/Los_Angeles' }, // Late night PST
+      { time: '12:00', timezone: 'UTC' }, // Noon UTC
+    ]
+    
+    edgeCases.forEach(({ time, timezone }) => {
+      const utcTime = convertClientTimeToUTC(time, timezone)
+      const convertedBack = convertUTCToClientTime(utcTime, timezone)
+      
+      console.log(`   ${timezone} ${time} → UTC: ${utcTime} → ${timezone}: ${convertedBack}`)
+      
+      if (convertedBack === time) {
+        console.log('   ✅ Edge case successful')
+      } else {
+        console.log('   ❌ Edge case failed')
+      }
+    })
+
+    console.log('\n✅ Client timezone conversion testing completed!')
+
   } catch (error) {
-    console.error('Error getting current time for timezone:', error)
-    return getCurrentLocalTime() // Fallback to local time
+    console.error('❌ Error during testing:', error)
   }
 }
 
-/**
- * Convert time string to minutes for comparison
- * @param time - Time string in format "HH:mm"
- * @returns Minutes since midnight
- */
-export function timeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-/**
- * Convert minutes to time string
- * @param minutes - Minutes since midnight
- * @returns Time string in format "HH:mm"
- */
-export function minutesToTime(minutes: number): string {
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
-}
-
-/**
- * Validate timezone identifier
- * @param timezone - Timezone string to validate
- * @returns Whether the timezone is valid
- */
-export function isValidTimezone(timezone: string): boolean {
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: timezone })
-    return true
-  } catch {
-    return false
-  }
-} 
+testClientTimezoneConversion()

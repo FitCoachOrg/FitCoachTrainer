@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import { convertLocalTimeToUTC } from "@/lib/timezone-utils"
+import { convertLocalTimeToUTC, convertTimezoneTimeToUTC, convertClientTimeToUTC } from "@/lib/timezone-utils"
 import { addDays, addMonths, format, parseISO } from "date-fns"
 import { Wand2 } from "lucide-react"
 import { askCerebras } from "@/lib/cerebras-service"
@@ -33,6 +33,8 @@ interface NewCustomerOnboardingModalProps {
   isOpen: boolean
   onClose: () => void
   onCompleted: () => void
+  selectedTimezone?: string
+  clientTimezone?: string
 }
 
 const PROGRAM_DEFAULTS: Array<Omit<ProgramConfigRow, "enabled" | "startDate" | "coachTip">> = [
@@ -76,7 +78,7 @@ function generateDatesForRange(startDateStr: string, frequency: Frequency): stri
   return dates
 }
 
-export function NewCustomerOnboardingModal({ clientId, clientName = "Client", isOpen, onClose, onCompleted }: NewCustomerOnboardingModalProps) {
+export function NewCustomerOnboardingModal({ clientId, clientName = "Client", isOpen, onClose, onCompleted, selectedTimezone, clientTimezone }: NewCustomerOnboardingModalProps) {
   const { toast } = useToast()
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
 
@@ -135,7 +137,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
             summary: r.eventName,
             type: r.key,
             for_date,
-            for_time: convertLocalTimeToUTC(r.time),
+            for_time: clientTimezone ? convertClientTimeToUTC(r.time, clientTimezone) : convertLocalTimeToUTC(r.time),
             icon: getIconNameForType(r.key),
             coach_tip: r.coachTip || r.label,
             details_json: {
@@ -144,7 +146,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               program_name: r.eventName,
               selected_measurements: ["hip", "waist", "bicep", "thigh"],
               original_local_time: r.time,
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+              timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
             }
           })
         })
@@ -156,7 +158,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
             summary: r.eventName,
             type: r.key,
             for_date,
-            for_time: convertLocalTimeToUTC(r.time),
+            for_time: clientTimezone ? convertClientTimeToUTC(r.time, clientTimezone) : convertLocalTimeToUTC(r.time),
             icon: getIconNameForType(r.key),
             coach_tip: r.coachTip || r.label,
             details_json: {
@@ -164,7 +166,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               frequency: r.frequency,
               program_name: r.eventName,
               original_local_time: r.time,
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+              timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
             }
           })
         })

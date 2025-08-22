@@ -10,19 +10,19 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Droplet, Bed, Camera, Bell, Clock, Ruler } from "lucide-react"
+import { CalendarIcon, Droplet, Bed, Camera, Bell, Clock, Ruler, Globe } from "lucide-react"
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faWeightScale } from '@fortawesome/free-solid-svg-icons'
 import { format, addDays, addWeeks, addMonths, addQuarters, setDay, setDate } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import { convertLocalTimeToUTC } from "@/lib/timezone-utils"
+import { convertLocalTimeToUTC, convertTimezoneTimeToUTC, convertClientTimeToUTC } from "@/lib/timezone-utils"
 
 // Task type definitions
 interface CustomTask {
   taskType: "water" | "sleep" | "weight" | "progress" | "bedtime" | "other" | "body_measurement"
-  frequency: "daily" | "weekly" | "monthly"
+  frequency: "daily" | "weekly" | "monthly" | "quarterly"
   time: string
   dayOfWeek?: number // 0-6 (Sunday-Saturday)
   dayOfMonth?: number // 1-31
@@ -51,7 +51,8 @@ const taskTypeOptions = [
 const frequencyOptions = [
   { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" }
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" }
 ]
 
 // Day of week options
@@ -71,6 +72,8 @@ interface AddCustomTaskModalProps {
   isOpen: boolean
   onClose: () => void
   onTaskAdded: () => void
+  selectedTimezone?: string
+  clientTimezone?: string
 }
 
 /**
@@ -96,7 +99,9 @@ export function AddCustomTaskModal({
   clientName = "Client", 
   isOpen, 
   onClose, 
-  onTaskAdded 
+  onTaskAdded,
+  selectedTimezone,
+  clientTimezone 
 }: AddCustomTaskModalProps) {
   const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
@@ -264,7 +269,7 @@ export function AddCustomTaskModal({
             summary: taskData.programName || 'Body Measurements',
             type: 'body_measurement',
             for_date: format(date, 'yyyy-MM-dd'),
-            for_time: convertLocalTimeToUTC(taskData.time),
+            for_time: clientTimezone ? convertClientTimeToUTC(taskData.time, clientTimezone) : convertLocalTimeToUTC(taskData.time),
             icon: getTaskIconName(taskData.taskType),
             coach_tip: taskData.coachMessage || getTaskDisplayName(taskData.taskType),
             details_json: {
@@ -273,7 +278,7 @@ export function AddCustomTaskModal({
               program_name: taskData.programName,
               selected_measurements: selected, // ['hip','waist','bicep']
               original_local_time: taskData.time,
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+              timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
             }
           })
         })
@@ -284,7 +289,7 @@ export function AddCustomTaskModal({
           summary: taskData.programName,
           type: getTaskType(taskData.taskType),
           for_date: format(date, 'yyyy-MM-dd'),
-          for_time: taskData.time, // Store time as-is for now to avoid timezone issues
+          for_time: clientTimezone ? convertClientTimeToUTC(taskData.time, clientTimezone) : convertLocalTimeToUTC(taskData.time),
           icon: getTaskIconName(taskData.taskType),
           coach_tip: taskData.coachMessage || taskData.otherDetails || getTaskDisplayName(taskData.taskType),
           details_json: {
@@ -293,7 +298,7 @@ export function AddCustomTaskModal({
             program_name: taskData.programName,
             custom_details: taskData.otherDetails,
             original_local_time: taskData.time, // Store original local time for reference
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone // Store user's timezone
+                          timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone // Store client's timezone
           }
         }))
       }
@@ -615,6 +620,24 @@ export function AddCustomTaskModal({
                   className="flex-1"
                 />
               </div>
+              
+              {/* Timezone Information */}
+              {clientTimezone && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-blue-800 dark:text-blue-200 font-medium">
+                      Client Timezone: {clientTimezone}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    The reminder time will be adjusted to {clientTimezone} timezone. 
+                    {selectedTimezone && selectedTimezone !== clientTimezone && (
+                      <span> You're planning in {selectedTimezone}, but the reminder will be set for the client's timezone.</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

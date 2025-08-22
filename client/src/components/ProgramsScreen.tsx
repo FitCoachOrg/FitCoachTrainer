@@ -34,7 +34,8 @@ import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
 import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { AddCustomTaskModal } from "./add-custom-task-modal"
   import { NewCustomerOnboardingModal } from "@/components/new-customer-onboarding-modal"
-import { convertUTCToLocalTime, convertLocalTimeToUTC } from "@/lib/timezone-utils"
+import { convertUTCToLocalTime, convertLocalTimeToUTC, convertUTCToClientTime } from "@/lib/timezone-utils"
+import { TimezoneDropdown } from "@/components/timezone-dropdown"
 
 
 interface ScheduleItem {
@@ -129,6 +130,53 @@ export function ProgramsScreen({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [pendingAction, setPendingAction] = useState<'edit' | 'delete' | null>(null)
   const [scopeSelection, setScopeSelection] = useState<'single' | 'future' | null>(null)
+
+  // Add state for timezone selection
+  const [selectedTimezone, setSelectedTimezone] = useState<string>("")
+  
+  // Load client's timezone on component mount
+  useEffect(() => {
+    if (client?.timezone) {
+      setSelectedTimezone(client.timezone)
+    }
+  }, [client?.timezone])
+
+  // Function to update client's timezone in database
+  const updateClientTimezone = async (timezone: string) => {
+    if (!clientId) return
+    
+    try {
+      const { error } = await supabase
+        .from('client')
+        .update({ timezone: timezone })
+        .eq('client_id', clientId)
+      
+      if (error) {
+        console.error('Error updating client timezone:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update client timezone.",
+          variant: "destructive"
+        })
+      } else {
+        // Update local client data
+        if (client) {
+          client.timezone = timezone
+        }
+        toast({
+          title: "Timezone Updated",
+          description: `Client timezone updated to ${timezone}`,
+        })
+      }
+    } catch (error) {
+      console.error('Error updating client timezone:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update client timezone.",
+        variant: "destructive"
+      })
+    }
+  }
 
   // 1. Add state for meal logging - COMMENTED OUT FOR TRAINER DASHBOARD
   // const [loggingMeal, setLoggingMeal] = useState<ScheduleItem | null>();
@@ -244,8 +292,11 @@ export function ProgramsScreen({
     }
   }
 
-  // Convert UTC time to local timezone for display
+  // Convert UTC time to client's timezone for display
   const convertToLocalTime = (utcTime: string) => {
+    if (client?.timezone) {
+      return convertUTCToClientTime(utcTime, client.timezone)
+    }
     return convertUTCToLocalTime(utcTime)
   }
 
@@ -979,6 +1030,25 @@ export function ProgramsScreen({
                 </SelectContent>
               </Select>
 
+                {/* Timezone Selector */}
+                <div className="w-full sm:w-48">
+                  <div className="text-xs text-gray-500 mb-1">Client Timezone</div>
+                  <TimezoneDropdown
+                    value={selectedTimezone}
+                    onValueChange={(timezone) => {
+                      setSelectedTimezone(timezone)
+                      // Update client's timezone in database
+                      if (timezone && timezone !== client?.timezone) {
+                        updateClientTimezone(timezone)
+                      }
+                    }}
+                    label=""
+                    placeholder="Select timezone"
+                    showCurrentTime={false}
+                    className="w-full"
+                  />
+                </div>
+
               {/* Navigation */}
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={goToPrevious}>
@@ -1348,6 +1418,8 @@ export function ProgramsScreen({
         clientName={client?.cl_name || client?.cl_prefer_name || "Client"}
         isOpen={isCustomTaskModalOpen}
         onClose={() => setIsCustomTaskModalOpen(false)}
+        selectedTimezone={selectedTimezone}
+        clientTimezone={client?.timezone}
         onTaskAdded={() => {
           // Refresh schedule data
           fetchScheduleData()
@@ -1364,6 +1436,8 @@ export function ProgramsScreen({
         clientName={client?.cl_name || client?.cl_prefer_name || "Client"}
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
+        selectedTimezone={selectedTimezone}
+        clientTimezone={client?.timezone}
         onCompleted={() => {
           fetchScheduleData()
           toast({ title: "Success", description: "Onboarding programs added to schedule." })
