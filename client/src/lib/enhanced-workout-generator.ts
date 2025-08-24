@@ -250,11 +250,76 @@ export class EnhancedWorkoutGenerator {
     message?: string;
     progressionConfirmation?: boolean;
   }> {
+    const startTime = Date.now();
+    
+    // Add timeout protection to prevent infinite hanging
+    // Increased to 60 seconds to match WorkoutPlanSection component timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Enhanced workout generation timed out after 60 seconds'));
+      }, 60000); // Increased to 60 seconds to match component timeout
+    });
+
     try {
       console.log('🚀 === ENHANCED WORKOUT GENERATOR START ===');
       console.log(`👤 Client ID: ${clientId}`);
+      console.log(`⏰ Timeout set to 60 seconds`);
+      console.log(`⏱️ Start time: ${new Date().toISOString()}`);
+      
+      // Race the main generation against the timeout
+      const result = await Promise.race([
+        this.generateWorkoutPlanInternal(clientId, planStartDate),
+        timeoutPromise
+      ]);
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.log(`✅ Enhanced workout generation completed in ${duration}ms (${(duration/1000).toFixed(1)}s)`);
+      
+      return result;
+    } catch (error) {
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      console.error('❌ Enhanced workout generator error:', error);
+      console.error(`⏱️ Generation failed after ${duration}ms (${(duration/1000).toFixed(1)}s)`);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        if (error.message.includes('timed out')) {
+          errorMessage = 'Generation took too long. The AI service may be experiencing high load. Please try again in a few moments.';
+        } else if (error.message.includes('Failed to fetch client data')) {
+          errorMessage = 'Unable to retrieve client information. Please check your connection and try again.';
+        } else if (error.message.includes('No exercises found')) {
+          errorMessage = 'Unable to find suitable exercises for your profile. Please try again or contact support.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Internal workout plan generation method
+   */
+  private static async generateWorkoutPlanInternal(clientId: number, planStartDate: Date): Promise<{
+    success: boolean;
+    workoutPlan?: any;
+    message?: string;
+    progressionConfirmation?: boolean;
+  }> {
+    try {
+      const internalStartTime = Date.now();
+      console.log('🚀 === ENHANCED WORKOUT GENERATOR INTERNAL START ===');
+      console.log(`👤 Client ID: ${clientId}`);
 
       // 1. Fetch fresh client data (no caching)
+      console.log('📊 Step 1: Fetching client data...');
       const { data: client, error } = await supabase
         .from('client')
         .select('*')
@@ -268,6 +333,7 @@ export class EnhancedWorkoutGenerator {
       console.log('✅ Client data fetched successfully');
 
       // 2. Check progression status (only for existing clients)
+      console.log('📊 Step 2: Checking progression status...');
       const progressionStatus = await this.checkProgressionStatus(clientId);
       if (progressionStatus.shouldReset && progressionStatus.reason !== "No previous workouts found") {
         return {
@@ -285,12 +351,48 @@ export class EnhancedWorkoutGenerator {
       const isToneAndSculpt = client.cl_primary_goal?.trim() === "tone_and_sculpt";
       
       // Parse session time
-      const timeMatch = client.training_time_per_session?.match(/(\d+)_minutes/);
-      const sessionMinutes = timeMatch ? parseInt(timeMatch[1]) : 45;
+      let sessionMinutes = 45; // Default fallback
+      
+      if (client.training_time_per_session) {
+        // Handle various time formats
+        const timeStr = client.training_time_per_session;
+        
+        // Format: "45_minutes"
+        const minutesMatch = timeStr.match(/(\d+)_minutes/);
+        if (minutesMatch) {
+          sessionMinutes = parseInt(minutesMatch[1]);
+        }
+        // Format: "30_45" (range format)
+        else if (timeStr.includes('_')) {
+          const rangeMatch = timeStr.match(/(\d+)_(\d+)/);
+          if (rangeMatch) {
+            const min = parseInt(rangeMatch[1]);
+            const max = parseInt(rangeMatch[2]);
+            sessionMinutes = Math.round((min + max) / 2); // Use average
+            console.log(`⏰ TIME RANGE DETECTED: ${min}-${max} minutes, using average: ${sessionMinutes} minutes`);
+          }
+        }
+        // Format: just a number
+        else if (!isNaN(parseInt(timeStr))) {
+          sessionMinutes = parseInt(timeStr);
+        }
+      }
+      
+      console.log(`⏰ SESSION TIME PARSED: ${sessionMinutes} minutes (from: "${client.training_time_per_session}")`);
       
       // Parse workout days
       const workoutDays = this.parseWorkoutDays(client.workout_days);
       const daysPerWeek = workoutDays.length;
+      
+      // 🎯 DATA CONSISTENCY CHECK - Prioritize workout_days over training_days_per_week
+      const dbDaysPerWeek = client.training_days_per_week;
+      if (daysPerWeek !== dbDaysPerWeek) {
+        console.log(`⚠️  DATA INCONSISTENCY DETECTED:`);
+        console.log(`   📅 workout_days count: ${daysPerWeek} (${workoutDays.join(', ')})`);
+        console.log(`   🏋️‍♀️ training_days_per_week: ${dbDaysPerWeek} (from database)`);
+        console.log(`   ✅ USING workout_days count (${daysPerWeek}) as source of truth`);
+        console.log('');
+      }
 
       // Parse equipment
       const eqUI = Array.isArray(client.available_equipment) ? client.available_equipment : [client.available_equipment];
@@ -336,6 +438,14 @@ export class EnhancedWorkoutGenerator {
         injuries
       });
 
+      // 🎯 TARGET TRACKING - Log initial targets
+      console.log('🎯 === TARGET TRACKING START ===');
+      console.log(`🎯 TARGET DAYS: ${daysPerWeek} days per week`);
+      console.log(`🎯 TARGET SESSION TIME: ${sessionMinutes} minutes per session`);
+      console.log(`🎯 TARGET WORKOUT DAYS: ${workoutDays.join(', ')}`);
+      console.log(`🎯 TARGET MUSCLE GROUPS: ${targetMuscles.join(', ')}`);
+      console.log('🎯 === TARGET TRACKING END ===\n');
+
       // 4. Fetch fresh exercises from database (no caching)
       const { data: exercises, error: exerciseError } = await supabase
         .from('exercises_raw')
@@ -364,8 +474,16 @@ export class EnhancedWorkoutGenerator {
 
       console.log(`✅ Found ${scoredExercises.length} suitable exercises`);
       
+      // Enhanced debugging for exercise data
+      console.log(`📊 === EXERCISE DATA ANALYSIS ===`);
+      console.log(`📊 Total scored exercises: ${scoredExercises.length}`);
+      
+      // Check for null/undefined categories
+      const nullCategories = scoredExercises.filter(ex => !ex.category);
+      console.log(`⚠️ Exercises with null categories: ${nullCategories.length}`);
+      
       // Log exercise categories for debugging
-      const categories = new Set(scoredExercises.map(ex => ex.category));
+      const categories = new Set(scoredExercises.map(ex => ex.category).filter(Boolean));
       console.log(`📊 Available exercise categories: ${Array.from(categories).join(', ')}`);
       
       // Log some example exercises by category
@@ -376,6 +494,24 @@ export class EnhancedWorkoutGenerator {
           console.log(`    Examples: ${categoryExercises.slice(0, 3).map(ex => ex.exercise_name).join(', ')}`);
         }
       });
+      
+      // Check primary_muscle and target_muscle fields
+      const hasPrimaryMuscle = scoredExercises.filter(ex => ex.primary_muscle).length;
+      const hasTargetMuscle = scoredExercises.filter(ex => ex.target_muscle).length;
+      console.log(`📊 Exercises with primary_muscle: ${hasPrimaryMuscle}/${scoredExercises.length}`);
+      console.log(`📊 Exercises with target_muscle: ${hasTargetMuscle}/${scoredExercises.length}`);
+      
+      // Show sample exercise structure
+      if (scoredExercises.length > 0) {
+        const sampleExercise = scoredExercises[0];
+        console.log(`📝 Sample exercise structure:`);
+        console.log(`  Name: ${sampleExercise.exercise_name}`);
+        console.log(`  Category: ${sampleExercise.category || 'null'}`);
+        console.log(`  Primary Muscle: ${sampleExercise.primary_muscle || 'null'}`);
+        console.log(`  Target Muscle: ${sampleExercise.target_muscle || 'null'}`);
+        console.log(`  Equipment: ${sampleExercise.equipment || 'null'}`);
+      }
+      console.log(`📊 === EXERCISE DATA ANALYSIS END ===`);
 
       // 7. Analyze previous workouts for progressive overload
       const currentWeek = Math.ceil((Date.now() - new Date('2025-01-01').getTime()) / (7 * 24 * 60 * 60 * 1000));
@@ -447,8 +583,31 @@ export class EnhancedWorkoutGenerator {
         exercisesPerDay
       });
 
+      // 🎯 TIME TARGET TRACKING
+      console.log('🎯 === TIME TARGET BREAKDOWN ===');
+      console.log(`🎯 TARGET TOTAL SESSION: ${sessionMinutes} minutes`);
+      console.log(`🎯 TARGET WARMUP: ${warmup} minutes`);
+      console.log(`🎯 TARGET COOLDOWN: ${cooldown} minutes`);
+      console.log(`🎯 TARGET EXERCISE TIME: ${availableTime} minutes`);
+      console.log(`🎯 TARGET EXERCISES PER DAY: ${exercisesPerDay}`);
+      console.log(`🎯 TARGET TIME PER EXERCISE: ${Math.round(availableTime / exercisesPerDay)} minutes`);
+      console.log('🎯 === TIME TARGET BREAKDOWN END ===\n');
+
       // 10. Generate muscle groups for each day
       const muscleGroups = this.generateMuscleGroups(goal, daysPerWeek, targetMuscles);
+
+      // 10.5. Validate that we have enough exercises for each muscle group
+      console.log(`🔍 === VALIDATING EXERCISE AVAILABILITY ===`);
+      let hasEnoughExercises = true;
+      muscleGroups.forEach((muscleGroup, index) => {
+        const availableExercises = this.getExercisesForMuscleGroup(scoredExercises, muscleGroup);
+        console.log(`  Day ${index + 1} (${muscleGroup.join(', ')}): ${availableExercises.length} exercises available`);
+        if (availableExercises.length < exercisesPerDay) {
+          console.log(`  ⚠️ Warning: Only ${availableExercises.length} exercises for ${muscleGroup.join(', ')}, need ${exercisesPerDay}`);
+          hasEnoughExercises = false;
+        }
+      });
+      console.log(`🔍 === VALIDATION COMPLETE ===`);
 
       // 11. Create weekly exercise pool for day-to-day rotation
       const weekNumber = Math.ceil((Date.now() - new Date('2025-01-01').getTime()) / (7 * 24 * 60 * 60 * 1000));
@@ -467,6 +626,14 @@ export class EnhancedWorkoutGenerator {
       console.log(`⏰ Session minutes: ${sessionMinutes}`);
       console.log(`🏋️‍♀️ Exercises per day: ${exercisesPerDay}`);
       
+      // 🎯 PLAN GENERATION TARGETS
+      console.log('🎯 === PLAN GENERATION TARGETS ===');
+      console.log(`🎯 TARGET WORKOUT DAYS: ${workoutDays.length} days`);
+      console.log(`🎯 TARGET SESSION DURATION: ${sessionMinutes} minutes`);
+      console.log(`🎯 TARGET EXERCISES PER DAY: ${exercisesPerDay} exercises`);
+      console.log(`🎯 TARGET TOTAL EXERCISES: ${workoutDays.length * exercisesPerDay} exercises`);
+      console.log('🎯 === PLAN GENERATION TARGETS END ===\n');
+      
       const workoutPlan = this.createWorkoutPlanWithDayToDayVariety(
         muscleGroups,
         weeklyPool,
@@ -478,11 +645,40 @@ export class EnhancedWorkoutGenerator {
         cooldown,
         exercisesPerDay,
         injuries,
-        progressionAnalysis
+        progressionAnalysis,
+        scoredExercises
       );
 
       console.log('✅ Enhanced workout plan generated successfully');
       console.log(`📋 Generated ${daysPerWeek} workout days with ${exercisesPerDay} exercises per day`);
+
+      // 🎯 FINAL RESULTS TRACKING
+      console.log('🎯 === FINAL RESULTS TRACKING ===');
+      const actualWorkoutDays = workoutPlan.days.filter((day: any) => day.isWorkoutDay).length;
+      const actualTotalExercises = workoutPlan.days.flatMap((day: any) => day.exercises).length;
+      const actualSessionDuration = workoutPlan.days.find((day: any) => day.isWorkoutDay)?.totalDuration || 0;
+      
+      console.log(`🎯 TARGET vs ACTUAL COMPARISON:`);
+      console.log(`   📅 Days: ${daysPerWeek} target vs ${actualWorkoutDays} actual`);
+      console.log(`   ⏰ Session Time: ${sessionMinutes} min target vs ${actualSessionDuration} min actual`);
+      console.log(`   🏋️‍♀️ Total Exercises: ${daysPerWeek * exercisesPerDay} target vs ${actualTotalExercises} actual`);
+      
+      // Check for discrepancies
+      if (actualWorkoutDays !== daysPerWeek) {
+        console.log(`⚠️  DISCREPANCY: Expected ${daysPerWeek} workout days, got ${actualWorkoutDays}`);
+      }
+      if (actualSessionDuration !== sessionMinutes) {
+        console.log(`⚠️  DISCREPANCY: Expected ${sessionMinutes} min session, got ${actualSessionDuration} min`);
+      }
+      if (actualTotalExercises !== daysPerWeek * exercisesPerDay) {
+        console.log(`⚠️  DISCREPANCY: Expected ${daysPerWeek * exercisesPerDay} exercises, got ${actualTotalExercises}`);
+      }
+      
+      console.log('🎯 === FINAL RESULTS TRACKING END ===\n');
+
+      const internalEndTime = Date.now();
+      const internalDuration = internalEndTime - internalStartTime;
+      console.log(`✅ Internal generation completed in ${internalDuration}ms (${(internalDuration/1000).toFixed(1)}s)`);
 
       return {
         success: true,
@@ -887,48 +1083,118 @@ export class EnhancedWorkoutGenerator {
   }
 
   /**
-   * Get exercises for a specific muscle group using category-based filtering
+   * Get exercises for a specific muscle group using multiple filtering strategies
    */
   private static getExercisesForMuscleGroup(scoredExercises: any[], muscleGroup: string[]): any[] {
     console.log(`🔍 Getting exercises for muscle group: ${muscleGroup.join(', ')}`);
     console.log(`📊 Total scored exercises available: ${scoredExercises.length}`);
     
-    const filteredExercises = scoredExercises.filter(exercise => {
-      const exerciseCategory = exercise.category;
+    // Strategy 1: Filter by primary_muscle and target_muscle fields (most accurate)
+    const muscleFilteredExercises = scoredExercises.filter(exercise => {
+      const primaryMuscle = exercise.primary_muscle?.toLowerCase() || '';
+      const targetMuscle = exercise.target_muscle?.toLowerCase() || '';
       
       return muscleGroup.some(muscle => {
-        // Map muscle to category
-        const muscleToCategoryMapping: Record<string, string> = {
-          'Chest': 'Upper Body',
-          'Back': 'Upper Body', 
-          'Shoulders': 'Upper Body',
-          'Arms': 'Upper Body',
-          'Core': 'Core',
-          'Lower Back': 'Core',
-          'Full Body': 'Full Body',
-          'Quads': 'Lower Body',
-          'Glutes': 'Lower Body',
-          'Hamstrings': 'Lower Body',
-          'Calves': 'Lower Body'
-        };
-        
-        const expectedCategory = muscleToCategoryMapping[muscle];
-        const matches = exerciseCategory === expectedCategory;
+        const muscleLower = muscle.toLowerCase();
+        const matches = primaryMuscle.includes(muscleLower) || targetMuscle.includes(muscleLower);
         
         if (matches) {
-          console.log(`  ✅ ${exercise.exercise_name} (${exerciseCategory}) matches ${muscle} → ${expectedCategory}`);
+          console.log(`  ✅ ${exercise.exercise_name} (primary: ${exercise.primary_muscle}, target: ${exercise.target_muscle}) matches ${muscle}`);
         }
         
         return matches;
       });
     });
     
-    console.log(`📦 Found ${filteredExercises.length} exercises for ${muscleGroup.join(', ')}`);
-    if (filteredExercises.length > 0) {
-      console.log(`  Examples: ${filteredExercises.slice(0, 3).map(ex => ex.exercise_name).join(', ')}`);
+    if (muscleFilteredExercises.length > 0) {
+      console.log(`📦 Found ${muscleFilteredExercises.length} exercises via muscle field matching`);
+      console.log(`  Examples: ${muscleFilteredExercises.slice(0, 3).map(ex => ex.exercise_name).join(', ')}`);
+      return muscleFilteredExercises;
     }
     
-    return filteredExercises;
+    // Strategy 2: Filter by category field
+    console.log(`⚠️ No exercises found via muscle fields, trying category matching...`);
+    
+    const categoryMapping: Record<string, string[]> = {
+      'Chest': ['Upper Body', 'upper body', 'Upper', 'upper', 'Chest', 'chest'],
+      'Back': ['Upper Body', 'upper body', 'Upper', 'upper', 'Back', 'back'],
+      'Shoulders': ['Upper Body', 'upper body', 'Upper', 'upper', 'Shoulders', 'shoulders'],
+      'Arms': ['Upper Body', 'upper body', 'Upper', 'upper', 'Arms', 'arms'],
+      'Core': ['Core', 'core', 'Abdominal', 'abdominal', 'Abs', 'abs'],
+      'Lower Back': ['Core', 'core', 'Lower Back', 'lower back', 'Back', 'back'],
+      'Full Body': ['Full Body', 'full body', 'Full', 'full', 'Compound', 'compound'],
+      'Quads': ['Lower Body', 'lower body', 'Lower', 'lower', 'Legs', 'legs', 'Quads', 'quads'],
+      'Glutes': ['Lower Body', 'lower body', 'Lower', 'lower', 'Legs', 'legs', 'Glutes', 'glutes'],
+      'Hamstrings': ['Lower Body', 'lower body', 'Lower', 'lower', 'Legs', 'legs', 'Hamstrings', 'hamstrings'],
+      'Calves': ['Lower Body', 'lower body', 'Lower', 'lower', 'Legs', 'legs', 'Calves', 'calves']
+    };
+    
+    const categoryFilteredExercises = scoredExercises.filter(exercise => {
+      const exerciseCategory = exercise.category?.toLowerCase() || '';
+      
+      return muscleGroup.some(muscle => {
+        const possibleCategories = categoryMapping[muscle] || [];
+        const matches = possibleCategories.some(category => 
+          exerciseCategory === category.toLowerCase()
+        );
+        
+        if (matches) {
+          console.log(`  ✅ ${exercise.exercise_name} (${exercise.category}) matches ${muscle} → [${possibleCategories.join(', ')}]`);
+        }
+        
+        return matches;
+      });
+    });
+    
+    if (categoryFilteredExercises.length > 0) {
+      console.log(`📦 Found ${categoryFilteredExercises.length} exercises via category matching`);
+      console.log(`  Examples: ${categoryFilteredExercises.slice(0, 3).map(ex => ex.exercise_name).join(', ')}`);
+      return categoryFilteredExercises;
+    }
+    
+    // Strategy 3: Fallback based on exercise name keywords
+    console.log(`⚠️ No exercises found via category matching, trying exercise name keywords...`);
+    
+    const keywordMapping: Record<string, string[]> = {
+      'Chest': ['chest', 'bench', 'press', 'push-up', 'dip', 'fly'],
+      'Back': ['back', 'row', 'pull-up', 'chin-up', 'lat', 'pull'],
+      'Shoulders': ['shoulder', 'press', 'raise', 'delt', 'overhead'],
+      'Arms': ['curl', 'extension', 'tricep', 'bicep', 'arm'],
+      'Core': ['core', 'ab', 'crunch', 'plank', 'sit-up', 'twist', 'dead bug'],
+      'Lower Back': ['back', 'deadlift', 'good morning', 'back extension'],
+      'Full Body': ['squat', 'deadlift', 'clean', 'snatch', 'thruster', 'burpee', 'turkish'],
+      'Quads': ['squat', 'lunge', 'leg press', 'quad', 'step-up'],
+      'Glutes': ['glute', 'bridge', 'hip thrust', 'deadlift', 'clamshell'],
+      'Hamstrings': ['hamstring', 'curl', 'deadlift', 'good morning', 'nordic'],
+      'Calves': ['calf', 'raise', 'calves', 'heel']
+    };
+    
+    const keywordFilteredExercises = scoredExercises.filter(exercise => {
+      const exerciseName = exercise.exercise_name?.toLowerCase() || '';
+      
+      return muscleGroup.some(muscle => {
+        const keywords = keywordMapping[muscle] || [];
+        const matches = keywords.some(keyword => exerciseName.includes(keyword));
+        
+        if (matches) {
+          console.log(`  🔄 KEYWORD: ${exercise.exercise_name} matches ${muscle} via keywords [${keywords.join(', ')}]`);
+        }
+        
+        return matches;
+      });
+    });
+    
+    if (keywordFilteredExercises.length > 0) {
+      console.log(`📦 Found ${keywordFilteredExercises.length} exercises via keyword matching`);
+      console.log(`  Examples: ${keywordFilteredExercises.slice(0, 3).map(ex => ex.exercise_name).join(', ')}`);
+      return keywordFilteredExercises;
+    }
+    
+    // Strategy 4: Last resort - return any exercises if nothing else works
+    console.log(`⚠️ No exercises found via any matching strategy, returning first ${Math.min(5, scoredExercises.length)} exercises as fallback`);
+    const fallbackExercises = scoredExercises.slice(0, 5);
+    console.log(`  Fallback exercises: ${fallbackExercises.map(ex => ex.exercise_name).join(', ')}`);
+    return fallbackExercises;
   }
 
   /**
@@ -1386,7 +1652,7 @@ export class EnhancedWorkoutGenerator {
    * Generate muscle groups for each day using category-based approach
    */
   private static generateMuscleGroups(goal: string, daysPerWeek: number, targetMuscles: string[]): string[][] {
-    // Map target muscles to exercise categories
+    // Map target muscles to exercise categories (using the same mapping as getExercisesForMuscleGroup)
     const muscleToCategoryMapping: Record<string, string> = {
       'Chest': 'Upper Body',
       'Back': 'Upper Body', 
@@ -1411,6 +1677,8 @@ export class EnhancedWorkoutGenerator {
           "fat_loss": ["Full Body", "Core", "Upper Body", "Lower Body"]
         }[goal] || ["Full Body", "Core", "Upper Body"];
 
+    console.log(`🎯 Target categories for goal "${goal}": ${targetCategories.join(', ')}`);
+
     // Always ensure we have exactly daysPerWeek category groups
     const categoryGroups: string[][] = [];
     for (let i = 0; i < daysPerWeek; i++) {
@@ -1422,6 +1690,7 @@ export class EnhancedWorkoutGenerator {
       }
     }
 
+    console.log(`📅 Generated ${categoryGroups.length} muscle groups: ${categoryGroups.map(group => group.join(', ')).join(' | ')}`);
     return categoryGroups;
   }
 
@@ -1439,7 +1708,8 @@ export class EnhancedWorkoutGenerator {
     cooldown: number,
     exercisesPerDay: number,
     injuries: Array<{ injury: string; severity: string; affectedMuscles: string[] }>,
-    progressionAnalysis?: any
+    progressionAnalysis?: any,
+    scoredExercises?: any[]
   ): any {
     console.log('🎯 Creating workout plan with day-to-day variety');
     
@@ -1448,6 +1718,11 @@ export class EnhancedWorkoutGenerator {
     let workoutDayCounter = 0;
 
     // Create a 7-day array with day-to-day variety
+    console.log('🎯 === DAY CREATION PROCESS ===');
+    console.log(`🎯 TARGET WORKOUT DAYS: ${workoutDays.join(', ')}`);
+    console.log(`🎯 TARGET SESSION MINUTES: ${sessionMinutes}`);
+    console.log(`🎯 TARGET EXERCISES PER DAY: ${exercisesPerDay}`);
+    
     for (let i = 0; i < 7; i++) {
       const currentDate = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
       const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
@@ -1456,19 +1731,32 @@ export class EnhancedWorkoutGenerator {
       // Check if this is a workout day
       const isWorkoutDay = workoutDays.includes(dayName);
       
+      console.log(`📅 Day ${i + 1} (${dayName}): ${isWorkoutDay ? 'WORKOUT DAY' : 'REST DAY'}`);
+      
       if (isWorkoutDay) {
         workoutDayCounter++;
         const workoutIndex = workoutDays.indexOf(dayName);
         const muscleGroup = muscleGroups[workoutIndex] || ["Full Body"];
         
         // Select exercises for this specific day with variety
-        const selectedExercises = this.selectExercisesForDay(
+        let selectedExercises = this.selectExercisesForDay(
           workoutDayCounter,
           muscleGroup,
           weeklyPool,
           exercisesPerDay,
           template
         );
+        
+        // Fallback: If no exercises selected, use any available exercises
+        if (selectedExercises.length === 0 && scoredExercises && scoredExercises.length > 0) {
+          console.log(`⚠️ No exercises selected for Day ${workoutDayCounter}, using fallback exercises`);
+          const fallbackExercises = scoredExercises.slice(0, exercisesPerDay);
+          selectedExercises = fallbackExercises.map((exercise: any, index: number) => ({
+            ...exercise,
+            exerciseType: index === 0 ? 'primary' : 'secondary'
+          }));
+          console.log(`  Fallback exercises: ${selectedExercises.map((ex: any) => ex.exercise_name).join(', ')}`);
+        }
         
         // Convert exercises to full exercise objects
         const exercises = this.buildExerciseObjects(
@@ -1494,6 +1782,9 @@ export class EnhancedWorkoutGenerator {
         });
         
         console.log(`✅ Day ${workoutDayCounter} (${dayName}): ${exercises.length} exercises for ${muscleGroup.join(', ')}`);
+        console.log(`   ⏰ Session Time: ${sessionMinutes} min target, ${totalTime.total} min actual`);
+        console.log(`   🏋️‍♀️ Exercises: ${exercises.length} exercises (target: ${exercisesPerDay})`);
+        console.log(`   📊 Time Breakdown: Warmup ${warmup}m, Exercises ${totalTime.exercises}m, Rest ${totalTime.rest}m, Cooldown ${cooldown}m`);
       } else {
         // Rest day
         days.push({
@@ -1517,9 +1808,22 @@ export class EnhancedWorkoutGenerator {
     // Log variety metrics
     this.logVarietyMetrics(weeklyPool);
 
+    // 🎯 FINAL PLAN SUMMARY
+    console.log('🎯 === FINAL PLAN SUMMARY ===');
+    const actualWorkoutDays = days.filter((day: any) => day.isWorkoutDay).length;
+    const actualTotalExercises = days.flatMap((day: any) => day.exercises).length;
+    const actualTotalTime = days.filter((day: any) => day.isWorkoutDay).reduce((sum: number, day: any) => sum + (day.timeBreakdown?.total || 0), 0);
+    
+    console.log(`📊 PLAN SUMMARY:`);
+    console.log(`   📅 Workout Days: ${workoutDays.length} target vs ${actualWorkoutDays} actual`);
+    console.log(`   🏋️‍♀️ Total Exercises: ${workoutDays.length * exercisesPerDay} target vs ${actualTotalExercises} actual`);
+    console.log(`   ⏰ Total Time: ${workoutDays.length * sessionMinutes} min target vs ${actualTotalTime} min actual`);
+    console.log(`   📈 Average Session: ${sessionMinutes} min target vs ${Math.round(actualTotalTime / actualWorkoutDays)} min actual`);
+    console.log('🎯 === FINAL PLAN SUMMARY END ===\n');
+
     return {
       days: days,
-      workout_plan: days.flatMap(day => day.exercises),
+      workout_plan: days.flatMap((day: any) => day.exercises),
       summary: {
         totalDays: 7,
         workoutDays: workoutDays.length,
@@ -1743,12 +2047,22 @@ export class EnhancedWorkoutGenerator {
       return total + restMinutes;
     }, 0);
 
+    const total = warmup + exerciseTime + Math.round(restTime) + cooldown;
+
+    // 🎯 TIME CALCULATION LOGGING
+    console.log(`⏰ TIME CALCULATION for ${exercises.length} exercises:`);
+    console.log(`   🏃‍♂️ Warmup: ${warmup} minutes`);
+    console.log(`   🏋️‍♀️ Exercise Time: ${exerciseTime} minutes (${exercises.map(ex => `${ex.exercise_name}: ${ex.duration}m`).join(', ')})`);
+    console.log(`   😴 Rest Time: ${Math.round(restTime)} minutes`);
+    console.log(`   🧘‍♀️ Cooldown: ${cooldown} minutes`);
+    console.log(`   📊 TOTAL: ${total} minutes`);
+
     return {
       warmup,
       exercises: exerciseTime,
       rest: Math.round(restTime),
       cooldown,
-      total: warmup + exerciseTime + Math.round(restTime) + cooldown
+      total
     };
   }
 
@@ -1921,8 +2235,18 @@ export class EnhancedWorkoutGenerator {
     const restMinutes = (template.sets - 1) * template.rest / 60;
     baseTime += restMinutes;
     
-    // Round to nearest minute and ensure minimum
-    return Math.max(4, Math.round(baseTime));
+    const finalDuration = Math.max(4, Math.round(baseTime));
+    
+    // 🎯 EXERCISE DURATION LOGGING
+    console.log(`⏱️ DURATION CALCULATION for ${exercise.exercise_name}:`);
+    console.log(`   📊 Base Time: 6 minutes`);
+    console.log(`   🏷️ Category Factor: ${complexityFactors.category[category] || 0} (${category})`);
+    console.log(`   🛠️ Equipment Factor: ${complexityFactors.equipment[equipment] || 0} (${equipment})`);
+    console.log(`   🔢 Template Adjustments: Sets ${template.sets} (+${template.sets > 3 ? 1 : 0}), Rest ${template.rest}s (+${template.rest > 60 ? 0.5 : 0})`);
+    console.log(`   😴 Rest Time: ${restMinutes} minutes (${template.sets - 1} sets × ${template.rest}s ÷ 60)`);
+    console.log(`   📈 FINAL DURATION: ${finalDuration} minutes`);
+    
+    return finalDuration;
   }
 
   /**

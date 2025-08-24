@@ -1,70 +1,53 @@
 import { createClient } from '@supabase/supabase-js';
-import { env } from './client/src/env.ts';
+import dotenv from 'dotenv';
 
-const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+dotenv.config();
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
 
 async function checkTables() {
-  console.log('🔍 Checking available tables...');
-  
+  console.log('🔍 === CHECKING DATABASE TABLES ===\n');
+
   try {
-    // Try to get table information
-    const { data, error } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public');
-    
-    if (error) {
-      console.log('❌ Error accessing information_schema:', error);
+    // Try to get table information by querying different tables
+    const tables = [
+      'exercises_raw',
+      'exercises',
+      'client',
+      'schedule',
+      'schedule_preview'
+    ];
+
+    for (const tableName of tables) {
+      console.log(`📋 Checking table: ${tableName}`);
       
-      // Try some common table names
-      const commonTables = [
-        'clients',
-        'client',
-        'users',
-        'user',
-        'profiles',
-        'profile',
-        'trainers',
-        'trainer'
-      ];
-      
-      console.log('🔍 Trying common table names...');
-      
-      for (const tableName of commonTables) {
-        try {
-          const { data: testData, error: testError } = await supabase
-            .from(tableName)
-            .select('*')
-            .limit(1);
-          
-          if (!testError) {
-            console.log(`✅ Table "${tableName}" exists!`);
-            
-            // Try to get client 34 from this table
-            const { data: clientData, error: clientError } = await supabase
-              .from(tableName)
-              .select('*')
-              .eq('id', 34)
-              .single();
-            
-            if (!clientError && clientData) {
-              console.log(`✅ Found client 34 in table "${tableName}":`);
-              console.log(JSON.stringify(clientData, null, 2));
-              return clientData;
-            }
+      try {
+        const { data, error, count } = await supabase
+          .from(tableName)
+          .select('*', { count: 'exact', head: true })
+          .limit(1);
+
+        if (error) {
+          console.log(`  ❌ Error: ${error.message}`);
+        } else {
+          console.log(`  ✅ Table exists`);
+          if (data && data.length > 0) {
+            console.log(`  📊 Has data: ${count || data.length} rows`);
+            console.log(`  📝 Sample columns: ${Object.keys(data[0]).join(', ')}`);
           } else {
-            console.log(`❌ Table "${tableName}" does not exist`);
+            console.log(`  📊 Empty table`);
           }
-        } catch (e) {
-          console.log(`❌ Error checking table "${tableName}":`, e.message);
         }
+      } catch (err) {
+        console.log(`  ❌ Table doesn't exist or access denied`);
       }
-    } else {
-      console.log('📋 Available tables:');
-      data.forEach(table => {
-        console.log(`  - ${table.table_name}`);
-      });
+      
+      console.log('');
     }
+
   } catch (error) {
     console.error('❌ Error:', error);
   }

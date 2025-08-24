@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -105,7 +105,40 @@ interface WeeklyWorkoutPlan {
   planEndDate: string;
 }
 
-// The real AI workout plan generator is now imported from ai-fitness-plan.ts 
+// Enhanced state management for better UX
+interface WorkoutPlanState {
+  status: 'no_plan' | 'draft' | 'approved' | 'template';
+  source: 'generated' | 'template' | 'database';
+  lastSaved: Date | null;
+  hasUnsavedChanges: boolean;
+  templateDate?: string;
+  isAutoSaving: boolean;
+}
+
+interface LoadingState {
+  type: 'generating' | 'saving' | 'approving' | 'fetching' | null;
+  message: string;
+}
+
+interface WorkoutPlanSectionProps {
+  clientId?: string | number;
+  client?: any;
+  lastAIRecommendation?: any;
+  trainerNotes?: string;
+  setTrainerNotes?: (notes: string) => void;
+  handleSaveTrainerNotes?: () => void;
+  isSavingNotes?: boolean;
+  isEditingNotes?: boolean;
+  setIsEditingNotes?: (editing: boolean) => void;
+  notesDraft?: string;
+  setNotesDraft?: (draft: string) => void;
+  notesError?: string | null;
+  setNotesError?: (error: string | null) => void;
+  isGeneratingAnalysis?: boolean;
+  handleSummarizeNotes?: () => void;
+  isSummarizingNotes?: boolean;
+  onDateChange?: (newDate: Date) => void;
+}
 
 // Mock popup components (replace with your actual implementations)
 const ClientDataPopup = ({ isOpen, onClose, clientInfo }: any) => (
@@ -731,26 +764,6 @@ function normalizeExercise(ex: any): any {
 }
 // ---
 
-interface WorkoutPlanSectionProps {
-  clientId?: string | number;
-  client?: any;
-  lastAIRecommendation?: any;
-  trainerNotes?: string;
-  setTrainerNotes?: (notes: string) => void;
-  handleSaveTrainerNotes?: () => void;
-  isSavingNotes?: boolean;
-  isEditingNotes?: boolean;
-  setIsEditingNotes?: (editing: boolean) => void;
-  notesDraft?: string;
-  setNotesDraft?: (draft: string) => void;
-  notesError?: string | null;
-  setNotesError?: (error: string | null) => void;
-  isGeneratingAnalysis?: boolean;
-  handleSummarizeNotes?: () => void;
-  isSummarizingNotes?: boolean;
-  onDateChange?: (newDate: Date) => void;
-}
-
 // Helper to build the payload for schedule_preview
 function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_time: string, workout_id: string) {
   return planWeek.map((day) => ({
@@ -986,21 +999,39 @@ const WorkoutPlanSection = ({
 }: WorkoutPlanSectionProps) => {
   const { toast } = useToast();
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
-  // Plan start weekday persisted in client table; default Sunday
   const [planStartDay, setPlanStartDay] = useState<string>(client?.plan_start_day || 'Sunday');
-  const [isFetchingPlan, setIsFetchingPlan] = useState(false);
+  
+  // Enhanced state management for better UX
+  const [workoutPlanState, setWorkoutPlanState] = useState<WorkoutPlanState>({
+    status: 'no_plan',
+    source: 'database',
+    lastSaved: null,
+    hasUnsavedChanges: false,
+    isAutoSaving: false
+  });
+  
+  const [loadingState, setLoadingState] = useState<LoadingState>({
+    type: null,
+    message: ''
+  });
+  
   const [workoutPlan, setWorkoutPlan] = useState<WeeklyWorkoutPlan | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingSearch, setIsGeneratingSearch] = useState(false);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
   const [openPopup, setOpenPopup] = useState<PopupKey | null>(null);
-  const [hasAIGeneratedPlan, setHasAIGeneratedPlan] = useState(false); // Add this flag
-  const [isDraftPlan, setIsDraftPlan] = useState(false); // Indicates if plan is from preview (draft)
+  const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
+  const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
+  
+  // Legacy state variables for compatibility (will be replaced by enhanced state)
+  const [isFetchingPlan, setIsFetchingPlan] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingSearch, setIsGeneratingSearch] = useState(false);
+  const [isDraftPlan, setIsDraftPlan] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
+  const [hasAIGeneratedPlan, setHasAIGeneratedPlan] = useState(false);
 
   // Save Plan for Future (template) state
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
@@ -1011,6 +1042,144 @@ const WorkoutPlanSection = ({
   const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const { trainer } = useAuth();
+  
+  // Enhanced UX functions
+  const setLoading = (type: LoadingState['type'], message: string) => {
+    setLoadingState({ type, message });
+  };
+
+  // Debug function to help troubleshoot approval status
+  const debugApprovalStatus = async () => {
+    if (!numericClientId || !planStartDate) return;
+    
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log('🔍 === APPROVAL STATUS DEBUG ===');
+    console.log('🔍 Date range:', startDateStr, 'to', endDateStr);
+    console.log('🔍 Current workoutPlanState:', workoutPlanState);
+    console.log('🔍 Current planApprovalStatus:', planApprovalStatus);
+    console.log('🔍 Current isDraftPlan:', isDraftPlan);
+    
+    // Check schedule table
+    const { data: scheduleData, error: scheduleError } = await supabase
+      .from('schedule')
+      .select('id, for_date')
+      .eq('client_id', numericClientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr);
+    
+    console.log('🔍 Schedule table data:', scheduleData?.length || 0, 'entries');
+    if (scheduleData) {
+      console.log('🔍 Schedule dates:', scheduleData.map(row => row.for_date));
+    }
+    
+    // Check schedule_preview table
+    const { data: previewData, error: previewError } = await supabase
+      .from('schedule_preview')
+      .select('id, for_date, is_approved')
+      .eq('client_id', numericClientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr);
+    
+    console.log('🔍 Schedule_preview table data:', previewData?.length || 0, 'entries');
+    if (previewData) {
+      console.log('🔍 Preview dates and approval status:', previewData.map(row => ({ date: row.for_date, approved: row.is_approved })));
+    }
+    
+    console.log('🔍 === END DEBUG ===');
+  };
+
+  const clearLoading = () => {
+    setLoadingState({ type: null, message: '' });
+  };
+
+  const updateWorkoutPlanState = (updates: Partial<WorkoutPlanState>) => {
+    setWorkoutPlanState(prev => ({ ...prev, ...updates }));
+  };
+
+  const showConfirmationDialog = (title: string, message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      // For now, use browser confirm - can be replaced with custom dialog
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      resolve(confirmed);
+    });
+  };
+
+  const handleUnsavedChanges = async (action: () => void) => {
+    if (workoutPlanState.hasUnsavedChanges) {
+      const confirmed = await showConfirmationDialog(
+        'Unsaved Changes',
+        'You have unsaved changes. Do you want to save them before continuing?'
+      );
+      
+      if (confirmed) {
+        // Auto-save current changes
+        await autoSaveDraft();
+      }
+    }
+    action();
+  };
+
+  const autoSaveDraft = async () => {
+    if (!workoutPlan || !workoutPlanState.hasUnsavedChanges) return;
+    
+    updateWorkoutPlanState({ isAutoSaving: true });
+    setLoading('saving', 'Auto-saving draft...');
+    
+    try {
+      const result = await savePlanToSchedulePreview(workoutPlan.week, numericClientId, planStartDate);
+      if (result.success) {
+        updateWorkoutPlanState({ 
+          hasUnsavedChanges: false, 
+          lastSaved: new Date(),
+          isAutoSaving: false 
+        });
+        toast({ 
+          title: 'Draft Saved', 
+          description: 'Your changes have been auto-saved.',
+          variant: 'default'
+        });
+      }
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+      updateWorkoutPlanState({ isAutoSaving: false });
+    } finally {
+      clearLoading();
+    }
+  };
+
+  // Auto-save effect
+  useEffect(() => {
+    if (workoutPlanState.hasUnsavedChanges && !workoutPlanState.isAutoSaving) {
+      const autoSaveTimer = setTimeout(() => {
+        autoSaveDraft();
+      }, 30000); // Auto-save after 30 seconds of inactivity
+      
+      return () => clearTimeout(autoSaveTimer);
+    }
+  }, [workoutPlanState.hasUnsavedChanges, workoutPlan]);
+
+  // Cleanup effect to reset loading states on unmount
+  useEffect(() => {
+    return () => {
+      // Reset loading states if component unmounts during generation
+      if (isGeneratingSearch) {
+        console.log('🔄 Component unmounting during generation - resetting state');
+        setIsGeneratingSearch(false);
+      }
+      if (isGenerating) {
+        console.log('🔄 Component unmounting during generation - resetting state');
+        setIsGenerating(false);
+      }
+      // Clear any pending timeouts
+      clearLoading();
+    };
+  }, [isGeneratingSearch, isGenerating]);
+  
   // DnD sensors for reordering the 7-day header boxes
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1609,45 +1778,101 @@ const WorkoutPlanSection = ({
       return;
     }
 
+    setLoading('fetching', 'Loading workout plan...');
     setIsFetchingPlan(true);
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
     const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
     console.log(`[WorkoutPlanSection] Fetching plan for client ${numericClientId} from ${startDateStr} to ${endDateStr}`);
 
-    // 1. Try schedule_preview first - but search for ANY data for this client, not just the fixed range
-    let { data, error } = await supabase
+    let data: any[] = [];
+    let error: any = null;
+    let isFromPreview = false;
+
+    // Strategy 1: Try to fetch data specifically for the requested date range from schedule_preview
+    console.log('[WorkoutPlanSection] Strategy 1: Fetching from schedule_preview for specific date range');
+    let { data: previewData, error: previewError } = await supabase
       .from('schedule_preview')
       .select('*')
       .eq('client_id', numericClientId)
       .eq('type', 'workout')
+      .gte('for_date', startDateStr)
+      .lte('for_date', endDateStr)
       .order('for_date', { ascending: true });
     
-    console.log('[WorkoutPlanSection] All schedule_preview data for client:', data?.map(d => ({ date: d.for_date, summary: d.summary })));
-    
-    console.log('[WorkoutPlanSection] Fetched from schedule_preview. Data length:', data?.length, 'Error:', error);
-
-    if (data && data.length > 0) {
+    if (previewError) {
+      console.warn('[WorkoutPlanSection] Error fetching from schedule_preview:', previewError);
+    } else if (previewData && previewData.length > 0) {
+      console.log('[WorkoutPlanSection] Found data in schedule_preview for date range:', previewData.length, 'entries');
+      data = previewData;
+      isFromPreview = true;
       setIsDraftPlan(true);
-      // Filter data to the requested date range
-      data = data.filter(workout => 
-        workout.for_date >= startDateStr && workout.for_date <= endDateStr
-      );
-      console.log('[WorkoutPlanSection] Filtered data for date range. Data length:', data?.length);
-    } else {
-      // 2. Fallback to schedule
-      console.log('[WorkoutPlanSection] No data in schedule_preview, falling back to schedule.');
-      ({ data, error } = await supabase
+    }
+
+    // Strategy 2: If no data in schedule_preview for the range, try schedule table
+    if (data.length === 0) {
+      console.log('[WorkoutPlanSection] Strategy 2: No data in schedule_preview, trying schedule table');
+      let { data: scheduleData, error: scheduleError } = await supabase
         .from('schedule')
         .select('*')
         .eq('client_id', numericClientId)
         .eq('type', 'workout')
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr)
-        .order('for_date', { ascending: true }));
-      setIsDraftPlan(false);
-      console.log('[WorkoutPlanSection] Fetched from schedule. Data length:', data?.length, 'Error:', error);
+        .order('for_date', { ascending: true });
+      
+      if (scheduleError) {
+        console.warn('[WorkoutPlanSection] Error fetching from schedule:', scheduleError);
+        error = scheduleError;
+      } else if (scheduleData && scheduleData.length > 0) {
+        console.log('[WorkoutPlanSection] Found data in schedule for date range:', scheduleData.length, 'entries');
+        data = scheduleData;
+        setIsDraftPlan(false);
+      }
     }
+
+    // Strategy 3: If still no data, try to find the most recent plan and use it as a template
+    if (data.length === 0) {
+      console.log('[WorkoutPlanSection] Strategy 3: No data for date range, looking for most recent plan');
+      
+      // Try to find the most recent plan from schedule_preview
+      let { data: recentPreviewData, error: recentPreviewError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', numericClientId)
+        .eq('type', 'workout')
+        .order('for_date', { ascending: false })
+        .limit(1);
+      
+      if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
+        console.log('[WorkoutPlanSection] Found recent plan in schedule_preview, using as template');
+        data = recentPreviewData;
+        isFromPreview = true;
+        setIsDraftPlan(true);
+      } else {
+        // Try schedule table for recent plan
+        let { data: recentScheduleData, error: recentScheduleError } = await supabase
+          .from('schedule')
+          .select('*')
+          .eq('client_id', numericClientId)
+          .eq('type', 'workout')
+          .order('for_date', { ascending: false })
+          .limit(1);
+        
+        if (!recentScheduleError && recentScheduleData && recentScheduleData.length > 0) {
+          console.log('[WorkoutPlanSection] Found recent plan in schedule, using as template');
+          data = recentScheduleData;
+          setIsDraftPlan(false);
+        }
+      }
+    }
+
+    console.log('[WorkoutPlanSection] Final data result:', {
+      dataLength: data.length,
+      isFromPreview,
+      error: error?.message
+    });
+
     if (error) {
       toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
       setWorkoutPlan(null);
@@ -1663,11 +1888,13 @@ const WorkoutPlanSection = ({
           const normalizedWorkoutDate = normalizeDateForStorage(workout.for_date);
           return normalizedWorkoutDate === dateStr;
         });
+        
         let planDay = {
             date: dateStr,
             focus: 'Rest Day',
             exercises: []
         };
+        
         if (dayData && dayData.details_json?.exercises) {
             planDay.focus = dayData.summary || 'Workout';
             // Use the comprehensive normalizeExercise function here
@@ -1680,16 +1907,72 @@ const WorkoutPlanSection = ({
         }
         weekDates.push(planDay);
       }
+      
       const dbWorkoutPlan = {
         week: weekDates,
         hasAnyWorkouts: weekDates.some(day => day.exercises && day.exercises.length > 0),
         planStartDate: startDateStr,
         planEndDate: endDateStr
       };
+      
       setWorkoutPlan(dbWorkoutPlan);
       console.log('[WorkoutPlanSection] Successfully processed and set workout plan:', dbWorkoutPlan);
+      
+      // If we used a template plan, show a helpful message
+      if (data.length > 0 && data[0].for_date !== startDateStr) {
+        console.log('[WorkoutPlanSection] Used template plan from different date');
+        const templateDate = format(new Date(data[0].for_date), 'MMM d, yyyy');
+        const currentDate = format(planStartDate, 'MMM d, yyyy');
+        
+        updateWorkoutPlanState({
+          status: 'template',
+          source: 'template',
+          templateDate: data[0].for_date
+        });
+        
+        toast({
+          title: 'Template Plan Loaded',
+          description: `Showing plan from ${templateDate} as template for ${currentDate}. You can generate a new plan for this date.`,
+          action: (
+            <Button 
+              onClick={() => handleGeneratePlan()} 
+              size="sm"
+              className="mt-2"
+            >
+              Generate New Plan
+            </Button>
+          )
+        });
+      } else if (data.length > 0) {
+        // Determine if this is an approved plan or draft
+        const isApprovedPlan = !isFromPreview; // If not from preview, it's from schedule (approved)
+        
+        updateWorkoutPlanState({
+          status: isApprovedPlan ? 'approved' : 'draft',
+          source: isApprovedPlan ? 'database' : 'generated'
+        });
+        
+        // Update legacy status for compatibility
+        if (isApprovedPlan) {
+          setPlanApprovalStatus('approved');
+          setIsDraftPlan(false);
+        } else {
+          setPlanApprovalStatus('not_approved');
+          setIsDraftPlan(true);
+        }
+      } else {
+        updateWorkoutPlanState({
+          status: 'no_plan',
+          source: 'database'
+        });
+        
+        // Update legacy status for compatibility
+        setPlanApprovalStatus('pending');
+        setIsDraftPlan(false);
+      }
     }
     setIsFetchingPlan(false);
+    clearLoading();
   };
 
   // Debounced save function for autosaving inline edits
@@ -1710,6 +1993,11 @@ const WorkoutPlanSection = ({
     setIsSavingEdits(false);
     if (result.success) {
       toast({ title: 'Changes saved', description: 'Your edits have been saved to the draft.' });
+      // Clear unsaved changes flag
+      updateWorkoutPlanState({ 
+        hasUnsavedChanges: false, 
+        lastSaved: new Date() 
+      });
       // Check approval status after saving to update the approve button
       await checkPlanApprovalStatus();
       // DO NOT REFETCH HERE. The local state is the source of truth during editing.
@@ -1736,6 +2024,10 @@ const WorkoutPlanSection = ({
       if (!currentPlan) return null;
       return { ...currentPlan, week: updatedWeek };
     });
+    
+    // Mark as having unsaved changes
+    updateWorkoutPlanState({ hasUnsavedChanges: true });
+    
     // Trigger the debounced save
     debouncedSave(updatedWeek);
   };
@@ -1803,17 +2095,44 @@ const WorkoutPlanSection = ({
 
   // Fetch workout plan for client and date
   useEffect(() => {
+    console.log('[WorkoutPlanSection] === DATE NAVIGATION DEBUG ===');
+    console.log('[WorkoutPlanSection] Client ID:', numericClientId);
+    console.log('[WorkoutPlanSection] Plan Start Date:', planStartDate?.toISOString());
+    console.log('[WorkoutPlanSection] Plan Start Day:', planStartDay);
+    console.log('[WorkoutPlanSection] Has AI Generated Plan:', hasAIGeneratedPlan);
+    console.log('[WorkoutPlanSection] Current Workout Plan:', workoutPlan ? 'exists' : 'null');
+    
     if (hasAIGeneratedPlan) {
       console.log('[WorkoutPlanSection] Skipping database fetch because AI-generated plan is active.');
       return;
     }
+    
+    console.log('[WorkoutPlanSection] Triggering fetchPlan...');
     fetchPlan();
   }, [numericClientId, planStartDate, planStartDay, hasAIGeneratedPlan]);
 
-  // Reset AI generated plan flag when client changes
+  // Reset AI generated plan flag when client or date changes
   useEffect(() => {
+    console.log('[WorkoutPlanSection] Resetting AI generated plan flag due to client or date change');
     setHasAIGeneratedPlan(false);
-  }, [numericClientId]);
+  }, [numericClientId, planStartDate]);
+
+  // Handle date changes with unsaved changes protection
+  const handleDateChange = async (newDate: Date) => {
+    if (workoutPlanState.hasUnsavedChanges) {
+      const confirmed = await showConfirmationDialog(
+        'Unsaved Changes',
+        'You have unsaved changes. Do you want to save them before changing the date?'
+      );
+      
+      if (confirmed) {
+        await autoSaveDraft();
+      }
+    }
+    
+    setPlanStartDate(newDate);
+    updateWorkoutPlanState({ hasUnsavedChanges: false });
+  };
 
   // Clear workout plan when client changes (but not when we have AI data)
   useEffect(() => {
@@ -1831,6 +2150,7 @@ const WorkoutPlanSection = ({
       return;
     }
     
+    setLoading('generating', 'Checking provider health...');
     setIsGenerating(true);
     setCurrentModel('Checking provider health...');
     setRetryCount(0);
@@ -1923,6 +2243,7 @@ const WorkoutPlanSection = ({
       setIsGenerating(false);
       setCurrentModel(null);
       setRetryCount(0);
+      clearLoading();
     }
   };
 
@@ -1934,7 +2255,22 @@ const WorkoutPlanSection = ({
     const endDateStr = format(endDate, 'yyyy-MM-dd');
     
     try {
-      // Get all preview rows for the week
+      console.log('[checkPlanApprovalStatus] Checking approval status for date range:', startDateStr, 'to', endDateStr);
+      
+      // First, check if there's data in the schedule table (approved plans)
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('id, for_date')
+        .eq('client_id', numericClientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      if (scheduleError) {
+        console.error('Schedule check error:', scheduleError);
+      }
+      
+      // Then, check schedule_preview table (draft plans)
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
         .select('id, for_date, is_approved')
@@ -1945,82 +2281,84 @@ const WorkoutPlanSection = ({
       
       if (previewError) {
         console.error('Preview check error:', previewError);
+      }
+      
+      console.log('[checkPlanApprovalStatus] Schedule data:', scheduleData?.length || 0, 'entries');
+      console.log('[checkPlanApprovalStatus] Preview data:', previewData?.length || 0, 'entries');
+      
+      // Determine status based on data presence
+      let newStatus: 'no_plan' | 'draft' | 'approved' | 'template' = 'no_plan';
+      let newSource: 'generated' | 'template' | 'database' = 'database';
+      
+      if (scheduleData && scheduleData.length > 0) {
+        // Data exists in schedule table = approved plan
+        console.log('[checkPlanApprovalStatus] ✅ Found approved plan in schedule table');
+        newStatus = 'approved';
+        newSource = 'database';
+        
+        // Update legacy status for compatibility
+        setPlanApprovalStatus('approved');
+        setIsDraftPlan(false);
+      } else if (previewData && previewData.length > 0) {
+        // Data exists in schedule_preview table = draft plan
+        console.log('[checkPlanApprovalStatus] 📝 Found draft plan in schedule_preview table');
+        
+        // Check if all days are approved in preview
+        const uniqueDays = Array.from(new Set(previewData.map(row => row.for_date)));
+        const approvedDays = uniqueDays.filter(day => {
+          const dayRows = previewData.filter(row => row.for_date === day);
+          return dayRows.every(row => row.is_approved === true);
+        });
+        
+        if (approvedDays.length === uniqueDays.length && uniqueDays.length > 0) {
+          // All days are approved but still in preview (edge case)
+          console.log('[checkPlanApprovalStatus] ⚠️ All days approved but still in preview - marking as approved');
+          newStatus = 'approved';
+          newSource = 'database';
+          setPlanApprovalStatus('approved');
+          setIsDraftPlan(false);
+        } else {
+          // Some or no days approved = draft
+          console.log('[checkPlanApprovalStatus] 📝 Draft plan with', approvedDays.length, 'of', uniqueDays.length, 'days approved');
+          newStatus = 'draft';
+          newSource = 'generated';
+          setPlanApprovalStatus(approvedDays.length > 0 ? 'partial_approved' : 'not_approved');
+          setIsDraftPlan(true);
+        }
+      } else {
+        // No data in either table
+        console.log('[checkPlanApprovalStatus] ⚪ No plan found in either table');
+        newStatus = 'no_plan';
+        newSource = 'database';
         setPlanApprovalStatus('pending');
-        return;
+        setIsDraftPlan(false);
       }
       
-      // Get all schedule rows for the week
-      const { data: scheduleData, error: scheduleError } = await supabase
-        .from('schedule')
-        .select('id')
-        .eq('client_id', numericClientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr);
-      
-      if (scheduleError) {
-        console.error('Schedule check error:', scheduleError);
-      }
-      
-      // Use the same logic as nutrition plan
-      if (!previewData || previewData.length === 0) {
-        setPlanApprovalStatus('pending');
-        return;
-      }
-      
-      // Get unique days from the rows (since there are multiple workout entries per day)
-      const uniqueDays = Array.from(new Set(previewData.map(row => row.for_date)));
-      const actualTotalDays = uniqueDays.length;
-      
-      // Debug logging
-      console.log('[Workout Plan Approval Debug] Status calculation details:');
-      console.log('Actual unique days in preview:', actualTotalDays);
-      console.log('Unique days:', uniqueDays);
-      console.log('Total rows (workout entries):', previewData.length);
-      console.log('is_approved types:', previewData.map(r => typeof r.is_approved), 'values:', previewData.map(r => r.is_approved));
-      
-      // Check if all existing days are approved
-      const approvedDays = uniqueDays.filter(day => {
-        const dayRows = previewData.filter(row => row.for_date === day);
-        const allApproved = dayRows.every(row => row.is_approved === true);
-        console.log(`Day ${day}: ${dayRows.length} entries, all approved: ${allApproved}`);
-        return allApproved;
+      // Update enhanced state management
+      updateWorkoutPlanState({
+        status: newStatus,
+        source: newSource
       });
       
-      console.log('Approved days:', approvedDays);
-      console.log('Approved days count:', approvedDays.length);
-      console.log('Total days count:', actualTotalDays);
-      
-      // If we have no approved days, it's not approved
-      if (approvedDays.length === 0) {
-        console.log('❌ Result: not_approved (no days are approved)');
-        setPlanApprovalStatus('not_approved');
-        return;
-      }
-      
-      // If all available days are approved, it's approved (regardless of how many days)
-      if (approvedDays.length === actualTotalDays) {
-        console.log('✅ Result: approved (all available days are approved)');
-        setPlanApprovalStatus('approved');
-        return;
-      }
-      
-      // If some days are approved but not all, it's partial approved
-      console.log('⚠️ Result: partial_approved (some days approved, some not)');
-      setPlanApprovalStatus('partial_approved');
+      console.log('[checkPlanApprovalStatus] Final status:', newStatus, 'source:', newSource);
       
     } catch (error) {
       console.error('Error checking approval status:', error);
       setPlanApprovalStatus('pending');
+      updateWorkoutPlanState({
+        status: 'no_plan',
+        source: 'database'
+      });
     }
   };
 
   // Re-check approval status whenever plan, client, or date changes
   useEffect(() => {
     if (numericClientId && planStartDate) {
+      console.log('[useEffect] Triggering approval status check due to dependency change');
       checkPlanApprovalStatus();
     }
-  }, [numericClientId, planStartDate, workoutPlan]);
+  }, [numericClientId, planStartDate, workoutPlan, workoutPlanState.status]);
 
   // Enhanced search-based generation handler
   const handleGenerateSearchPlan = async () => {
@@ -2030,30 +2368,91 @@ const WorkoutPlanSection = ({
       return;
     }
     
+    console.log('🔄 === ENHANCED GENERATION START ===');
+    console.log('🔄 Client ID:', numericClientId);
+    console.log('🔄 Plan Start Date:', planStartDate.toISOString());
+    console.log('🔄 Current loading states:', { isGenerating, isGeneratingSearch });
+    
+    setLoading('generating', 'Starting enhanced workout generation... This may take up to 60 seconds.');
     setIsGeneratingSearch(true);
+    
+    // Add timeout protection to prevent infinite loading
+    // Increased from 30 seconds to 65 seconds to match enhanced generator timeout
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Enhanced workout generation timeout - forcing reset');
+      setIsGeneratingSearch(false);
+      setAiError('Generation timed out. Please try again.');
+      toast({ title: 'Generation Timeout', description: 'The operation took too long. Please try again.', variant: 'destructive' });
+    }, 65000); // 65 second timeout
     
     try {
       console.log('🚀 Starting enhanced workout plan generation...');
       
-      // Use the enhanced workout generator
-      const result = await EnhancedWorkoutGenerator.generateWorkoutPlan(
+      // Update loading message to show progress
+      setLoading('generating', 'Analyzing client data and generating personalized workout plan...');
+      
+      // Use the enhanced workout generator with timeout protection
+      const generationPromise = EnhancedWorkoutGenerator.generateWorkoutPlan(
         numericClientId,
         planStartDate
       );
       
-      // Check if progression reset is needed
-      if (!result.success && result.progressionConfirmation === false) {
-        // This is a normal case for new clients with no previous workout data
-        console.log('ℹ️ No previous workout data found - using baseline template');
+      // Race against timeout - increased to 60 seconds to match enhanced generator
+      let result = await Promise.race([
+        generationPromise,
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Generation timeout')), 60000)
+        )
+      ]) as {
+        success: boolean;
+        workoutPlan?: any;
+        message?: string;
+        progressionConfirmation?: boolean;
+      };
+      
+      // Clear the main timeout since generation completed
+      clearTimeout(timeoutId);
+      
+      console.log('✅ Generation completed successfully:', result);
+      
+      // Update loading message to show completion
+      setLoading('generating', 'Finalizing workout plan...');
+      
+      // Add additional validation
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid generation result received');
+      }
+      
+      // Check if progression reset is needed or if we need to retry
+      if (!result.success) {
+        if (result.progressionConfirmation === false) {
+          // This is a normal case for new clients with no previous workout data
+          console.log('ℹ️ No previous workout data found - using baseline template');
+        } else {
+          console.log('⚠️ Generation failed, attempting retry...');
+        }
         
         // Try again - the generator should handle this gracefully now
-        const retryResult = await EnhancedWorkoutGenerator.generateWorkoutPlan(
+        const retryPromise = EnhancedWorkoutGenerator.generateWorkoutPlan(
           numericClientId,
           planStartDate
         );
         
+        // Retry with same timeout
+        const retryResult = await Promise.race([
+          retryPromise,
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Retry generation timeout')), 60000)
+          )
+        ]) as {
+          success: boolean;
+          workoutPlan?: any;
+          message?: string;
+          progressionConfirmation?: boolean;
+        };
+        
         if (!retryResult.success) {
-          throw new Error(retryResult.message || 'Failed to generate plan');
+          throw new Error(retryResult.message || 'Failed to generate plan after retry');
         }
         
         result = retryResult;
@@ -2109,25 +2508,87 @@ const WorkoutPlanSection = ({
         console.log('✅ Setting enhanced workout plan:', newWorkoutPlan);
         setWorkoutPlan(newWorkoutPlan);
         setHasAIGeneratedPlan(true); // Mark that plan data is now available
-        // Immediately save to schedule_preview
+        
+        // Immediately save to schedule_preview with timeout protection
         console.log('[DEBUG] Calling savePlanToSchedulePreview...');
-        const saveResult = await savePlanToSchedulePreview(week, numericClientId, planStartDate);
-        if (!saveResult.success) {
-          toast({ title: 'Error', description: 'Failed to save plan to schedule_preview.', variant: 'destructive' });
-        } else {
-          setIsDraftPlan(true);
+        try {
+          const savePromise = savePlanToSchedulePreview(week, numericClientId, planStartDate);
+          const saveResult = await Promise.race([
+            savePromise,
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Save timeout')), 10000)
+            )
+          ]) as { success: boolean; message?: string };
+          
+          if (!saveResult.success) {
+            console.warn('⚠️ Failed to save plan to schedule_preview, but continuing...');
+            toast({ title: 'Warning', description: 'Plan generated but failed to save to preview. You can still approve it.', variant: 'default' });
+          } else {
+            setIsDraftPlan(true);
+          }
+        } catch (saveError) {
+          console.warn('⚠️ Save to preview failed:', saveError);
+          toast({ title: 'Warning', description: 'Plan generated but failed to save to preview. You can still approve it.', variant: 'default' });
         }
-        // Refresh approval status after generating and saving plan
-        await checkPlanApprovalStatus();
+        
+        // Refresh approval status after generating and saving plan with timeout protection
+        try {
+          const approvalPromise = checkPlanApprovalStatus();
+          await Promise.race([
+            approvalPromise,
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Approval check timeout')), 5000)
+            )
+          ]);
+        } catch (approvalError) {
+          console.warn('⚠️ Approval status check failed:', approvalError);
+          // Don't show error to user for this non-critical operation
+        }
+        
+        console.log('✅ === ENHANCED GENERATION COMPLETE ===');
       } else {
         throw new Error(result.message || 'Unknown error');
       }
     } catch (error: any) {
-      setAiError('Enhanced workout generation failed. Please try again or check the console for details.');
-      console.error('Full enhanced workout response error:', error);
-      toast({ title: 'Enhanced Workout Generation Failed', description: error.message || 'Could not generate workout plan.', variant: 'destructive' });
+      console.error('❌ Enhanced workout generation error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        clientId: numericClientId,
+        planStartDate: planStartDate?.toISOString()
+      });
+      
+      // Clear the timeout since we're handling the error
+      clearTimeout(timeoutId);
+      
+      // Set appropriate error message based on error type
+      let errorMessage = 'Enhanced workout generation failed. Please try again.';
+      if (error.message?.includes('timeout')) {
+        errorMessage = 'Enhanced workout generation timed out. The AI service may be experiencing high load. Please try again in a few moments.';
+      } else if (error.message?.includes('Failed to fetch client data')) {
+        errorMessage = 'Unable to fetch client data. Please check your connection and try again.';
+      } else if (error.message?.includes('Failed to fetch exercises')) {
+        errorMessage = 'Unable to fetch exercise database. Please try again.';
+      } else if (error.message?.includes('Invalid generation result')) {
+        errorMessage = 'The workout generator returned an invalid response. Please try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setAiError(errorMessage);
+      toast({ 
+        title: 'Enhanced Workout Generation Failed', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      });
     } finally {
+      // Always ensure loading state is reset
+      console.log('🔄 Resetting generation loading state');
       setIsGeneratingSearch(false);
+      clearTimeout(timeoutId);
+      clearLoading();
+      console.log('🔄 === ENHANCED GENERATION END ===');
     }
   };
 
@@ -2167,31 +2628,77 @@ const WorkoutPlanSection = ({
               <Sparkles className="h-4 w-4 text-blue-500" />
               AI-powered workout planning and exercise tracking
             </p>
-            {/* Approval Status Indicator */}
+            {/* Debug button for troubleshooting */}
+            {process.env.NODE_ENV === 'development' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={debugApprovalStatus}
+                className="mt-2"
+              >
+                Debug Status
+              </Button>
+            )}
+            {/* Enhanced Status Indicator */}
             <div className="flex items-center gap-2 mt-2">
-              {planApprovalStatus === 'approved' && (
+              {workoutPlanState.status === 'approved' && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
                   <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                   ✅ Approved Plan
                 </div>
               )}
-              {planApprovalStatus === 'partial_approved' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  📝 Partial Approval
+              {workoutPlanState.status === 'draft' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-300 dark:border-blue-700">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  📝 Draft Plan
+                  {workoutPlanState.hasUnsavedChanges && (
+                    <span className="text-xs">(Unsaved)</span>
+                  )}
                 </div>
               )}
-              {planApprovalStatus === 'not_approved' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-full text-sm font-medium border border-yellow-300 dark:border-yellow-700">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  📝 Draft Plan (Not Approved)
+              {workoutPlanState.status === 'template' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium border border-purple-300 dark:border-purple-700">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                  📋 Template Plan
+                  {workoutPlanState.templateDate && (
+                    <span className="text-xs">({format(new Date(workoutPlanState.templateDate), 'MMM d')})</span>
+                  )}
                 </div>
               )}
-              {planApprovalStatus === 'pending' && (
+              {workoutPlanState.status === 'no_plan' && (
                 <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-700">
                   <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
                   ⚪ No Plan
                 </div>
+              )}
+              
+              {/* Loading indicator */}
+              {loadingState.type && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium border border-blue-200 dark:border-blue-800">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  {loadingState.message}
+                </div>
+              )}
+              
+              {/* Auto-save indicator */}
+              {workoutPlanState.isAutoSaving && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium border border-yellow-200 dark:border-yellow-800">
+                  <Save className="h-3 w-3 animate-spin" />
+                  Auto-saving...
+                </div>
+              )}
+              
+              {/* Debug button (only in development) */}
+              {process.env.NODE_ENV === 'development' && (
+                <Button
+                  onClick={debugApprovalStatus}
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  <Bug className="h-3 w-3 mr-1" />
+                  Debug Status
+                </Button>
               )}
             </div>
           </div>
@@ -2311,11 +2818,11 @@ const WorkoutPlanSection = ({
             <div className="flex gap-2">
               <Button
                 onClick={handleGeneratePlan}
-                disabled={isGenerating || isGeneratingSearch || !numericClientId}
+                disabled={loadingState.type !== null || !numericClientId}
                 size="lg"
                 className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
               >
-                {isGenerating ? (
+                {loadingState.type === 'generating' ? (
                   <>
                     <Sparkles className="h-5 w-5 mr-3 animate-spin" />
                     <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
@@ -2323,28 +2830,49 @@ const WorkoutPlanSection = ({
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 mr-3" />
-                    AI Generate
+                    Generate Workout Plan
                   </>
                 )}
               </Button>
+              
+              {/* Enhanced generation button */}
               <Button
                 onClick={handleGenerateSearchPlan}
-                disabled={isGenerating || isGeneratingSearch || !numericClientId}
+                disabled={loadingState.type !== null || !numericClientId}
+                variant="outline"
                 size="lg"
-                className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+                className="border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20"
               >
-                {isGeneratingSearch ? (
+                {loadingState.type === 'generating' ? (
                   <>
-                    <Search className="h-5 w-5 mr-3 animate-spin" />
-                    <span className="ml-3">Searching...</span>
+                    <Search className="h-4 w-4 mr-2 animate-spin" />
+                    Searching...
                   </>
                 ) : (
                   <>
-                    <Search className="h-5 w-5 mr-3" />
+                    <Search className="h-4 w-4 mr-2" />
                     Enhanced Generate
                   </>
                 )}
               </Button>
+              
+              {/* Manual reset button for stuck states */}
+              {loadingState.type && (
+                <Button
+                  onClick={() => {
+                    console.log('🔄 Manual reset triggered by user');
+                    clearLoading();
+                    setAiError(null);
+                    toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+              )}
             </div>
           </div>
 
@@ -2356,16 +2884,38 @@ const WorkoutPlanSection = ({
               </div>
               <Button
                 onClick={async () => {
+                  setLoading('approving', 'Approving plan...');
                   setIsApproving(true);
-                  const result = await approvePlan(numericClientId, planStartDate);
-                  setIsApproving(false);
-                  if (result.success) {
-                    toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
-                    setIsDraftPlan(false); // UI update: now approved
-                    // Refresh approval status after successful approval
-                    await checkPlanApprovalStatus();
-                  } else {
-                    toast({ title: 'Approval Failed', description: 'Could not approve plan.', variant: 'destructive' });
+                  
+                  try {
+                    const result = await approvePlan(numericClientId, planStartDate);
+                    
+                    if (result.success) {
+                      toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
+                      
+                      // Update state immediately
+                      setIsDraftPlan(false);
+                      updateWorkoutPlanState({
+                        status: 'approved',
+                        source: 'database',
+                        hasUnsavedChanges: false,
+                        lastSaved: new Date()
+                      });
+                      
+                      // Refresh approval status to ensure consistency
+                      await checkPlanApprovalStatus();
+                      
+                      // Refresh the plan data to show approved version
+                      await fetchPlan();
+                    } else {
+                      toast({ title: 'Approval Failed', description: result.error || 'Could not approve plan.', variant: 'destructive' });
+                    }
+                  } catch (error) {
+                    console.error('Approval error:', error);
+                    toast({ title: 'Approval Failed', description: 'An unexpected error occurred during approval.', variant: 'destructive' });
+                  } finally {
+                    setIsApproving(false);
+                    clearLoading();
                   }
                 }}
                 disabled={isApproving}
@@ -2457,9 +3007,36 @@ const WorkoutPlanSection = ({
           </div>
         )}
         {aiError && (
-          <Card className="flex flex-col items-center justify-center h-32 text-center bg-red-50 border-red-200">
-            <h3 className="text-lg font-semibold text-red-700">AI Response Error</h3>
-            <p className="text-red-600 mt-2">{aiError}</p>
+          <Card className="flex flex-col items-center justify-center p-6 text-center bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700">
+            <div className="flex items-center gap-3 mb-3">
+              <Bug className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <h3 className="text-lg font-semibold text-red-700 dark:text-red-300">Generation Error</h3>
+            </div>
+            <p className="text-red-600 dark:text-red-300 mb-4 max-w-md">{aiError}</p>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setAiError(null);
+                  console.log('🔄 User cleared error - ready to retry');
+                }}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+              >
+                Dismiss
+              </Button>
+              <Button
+                onClick={() => {
+                  setAiError(null);
+                  handleGenerateSearchPlan();
+                }}
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+            </div>
           </Card>
         )}
         {isFetchingPlan ? (
@@ -2551,14 +3128,70 @@ const WorkoutPlanSection = ({
                 onImportSuccess={handleImportSuccess}
               />
             ) : (
-              <Card className="flex flex-col items-center justify-center h-32 text-center">
-                <h3 className="text-lg font-semibold">No Workout Plans Available</h3>
-                <p className="text-muted-foreground mt-2">
-                  No workout plans found for the week of {format(planStartDate, "MMM d, yyyy")}
-                </p>
-                <Button onClick={handleGeneratePlan} disabled={isGenerating} className="mt-4">
-                  {isGenerating ? 'Generating...' : 'Generate a new plan with AI'}
-                </Button>
+              <Card className="flex flex-col items-center justify-center p-8 text-center">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-3">
+                    <CalendarDays className="h-8 w-8 text-gray-400" />
+                    <h3 className="text-lg font-semibold">No Workout Plans Available</h3>
+                  </div>
+                  <p className="text-muted-foreground max-w-md">
+                    No workout plans found for the week of {format(planStartDate, "MMM d, yyyy")}. 
+                    This could be because no plan has been generated for this date range yet.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Button 
+                      onClick={handleGeneratePlan} 
+                      disabled={isGenerating} 
+                      className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate with AI
+                        </>
+                      )}
+                    </Button>
+                    <Button 
+                      onClick={handleGenerateSearchPlan} 
+                      disabled={isGeneratingSearch} 
+                      variant="outline"
+                    >
+                      {isGeneratingSearch ? (
+                        <>
+                          <Search className="h-4 w-4 mr-2 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4 mr-2" />
+                          Enhanced Generate
+                        </>
+                      )}
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        console.log('[WorkoutPlanSection] Manual refresh triggered');
+                        fetchPlan();
+                      }} 
+                      variant="outline"
+                      size="sm"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </Button>
+                  </div>
+                  {isFetchingPlan && (
+                    <p className="text-sm text-muted-foreground">
+                      <RefreshCw className="h-3 w-3 mr-1 animate-spin inline" />
+                      Checking for plans...
+                    </p>
+                  )}
+                </div>
               </Card>
             )}
 

@@ -1575,52 +1575,83 @@ export default function ClientDashboard() {
 
   // Fetch trainer id and clients for dropdown
   useEffect(() => {
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
-      setClientsLoading(true);
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.email) {
+      try {
+        console.log('🔄 Loading trainer clients...');
+        setClientsLoading(true);
+        
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData?.session?.user?.email) {
+          if (isMounted) {
+            setClientsLoading(false);
+          }
+          return;
+        }
+        const trainerEmail = sessionData.session.user.email;
+        
+        // Fetch trainer id
+        const { data: trainerData, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", trainerEmail)
+          .single();
+        if (trainerError || !trainerData?.id) {
+          if (isMounted) {
+            setClientsLoading(false);
+          }
+          return;
+        }
+        
+        // Fetch all client_ids for this trainer from the linking table
+        const { data: linkRows, error: linkError } = await supabase
+          .from("trainer_client_web")
+          .select("client_id")
+          .eq("trainer_id", trainerData.id);
+        if (linkError || !linkRows || linkRows.length === 0) {
+          if (isMounted) {
+            setTrainerClients([]);
+            setClientsLoading(false);
+          }
+          return;
+        }
+        const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
+        if (clientIds.length === 0) {
+          if (isMounted) {
+            setTrainerClients([]);
+            setClientsLoading(false);
+          }
+          return;
+        }
+        
+        // Fetch complete client data for these client_ids
+        const { data: clientsData, error: clientsError } = await supabase
+          .from("client")
+          .select("client_id, cl_name, cl_email, last_active, created_at")
+          .in("client_id", clientIds);
+        
+        if (!isMounted) return; // Don't update state if component unmounted
+        
+        if (!clientsError && clientsData) {
+          setTrainerClients(clientsData);
+        } else {
+          setTrainerClients([]);
+        }
         setClientsLoading(false);
-        return;
+      } catch (error) {
+        console.error('❌ Error loading trainer clients:', error);
+        if (isMounted) {
+          setTrainerClients([]);
+          setClientsLoading(false);
+        }
       }
-      const trainerEmail = sessionData.session.user.email;
-      // Fetch trainer id
-      const { data: trainerData, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", trainerEmail)
-        .single();
-      if (trainerError || !trainerData?.id) {
-        setClientsLoading(false);
-        return;
-      }
-      // Fetch all client_ids for this trainer from the linking table
-      const { data: linkRows, error: linkError } = await supabase
-        .from("trainer_client_web")
-        .select("client_id")
-        .eq("trainer_id", trainerData.id);
-      if (linkError || !linkRows || linkRows.length === 0) {
-        setTrainerClients([]);
-        setClientsLoading(false);
-        return;
-      }
-      const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
-      if (clientIds.length === 0) {
-        setTrainerClients([]);
-        setClientsLoading(false);
-        return;
-      }
-      // Fetch complete client data for these client_ids
-      const { data: clientsData, error: clientsError } = await supabase
-        .from("client")
-        .select("client_id, cl_name, cl_email, last_active, created_at")
-        .in("client_id", clientIds);
-      if (!clientsError && clientsData) {
-        setTrainerClients(clientsData);
-      } else {
-        setTrainerClients([]);
-      }
-      setClientsLoading(false);
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1636,65 +1667,90 @@ export default function ClientDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!clientId) return; // Don't run if no clientId
+    
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
-      // 1. Get the current session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.email) {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
-        return;
-      }
-      const trainerEmail = sessionData.session.user.email;
-      console.log(trainerEmail,"himanshu");
-      
-      // 2. Fetch trainer ID
-      const { data: trainerData, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", trainerEmail)
-        .single();
-      
-      if (trainerError || !trainerData?.id || !clientId) {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
-        return;
-      }
-      
-      // 3. Fetch client-specific trainer notes from trainer_client_web table
-      const { data, error } = await supabase
-        .from("trainer_client_web")
-        .select("trainer_notes, ai_summary")
-        .eq("trainer_id", trainerData.id)
-        .eq("client_id", clientId)
-        .single();
-      
-      if (!error && data) {
-        // Set trainer notes
-        const notes = data.trainer_notes || "";
-        setTrainerNotes(notes);
-        setNotesDraft(notes);
+      try {
+        console.log(`🔄 Loading trainer notes for client: ${clientId}`);
         
-        // Set AI analysis from ai_summary column
-        if (data.ai_summary) {
-          let parsedSummary: any = null;
-          try {
-            parsedSummary = typeof data.ai_summary === 'string' ? JSON.parse(data.ai_summary) : data.ai_summary;
-          } catch (jsonErr) {
-            console.error('❌ Failed to parse ai_summary JSON from DB:', jsonErr);
+        // 1. Get the current session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData?.session?.user?.email) {
+          if (isMounted) {
+            setTrainerNotes("");
+            setNotesDraft("");
+            setLastAIRecommendation(null);
           }
-          setLastAIRecommendation(parsedSummary);
-          console.log('📊 Loaded previous AI analysis:', parsedSummary);
+          return;
+        }
+        const trainerEmail = sessionData.session.user.email;
+        
+        // 2. Fetch trainer ID
+        const { data: trainerData, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", trainerEmail)
+          .single();
+        
+        if (trainerError || !trainerData?.id || !clientId) {
+          if (isMounted) {
+            setTrainerNotes("");
+            setNotesDraft("");
+            setLastAIRecommendation(null);
+          }
+          return;
+        }
+        
+        // 3. Fetch client-specific trainer notes from trainer_client_web table
+        const { data, error } = await supabase
+          .from("trainer_client_web")
+          .select("trainer_notes, ai_summary")
+          .eq("trainer_id", trainerData.id)
+          .eq("client_id", clientId)
+          .single();
+        
+        if (!isMounted) return; // Don't update state if component unmounted
+        
+        if (!error && data) {
+          // Set trainer notes
+          const notes = data.trainer_notes || "";
+          setTrainerNotes(notes);
+          setNotesDraft(notes);
+          
+          // Set AI analysis from ai_summary column
+          if (data.ai_summary) {
+            let parsedSummary: any = null;
+            try {
+              parsedSummary = typeof data.ai_summary === 'string' ? JSON.parse(data.ai_summary) : data.ai_summary;
+            } catch (jsonErr) {
+              console.error('❌ Failed to parse ai_summary JSON from DB:', jsonErr);
+            }
+            setLastAIRecommendation(parsedSummary);
+            console.log('📊 Loaded previous AI analysis:', parsedSummary);
+          } else {
+            setLastAIRecommendation(null);
+          }
         } else {
+          setTrainerNotes("");
+          setNotesDraft("");
           setLastAIRecommendation(null);
         }
-      } else {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
+      } catch (error) {
+        console.error('❌ Error loading trainer notes:', error);
+        if (isMounted) {
+          setTrainerNotes("");
+          setNotesDraft("");
+          setLastAIRecommendation(null);
+        }
       }
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [clientId]);
 
   useEffect(() => {
@@ -1706,21 +1762,39 @@ export default function ClientDashboard() {
 
     setLoading(true);
     setError(null);
+    
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
       try {
-        // Fetch client data
-        const { data, error } = await supabase
+        console.log(`🔄 Fetching client data for ID: ${clientId}`);
+        
+        // Fetch client data with timeout
+        const clientDataPromise = supabase
           .from("client")
           .select("*")
           .eq("client_id", clientId)
           .single();
+        
+        const { data, error } = await Promise.race([
+          clientDataPromise,
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Client data fetch timeout')), 30000)
+          )
+        ]);
+
+        if (!isMounted) return; // Don't update state if component unmounted
 
         if (error) {
           console.error("Error fetching client:", error);
-          setError("Failed to fetch client data");
+          if (error.message?.includes('timeout')) {
+            setError("Client data fetch timed out. Please refresh the page.");
+          } else {
+            setError("Failed to fetch client data");
+          }
           setClient(null);
         } else if (data) {
-          console.log("Fetched client:", data);
+          console.log("✅ Fetched client:", data);
           setClient(data);
           setError(null);
 
@@ -1729,6 +1803,8 @@ export default function ClientDashboard() {
           const { data: imageData, error: imageError } = await supabase.storage
             .from('client-images')
             .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+
+          if (!isMounted) return; // Don't update state if component unmounted
 
           if (imageData && imageData.signedUrl) {
             setClientImageUrl(imageData.signedUrl);
@@ -1744,13 +1820,22 @@ export default function ClientDashboard() {
         }
       } catch (err) {
         console.error("Unexpected error:", err);
-        setError("An unexpected error occurred");
-        setClient(null);
-        setClientImageUrl(null);
+        if (isMounted) {
+          setError("An unexpected error occurred");
+          setClient(null);
+          setClientImageUrl(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [clientId]);
 
   if (loading) {
