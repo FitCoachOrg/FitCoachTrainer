@@ -1,71 +1,90 @@
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-// Load environment variables
-const envPath = '.env'
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8')
-  envContent.split('\n').forEach(line => {
-    const [key, value] = line.split('=')
-    if (key && value) {
-      process.env[key.trim()] = value.trim()
-    }
-  })
-}
+dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Missing Supabase environment variables')
-  process.exit(1)
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey)
-
+// Check available tables and their structure
 async function checkAvailableTables() {
-  console.log('🔍 Checking available tables in database...')
-  console.log('=' .repeat(50))
+  console.log('🔍 === CHECKING AVAILABLE TABLES ===\n');
 
   try {
-    // Try to query information_schema to see available tables
-    const { data: tables, error } = await supabase
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public')
+    // Try to fetch from different possible table names
+    const possibleTables = [
+      'exercises_raw',
+      'exercises',
+      'exercise',
+      'workout_exercises',
+      'fitness_exercises'
+    ];
 
-    if (error) {
-      console.error('❌ Error querying information_schema:', error)
+    for (const tableName of possibleTables) {
+      console.log(`\n📋 Testing table: "${tableName}"`);
+      console.log('='.repeat(30));
       
-      // Try a different approach - test common table names
-      const commonTables = ['clients', 'client', 'users', 'schedule', 'client_data']
-      
-      for (const tableName of commonTables) {
-        try {
-          const { data, error: testError } = await supabase
-            .from(tableName)
-            .select('*')
-            .limit(1)
+      try {
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('*')
+          .limit(1);
+
+        if (error) {
+          console.log(`❌ Error: ${error.message}`);
+        } else if (data && data.length > 0) {
+          console.log(`✅ Table exists with ${data.length} row(s)`);
+          console.log('Columns:', Object.keys(data[0]));
           
-          if (!testError) {
-            console.log(`✅ Table '${tableName}' exists`)
-          } else {
-            console.log(`❌ Table '${tableName}' does not exist`)
+          // Check for experience-related columns
+          const experienceCols = Object.keys(data[0]).filter(col => 
+            col.toLowerCase().includes('experience') || 
+            col.toLowerCase().includes('level') || 
+            col.toLowerCase().includes('difficulty') ||
+            col.toLowerCase().includes('skill')
+          );
+          
+          if (experienceCols.length > 0) {
+            console.log('Experience-related columns:', experienceCols);
           }
-        } catch (e) {
-          console.log(`❌ Table '${tableName}' does not exist`)
+          
+          // Show sample data
+          console.log('Sample data:', JSON.stringify(data[0], null, 2));
+          break; // Found the table, stop searching
+        } else {
+          console.log('✅ Table exists but is empty');
         }
+      } catch (err) {
+        console.log(`❌ Exception: ${err.message}`);
       }
-    } else {
-      console.log('📋 Available tables:')
-      tables?.forEach(table => {
-        console.log(`   - ${table.table_name}`)
-      })
     }
 
+    // Also try to get table count
+    console.log('\n📊 TABLE COUNTS:');
+    console.log('================');
+    
+    for (const tableName of possibleTables) {
+      try {
+        const { count, error } = await supabase
+          .from(tableName)
+          .select('*', { count: 'exact', head: true });
+
+        if (!error && count !== null) {
+          console.log(`• ${tableName}: ${count} rows`);
+        }
+      } catch (err) {
+        // Table doesn't exist or no access
+      }
+    }
+
+    console.log('\n✅ Table analysis completed!');
+
   } catch (error) {
-    console.error('❌ Error checking tables:', error)
+    console.error('❌ Error:', error);
   }
 }
 
-checkAvailableTables() 
+// Run the analysis
+checkAvailableTables().catch(console.error); 
