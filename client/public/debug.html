@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Page</title>
+</head>
+<body>
+    <div id="root">
+        <h1>Debug Page</h1>
+        <p>If you see this, the page is loading but React might not be working.</p>
+        <div id="debug-info"></div>
+    </div>
+    
+    <script type="module">
+        const debugInfo = document.getElementById('debug-info');
+        
+        function log(message) {
+            console.log(message);
+            debugInfo.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        log('🔍 Debug Page Loaded');
+        log('📅 Time: ' + new Date().toLocaleString());
+        log('🌐 User Agent: ' + navigator.userAgent);
+        
+        // Test environment variables
+        log('🔑 Testing Environment Variables...');
+        try {
+            const envVars = [
+                'VITE_YOUTUBE_API_KEY',
+                'VITE_SUPABASE_URL',
+                'VITE_SUPABASE_ANON_KEY'
+            ];
+            
+            envVars.forEach(varName => {
+                const value = import.meta.env[varName];
+                if (value && value !== 'your_youtube_api_key_here' && value !== '') {
+                    log(`✅ ${varName}: ${value.substring(0, 10)}...`);
+                } else {
+                    log(`❌ ${varName}: Not configured`);
+                }
+            });
+        } catch (error) {
+            log('❌ Error accessing environment variables: ' + error.message);
+        }
+        
+        // Test fetch
+        log('🌐 Testing fetch...');
+        fetch('/api/test')
+            .then(response => {
+                log('✅ Fetch working');
+            })
+            .catch(error => {
+                log('⚠️ Fetch test failed (expected): ' + error.message);
+            });
+        
+        log('🎉 Debug test completed!');
+    </script>
+</body>
+</html>

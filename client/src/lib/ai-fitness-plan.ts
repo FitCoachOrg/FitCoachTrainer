@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 // import { askOpenRouter } from './open-router-service'
 // import { askCerebras } from './cerebras-service'
 import { askLLM } from './llm-service'
+import { enhanceWorkoutPlanWithVideos } from './workout-video-integration'
 
 /**
  * Helper function to get the next occurrence of a specific day of the week
@@ -1153,7 +1154,28 @@ export async function generateAIWorkoutPlan(clientId: number) {
         };
       }
       
-      console.log('✅ Workout exercises found, PROCEEDING WITH DATABASE SAVE');
+      console.log('✅ Workout exercises found, PROCEEDING WITH VIDEO ENHANCEMENT');
+      console.log('📊 Number of exercises to enhance:', processedWorkoutPlan.workout_plan.length);
+      
+      // Enhance workout plan with YouTube videos
+      console.log('🎬 Starting video enhancement for workout plan...');
+      const videoEnhancedResult = await enhanceWorkoutPlanWithVideos(processedWorkoutPlan.workout_plan);
+      
+      if (videoEnhancedResult.success) {
+        console.log('✅ Video enhancement completed successfully!');
+        console.log(`📊 Video Statistics:`);
+        console.log(`   - Videos found: ${videoEnhancedResult.videos_found}`);
+        console.log(`   - Videos cached: ${videoEnhancedResult.videos_cached}`);
+        console.log(`   - Videos fetched: ${videoEnhancedResult.videos_fetched}`);
+        
+        // Update the processed workout plan with enhanced exercises
+        processedWorkoutPlan.workout_plan = videoEnhancedResult.exercises;
+      } else {
+        console.warn('⚠️ Video enhancement failed, continuing with original workout plan');
+        console.warn('⚠️ Error:', videoEnhancedResult.message);
+      }
+      
+      console.log('✅ PROCEEDING WITH DATABASE SAVE');
       console.log('📊 Number of exercises to save:', processedWorkoutPlan.workout_plan.length);
       
       // Prepare the data that will be sent to database for debugging
@@ -1475,6 +1497,24 @@ export async function generateAIWorkoutPlanForReview(clientId: number, model?: s
             clientInfo: clientInfo,
             aiResponse: aiResponse
           };
+        }
+        
+        // Enhance workout plan with YouTube videos for review
+        console.log('🎬 Starting video enhancement for review workout plan...');
+        const videoEnhancedResult = await enhanceWorkoutPlanWithVideos(processedWorkoutPlan.workout_plan);
+        
+        if (videoEnhancedResult.success) {
+          console.log('✅ Video enhancement completed successfully for review!');
+          console.log(`📊 Video Statistics:`);
+          console.log(`   - Videos found: ${videoEnhancedResult.videos_found}`);
+          console.log(`   - Videos cached: ${videoEnhancedResult.videos_cached}`);
+          console.log(`   - Videos fetched: ${videoEnhancedResult.videos_fetched}`);
+          
+          // Update the processed workout plan with enhanced exercises
+          processedWorkoutPlan.workout_plan = videoEnhancedResult.exercises;
+        } else {
+          console.warn('⚠️ Video enhancement failed for review, continuing with original workout plan');
+          console.warn('⚠️ Error:', videoEnhancedResult.message);
         }
         
         console.log('✅ AI Workout Plan generated successfully for REVIEW');

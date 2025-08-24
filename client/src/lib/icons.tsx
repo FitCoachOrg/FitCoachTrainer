@@ -3,7 +3,7 @@ import {
   Users, 
   ClipboardList, 
   CreditCard, 
-  PaintbrushVertical, 
+  Paintbrush, 
   Bell, 
   LogOut,
   Moon,
@@ -54,7 +54,7 @@ export const HomeIcon = Home;
 export const UsersIcon = Users;
 export const ClipboardIcon = ClipboardList;
 export const CreditCardIcon = CreditCard;
-export const PaintbrushIcon = PaintbrushVertical;
+export const PaintbrushIcon = Paintbrush;
 export const BellIcon = Bell;
 export const LogOutIcon = LogOut;
 export const MoonIcon = Moon;

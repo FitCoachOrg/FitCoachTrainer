@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import WorkoutExportButton from './WorkoutExportButton';
 import WorkoutImportButton from './WorkoutImportButton';
 import ExercisePickerModal from './ExercisePickerModal';
+import VideoPlayer from './VideoPlayer';
 
 // Define the type for a single exercise item
 export interface Exercise {
@@ -527,6 +528,22 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       <div className="text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
                         {day.focus}
                       </div>
+                      {/* Time Breakdown Display */}
+                      {day.timeBreakdown && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          <span className="flex items-center gap-2">
+                            <span>⏰ {day.timeBreakdown.total} min total</span>
+                            <span className="text-gray-400">|</span>
+                            <span>🔥 {day.timeBreakdown.warmup} min warmup</span>
+                            <span className="text-gray-400">|</span>
+                            <span>🏋️ {day.timeBreakdown.exercises} min exercises</span>
+                            <span className="text-gray-400">|</span>
+                            <span>⏸️ {day.timeBreakdown.rest} min rest</span>
+                            <span className="text-gray-400">|</span>
+                            <span>❄️ {day.timeBreakdown.cooldown} min cooldown</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -559,6 +576,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         <th className="text-left p-3">Duration</th>
                         <th className="text-left p-3">Equipment</th>
                         <th className="text-left p-3">Coach Tip</th>
+                        <th className="text-left p-3">Trainer Notes</th>
+                        <th className="text-left p-3">Progression</th>
                         <th className="text-left p-3">Video Link</th>
                         <th className="text-right p-3 w-8"></th>
                       </tr>
@@ -714,12 +733,75 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                             </Popover>
                           </td>
                           <td className="p-3">
+                            {/* Trainer Notes Display */}
+                            <div className="text-xs text-gray-600 max-w-xs">
+                              {ex.coach_tip && ex.coach_tip.includes('🚨') && (
+                                <div className="mb-1">
+                                  <span className="text-red-600 font-semibold">🚨 Injury Avoidance:</span>
+                                  <span className="ml-1">{ex.coach_tip.split('🚨')[1]?.split('|')[0]?.trim()}</span>
+                                </div>
+                              )}
+                              {ex.coach_tip && ex.coach_tip.includes('💡') && (
+                                <div className="mb-1">
+                                  <span className="text-blue-600 font-semibold">💡 Form Focus:</span>
+                                  <span className="ml-1">{ex.coach_tip.split('💡')[1]?.split('|')[0]?.trim()}</span>
+                                </div>
+                              )}
+                              {ex.coach_tip && ex.coach_tip.includes('📈') && (
+                                <div className="mb-1">
+                                  <span className="text-green-600 font-semibold">📈 Progression:</span>
+                                  <span className="ml-1">{ex.coach_tip.split('📈')[1]?.split('|')[0]?.trim()}</span>
+                                </div>
+                              )}
+                              {ex.coach_tip && ex.coach_tip.includes('🏃‍♂️') && (
+                                <div className="mb-1">
+                                  <span className="text-purple-600 font-semibold">🏃‍♂️ Equipment:</span>
+                                  <span className="ml-1">{ex.coach_tip.split('🏃‍♂️')[1]?.split('|')[0]?.trim()}</span>
+                                </div>
+                                                             )}
+                             </div>
+                           </td>
+                           <td className="p-3">
+                             {/* Progression Display */}
+                             {ex.progression_applied && (
+                               <div className="text-xs text-gray-600 max-w-xs">
+                                 <div className="mb-1">
+                                   <span className="text-green-600 font-semibold">📈 Sets:</span>
+                                   <span className="ml-1">{ex.progression_applied.sets}</span>
+                                 </div>
+                                 <div className="mb-1">
+                                   <span className="text-blue-600 font-semibold">🔄 Reps:</span>
+                                   <span className="ml-1">{ex.progression_applied.reps}</span>
+                                 </div>
+                                 <div className="mb-1">
+                                   <span className="text-purple-600 font-semibold">⚖️ Weight:</span>
+                                   <span className="ml-1">{ex.progression_applied.weight}</span>
+                                 </div>
+                                 {ex.progression_applied.confidence && (
+                                   <div className="mb-1">
+                                     <span className="text-orange-600 font-semibold">🎯 Confidence:</span>
+                                     <span className="ml-1 capitalize">{ex.progression_applied.confidence}</span>
+                                   </div>
+                                 )}
+                                 {ex.performance_trend && (
+                                   <div className="mb-1">
+                                     <span className="text-indigo-600 font-semibold">📊 Trend:</span>
+                                     <span className="ml-1 capitalize">{ex.performance_trend}</span>
+                                   </div>
+                                 )}
+                               </div>
+                             )}
+                           </td>
+                           <td className="p-3">
                             {ex.video_link ? (
                               <div className="flex items-center gap-2">
-                                <a href={ex.video_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-500 underline">
-                                  <Link2 className="h-4 w-4" />
-                                  <span>video-link</span>
-                                </a>
+                                <VideoPlayer
+                                  videoUrl={ex.video_link}
+                                  title={ex.video_metadata?.title}
+                                  channelTitle={ex.video_metadata?.channel_title}
+                                  score={ex.video_metadata?.score}
+                                  reason={ex.video_metadata?.reason}
+                                />
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <button className="text-xs text-muted-foreground underline">edit</button>

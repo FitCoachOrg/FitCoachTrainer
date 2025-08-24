@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "./lib/queryClient"
 import { useState, useEffect } from "react"
 import { supabase } from "./lib/supabase"
+import { warmupExerciseCache } from "./lib/search-based-workout-plan"
 
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -55,6 +56,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) {
           setIsAuthenticated(true)
+          // Warm up exercise cache when user is authenticated
+          warmupExerciseCache().catch(error => {
+            console.warn('Failed to warm up exercise cache:', error);
+          });
         } else {
           setIsAuthenticated(false)
         }
@@ -72,6 +77,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true)
+        // Warm up exercise cache when user signs in
+        warmupExerciseCache().catch(error => {
+          console.warn('Failed to warm up exercise cache:', error);
+        });
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false)
       }

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Integration Test</title>
+</head>
+<body>
+    <h1>YouTube Integration Test</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        // Test environment variables in browser context
+        const resultsDiv = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            resultsDiv.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        log('🔍 Testing YouTube Integration in Browser Context...');
+        
+        // Check if environment variables are available
+        const envVars = [
+            'VITE_YOUTUBE_API_KEY',
+            'VITE_YOUTUBE_API_KEY2',
+            'VITE_YOUTUBE_API_KEY3',
+            'VITE_YOUTUBE_API_KEY4'
+        ];
+        
+        log('📋 Environment Variables:');
+        envVars.forEach(varName => {
+            const value = import.meta.env[varName];
+            if (value && value !== 'your_youtube_api_key_here' && value !== '') {
+                log(`✅ ${varName}: ${value.substring(0, 10)}...`);
+            } else {
+                log(`❌ ${varName}: Not configured`);
+            }
+        });
+        
+        // Test YouTube API directly
+        const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+        if (apiKey && apiKey !== 'your_youtube_api_key_here') {
+            log('🧪 Testing YouTube API...');
+            
+            fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=pushup+form&type=video&videoDuration=short&maxResults=1&key=${apiKey}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        log(`❌ YouTube API Error: ${data.error.message}`);
+                    } else if (data.items && data.items.length > 0) {
+                        log(`✅ YouTube API Working: Found "${data.items[0].snippet.title}"`);
+                    } else {
+                        log('⚠️ No videos found in YouTube API response');
+                    }
+                })
+                .catch(error => {
+                    log(`❌ YouTube API Test Failed: ${error.message}`);
+                });
+        } else {
+            log('❌ No valid YouTube API key found');
+        }
+        
+        log('🎉 Browser integration test completed!');
+    </script>
+</body>
+</html>

@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -41,6 +41,9 @@ import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generatio
 import WorkoutExportButton from './WorkoutExportButton';
 import WorkoutImportButton from './WorkoutImportButton';
 import { normalizeDateForStorage, createDateFromString } from '../lib/date-utils';
+import { generateSearchBasedWorkoutPlanForReview, warmupExerciseCache } from "@/lib/search-based-workout-plan"
+import { SimpleWorkoutGenerator } from "@/lib/simple-workout-generator"
+import { EnhancedWorkoutGenerator } from "@/lib/enhanced-workout-generator"
 
 // Types
 interface Exercise {
@@ -86,6 +89,13 @@ interface WeekDay {
   date: string;
   focus: string;
   exercises: any[];
+  timeBreakdown?: {
+    warmup: number;
+    exercises: number;
+    rest: number;
+    cooldown: number;
+    total: number;
+  };
 }
 
 interface WeeklyWorkoutPlan {
@@ -645,8 +655,8 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => (
         )}
       </div>
     </DialogContent>
-  </Dialog>
-) 
+  </Dialog> 
+)
 
 
 
@@ -687,6 +697,13 @@ function normalizeExercise(ex: any): any {
     // Video link variations
     video_link: ex.video_link ?? ex.videoLink ?? ex.video_url ?? ex.video ?? ex.link ?? '',
     
+    // Enhanced generator specific fields
+    timeBreakdown: ex.timeBreakdown || null,
+    experience: ex.experience || 'Beginner',
+    rpe_target: ex.rpe_target || 'RPE 7-8',
+    phase: ex.phase || 1,
+    session_id: ex.session_id || '',
+    
     // Preserve any other properties that might be useful
     ...ex
   };
@@ -704,7 +721,12 @@ function normalizeExercise(ex: any): any {
     equipment: normalized.equipment || 'None',
     coach_tip: normalized.coach_tip || 'Focus on proper form',
     rest: normalized.rest || '60',
-    video_link: normalized.video_link || ''
+    video_link: normalized.video_link || '',
+    experience: normalized.experience || 'Beginner',
+    rpe_target: normalized.rpe_target || 'RPE 7-8',
+    phase: normalized.phase || 1,
+    session_id: normalized.session_id || '',
+    timeBreakdown: normalized.timeBreakdown
   };
 }
 // ---
@@ -969,6 +991,7 @@ const WorkoutPlanSection = ({
   const [isFetchingPlan, setIsFetchingPlan] = useState(false);
   const [workoutPlan, setWorkoutPlan] = useState<WeeklyWorkoutPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingSearch, setIsGeneratingSearch] = useState(false);
   const [currentModel, setCurrentModel] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -1267,60 +1290,68 @@ const WorkoutPlanSection = ({
     };
 
     // Memoize the target meta to prevent unnecessary re-renders
-    const targetMeta = useMemo(() => [
-      { 
-        key: 'workout_days', 
-        label: 'Target Days of the Week', 
-        value: parseWorkoutDays(client?.workout_days),
-        icon: CalendarDays,
-        color: 'from-blue-500 to-indigo-500',
-        type: 'days'
-      },
-      { 
-        key: 'cl_primary_goal', 
-        label: 'Primary Goal', 
-        value: client?.cl_primary_goal || 'Not set',
-        icon: Target,
-        color: 'from-green-500 to-emerald-500',
-        type: 'text'
-      },
-      { 
-        key: 'specific_outcome', 
-        label: 'Specific Outcome', 
-        value: client?.specific_outcome || 'Not set',
-        icon: Target,
-        color: 'from-purple-500 to-pink-500',
-        type: 'text'
-      },
-      { 
-        key: 'goal_timeline', 
-        label: 'Timeline', 
-        value: client?.goal_timeline || 'Not set',
-        icon: Clock,
-        color: 'from-orange-500 to-red-500',
-        type: 'text'
-      },
-      { 
-        key: 'injuries_limitations', 
-        label: 'Limitations & Constraints', 
-        value: client?.injuries_limitations || 'Not set',
-        icon: FileText,
-        color: 'from-yellow-500 to-orange-500',
-        type: 'textarea'
-      },
-      { 
-        key: 'training_time_per_session', 
-        label: 'Minutes per Workout', 
-        value: formatTrainingTime(client?.training_time_per_session),
-        icon: Clock,
-        color: 'from-indigo-500 to-purple-500',
-        type: 'number'
+    const targetMeta = useMemo(() => {
+      // Defensive check for client
+      if (!client) {
+        return [];
       }
-    ], [client?.workout_days, client?.cl_primary_goal, client?.specific_outcome, client?.goal_timeline, client?.injuries_limitations, client?.training_time_per_session]);
+      
+      return [
+        { 
+          key: 'workout_days', 
+          label: 'Target Days of the Week', 
+          value: parseWorkoutDays(client?.workout_days),
+          icon: CalendarDays,
+          color: 'from-blue-500 to-indigo-500',
+          type: 'days'
+        },
+        { 
+          key: 'cl_primary_goal', 
+          label: 'Primary Goal', 
+          value: client?.cl_primary_goal || 'Not set',
+          icon: Target,
+          color: 'from-green-500 to-emerald-500',
+          type: 'text'
+        },
+        { 
+          key: 'specific_outcome', 
+          label: 'Specific Outcome', 
+          value: client?.specific_outcome || 'Not set',
+          icon: Target,
+          color: 'from-purple-500 to-pink-500',
+          type: 'text'
+        },
+        { 
+          key: 'goal_timeline', 
+          label: 'Timeline', 
+          value: client?.goal_timeline || 'Not set',
+          icon: Clock,
+          color: 'from-orange-500 to-red-500',
+          type: 'text'
+        },
+        { 
+          key: 'injuries_limitations', 
+          label: 'Limitations & Constraints', 
+          value: client?.injuries_limitations || 'Not set',
+          icon: FileText,
+          color: 'from-yellow-500 to-orange-500',
+          type: 'textarea'
+        },
+        { 
+          key: 'training_time_per_session', 
+          label: 'Minutes per Workout', 
+          value: formatTrainingTime(client?.training_time_per_session),
+          icon: Clock,
+          color: 'from-indigo-500 to-purple-500',
+          type: 'number'
+        }
+      ];
+    }, [client?.workout_days, client?.cl_primary_goal, client?.specific_outcome, client?.goal_timeline, client?.injuries_limitations, client?.training_time_per_session]);
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {targetMeta.map(({ key, label, value, icon: Icon, color, type }) => (
+        {targetMeta && targetMeta.length > 0 ? (
+          targetMeta.map(({ key, label, value, icon: Icon, color, type }) => (
           <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
             <div className="absolute top-2 right-2">
               {editingTarget === key ? (
@@ -1562,7 +1593,11 @@ const WorkoutPlanSection = ({
               </div>
             )}
           </div>
-        ))}
+        ))) : (
+          <div className="col-span-full text-center py-8 text-gray-500">
+            No client data available
+          </div>
+        )}
       </div>
     );
   };
@@ -1987,6 +2022,115 @@ const WorkoutPlanSection = ({
     }
   }, [numericClientId, planStartDate, workoutPlan]);
 
+  // Enhanced search-based generation handler
+  const handleGenerateSearchPlan = async () => {
+    setAiError(null); // Clear previous error
+    if (!numericClientId) {
+      toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsGeneratingSearch(true);
+    
+    try {
+      console.log('🚀 Starting enhanced workout plan generation...');
+      
+      // Use the enhanced workout generator
+      const result = await EnhancedWorkoutGenerator.generateWorkoutPlan(
+        numericClientId,
+        planStartDate
+      );
+      
+      // Check if progression reset is needed
+      if (!result.success && result.progressionConfirmation === false) {
+        // This is a normal case for new clients with no previous workout data
+        console.log('ℹ️ No previous workout data found - using baseline template');
+        
+        // Try again - the generator should handle this gracefully now
+        const retryResult = await EnhancedWorkoutGenerator.generateWorkoutPlan(
+          numericClientId,
+          planStartDate
+        );
+        
+        if (!retryResult.success) {
+          throw new Error(retryResult.message || 'Failed to generate plan');
+        }
+        
+        result = retryResult;
+      }
+      
+      if (result.success && result.workoutPlan) {
+        toast({ title: 'Enhanced Workout Plan Generated', description: 'The new plan is ready for review.' });
+        
+        const searchWorkoutPlan = result.workoutPlan;
+        const searchDays = searchWorkoutPlan.days || [];
+        
+        console.log('🚀 === ENHANCED WORKOUT PLAN RESPONSE ===');
+        console.log('🚀 Enhanced Workout Plan:', searchWorkoutPlan);
+        console.log('🚀 Search Days:', searchDays);
+        console.log('🚀 First day sample:', searchDays[0]);
+        console.log('🚀 First day exercises:', searchDays[0]?.exercises);
+        console.log('🚀 First day time breakdown:', searchDays[0]?.timeBreakdown);
+        
+        // Build week array starting from planStartDate, assigning each search day to a date
+        const week = [];
+        for (let i = 0; i < searchDays.length; i++) {
+          const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          
+          const normalizedExercises = (searchDays[i].exercises || []).map(normalizeExercise);
+          console.log(`🚀 Day ${i} exercises before normalization:`, searchDays[i].exercises);
+          console.log(`🚀 Day ${i} exercises after normalization:`, normalizedExercises);
+          
+          week.push({
+            date: dateStr,
+            focus: searchDays[i].focus,
+            exercises: normalizedExercises,
+            timeBreakdown: searchDays[i].timeBreakdown || {
+              warmup: 0,
+              exercises: 0,
+              rest: 0,
+              cooldown: 0,
+              total: 0
+            }
+          });
+        }
+        
+        console.log('🚀 Final week structure:', week);
+        console.log('🚀 First week day sample:', week[0]);
+        console.log('🚀 First week day exercises:', week[0]?.exercises);
+        
+        const newWorkoutPlan = {
+          week,
+          hasAnyWorkouts: week.some((day: WeekDay) => day.exercises && day.exercises.length > 0),
+          planStartDate: week[0]?.date || '',
+          planEndDate: week[week.length - 1]?.date || ''
+        };
+        console.log('✅ Setting enhanced workout plan:', newWorkoutPlan);
+        setWorkoutPlan(newWorkoutPlan);
+        setHasAIGeneratedPlan(true); // Mark that plan data is now available
+        // Immediately save to schedule_preview
+        console.log('[DEBUG] Calling savePlanToSchedulePreview...');
+        const saveResult = await savePlanToSchedulePreview(week, numericClientId, planStartDate);
+        if (!saveResult.success) {
+          toast({ title: 'Error', description: 'Failed to save plan to schedule_preview.', variant: 'destructive' });
+        } else {
+          setIsDraftPlan(true);
+        }
+        // Refresh approval status after generating and saving plan
+        await checkPlanApprovalStatus();
+      } else {
+        throw new Error(result.message || 'Unknown error');
+      }
+    } catch (error: any) {
+      setAiError('Enhanced workout generation failed. Please try again or check the console for details.');
+      console.error('Full enhanced workout response error:', error);
+      toast({ title: 'Enhanced Workout Generation Failed', description: error.message || 'Could not generate workout plan.', variant: 'destructive' });
+    } finally {
+      setIsGeneratingSearch(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Placeholder Cards Section */}
@@ -2164,24 +2308,44 @@ const WorkoutPlanSection = ({
             <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               2
             </div>
-            <Button
-              onClick={handleGeneratePlan}
-              disabled={isGenerating || !numericClientId}
-              size="lg"
-              className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
-            >
-              {isGenerating ? (
-                <>
-                  <Sparkles className="h-5 w-5 mr-3 animate-spin" />
-                  <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-5 w-5 mr-3" />
-                  Generate Workout Plan
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGeneratePlan}
+                disabled={isGenerating || isGeneratingSearch || !numericClientId}
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+              >
+                {isGenerating ? (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-3 animate-spin" />
+                    <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5 mr-3" />
+                    AI Generate
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={handleGenerateSearchPlan}
+                disabled={isGenerating || isGeneratingSearch || !numericClientId}
+                size="lg"
+                className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+              >
+                {isGeneratingSearch ? (
+                  <>
+                    <Search className="h-5 w-5 mr-3 animate-spin" />
+                    <span className="ml-3">Searching...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-5 w-5 mr-3" />
+                    Enhanced Generate
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Step 3: Approve Plan */}
