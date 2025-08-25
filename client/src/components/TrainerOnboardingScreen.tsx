@@ -316,7 +316,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
               className="btn btn-secondary onboarding-btn"
               onClick={() => setIsOnboardingOpen(true)}
             >
-              New Customer Onboarding
+              Customer Program Setup
             </button>
           </div>
           {showOnlyIncomplete && (
@@ -471,7 +471,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
         </div>
       )}
 
-      {/* New Customer Onboarding Modal */}
+      {/* Customer Program Setup Modal */}
       <NewCustomerOnboardingModal
         clientId={parseInt(clientId)}
         clientName={client?.cl_name || client?.cl_prefer_name || "Client"}

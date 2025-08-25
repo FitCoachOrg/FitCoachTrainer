@@ -340,13 +340,34 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       const existingSet = new Set((existingData || []).map((e: any) => `${e.for_date}-${e.type}`))
       const newEntries = allEntries.filter(e => !existingSet.has(`${e.for_date}-${e.type}`))
 
-      if (newEntries.length === 0) {
-        toast({ title: "No new entries", description: "Selected dates already exist for these programs.", variant: "destructive" })
-        return
+      // Insert new entries if any exist
+      if (newEntries.length > 0) {
+        const { error: insertError } = await supabase.from("schedule").insert(newEntries)
+        if (insertError) throw insertError
       }
 
-      const { error: insertError } = await supabase.from("schedule").insert(newEntries)
-      if (insertError) throw insertError
+      // Update existing entries with any changes (coach tips, times, etc.)
+      const existingEntries = allEntries.filter(e => existingSet.has(`${e.for_date}-${e.type}`))
+      if (existingEntries.length > 0) {
+        for (const entry of existingEntries) {
+          const { error: updateError } = await supabase
+            .from("schedule")
+            .update({
+              for_time: entry.for_time,
+              coach_tip: entry.coach_tip,
+              summary: entry.summary,
+              details_json: entry.details_json
+            })
+            .eq("client_id", clientId)
+            .eq("for_date", entry.for_date)
+            .eq("type", entry.type)
+          
+          if (updateError) {
+            console.error('Error updating existing entry:', updateError)
+            // Continue with other updates even if one fails
+          }
+        }
+      }
 
       // Save programs data to client table in JSON format
       const programsData = rows.map(row => ({
@@ -377,9 +398,12 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       // Update previous rows state to reflect current state
       setPreviousRows(rows)
 
+      const existingEntriesCount = allEntries.filter(e => existingSet.has(`${e.for_date}-${e.type}`)).length
       const actionMessage = deselectedPrograms.length > 0 
         ? `Updated programs and removed ${deselectedPrograms.length} deselected program(s).`
-        : `Inserted ${newEntries.length} schedule items for ${clientName}.`
+        : newEntries.length > 0 
+          ? `Inserted ${newEntries.length} new schedule items and updated ${existingEntriesCount} existing items for ${clientName}.`
+          : `Updated ${existingEntriesCount} existing schedule items for ${clientName}.`
 
       toast({ title: "Onboarding updated", description: actionMessage })
 
@@ -493,7 +517,7 @@ ${items.join(',\n')}
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-6xl max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">New Customer Onboarding</DialogTitle>
+          <DialogTitle className="text-xl font-bold">Customer Program Setup</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
