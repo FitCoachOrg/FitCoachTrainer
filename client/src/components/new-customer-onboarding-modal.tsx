@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -17,7 +17,7 @@ import { askCerebras } from "@/lib/cerebras-service"
 type Frequency = "daily" | "weekly" | "monthly"
 
 interface ProgramConfigRow {
-  key: "wakeup" | "bedtime" | "hydration" | "progresspicture" | "weight" | "body_measurement"
+  key: "wakeup" | "bedtime" | "hydration" | "progresspicture" | "weight" | "body_measurement" | "workout_plan" | "nutritional_plan"
   label: string
   enabled: boolean
   startDate: string // yyyy-MM-dd
@@ -38,6 +38,8 @@ interface NewCustomerOnboardingModalProps {
 }
 
 const PROGRAM_DEFAULTS: Array<Omit<ProgramConfigRow, "enabled" | "startDate" | "coachTip">> = [
+  { key: "workout_plan", label: "Workout Plan", frequency: "weekly", time: "08:00", eventName: "Workout Plan" },
+  { key: "nutritional_plan", label: "Nutritional Plan", frequency: "daily", time: "09:00", eventName: "Nutritional Plan" },
   { key: "wakeup", label: "Wakeup", frequency: "daily", time: "07:00", eventName: "Sleep Data" },
   { key: "bedtime", label: "Bedtime", frequency: "daily", time: "21:00", eventName: "Bed time: No Screen Time" },
   { key: "hydration", label: "Hydration", frequency: "daily", time: "09:00", eventName: "Water Intake" },
@@ -54,6 +56,8 @@ function getIconNameForType(type: ProgramConfigRow["key"]): string {
     case "progresspicture": return "camera"
     case "weight": return "weight-scale"
     case "body_measurement": return "ruler"
+    case "workout_plan": return "dumbbell"
+    case "nutritional_plan": return "utensils"
     default: return "bell"
   }
 }
@@ -94,11 +98,60 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       eventName: d.eventName,
     }))
   )
+
+  // Load existing programs data when modal opens
+  useEffect(() => {
+    if (isOpen && clientId) {
+      loadExistingPrograms()
+    }
+  }, [isOpen, clientId])
+
+  const loadExistingPrograms = async () => {
+    try {
+      const { data: clientData, error } = await supabase
+        .from('client')
+        .select('programs')
+        .eq('client_id', clientId)
+        .single()
+
+      if (error) {
+        console.error('Error loading existing programs:', error)
+        return
+      }
+
+      if (clientData?.programs) {
+        try {
+          const existingPrograms = JSON.parse(clientData.programs)
+          if (Array.isArray(existingPrograms)) {
+            // Update rows with existing data
+            setRows(prev => prev.map(row => {
+              const existing = existingPrograms.find((p: any) => p.key === row.key)
+              if (existing) {
+                return {
+                  ...row,
+                  enabled: existing.enabled || false,
+                  startDate: existing.startDate || today,
+                  frequency: existing.frequency || row.frequency,
+                  time: existing.time || row.time,
+                  coachTip: existing.coachTip || "",
+                  eventName: existing.eventName || row.eventName,
+                }
+              }
+              return row
+            }))
+          }
+        } catch (parseError) {
+          console.error('Error parsing existing programs JSON:', parseError)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading existing programs:', error)
+    }
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [generatingKey, setGeneratingKey] = useState<ProgramConfigRow["key"] | null>(null)
   const [generatingAll, setGeneratingAll] = useState(false)
-  const [promptPreview, setPromptPreview] = useState<string>("")
-  const [showPrompt, setShowPrompt] = useState(false)
+
 
   const updateRow = (key: ProgramConfigRow["key"], updates: Partial<ProgramConfigRow>) => {
     setRows(prev => prev.map(r => r.key === key ? { ...r, ...updates } : r))
@@ -203,6 +256,28 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       const { error: insertError } = await supabase.from("schedule").insert(newEntries)
       if (insertError) throw insertError
 
+      // Save programs data to client table in JSON format
+      const programsData = rows.map(row => ({
+        key: row.key,
+        label: row.label,
+        enabled: row.enabled,
+        startDate: row.startDate,
+        frequency: row.frequency,
+        time: row.time,
+        coachTip: row.coachTip,
+        eventName: row.eventName,
+      }))
+
+      const { error: updateError } = await supabase
+        .from('client')
+        .update({ programs: JSON.stringify(programsData) })
+        .eq('client_id', clientId)
+
+      if (updateError) {
+        console.error('Error saving programs data:', updateError)
+        // Don't throw error here as the schedule entries were already saved
+      }
+
       toast({ title: "Onboarding added", description: `Inserted ${newEntries.length} schedule items for ${clientName}.` })
 
       onCompleted()
@@ -286,8 +361,6 @@ ${items.join(',\n')}
       return
     }
     const prompt = buildBatchPrompt(selected)
-    setPromptPreview(prompt)
-    setShowPrompt(true)
     console.log('[Onboarding] Cerebras prompt for batch tips:', prompt)
 
     setGeneratingAll(true)
@@ -334,18 +407,13 @@ ${items.join(',\n')}
             >
               {generatingAll ? 'Generating Tips…' : 'Generate Coach Tips for Selected (AI)'}
             </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowPrompt(v => !v)}>
-              {showPrompt ? 'Hide Prompt' : 'View Prompt Being Sent'}
-            </Button>
           </div>
 
-          {showPrompt && (
-            <div className="rounded-md border p-3 bg-gray-50 dark:bg-gray-900/30 max-h-64 overflow-auto text-xs whitespace-pre-wrap">
-              {promptPreview || 'No prompt generated yet. Click "Generate Coach Tips for Selected (AI)" to see the prompt.'}
-            </div>
-          )}
-
           <div className="overflow-x-auto">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">Main Programs</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Configure the primary workout and nutrition programs for your client.</p>
+            </div>
             <table className="min-w-full text-xs md:text-sm border border-gray-200 dark:border-gray-700 rounded-lg">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
@@ -373,49 +441,65 @@ ${items.join(',\n')}
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
-                  <tr key={r.key} className="align-top">
-                    <td className="p-2 border-b">
-                      <Checkbox checked={r.enabled} onCheckedChange={(v: any) => updateRow(r.key, { enabled: Boolean(v) })} />
-                    </td>
-                    <td className="p-2 border-b font-semibold whitespace-nowrap">{r.label}</td>
-                    <td className="p-2 border-b">
-                      <Input type="date" value={r.startDate} onChange={e => updateRow(r.key, { startDate: e.target.value })} />
-                    </td>
-                    <td className="p-2 border-b min-w-[120px]">
-                      <Select value={r.frequency} onValueChange={(v: any) => updateRow(r.key, { frequency: v })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="p-2 border-b">
-                      <Input type="time" value={r.time} onChange={e => updateRow(r.key, { time: e.target.value })} />
-                    </td>
-                    <td className="p-2 border-b">
-                      <div className="flex items-center gap-2">
-                        <Input placeholder="Optional" value={r.coachTip} onChange={e => updateRow(r.key, { coachTip: e.target.value })} />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleGenerateCoachTip(r)}
-                          disabled={generatingKey === r.key}
-                          title="Generate coach tip with AI"
-                        >
-                          <Wand2 className={`h-4 w-4 ${generatingKey === r.key ? 'animate-pulse' : ''}`} />
-                        </Button>
-                      </div>
-                    </td>
-                    <td className="p-2 border-b">
-                      <Input value={r.eventName} onChange={e => updateRow(r.key, { eventName: e.target.value })} />
-                    </td>
-                  </tr>
+                {rows.map((r, index) => (
+                  <React.Fragment key={r.key}>
+                    <tr className={`align-top ${index < 2 ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' : ''}`}>
+                      <td className="p-2 border-b">
+                        <Checkbox checked={r.enabled} onCheckedChange={(v: any) => updateRow(r.key, { enabled: Boolean(v) })} />
+                      </td>
+                      <td className="p-2 border-b font-semibold whitespace-nowrap">
+                        {index < 2 && (
+                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2" title="Main Program"></span>
+                        )}
+                        {r.label}
+                      </td>
+                      <td className="p-2 border-b">
+                        <Input type="date" value={r.startDate} onChange={e => updateRow(r.key, { startDate: e.target.value })} />
+                      </td>
+                      <td className="p-2 border-b min-w-[120px]">
+                        <Select value={r.frequency} onValueChange={(v: any) => updateRow(r.key, { frequency: v })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="daily">Daily</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="p-2 border-b">
+                        <Input type="time" value={r.time} onChange={e => updateRow(r.key, { time: e.target.value })} />
+                      </td>
+                      <td className="p-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <Input placeholder="Optional" value={r.coachTip} onChange={e => updateRow(r.key, { coachTip: e.target.value })} />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleGenerateCoachTip(r)}
+                            disabled={generatingKey === r.key}
+                            title="Generate coach tip with AI"
+                          >
+                            <Wand2 className={`h-4 w-4 ${generatingKey === r.key ? 'animate-pulse' : ''}`} />
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="p-2 border-b">
+                        <Input value={r.eventName} onChange={e => updateRow(r.key, { eventName: e.target.value })} />
+                      </td>
+                    </tr>
+                    {index === 1 && (
+                      <tr>
+                        <td colSpan={7} className="p-2 bg-gray-100 dark:bg-gray-800 border-b">
+                          <div className="text-center text-xs text-gray-600 dark:text-gray-400 font-medium">
+                            Additional Programs
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

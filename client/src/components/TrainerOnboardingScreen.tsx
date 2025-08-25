@@ -12,6 +12,7 @@ import {
 } from '../utils/supabaseClient';
 import { supabase } from '../lib/supabase';
 import { calculateAllTargets } from '../utils/targetCalculations';
+import { NewCustomerOnboardingModal } from './new-customer-onboarding-modal';
 import { 
   cleanDataForDatabase, 
   calculateCompletionPercentage, 
@@ -25,6 +26,7 @@ import '../styles/onboardingStyles.css';
 
 interface TrainerOnboardingScreenProps {
   clientId: string;
+  client?: any;
   onComplete?: (data: any) => void;
   onSave?: (data: any) => void;
   onError?: (error: any) => void;
@@ -35,6 +37,7 @@ interface TrainerOnboardingScreenProps {
 
 const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({ 
   clientId, 
+  client,
   onComplete, 
   onSave,
   onError,
@@ -51,6 +54,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
   const [sections, setSections] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   // Initialize component
   useEffect(() => {
@@ -305,7 +309,15 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
       {/* Header */}
       <div className="onboarding-header">
         <div className="header-top">
-          <h1>Client Onboarding</h1>
+          <div className="header-left">
+            <h1>Client Onboarding</h1>
+            <button
+              className="btn btn-secondary onboarding-btn"
+              onClick={() => setIsOnboardingOpen(true)}
+            >
+              New Customer Onboarding
+            </button>
+          </div>
           {showOnlyIncomplete && (
             <div className="filter-indicator">
               <span className="filter-badge">Filtered: Incomplete Questions Only</span>
@@ -461,6 +473,20 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
           </ul>
         </div>
       )}
+
+      {/* New Customer Onboarding Modal */}
+      <NewCustomerOnboardingModal
+        clientId={parseInt(clientId)}
+        clientName={client?.cl_name || client?.cl_prefer_name || "Client"}
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        selectedTimezone={formData.timezone || ""}
+        clientTimezone={formData.timezone || ""}
+        onCompleted={() => {
+          // Refresh the form data or show success message
+          console.log("Onboarding programs added to schedule");
+        }}
+      />
     </div>
   );
 };

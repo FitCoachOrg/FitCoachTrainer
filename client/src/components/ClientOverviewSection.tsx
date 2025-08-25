@@ -78,6 +78,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
           <div className="w-full">
             <TrainerOnboardingScreen
               clientId={client?.client_id?.toString() || ''}
+              client={client}
               onComplete={handleOnboardingComplete}
               onSave={handleOnboardingSave}
               onError={handleOnboardingError}

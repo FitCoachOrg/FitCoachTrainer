@@ -34,7 +34,7 @@
 .onboarding-header {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 10;
   background-color: #fff;
   border-bottom: 2px solid #e0e0e0;
   padding: 20px 0;
@@ -43,11 +43,60 @@
   transition: box-shadow 0.3s ease;
 }
 
+/* Modal overlay styles to ensure proper layering */
+[data-radix-dialog-overlay] {
+  z-index: 50 !important;
+}
+
+[data-radix-dialog-content] {
+  z-index: 51 !important;
+}
+
+/* Ensure onboarding container doesn't interfere with modals */
+.onboarding-container:has([data-radix-dialog-overlay]) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Alternative approach for browsers that don't support :has() */
+.onboarding-container [data-radix-dialog-overlay] {
+  position: fixed !important;
+  z-index: 50 !important;
+}
+
+.onboarding-container [data-radix-dialog-content] {
+  position: fixed !important;
+  z-index: 51 !important;
+}
+
 .header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.onboarding-btn {
+  background-color: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.onboarding-btn:hover {
+  background-color: #059669;
+  border-color: #059669;
 }
 
 .onboarding-header h1 {
@@ -501,6 +550,12 @@
   }
 
   .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-left {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
