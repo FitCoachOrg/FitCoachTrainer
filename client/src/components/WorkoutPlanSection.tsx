@@ -44,6 +44,13 @@ import { normalizeDateForStorage, createDateFromString } from '../lib/date-utils
 import { generateSearchBasedWorkoutPlanForReview, warmupExerciseCache } from "@/lib/search-based-workout-plan"
 import { SimpleWorkoutGenerator } from "@/lib/simple-workout-generator"
 import { EnhancedWorkoutGenerator } from "@/lib/enhanced-workout-generator"
+import { 
+  checkWeeklyWorkoutStatus, 
+  checkMonthlyWorkoutStatus, 
+  compareWorkoutData,
+  getStatusDisplay,
+  type WorkoutStatusResult 
+} from '@/utils/workoutStatusUtils';
 
 // Types
 interface Exercise {
@@ -1793,126 +1800,102 @@ const WorkoutPlanSection = ({
 
     let data: any[] = [];
     let error: any = null;
-    let isFromPreview = false;
+    let isFromPreview = true; // Default to preview as primary source
 
-    // Strategy 1: Try to fetch data specifically for the requested date range from schedule_preview
-    console.log('[WorkoutPlanSection] Strategy 1: Fetching from schedule_preview for specific date range');
-    let { data: previewData, error: previewError } = await supabase
-      .from('schedule_preview')
-      .select('*')
-      .eq('client_id', numericClientId)
-      .eq('type', 'workout')
-      .gte('for_date', startDateStr)
-      .lte('for_date', endDateStr)
-      .order('for_date', { ascending: true });
-    
-    if (previewError) {
-      console.warn('[WorkoutPlanSection] Error fetching from schedule_preview:', previewError);
-    } else if (previewData && previewData.length > 0) {
-      console.log('[WorkoutPlanSection] Found data in schedule_preview for date range:', previewData.length, 'entries');
-      data = previewData;
-      isFromPreview = true;
-      setIsDraftPlan(true);
-    }
-
-    // Strategy 2: If no data in schedule_preview for the range, try schedule table
-    if (data.length === 0) {
-      console.log('[WorkoutPlanSection] Strategy 2: No data in schedule_preview, trying schedule table');
-      let { data: scheduleData, error: scheduleError } = await supabase
-        .from('schedule')
-        .select('*')
-        .eq('client_id', numericClientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr)
-        .order('for_date', { ascending: true });
+    try {
+      // Use the unified weekly status function (same logic as monthly view)
+      console.log('[WorkoutPlanSection] Using unified weekly status logic');
+      const weeklyResult: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
       
-      if (scheduleError) {
-        console.warn('[WorkoutPlanSection] Error fetching from schedule:', scheduleError);
-        error = scheduleError;
-      } else if (scheduleData && scheduleData.length > 0) {
-        console.log('[WorkoutPlanSection] Found data in schedule for date range:', scheduleData.length, 'entries');
-        data = scheduleData;
-        setIsDraftPlan(false);
-      }
-    }
-
-    // Strategy 3: If still no data, try to find the most recent plan and use it as a template
-    if (data.length === 0) {
-      console.log('[WorkoutPlanSection] Strategy 3: No data for date range, looking for most recent plan');
+      console.log('[WorkoutPlanSection] Weekly status result:', weeklyResult);
       
-      // Try to find the most recent plan from schedule_preview
-      let { data: recentPreviewData, error: recentPreviewError } = await supabase
-        .from('schedule_preview')
-        .select('*')
-        .eq('client_id', numericClientId)
-        .eq('type', 'workout')
-        .order('for_date', { ascending: false })
-        .limit(1);
-      
-      if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
-        console.log('[WorkoutPlanSection] Found recent plan in schedule_preview, using as template');
-        data = recentPreviewData;
+      // Use preview data as primary source (same as monthly view)
+      if (weeklyResult.previewData && weeklyResult.previewData.length > 0) {
+        console.log('[WorkoutPlanSection] Using preview data as primary source:', weeklyResult.previewData.length, 'entries');
+        data = weeklyResult.previewData;
         isFromPreview = true;
-        setIsDraftPlan(true);
+      } else if (weeklyResult.scheduleData && weeklyResult.scheduleData.length > 0) {
+        console.log('[WorkoutPlanSection] No preview data, using schedule data as fallback:', weeklyResult.scheduleData.length, 'entries');
+        data = weeklyResult.scheduleData;
+        isFromPreview = false;
       } else {
-        // Try schedule table for recent plan
-        let { data: recentScheduleData, error: recentScheduleError } = await supabase
-          .from('schedule')
+        console.log('[WorkoutPlanSection] No data found in either table, looking for template');
+        
+        // Strategy 3: Try to find the most recent plan and use it as a template
+        // Try to find the most recent plan from schedule_preview first
+        let { data: recentPreviewData, error: recentPreviewError } = await supabase
+          .from('schedule_preview')
           .select('*')
           .eq('client_id', numericClientId)
           .eq('type', 'workout')
           .order('for_date', { ascending: false })
           .limit(1);
         
-        if (!recentScheduleError && recentScheduleData && recentScheduleData.length > 0) {
-          console.log('[WorkoutPlanSection] Found recent plan in schedule, using as template');
-          data = recentScheduleData;
-          setIsDraftPlan(false);
+        if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
+          console.log('[WorkoutPlanSection] Found recent plan in schedule_preview, using as template');
+          data = recentPreviewData;
+          isFromPreview = true;
+          setIsDraftPlan(true);
+        } else {
+          // Only fallback to schedule if no preview data exists
+          console.log('[WorkoutPlanSection] No recent preview data, checking schedule table as fallback');
+          let { data: recentScheduleData, error: recentScheduleError } = await supabase
+            .from('schedule')
+            .select('*')
+            .eq('client_id', numericClientId)
+            .eq('type', 'workout')
+            .order('for_date', { ascending: false })
+            .limit(1);
+          
+          if (!recentScheduleError && recentScheduleData && recentScheduleData.length > 0) {
+            console.log('[WorkoutPlanSection] Found recent plan in schedule, using as template');
+            data = recentScheduleData;
+            isFromPreview = false;
+            setIsDraftPlan(false);
+          }
         }
       }
-    }
 
-    console.log('[WorkoutPlanSection] Final data result:', {
-      dataLength: data.length,
-      isFromPreview,
-      error: error?.message
-    });
+      console.log('[WorkoutPlanSection] Final data result:', {
+        dataLength: data.length,
+        isFromPreview,
+        error: error?.message
+      });
 
-    if (error) {
-      toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
-      setWorkoutPlan(null);
-    } else {
-      // Build week structure, ensuring exercises are normalized
-      const weekDates = [];
-      for (let i = 0; i < 7; i++) {
-        const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
-        const dateStr = format(currentDate, 'yyyy-MM-dd');
-        
-        // Find matching data by comparing normalized dates
-        const dayData = data?.find(workout => {
-          const normalizedWorkoutDate = normalizeDateForStorage(workout.for_date);
-          return normalizedWorkoutDate === dateStr;
-        });
-        
-        let planDay = {
-            date: dateStr,
-            focus: 'Rest Day',
-            exercises: []
-        };
-        
-        if (dayData && dayData.details_json?.exercises) {
-            planDay.focus = dayData.summary || 'Workout';
-            // Use the comprehensive normalizeExercise function here
-            planDay.exercises = dayData.details_json.exercises.map(normalizeExercise);
-            
-            // Debug: Check sets values after normalization
-            planDay.exercises.forEach((ex: any, exIdx: number) => {
-              console.log(`[fetchPlan] Day ${i}, Exercise ${exIdx} sets value after normalization:`, ex.sets);
-            });
+      if (error) {
+        toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
+        setWorkoutPlan(null);
+      } else {
+        // Build week structure, ensuring exercises are normalized
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          
+          // Find matching data by comparing normalized dates
+          const dayData = data?.find(workout => {
+            const normalizedWorkoutDate = normalizeDateForStorage(workout.for_date);
+            return normalizedWorkoutDate === dateStr;
+          });
+          
+          let planDay = {
+              date: dateStr,
+              focus: 'Rest Day',
+              exercises: []
+          };
+          
+          if (dayData && dayData.details_json?.exercises) {
+              planDay.focus = dayData.summary || 'Workout';
+              // Use the comprehensive normalizeExercise function here
+              planDay.exercises = dayData.details_json.exercises.map(normalizeExercise);
+              
+              // Debug: Check sets values after normalization
+              planDay.exercises.forEach((ex: any, exIdx: number) => {
+                console.log(`[fetchPlan] Day ${i}, Exercise ${exIdx} sets value after normalization:`, ex.sets);
+              });
+          }
+          weekDates.push(planDay);
         }
-        weekDates.push(planDay);
-      }
       
       const dbWorkoutPlan = {
         week: weekDates,
@@ -1950,22 +1933,9 @@ const WorkoutPlanSection = ({
           )
         });
       } else if (data.length > 0) {
-        // Determine if this is an approved plan or draft
-        const isApprovedPlan = !isFromPreview; // If not from preview, it's from schedule (approved)
-        
-        updateWorkoutPlanState({
-          status: isApprovedPlan ? 'approved' : 'draft',
-          source: isApprovedPlan ? 'database' : 'generated'
-        });
-        
-        // Update legacy status for compatibility
-        if (isApprovedPlan) {
-          setPlanApprovalStatus('approved');
-          setIsDraftPlan(false);
-        } else {
-          setPlanApprovalStatus('not_approved');
-          setIsDraftPlan(true);
-        }
+        // Use the new consistency-based status logic
+        // The status will be determined by checkPlanApprovalStatus based on data comparison
+        await checkPlanApprovalStatus();
       } else {
         updateWorkoutPlanState({
           status: 'no_plan',
@@ -1977,8 +1947,14 @@ const WorkoutPlanSection = ({
         setIsDraftPlan(false);
       }
     }
-    setIsFetchingPlan(false);
-    clearLoading();
+    } catch (error: any) {
+      console.error('[WorkoutPlanSection] Error in fetchPlan:', error);
+      toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
+      setWorkoutPlan(null);
+    } finally {
+      setIsFetchingPlan(false);
+      clearLoading();
+    }
   };
 
   // Debounced save function for autosaving inline edits
@@ -2253,100 +2229,56 @@ const WorkoutPlanSection = ({
     }
   };
 
-  // Helper to check approval status for the week
+  // Helper to check approval status for the week using unified utility
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
-    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
-    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-    const endDateStr = format(endDate, 'yyyy-MM-dd');
-    
+
     try {
-      console.log('[checkPlanApprovalStatus] Checking approval status for date range:', startDateStr, 'to', endDateStr);
+      console.log('[checkPlanApprovalStatus] Checking weekly approval status');
       
-      // First, check if there's data in the schedule table (approved plans)
-      const { data: scheduleData, error: scheduleError } = await supabase
-        .from('schedule')
-        .select('id, for_date')
-        .eq('client_id', numericClientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr);
+      // Use the unified utility function
+      const result: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
       
-      if (scheduleError) {
-        console.error('Schedule check error:', scheduleError);
-      }
+      console.log('[checkPlanApprovalStatus] Status result:', result);
       
-      // Then, check schedule_preview table (draft plans)
-      const { data: previewData, error: previewError } = await supabase
-        .from('schedule_preview')
-        .select('id, for_date, is_approved')
-        .eq('client_id', numericClientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr);
-      
-      if (previewError) {
-        console.error('Preview check error:', previewError);
-      }
-      
-      console.log('[checkPlanApprovalStatus] Schedule data:', scheduleData?.length || 0, 'entries');
-      console.log('[checkPlanApprovalStatus] Preview data:', previewData?.length || 0, 'entries');
-      
-      // Determine status based on data presence
-      let newStatus: 'no_plan' | 'draft' | 'approved' | 'template' = 'no_plan';
-      let newSource: 'generated' | 'template' | 'database' = 'database';
-      
-      if (scheduleData && scheduleData.length > 0) {
-        // Data exists in schedule table = approved plan
-        console.log('[checkPlanApprovalStatus] ✅ Found approved plan in schedule table');
-        newStatus = 'approved';
-        newSource = 'database';
-        
-        // Update legacy status for compatibility
-        setPlanApprovalStatus('approved');
-        setIsDraftPlan(false);
-      } else if (previewData && previewData.length > 0) {
-        // Data exists in schedule_preview table = draft plan
-        console.log('[checkPlanApprovalStatus] 📝 Found draft plan in schedule_preview table');
-        
-        // Check if all days are approved in preview
-        const uniqueDays = Array.from(new Set(previewData.map(row => row.for_date)));
-        const approvedDays = uniqueDays.filter(day => {
-          const dayRows = previewData.filter(row => row.for_date === day);
-          return dayRows.every(row => row.is_approved === true);
-        });
-        
-        if (approvedDays.length === uniqueDays.length && uniqueDays.length > 0) {
-          // All days are approved but still in preview (edge case)
-          console.log('[checkPlanApprovalStatus] ⚠️ All days approved but still in preview - marking as approved');
-          newStatus = 'approved';
-          newSource = 'database';
+      // Map the result to legacy state variables for compatibility
+      switch (result.status) {
+        case 'approved':
           setPlanApprovalStatus('approved');
           setIsDraftPlan(false);
-        } else {
-          // Some or no days approved = draft
-          console.log('[checkPlanApprovalStatus] 📝 Draft plan with', approvedDays.length, 'of', uniqueDays.length, 'days approved');
-          newStatus = 'draft';
-          newSource = 'generated';
-          setPlanApprovalStatus(approvedDays.length > 0 ? 'partial_approved' : 'not_approved');
+          updateWorkoutPlanState({
+            status: 'approved',
+            source: result.source
+          });
+          break;
+        case 'draft':
+          setPlanApprovalStatus('not_approved');
           setIsDraftPlan(true);
-        }
-      } else {
-        // No data in either table
-        console.log('[checkPlanApprovalStatus] ⚪ No plan found in either table');
-        newStatus = 'no_plan';
-        newSource = 'database';
-        setPlanApprovalStatus('pending');
-        setIsDraftPlan(false);
+          updateWorkoutPlanState({
+            status: 'draft',
+            source: result.source
+          });
+          break;
+        case 'partial_approved':
+          setPlanApprovalStatus('partial_approved');
+          setIsDraftPlan(true);
+          updateWorkoutPlanState({
+            status: 'draft',
+            source: result.source
+          });
+          break;
+        case 'no_plan':
+        default:
+          setPlanApprovalStatus('pending');
+          setIsDraftPlan(false);
+          updateWorkoutPlanState({
+            status: 'no_plan',
+            source: result.source
+          });
+          break;
       }
       
-      // Update enhanced state management
-      updateWorkoutPlanState({
-        status: newStatus,
-        source: newSource
-      });
-      
-      console.log('[checkPlanApprovalStatus] Final status:', newStatus, 'source:', newSource);
+      console.log('[checkPlanApprovalStatus] Final status:', result.status, 'source:', result.source);
       
     } catch (error) {
       console.error('Error checking approval status:', error);

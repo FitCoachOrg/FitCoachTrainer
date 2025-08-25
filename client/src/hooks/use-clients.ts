@@ -101,7 +101,7 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
     async function fetchSchedule() {
       try {
         setLoading(true)
-        // 1. Try schedule_preview first
+        // ALWAYS fetch from schedule_preview first (primary source)
         let { data, error } = await supabase
           .from('schedule_preview')
           .select('*')
@@ -112,10 +112,12 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
         if (error) {
           console.warn('Error fetching from schedule_preview:', error)
         }
-        if (data && data.length > 0) {
-          setIsDraftPlan(true)
-        } else {
-          // 2. Fallback to schedule
+        
+        let isFromPreview = true;
+        
+        if (!data || data.length === 0) {
+          // Only fallback to schedule if no preview data exists
+          console.log('No preview data found, checking schedule table as fallback');
           ({ data, error } = await supabase
             .from('schedule')
             .select('*')
@@ -123,8 +125,11 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
             .gte('for_date', startDate)
             .lte('for_date', endDate)
             .order('for_date', { ascending: true }))
-          setIsDraftPlan(false)
+          isFromPreview = false;
         }
+        
+        // Set draft status based on data source
+        setIsDraftPlan(isFromPreview);
         if (error) {
           setError(error.message)
           return

@@ -8,6 +8,11 @@ import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
+import { 
+  checkMonthlyWorkoutStatus, 
+  getStatusDisplay,
+  type WorkoutStatusResult 
+} from '@/utils/workoutStatusUtils';
 
 type WeekDay = {
   date: string;
@@ -59,6 +64,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [copySourceWeek, setCopySourceWeek] = useState<number | null>(null);
   const [copyTargetWeek, setCopyTargetWeek] = useState<number | null>(null);
   const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
+  const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
 
   // Generate monthly data (4 weeks) from the current week data
   const monthlyData = useMemo(() => {
@@ -120,76 +126,79 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     return week || [];
   }, [week, planStartDate, viewMode]);
 
-  // Function to fetch multi-week data
+  // Function to fetch multi-week data using unified status logic
   const fetchMultiWeekData = async () => {
     if (!clientId || viewMode !== 'monthly') return;
     
     setIsLoadingMultiWeek(true);
     try {
-      const weeks = [];
-      for (let i = 0; i < 4; i++) {
-        const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
-        const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-        
-        // Strategy 1: Try schedule_preview first (draft plans)
-        let { data: weekData, error } = await supabase
-          .from('schedule_preview')
-          .select('*')
-          .eq('client_id', clientId)
-          .eq('type', 'workout')
-          .gte('for_date', weekStartDate.toISOString().slice(0, 10))
-          .lte('for_date', weekEndDate.toISOString().slice(0, 10))
-          .order('for_date');
-        
-        if (error) {
-          console.error('Error fetching from schedule_preview:', error);
-        }
-        
-        // Strategy 2: If no data in schedule_preview, try schedule table (approved plans)
-        if (!weekData || weekData.length === 0) {
-          console.log('No data in schedule_preview, trying schedule table for week', i + 1);
-          const { data: scheduleData, error: scheduleError } = await supabase
-            .from('schedule')
-            .select('*')
-            .eq('client_id', clientId)
-            .eq('type', 'workout')
-            .gte('for_date', weekStartDate.toISOString().slice(0, 10))
-            .lte('for_date', weekEndDate.toISOString().slice(0, 10))
-            .order('for_date');
-          
-          if (scheduleError) {
-            console.error('Error fetching from schedule:', scheduleError);
-          } else {
-            weekData = scheduleData;
+      console.log('[fetchMultiWeekData] Fetching monthly workout data using unified logic');
+      
+      // Use the unified monthly status function
+      const monthlyResult: WorkoutStatusResult = await checkMonthlyWorkoutStatus(supabase, clientId, planStartDate);
+      
+      console.log('[fetchMultiWeekData] Monthly status result:', monthlyResult);
+      
+      // Set the monthly status for display
+      setMonthlyStatus(monthlyResult);
+      
+      if (monthlyResult.weeklyBreakdown) {
+        // Convert the weekly breakdown to WeekDay format
+        const weeks = monthlyResult.weeklyBreakdown.map(weekData => {
+          const weekDays = [];
+          for (let j = 0; j < 7; j++) {
+            const dayDate = new Date(weekData.startDate.getTime() + j * 24 * 60 * 60 * 1000);
+            const dateStr = dayDate.toISOString().slice(0, 10);
+            
+            // Find matching data for this date from preview data (primary source)
+            let dayData = weekData.previewData?.find(d => d.for_date === dateStr);
+            
+            // If no preview data, try schedule data
+            if (!dayData) {
+              dayData = weekData.scheduleData?.find(d => d.for_date === dateStr);
+            }
+            
+            if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
+              weekDays.push({
+                date: dateStr,
+                focus: dayData.summary || 'Workout',
+                exercises: dayData.details_json.exercises
+              });
+            } else {
+              weekDays.push({
+                date: dateStr,
+                focus: 'Rest Day',
+                exercises: []
+              });
+            }
           }
-        }
+          return weekDays;
+        });
         
-        // Convert database data to WeekDay format (matching the structure from WorkoutPlanSection)
-        const weekDays = [];
-        for (let j = 0; j < 7; j++) {
-          const dayDate = new Date(weekStartDate.getTime() + j * 24 * 60 * 60 * 1000);
-          const dateStr = dayDate.toISOString().slice(0, 10);
+        setMultiWeekData(weeks);
+        console.log('[fetchMultiWeekData] Set multi-week data:', weeks.length, 'weeks');
+      } else {
+        // Fallback to generating placeholder data if no breakdown available
+        console.log('[fetchMultiWeekData] No weekly breakdown, generating placeholder data');
+        const weeks = [];
+        for (let i = 0; i < 4; i++) {
+          const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
+          const weekDays = [];
           
-          // Find matching data for this date
-          const dayData = weekData?.find(d => d.for_date === dateStr);
-          
-          if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
-            weekDays.push({
-              date: dateStr,
-              focus: dayData.summary || 'Workout',
-              exercises: dayData.details_json.exercises
-            });
-          } else {
+          for (let j = 0; j < 7; j++) {
+            const dayDate = new Date(weekStartDate.getTime() + j * 24 * 60 * 60 * 1000);
+            const dateStr = dayDate.toISOString().slice(0, 10);
+            
             weekDays.push({
               date: dateStr,
               focus: 'Rest Day',
               exercises: []
             });
           }
+          weeks.push(weekDays);
         }
-        weeks.push(weekDays);
+        setMultiWeekData(weeks);
       }
-      setMultiWeekData(weeks);
     } catch (error) {
       console.error('Error fetching multi-week data:', error);
     } finally {
@@ -793,25 +802,47 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           <Calendar className="h-4 w-4 text-gray-600" />
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan View</span>
         </div>
-        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-          <Button
-            variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('weekly')}
-            className="text-xs"
-          >
-            <Calendar className="h-3 w-3 mr-1" />
-            7 Day
-          </Button>
-          <Button
-            variant={viewMode === 'monthly' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setViewMode('monthly')}
-            className="text-xs"
-          >
-            <CalendarDays className="h-3 w-3 mr-1" />
-            Monthly
-          </Button>
+        <div className="flex items-center gap-4">
+          {/* Monthly Status Indicator */}
+          {viewMode === 'monthly' && monthlyStatus && (
+            <div className="flex items-center gap-2">
+              {(() => {
+                const statusDisplay = getStatusDisplay(monthlyStatus.status, true);
+                return (
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusDisplay.className}`}>
+                    <span>{statusDisplay.icon}</span>
+                    <span>{statusDisplay.text}</span>
+                    {monthlyStatus.weeklyBreakdown && (
+                      <span className="text-xs opacity-75">
+                        ({monthlyStatus.weeklyBreakdown.filter(w => w.status === 'approved').length}/4 weeks)
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <Button
+              variant={viewMode === 'weekly' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('weekly')}
+              className="text-xs"
+            >
+              <Calendar className="h-3 w-3 mr-1" />
+              7 Day
+            </Button>
+            <Button
+              variant={viewMode === 'monthly' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('monthly')}
+              className="text-xs"
+            >
+              <CalendarDays className="h-3 w-3 mr-1" />
+              Monthly
+            </Button>
+          </div>
         </div>
       </div>
 
