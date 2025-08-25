@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed } from 'lucide-react';
+import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed, ChevronDown, ChevronUp, Calendar, Clock, Target, Play, Edit3, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -22,6 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
@@ -44,6 +45,8 @@ export interface Exercise {
   coach_tip?: string;
   details_json?: any;
   workout_id?: string; // Add this line for UUID support
+  video_link?: string; // YouTube video link
+  video_thumbnail?: string; // Video thumbnail URL
 }
 
 interface WorkoutPlanTableProps {
@@ -90,100 +93,21 @@ const getExerciseIcon = (ex: any) => {
   return <Dumbbell className="h-5 w-5 text-gray-400" />;
 };
 
-// A single sortable row in the table
-const SortableExerciseRow = ({
-  exercise,
-  isEditing,
-  onCellClick,
-  onInputChange,
-  onInputBlur,
-  onDelete,
-}: {
-  exercise: Exercise;
-  isEditing: (field: keyof Exercise) => boolean;
-  onCellClick: (field: keyof Exercise) => void;
-  onInputChange: (field: keyof Exercise, value: any) => void;
-  onInputBlur: () => void;
-  onDelete: () => void;
-}) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: exercise.id });
+// Helper to extract YouTube video ID from URL
+const getYouTubeVideoId = (url: string) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const renderCell = (field: keyof Exercise, type: 'text' | 'number' = 'text') => {
-    if (isEditing(field)) {
-      return (
-        <Input
-          type={type}
-          value={exercise[field] as string}
-          onChange={(e) => onInputChange(field, e.target.value)}
-          onBlur={onInputBlur}
-          onKeyDown={(e) => e.key === 'Enter' && onInputBlur()}
-          autoFocus
-          className="h-8"
-        />
-      );
-    }
-    return (
-      <div onClick={() => onCellClick(field)} className="min-h-[32px] px-3 py-1">
-        {exercise[field]}
-      </div>
-    );
-  };
-
-  return (
-    <TableRow ref={setNodeRef} style={style} {...attributes}>
-      <TableCell className="w-12">
-        <div {...listeners} className="cursor-grab p-2">
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-        </div>
-      </TableCell>
-      <TableCell className="w-12">{getExerciseIcon(exercise)}</TableCell>
-      <TableCell>{renderCell('exercise')}</TableCell>
-      <TableCell>{renderCell('category')}</TableCell>
-      <TableCell>{renderCell('body_part')}</TableCell>
-      <TableCell>{renderCell('sets', 'number')}</TableCell>
-      <TableCell>{renderCell('reps', 'number')}</TableCell>
-      <TableCell>{renderCell('time')}</TableCell>
-      <TableCell>{renderCell('rest', 'number')}</TableCell> {/* New Rest column */}
-      <TableCell>{renderCell('weight', 'number')}</TableCell>
-      <TableCell>{renderCell('equipment')}</TableCell>
-      <TableCell>{exercise.date}</TableCell>
-      <TableCell>{renderCell('other_details')}</TableCell>
-      <TableCell>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="truncate max-w-[120px] inline-block align-middle cursor-pointer">
-                {(exercise.coach_tip ?? '').length > 0 ? (exercise.coach_tip ?? '').slice(0, 24) + ((exercise.coach_tip ?? '').length > 24 ? '…' : '') : '—'}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <span className="whitespace-pre-line">{exercise.coach_tip ?? 'No tip provided.'}</span>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </TableCell>
-      <TableCell>
-        <Button variant="ghost" size="icon" onClick={onDelete}>
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </TableCell>
-    </TableRow>
-  );
+// Helper to get YouTube thumbnail URL
+const getYouTubeThumbnail = (videoId: string) => {
+  return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
 };
 
 // Helper to get a full array for the week/month, filling missing days as null
-function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly' = 'weekly') {
+function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly') {
   const days = [];
   const totalDays = viewMode === 'monthly' ? 28 : 7;
   
@@ -196,24 +120,181 @@ function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly
   return days;
 }
 
+// Helper to organize days into weeks
+function organizeIntoWeeks(days: any[], viewMode: 'weekly' | 'monthly') {
+  if (viewMode === 'weekly') {
+    return [days]; // Single week
+  }
+  
+  // For monthly view, organize into 4 weeks
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return weeks;
+}
+
+// Inline Editable Cell Component
+const EditableCell = ({ 
+  value, 
+  onSave, 
+  type = 'text',
+  placeholder = '',
+  className = ''
+}: {
+  value: string | number;
+  onSave: (newValue: string) => void;
+  type?: 'text' | 'number';
+  placeholder?: string;
+  className?: string;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value.toString());
+
+  const handleSave = () => {
+    onSave(editValue);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditValue(value.toString());
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          type={type}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          autoFocus
+          className={`h-8 text-sm ${className}`}
+          placeholder={placeholder}
+        />
+        <Button size="sm" variant="ghost" onClick={handleSave} className="h-6 w-6 p-0">
+          <Check className="h-3 w-3 text-green-600" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+          <X className="h-3 w-3 text-red-600" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 ${className}`}
+      onClick={() => setIsEditing(true)}
+    >
+      <span className="truncate">{value || placeholder}</span>
+      <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </div>
+  );
+};
+
+// Video Cell Component
+const VideoCell = ({ 
+  videoLink, 
+  onVideoChange 
+}: { 
+  videoLink?: string;
+  onVideoChange: (newLink: string) => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(videoLink || '');
+  const videoId = getYouTubeVideoId(videoLink || '');
+
+  const handleSave = () => {
+    onVideoChange(editValue);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditValue(videoLink || '');
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          autoFocus
+          className="h-8 text-sm"
+          placeholder="Paste YouTube URL"
+        />
+        <Button size="sm" variant="ghost" onClick={handleSave} className="h-6 w-6 p-0">
+          <Check className="h-3 w-3 text-green-600" />
+        </Button>
+        <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
+          <X className="h-3 w-3 text-red-600" />
+        </Button>
+      </div>
+    );
+  }
+
+  if (videoId) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="relative group cursor-pointer" onClick={() => setIsEditing(true)}>
+          <img 
+            src={getYouTubeThumbnail(videoId)} 
+            alt="Video thumbnail" 
+            className="w-16 h-12 object-cover rounded border"
+          />
+          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity">
+            <Play className="h-4 w-4 text-white" />
+          </div>
+        </div>
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          onClick={() => window.open(videoLink, '_blank')}
+          className="h-6 w-6 p-0"
+        >
+          <Link2 className="h-3 w-3" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 text-gray-500"
+      onClick={() => setIsEditing(true)}
+    >
+      <span>Add video</span>
+      <Edit3 className="h-3 w-3" />
+    </div>
+  );
+};
+
 export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly' }: WorkoutPlanTableProps) => {
   // Debug logging
   console.log('[WorkoutPlanTable] Rendering with week data:', week);
   
-  // State for editing sets x reps
-  const [editIdx, setEditIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
-  const [editSets, setEditSets] = useState('');
-  const [editReps, setEditReps] = useState('');
-  const [editDurationIdx, setEditDurationIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
-  const [editDuration, setEditDuration] = useState('');
-  const [editRestIdx, setEditRestIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
-  const [editRest, setEditRest] = useState('');
-  const [editWeightIdx, setEditWeightIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
-  const [editWeight, setEditWeight] = useState('');
-  const [editCoachTipIdx, setEditCoachTipIdx] = useState<{ dayIdx: number; exIdx: number } | null>(null);
-  const [editCoachTip, setEditCoachTip] = useState('');
-  // Accordion open panels state
-  const [openPanels, setOpenPanels] = useState<string[]>([]);
   // State for delete confirmation
   const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
 
@@ -222,7 +303,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   const [pickerDayIdx, setPickerDayIdx] = useState<number | null>(null);
   const [pickerDateStr, setPickerDateStr] = useState<string | null>(null);
 
-
   // Local copy of the week for editing
   const [editableWeek, setEditableWeek] = useState(week);
 
@@ -230,14 +310,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     // Keep local state in sync with parent prop
     setEditableWeek(week);
   }, [week]);
-
-  // Expand all by default on initial load or when week changes
-  useEffect(() => {
-    setOpenPanels(editableWeek.map(day => day.date));
-  }, [editableWeek]);
-
-  const handleExpandAll = () => setOpenPanels(editableWeek.map(day => day.date));
-  const handleCollapseAll = () => setOpenPanels([]);
 
   // --- Normalization function ---
   function normalizeExercise(ex: any): any {
@@ -254,6 +326,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
       coach_tip: ex.coach_tip ?? ex.tips ?? '',
       rest: ex.rest ?? '',
       video_link: ex.video_link ?? ex.videoLink ?? '',
+      video_thumbnail: ex.video_thumbnail ?? '',
     };
   }
   // ---
@@ -265,32 +338,16 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
     console.log(`[WorkoutPlanTable] handlePlanChange triggered. Day: ${dayIdx}, Ex: ${exIdx}, Field: ${field}, Value:`, value);
-    console.log(`[WorkoutPlanTable] Previous value:`, normalizedWeek[dayIdx].exercises[exIdx][field]);
     
     const updatedWeek = [...normalizedWeek];
     const newExercises = [...updatedWeek[dayIdx].exercises];
     newExercises[exIdx] = { ...newExercises[exIdx], [field]: value };
     updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
     
-    console.log(`[WorkoutPlanTable] New value:`, newExercises[exIdx][field]);
-    
     console.log('[WorkoutPlanTable] Setting editableWeek to:', updatedWeek);
     setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
     onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
     console.log('[WorkoutPlanTable] Called onPlanChange with updated week:', updatedWeek);
-  };
-
-  const handleEditClick = (dayIdx: number, exIdx: number, sets: any, reps: any) => {
-    console.log(`[WorkoutPlanTable] handleEditClick - Day: ${dayIdx}, Ex: ${exIdx}, Sets: ${sets}, Reps: ${reps}`);
-    console.log(`[WorkoutPlanTable] handleEditClick - Sets type: ${typeof sets}, Reps type: ${typeof reps}`);
-    setEditIdx({ dayIdx, exIdx });
-    setEditSets(sets?.toString() || '');
-    setEditReps(reps?.toString() || '');
-    console.log(`[WorkoutPlanTable] handleEditClick - Set editSets to: ${sets?.toString() || ''}, editReps to: ${reps?.toString() || ''}`);
-  };
-  const handleSaveEdit = (onChange: (sets: string, reps: string) => void) => {
-    onChange(editSets, editReps);
-    setEditIdx(null);
   };
 
   const { toast } = useToast();
@@ -336,6 +393,10 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     return result;
   }, [planStartDate, editableWeek, viewMode]);
 
+  // Organize days into weeks
+  const weeks = useMemo(() => {
+    return organizeIntoWeeks(fullWeek, viewMode);
+  }, [fullWeek, viewMode]);
 
   // Helper: persist updated exercises array for a given date to schedule_preview
   const persistExercisesForDate = async (dateStr: string, exercises: any[], summaryFallback: string = 'Workout') => {
@@ -430,341 +491,372 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     await persistExercisesForDate(day.date, newExercises, day.focus || 'Workout');
   };
 
-  return (
-    <div>
-      
-      {/* Legend and Export Button */}
-      <div className="mb-2 flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex gap-6 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1"><Bed className="w-4 h-4" /> Rest Day</span>
-          <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Plan Not Generated</span>
-        </div>
-      </div>
-      {/* Render each day */}
-      {fullWeek.map((day, dayIdx) => {
-        // Get the date and day name for this day index
-        const currentDate = new Date(planStartDate.getTime() + dayIdx * 24 * 60 * 60 * 1000);
-        const dateStr = currentDate.toISOString().slice(0, 10);
-        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-        const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const renderDay = (day: any, dayIdx: number, weekIdx: number) => {
+    // Calculate the global day index across all weeks
+    const globalDayIdx = weekIdx * 7 + dayIdx;
+    const currentDate = new Date(planStartDate.getTime() + globalDayIdx * 24 * 60 * 60 * 1000);
+    const dateStr = currentDate.toISOString().slice(0, 10);
+    const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-        if (!day) {
-          // Plan Not Generated
-          return (
-            <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-yellow-50">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+    if (!day) {
+      // Plan Not Generated
+      return (
+        <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-yellow-400 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-yellow-100 dark:bg-yellow-900/40 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-yellow-600" />
+                </div>
                 <div>
-                  {hideDates ? (
-                    <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
-                  ) : (
-                    <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
-                  )}
-                  <div className="font-semibold text-yellow-700">Plan Not Generated</div>
-                  <div className="text-xs text-muted-foreground">No workout plan exists for this day.</div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
+                  </div>
+                  <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-200">Plan Not Generated</h4>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">No workout plan exists for this day.</p>
                 </div>
               </div>
-              <div className="ml-auto">
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
-                  <PlusCircle className="h-4 w-4" /> Add Exercise
-                </Button>
-              </div>
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
+                <PlusCircle className="h-4 w-4" />
+                Add Exercise
+              </Button>
             </div>
-          );
-        }
-        if (day.exercises.length === 0) {
-          // Rest Day
-          return (
-            <div key={dayIdx} className="border rounded p-4 mb-2 flex items-center gap-2 bg-gray-50">
-              <div className="flex items-center gap-3">
-                <Bed className="w-5 h-5" />
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (day.exercises.length === 0) {
+      // Rest Day
+      return (
+        <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                  <Bed className="w-6 h-6 text-blue-600" />
+                </div>
                 <div>
-                  {hideDates ? (
-                    <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
-                  ) : (
-                    <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
-                  )}
-                  <div className="font-semibold text-gray-700">Rest Day</div>
-                  <div className="text-xs text-muted-foreground">Enjoy your recovery!</div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
+                  </div>
+                  <h4 className="text-lg font-bold text-blue-800 dark:text-blue-200">Rest Day</h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">Enjoy your recovery and prepare for the next workout!</p>
                 </div>
               </div>
-              <div className="ml-auto">
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
-                  <PlusCircle className="h-4 w-4" /> Add Exercise
-                </Button>
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
+                <PlusCircle className="h-4 w-4" />
+                Add Exercise
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Workout Day
+    return (
+      <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-green-400 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                {getFocusIcon(day.focus)}
+              </div>
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <Calendar className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
+                </div>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                  {day.focus}
+                </h3>
+                {day.timeBreakdown && (
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Total: {day.timeBreakdown.total} min
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Target className="w-3 h-3" />
+                      {day.exercises.length} exercises
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-          );
-        }
-        // Normal workout day
-        return (
-          <Accordion key={day.date} type="multiple" value={openPanels} onValueChange={setOpenPanels} className="w-full">
-            <AccordionItem value={day.date}>
-              <AccordionTrigger>
-                <div className="flex items-center gap-3 w-full justify-between">
-                  <div className="flex items-center gap-3">
-                    {getFocusIcon(day.focus)}
-                    <div>
-                      {hideDates ? (
-                        <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
-                      ) : (
-                        <div className="text-xs text-gray-500">{dateDisplay} • {dayName}</div>
-                      )}
-                      <div className="text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent tracking-tight">
-                        {day.focus}
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
+                <PlusCircle className="h-4 w-4" />
+                Add Exercise
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="gap-2 text-red-600 border-red-300 hover:bg-red-50"
+                onClick={() => setDeleteDayIdx(globalDayIdx)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Day
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="pt-0">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-gray-700">
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead className="w-12">Icon</TableHead>
+                    <TableHead className="w-32">Exercise</TableHead>
+                    <TableHead className="w-20">Category</TableHead>
+                    <TableHead className="w-20">Body Part</TableHead>
+                    <TableHead className="w-16">Sets</TableHead>
+                    <TableHead className="w-16">Reps</TableHead>
+                    <TableHead className="w-16">Rest</TableHead>
+                    <TableHead className="w-20">Weight</TableHead>
+                    <TableHead className="w-16">Duration</TableHead>
+                                         <TableHead className="w-20">Equipment</TableHead>
+                     <TableHead className="w-24">Video</TableHead>
+                    <TableHead className="w-12">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {day.exercises.map((ex: any, exIdx: number) => (
+                    <TableRow key={exIdx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                      <TableCell className="font-medium text-gray-600 dark:text-gray-400">{exIdx + 1}</TableCell>
+                      <TableCell>{getExerciseIcon(ex)}</TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.exercise}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
+                          placeholder="Exercise name"
+                          className="font-medium text-gray-900 dark:text-white"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.category}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'category', newValue)}
+                          placeholder="Category"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.body_part}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'body_part', newValue)}
+                          placeholder="Body part"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.sets}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'sets', newValue)}
+                          type="number"
+                          placeholder="Sets"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.reps}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'reps', newValue)}
+                          placeholder="Reps"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.rest || ''}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'rest', newValue)}
+                          type="number"
+                          placeholder="Rest"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.weight || ''}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'weight', newValue)}
+                          placeholder="Weight"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <EditableCell
+                          value={ex.duration || ''}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'duration', newValue)}
+                          type="number"
+                          placeholder="Duration"
+                        />
+                      </TableCell>
+                                             <TableCell>
+                         <EditableCell
+                           value={ex.equipment || ''}
+                           onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'equipment', newValue)}
+                           placeholder="Equipment"
+                         />
+                       </TableCell>
+                       <TableCell>
+                        <VideoCell
+                          videoLink={ex.video_link}
+                          onVideoChange={(newLink) => handlePlanChange(globalDayIdx, exIdx, 'video_link', newLink)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Professional Header with Legend */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-6 text-sm">
+              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
+                <Bed className="w-4 h-4 text-blue-600" />
+                <span className="text-gray-700 dark:text-gray-300">Rest Day</span>
+              </span>
+              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
+                <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                <span className="text-gray-700 dark:text-gray-300">Plan Not Generated</span>
+              </span>
+              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
+                <Dumbbell className="w-4 h-4 text-green-600" />
+                <span className="text-gray-700 dark:text-gray-300">Workout Day</span>
+              </span>
+            </div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">
+              💡 Click any cell to edit inline • Press Enter to save • Press Escape to cancel
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Weeks Organization */}
+      {viewMode === 'monthly' ? (
+        // Monthly view with accordion at week level
+        <Accordion type="multiple" className="space-y-4">
+          {weeks.map((weekDays, weekIdx) => {
+            const weekStartDate = new Date(planStartDate.getTime() + weekIdx * 7 * 24 * 60 * 60 * 1000);
+            const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+            const workoutDaysCount = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
+            
+            return (
+              <AccordionItem key={weekIdx} value={`week-${weekIdx}`} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 shadow-sm">
+                <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      <div className="text-left">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          Week {weekIdx + 1}
+                        </h3>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
+                        </span>
                       </div>
-                      {/* Time Breakdown Display */}
-                      {day.timeBreakdown && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          <span className="flex items-center gap-2">
-                            <span>⏰ {day.timeBreakdown.total} min total</span>
-                            <span className="text-gray-400">|</span>
-                            <span>🔥 {day.timeBreakdown.warmup} min warmup</span>
-                            <span className="text-gray-400">|</span>
-                            <span>🏋️ {day.timeBreakdown.exercises} min exercises</span>
-                            <span className="text-gray-400">|</span>
-                            <span>⏸️ {day.timeBreakdown.rest} min rest</span>
-                            <span className="text-gray-400">|</span>
-                            <span>❄️ {day.timeBreakdown.cooldown} min cooldown</span>
-                          </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {workoutDaysCount} workout days
+                        </span>
+                        <div className="text-xs text-gray-400 dark:text-gray-500">
+                          Click to {workoutDaysCount > 0 ? 'expand' : 'view'}
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-0">
+                  <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {weekDays.map((day, dayIdx) => renderDay(day, dayIdx, weekIdx))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      ) : (
+        // Weekly view (unchanged)
+        weeks.map((weekDays, weekIdx) => {
+          const weekStartDate = new Date(planStartDate.getTime() + weekIdx * 7 * 24 * 60 * 60 * 1000);
+          const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+          
+          return (
+            <Card key={weekIdx} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm">
+              {/* Week Header */}
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 border-b border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Week {weekIdx + 1}
+                    </h3>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length} workout days
+                    </span>
+                  </div>
                 </div>
-              </AccordionTrigger>
-              {/* Actions outside of the trigger to avoid nested buttons */}
-              <div className="flex items-center gap-2 justify-end py-2">
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => openPickerForDay(dayIdx, dateStr)}>
-                  <PlusCircle className="h-4 w-4" /> Add Exercise
-                </Button>
-                <button
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 text-xs font-semibold"
-                  title="Delete all workouts for this day"
-                  onClick={async () => { await handleDeleteDay(dayIdx); }}
-                >
-                  <Trash2 className="h-4 w-4" /> Delete Day
-                </button>
-              </div>
-              <AccordionContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gray-50 dark:bg-gray-800 border-b">
-                        <th className="text-left p-3">Icon</th>
-                        <th className="text-left p-3">Exercise</th>
-                        <th className="text-left p-3">Category</th>
-                        <th className="text-left p-3">Body Part</th>
-                        <th className="text-left p-3">Sets x Reps</th>
-                        <th className="text-left p-3">Rest (sec)</th>
-                        <th className="text-left p-3">Weight</th>
-                        <th className="text-left p-3">Duration</th>
-                        <th className="text-left p-3">Equipment</th>
-                        <th className="text-left p-3">Tempo & RPE</th>
-                        {/* <th className="text-left p-3">Coach Tip</th> */}
-                        {/* <th className="text-left p-3">Trainer Notes</th> */}
-                        {/* <th className="text-left p-3">Progression</th> */}
-                        <th className="text-left p-3">Video Link</th>
-                        <th className="text-right p-3 w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {day.exercises.map((ex: any, exIdx: number) => {
-                        console.log(`[WorkoutPlanTable] Rendering exercise ${exIdx} for day ${dayIdx}:`, ex);
-                        return (
-                        <tr key={exIdx} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                          <td className="p-3">{getExerciseIcon(ex)}</td>
-                          <td className="p-3 font-semibold">{ex.exercise}</td>
-                          <td className="p-3">{ex.category}</td>
-                          <td className="p-3">{ex.body_part}</td>
-                          <td className="p-3">
-                            <Popover open={editIdx?.dayIdx === dayIdx && editIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditIdx(null); }}>
-                              <PopoverTrigger asChild>
-                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => handleEditClick(dayIdx, exIdx, ex.sets, ex.reps)}>
-                                  {ex.sets} x {ex.reps}
-                                  <span className="ml-1 text-xs">✎</span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-48">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Sets</label>
-                                  <input type="number" min="1" value={editSets} onChange={e => setEditSets(e.target.value)} className="border rounded px-2 py-1" />
-                                  <label className="text-xs">Reps</label>
-                                  <input type="text" value={editReps} onChange={e => setEditReps(e.target.value)} className="border rounded px-2 py-1" />
-                                  <button
-                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1"
-                                    onClick={() => {
-                                      console.log(`[WorkoutPlanTable] Saving Sets/Reps. Day: ${dayIdx}, Ex: ${exIdx}`);
-                                      console.log(`[WorkoutPlanTable] Sets value: ${editSets}, Reps value: ${editReps}`);
-                                      console.log(`[WorkoutPlanTable] Previous exercise data:`, normalizedWeek[dayIdx].exercises[exIdx]);
-                                      
-                                      // Update both sets and reps in a single operation
-                                      const updatedWeek = [...normalizedWeek];
-                                      const newExercises = [...updatedWeek[dayIdx].exercises];
-                                      newExercises[exIdx] = { 
-                                        ...newExercises[exIdx], 
-                                        sets: editSets,
-                                        reps: editReps
-                                      };
-                                      updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
-                                      
-                                      console.log(`[WorkoutPlanTable] Updated exercise data:`, newExercises[exIdx]);
-                                      
-                                      setEditableWeek(updatedWeek);
-                                      onPlanChange(updatedWeek);
-                                      setEditIdx(null);
-                                    }}
-                                  >Save</button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          <td className="p-3">
-                            <Popover open={editRestIdx?.dayIdx === dayIdx && editRestIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditRestIdx(null); }}>
-                              <PopoverTrigger asChild>
-                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditRestIdx({ dayIdx, exIdx }); setEditRest(ex.rest?.toString() || ''); }}>
-                                  {ex.rest || '-'} <span className="ml-1 text-xs">✎</span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-32">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Rest (sec)</label>
-                                  <input type="number" min="0" value={editRest} onChange={e => setEditRest(e.target.value)} className="border rounded px-2 py-1" />
-                                  <button 
-                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
-                                    onClick={() => {
-                                      console.log(`[WorkoutPlanTable] Saving Rest. Day: ${dayIdx}, Ex: ${exIdx}`);
-                                      handlePlanChange(dayIdx, exIdx, 'rest', editRest);
-                                      setEditRestIdx(null);
-                                    }}
-                                  >Save</button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          <td className="p-3">
-                            <Popover open={editWeightIdx?.dayIdx === dayIdx && editWeightIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditWeightIdx(null); }}>
-                              <PopoverTrigger asChild>
-                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditWeightIdx({ dayIdx, exIdx }); setEditWeight(ex.weight?.toString() || ''); }}>
-                                  {ex.weight || '-'} <span className="ml-1 text-xs">✎</span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-32">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Weight</label>
-                                  <input type="text" value={editWeight} onChange={e => setEditWeight(e.target.value)} className="border rounded px-2 py-1" />
-                                  <button 
-                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1"
-                                    onClick={() => {
-                                      console.log(`[WorkoutPlanTable] Saving Weight. Day: ${dayIdx}, Ex: ${exIdx}`);
-                                      handlePlanChange(dayIdx, exIdx, 'weight', editWeight);
-                                      setEditWeightIdx(null);
-                                    }}
-                                  >Save</button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          <td className="p-3">
-                            <Popover open={editDurationIdx?.dayIdx === dayIdx && editDurationIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditDurationIdx(null); }}>
-                              <PopoverTrigger asChild>
-                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditDurationIdx({ dayIdx, exIdx }); setEditDuration(ex.duration?.toString() || ''); }}>
-                                  {ex.duration} min <span className="ml-1 text-xs">✎</span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-32">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Duration (min)</label>
-                                  <input type="number" min="1" value={editDuration} onChange={e => setEditDuration(e.target.value)} className="border rounded px-2 py-1" />
-                                  <button 
-                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
-                                    onClick={() => {
-                                      console.log(`[WorkoutPlanTable] Saving Duration. Day: ${dayIdx}, Ex: ${exIdx}`);
-                                      handlePlanChange(dayIdx, exIdx, 'duration', editDuration);
-                                      setEditDurationIdx(null);
-                                    }}
-                                  >Save</button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          <td className="p-3">{ex.equipment}</td>
-                          <td className="p-3">
-                            <Popover open={editCoachTipIdx?.dayIdx === dayIdx && editCoachTipIdx?.exIdx === exIdx} onOpenChange={open => { if (!open) setEditCoachTipIdx(null); }}>
-                              <PopoverTrigger asChild>
-                                <button className="underline text-blue-600 dark:text-blue-400 flex items-center gap-1" onClick={() => { setEditCoachTipIdx({ dayIdx, exIdx }); setEditCoachTip(ex.coach_tip?.toString() || ''); }}>
-                                  {(ex.coach_tip ?? '').length > 0 ? ((ex.coach_tip as string).slice(0, 24) + (((ex.coach_tip as string).length > 24) ? '…' : '')) : '—'}
-                                  <span className="ml-1 text-xs">✎</span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72">
-                                <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Tempo & RPE</label>
-                                  <textarea rows={4} value={editCoachTip} onChange={e => setEditCoachTip(e.target.value)} className="border rounded px-2 py-1" placeholder="Enter tempo (e.g., 3-1-3) and RPE (e.g., RPE 7)" />
-                                  <button 
-                                    className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
-                                    onClick={async () => {
-                                      const updatedWeek = [...normalizedWeek];
-                                      const newExercises = [...updatedWeek[dayIdx].exercises];
-                                      newExercises[exIdx] = { ...newExercises[exIdx], coach_tip: editCoachTip };
-                                      updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
-                                      setEditableWeek(updatedWeek);
-                                      onPlanChange(updatedWeek);
-                                      await persistExercisesForDate(updatedWeek[dayIdx].date, newExercises, updatedWeek[dayIdx].focus || 'Workout');
-                                      setEditCoachTipIdx(null);
-                                    }}
-                                  >Save</button>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          {/* Commented out trainer notes display for now */}
-                          {/* Commented out progression display for now */}
-                           <td className="p-3">
-                            {ex.video_link ? (
-                              <div className="flex items-center gap-2">
-                                <VideoPlayer
-                                  videoUrl={ex.video_link}
-                                  title={ex.video_metadata?.title}
-                                  channelTitle={ex.video_metadata?.channel_title}
-                                  score={ex.video_metadata?.score}
-                                  reason={ex.video_metadata?.reason}
-                                />
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <button className="text-xs text-muted-foreground underline">edit</button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-64">
-                                    <input 
-                                      type="text" 
-                                      className="border rounded px-2 py-1 w-full" 
-                                      placeholder="Paste video link here" 
-                                      value={ex.video_link || ''} 
-                                      onChange={e => handlePlanChange(dayIdx, exIdx, 'video_link', e.target.value)} 
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button title="Delete" className="text-gray-400 hover:text-red-600 transition-colors" onClick={() => handleDeleteExercise(dayIdx, exIdx)}>
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              </CardHeader>
+              
+              {/* Days in Week */}
+              <CardContent className="p-0">
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {weekDays.map((day, dayIdx) => renderDay(day, dayIdx, weekIdx))}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        );
-      })}
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteDayIdx !== null && (
+        <Dialog open={deleteDayIdx !== null} onOpenChange={() => setDeleteDayIdx(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Day</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this day? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDayIdx(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => handleDeleteDay(deleteDayIdx)}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       <ExercisePickerModal
         open={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
