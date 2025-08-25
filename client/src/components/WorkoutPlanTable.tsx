@@ -213,6 +213,7 @@ const VideoCell = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(videoLink || '');
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const videoId = getYouTubeVideoId(videoLink || '');
 
   const handleSave = () => {
@@ -257,26 +258,47 @@ const VideoCell = ({
 
   if (videoId) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="relative group cursor-pointer" onClick={() => setIsEditing(true)}>
-          <img 
-            src={getYouTubeThumbnail(videoId)} 
-            alt="Video thumbnail" 
-            className="w-16 h-12 object-cover rounded border"
-          />
-          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play className="h-4 w-4 text-white" />
+      <>
+        <div className="flex items-center gap-2">
+          <div className="relative group cursor-pointer" onClick={() => setIsVideoModalOpen(true)}>
+            <img 
+              src={getYouTubeThumbnail(videoId)} 
+              alt="Video thumbnail" 
+              className="w-16 h-12 object-cover rounded border"
+            />
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity">
+              <Play className="h-4 w-4 text-white" />
+            </div>
           </div>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => setIsEditing(true)}
+            className="h-6 w-6 p-0"
+          >
+            <Edit3 className="h-3 w-3" />
+          </Button>
         </div>
-        <Button 
-          size="sm" 
-          variant="ghost" 
-          onClick={() => window.open(videoLink, '_blank')}
-          className="h-6 w-6 p-0"
-        >
-          <Link2 className="h-3 w-3" />
-        </Button>
-      </div>
+
+        {/* Video Modal */}
+        <Dialog open={isVideoModalOpen} onOpenChange={setIsVideoModalOpen}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Watch Video</DialogTitle>
+            </DialogHeader>
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+                title="YouTube video player"
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
 
