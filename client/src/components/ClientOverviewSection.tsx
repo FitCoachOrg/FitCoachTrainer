@@ -5,6 +5,7 @@ import { type PopupKey } from "@/components/popups/trainer-popups.config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import TrainerOnboardingScreen from "./TrainerOnboardingScreen";
+import ClientTargetsTable from "./ClientTargetsTable";
 
 interface ClientOverviewSectionProps {
   client: any;
@@ -91,18 +92,12 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
       
       case 'targets':
         return (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardContent className="p-6">
-              <div className="text-center py-8">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  Client Targets
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Targets content will be defined in the next step.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="w-full">
+            <ClientTargetsTable 
+              clientId={client?.client_id?.toString() || ''}
+              client={client}
+            />
+          </div>
         );
       
       default:

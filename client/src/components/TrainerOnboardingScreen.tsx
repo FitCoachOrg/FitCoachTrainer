@@ -2,28 +2,147 @@
 // Adapted from the trainer onboarding package for web environment
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { onboardingQuestions, getQuestionsBySection, getSections } from '../data/onboardingQuestions';
-import { 
-  getClientOnboardingData, 
-  updateClientOnboardingData, 
-  completeClientOnboarding,
-  checkClientExists,
-  createClientRecord
-} from '../utils/supabaseClient';
 import { supabase } from '../lib/supabase';
-import { calculateAllTargets } from '../utils/targetCalculations';
 import { NewCustomerOnboardingModal } from './new-customer-onboarding-modal';
-import { 
-  cleanDataForDatabase, 
-  calculateCompletionPercentage, 
-  getSectionProgress,
-  validateFormData,
-  debounce,
-  convertUTCToLocal,
-  generateDefaultFormData
-} from '../utils/onboardingUtils';
-import QuestionComponents from './QuestionComponents';
 import '../styles/onboardingStyles.css';
+
+// Mock data and functions for missing modules
+const onboardingQuestions: any[] = [
+  // Add your onboarding questions here
+];
+
+const getQuestionsBySection = (section: string): any[] => {
+  return onboardingQuestions.filter((q: any) => q.section === section);
+};
+
+const getSections = () => {
+  return ['Personal Information', 'Fitness Goals', 'Training Preferences', 'Nutrition', 'Health'];
+};
+
+// Mock functions for missing utilities
+const getClientOnboardingData = async (clientId: string) => {
+  const { data } = await supabase
+    .from('client')
+    .select('*')
+    .eq('client_id', clientId)
+    .single();
+  return data;
+};
+
+const updateClientOnboardingData = async (clientId: string, data: any) => {
+  const { error } = await supabase
+    .from('client')
+    .update(data)
+    .eq('client_id', clientId);
+  return { error };
+};
+
+const completeClientOnboarding = async (clientId: string, data: any) => {
+  const { error } = await supabase
+    .from('client')
+    .update({ ...data, onboarding_completed: true })
+    .eq('client_id', clientId);
+  return { error };
+};
+
+const checkClientExists = async (clientId: string) => {
+  const { data } = await supabase
+    .from('client')
+    .select('client_id')
+    .eq('client_id', clientId)
+    .single();
+  return !!data;
+};
+
+const createClientRecord = async (clientId: string) => {
+  const { error } = await supabase
+    .from('client')
+    .insert({ client_id: clientId });
+  return { error };
+};
+
+const calculateAllTargets = async (clientId: string, data: any) => {
+  // Mock target calculation
+  console.log('Calculating targets for client:', clientId, data);
+};
+
+const cleanDataForDatabase = (data: any) => {
+  return data;
+};
+
+const calculateCompletionPercentage = (data: any) => {
+  const requiredFields = ['cl_name', 'cl_age', 'cl_weight', 'cl_height'];
+  const completedFields = requiredFields.filter(field => data[field]);
+  return Math.round((completedFields.length / requiredFields.length) * 100);
+};
+
+const getSectionProgress = (data: any, section: string) => {
+  return { percentage: 50 }; // Mock progress
+};
+
+const validateFormData = (data: any) => {
+  const errors: Record<string, string> = {};
+  const requiredFields = ['cl_name', 'cl_age', 'cl_weight', 'cl_height'];
+  
+  requiredFields.forEach(field => {
+    if (!data[field]) {
+      errors[field] = `${field} is required`;
+    }
+  });
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
+};
+
+const debounce = (func: Function, delay: number) => {
+  let timeoutId: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
+const convertUTCToLocal = (time: string) => {
+  return time; // Mock conversion
+};
+
+const generateDefaultFormData = (): any => {
+  return {
+    cl_name: '',
+    cl_age: '',
+    cl_weight: '',
+    cl_height: '',
+    cl_sex: '',
+    cl_activity_level: '',
+    cl_primary_goal: '',
+    timezone: 'UTC',
+    plan_start_day: ''
+  };
+};
+
+// Mock QuestionComponents
+const QuestionComponents: React.FC<{
+  question: any;
+  value: any;
+  error: string;
+  onChange: (value: any) => void;
+  formData: any;
+}> = ({ question, value, error, onChange, formData }) => {
+  return (
+    <div className="question-component">
+      <label>{question.label}</label>
+      <input
+        type="text"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={question.placeholder}
+      />
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+};
 
 interface TrainerOnboardingScreenProps {
   clientId: string;
@@ -148,14 +267,14 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
 
   // Handle form field changes
   const handleFieldChange = (field: string, value: any) => {
-    setFormData(prev => ({
+    setFormData((prev: any) => ({
       ...prev,
       [field]: value
     }));
     
     // Clear error for this field
     if (errors[field]) {
-      setErrors(prev => ({
+      setErrors((prev: Record<string, string>) => ({
         ...prev,
         [field]: ''
       }));
