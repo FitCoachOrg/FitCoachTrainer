@@ -22,8 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import WorkoutExportButton from './WorkoutExportButton';
-import WorkoutImportButton from './WorkoutImportButton';
+
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
 
@@ -436,23 +435,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         <div className="flex gap-6 text-sm text-muted-foreground">
           <span className="flex items-center gap-1"><Bed className="w-4 h-4" /> Rest Day</span>
           <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-500" /> Plan Not Generated</span>
-        </div>
-        {/* Import/Export Buttons */}
-        <div className="ml-auto flex gap-2">
-          {onImportSuccess && (
-            <WorkoutImportButton
-              clientId={clientId}
-              clientName={clientName}
-              planStartDate={planStartDate}
-              onImportSuccess={onImportSuccess}
-            />
-          )}
-          <WorkoutExportButton
-            weekData={editableWeek}
-            clientId={clientId}
-            planStartDate={planStartDate}
-            clientName={clientName}
-          />
         </div>
       </div>
       {/* Render each day */}

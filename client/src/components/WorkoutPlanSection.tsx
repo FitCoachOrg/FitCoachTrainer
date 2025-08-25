@@ -2710,27 +2710,7 @@ const WorkoutPlanSection = ({
           </div>
         </div>
 
-        {/* Import/Export Buttons - Moved to header area */}
-        <div className="flex items-center gap-3">
-          {/* Import Button - Always available */}
-          <WorkoutImportButton
-            clientId={numericClientId}
-            clientName={client?.name}
-            planStartDate={planStartDate}
-            onImportSuccess={handleImportSuccess}
-            disabled={isGenerating}
-          />
-          {/* Export Button - Only show when there's workout data */}
-          {workoutPlan && workoutPlan.hasAnyWorkouts && (
-            <WorkoutExportButton
-              weekData={workoutPlan.week}
-              clientId={numericClientId}
-              planStartDate={planStartDate}
-              clientName={client?.name}
-              disabled={isGenerating}
-            />
-          )}
-        </div>
+
       </div>
 
       {/* Step-by-Step Workflow */}
@@ -2739,6 +2719,62 @@ const WorkoutPlanSection = ({
           <BarChart3 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           Workout Plan Workflow
         </h4>
+        
+        {/* Prominent Action Bar - Strategic placement for important actions */}
+        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-lg hover:shadow-xl transition-all duration-300">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 shadow-md">
+                <Save className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h5 className="text-lg font-bold text-blue-900 dark:text-blue-100">Plan Management</h5>
+                <p className="text-sm text-blue-700 dark:text-blue-300">Import, export, or save your workout plans for future use</p>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Import Button - Always available */}
+              <WorkoutImportButton
+                clientId={numericClientId}
+                clientName={client?.name}
+                planStartDate={planStartDate}
+                onImportSuccess={handleImportSuccess}
+                disabled={isGenerating}
+                className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+              />
+              
+              {/* Export Button - Only show when there's workout data */}
+              {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                <WorkoutExportButton
+                  weekData={workoutPlan.week}
+                  clientId={numericClientId}
+                  planStartDate={planStartDate}
+                  clientName={client?.name}
+                  disabled={isGenerating}
+                  className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                />
+              )}
+              
+              {/* Save Plan for Future Button - Only show when there's workout data */}
+              {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                <Button 
+                  variant="outline" 
+                  size="default"
+                  className="bg-gradient-to-r from-purple-500 via-indigo-600 to-blue-600 hover:from-purple-600 hover:via-indigo-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                  onClick={() => { 
+                    setTemplateTags([]); 
+                    setTemplateTagInput(''); 
+                    setIsSaveTemplateOpen(true); 
+                  }}
+                >
+                  <Save className="h-4 w-4 mr-2" /> 
+                  Save Plan for Future
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
         
         <div className="flex flex-row flex-wrap gap-6 items-center">
           {/* Step 1: Select Plan Start Date */}
@@ -3042,9 +3078,6 @@ const WorkoutPlanSection = ({
                 <h3 className="text-lg font-semibold">
                   7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
                 </h3>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => { setTemplateTags([]); setTemplateTagInput(''); setIsSaveTemplateOpen(true); }}>
-                  <Save className="h-4 w-4" /> Save Plan for Future
-                </Button>
               </div>
               <WeeklyPlanHeader
                 week={workoutPlan.week}
