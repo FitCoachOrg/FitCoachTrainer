@@ -168,6 +168,22 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     required: true
   },
   {
+    id: 'focus_areas',
+    section: 'Fitness Goals',
+    title: 'Specific Areas to Focus on',
+    type: 'multi_select',
+    field: 'focus_areas',
+    options: [
+      { value: 'upper_body', label: 'Upper body' },
+      { value: 'lower_body', label: 'Lower body' },
+      { value: 'core_abs', label: 'Core/abs' },
+      { value: 'cardio_fitness', label: 'Cardio fitness' },
+      { value: 'flexibility', label: 'Flexibility' },
+      { value: 'full_body_strength', label: 'Full body strength' }
+    ],
+    required: true
+  },
+  {
     id: 'obstacles',
     section: 'Fitness Goals',
     title: 'Obstacles or challenges',
@@ -186,6 +202,23 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     placeholder: '5',
     keyboardType: 'numeric',
     maxLength: 2,
+    required: true
+  },
+  {
+    id: 'motivation_style',
+    section: 'Fitness Goals',
+    title: 'Motivational factors',
+    type: 'select',
+    field: 'motivation_style',
+    options: [
+      { value: 'seeing_physical_results', label: 'Seeing physical results' },
+      { value: 'competition_challenges', label: 'Competition and challenges' },
+      { value: 'health_wellness', label: 'Health and wellness benefits' },
+      { value: 'feeling_energized', label: 'Feeling energized and strong' },
+      { value: 'social_connection', label: 'Social connection and community' },
+      { value: 'stress_relief', label: 'Stress relief and mental health' },
+      { value: 'structured_routine', label: 'Having a structured routine' }
+    ],
     required: true
   },
 
@@ -228,6 +261,23 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     required: true
   },
   {
+    id: 'workout_days',
+    section: 'Training',
+    title: 'Workout days',
+    type: 'multi_select',
+    field: 'workout_days',
+    options: [
+      { value: 'monday', label: 'Monday' },
+      { value: 'tuesday', label: 'Tuesday' },
+      { value: 'wednesday', label: 'Wednesday' },
+      { value: 'thursday', label: 'Thursday' },
+      { value: 'friday', label: 'Friday' },
+      { value: 'saturday', label: 'Saturday' },
+      { value: 'sunday', label: 'Sunday' }
+    ],
+    required: true
+  },
+  {
     id: 'training_time_per_session',
     section: 'Training',
     title: 'Time per session',
@@ -250,7 +300,8 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     options: [
       { value: 'home', label: 'Home' },
       { value: 'gym', label: 'Gym' },
-      { value: 'both', label: 'Both' }
+      { value: 'outdoors', label: 'Outdoors' },
+      { value: 'mix_locations', label: 'Mix of locations' }
     ],
     required: true
   },
@@ -261,6 +312,7 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     type: 'multi_select',
     field: 'available_equipment',
     options: [
+      { value: 'full_gym_access', label: 'Full gym access' },
       { value: 'bodyweight', label: 'Bodyweight only' },
       { value: 'dumbbells', label: 'Dumbbells' },
       { value: 'barbells', label: 'Barbells & plates' },
@@ -269,7 +321,8 @@ export const onboardingQuestions: OnboardingQuestion[] = [
       { value: 'trx', label: 'TRX/suspension trainer' },
       { value: 'bench', label: 'Bench' },
       { value: 'pull_up_bar', label: 'Pull-up bar' },
-      { value: 'cardio', label: 'Cardio equipment' }
+      { value: 'cardio', label: 'Cardio equipment' },
+      { value: 'yoga_mat', label: 'Yoga mat' }
     ],
     required: true
   },
@@ -284,26 +337,14 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     required: false
   },
   {
-    id: 'focus_areas',
+    id: 'training_obstacles',
     section: 'Training',
-    title: 'Focus areas',
-    type: 'multi_select',
-    field: 'focus_areas',
-    options: [
-      { value: 'abs', label: 'Abs' },
-      { value: 'arms', label: 'Arms' },
-      { value: 'back', label: 'Back' },
-      { value: 'chest', label: 'Chest' },
-      { value: 'glutes', label: 'Glutes' },
-      { value: 'legs', label: 'Legs' },
-      { value: 'shoulders', label: 'Shoulders' },
-      { value: 'functional_movement', label: 'Functional Movement' },
-      { value: 'cardio', label: 'Cardio' },
-      { value: 'flexibility', label: 'Flexibility' },
-      { value: 'strength', label: 'Strength' },
-      { value: 'no_preference', label: 'No Preference' }
-    ],
-    required: true
+    title: 'Challenges and Obstacles',
+    type: 'text',
+    field: 'training_obstacles',
+    placeholder: 'Describe any challenges or obstacles you face with training (optional)',
+    multiline: true,
+    required: false
   },
 
   // Nutrition Section
@@ -387,23 +428,6 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     title: 'Workout time',
     type: 'time_input',
     field: 'workout_time',
-    required: true
-  },
-  {
-    id: 'workout_days',
-    section: 'Timing',
-    title: 'Workout days',
-    type: 'multi_select',
-    field: 'workout_days',
-    options: [
-      { value: 'monday', label: 'Monday' },
-      { value: 'tuesday', label: 'Tuesday' },
-      { value: 'wednesday', label: 'Wednesday' },
-      { value: 'thursday', label: 'Thursday' },
-      { value: 'friday', label: 'Friday' },
-      { value: 'saturday', label: 'Saturday' },
-      { value: 'sunday', label: 'Sunday' }
-    ],
     required: true
   },
   {
@@ -491,16 +515,6 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     type: 'text',
     field: 'cl_gastric_issues',
     placeholder: 'Describe any gastric issues (optional)',
-    multiline: true,
-    required: false
-  },
-  {
-    id: 'motivation_style',
-    section: 'Wellness',
-    title: 'Motivation style',
-    type: 'text',
-    field: 'motivation_style',
-    placeholder: 'Describe what motivates you (optional)',
     multiline: true,
     required: false
   }

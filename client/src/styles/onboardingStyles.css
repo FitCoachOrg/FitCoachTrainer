@@ -19,26 +19,56 @@
 
 /* Main container */
 .onboarding-container {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   padding: 20px;
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header */
 .onboarding-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: #fff;
   border-bottom: 2px solid #e0e0e0;
-  padding-bottom: 20px;
+  padding: 20px 0;
   margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .onboarding-header h1 {
-  margin: 0 0 20px 0;
+  margin: 0;
   color: #2c3e50;
   font-size: 28px;
   font-weight: 600;
+}
+
+.filter-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.filter-badge {
+  background-color: #e74c3c;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Progress section */
@@ -121,6 +151,8 @@
 /* Content area */
 .onboarding-content {
   margin-bottom: 30px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* Question sections */
@@ -160,6 +192,13 @@
 .section-progress {
   font-size: 12px;
   color: #666;
+}
+
+.section-incomplete-count {
+  font-size: 11px;
+  color: #e74c3c;
+  font-weight: 500;
+  margin-left: 8px;
 }
 
 .section-toggle {
@@ -259,6 +298,16 @@
 
 .checkbox-item:hover {
   background-color: #f8f9fa;
+}
+
+.checkbox-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+.checkbox-item.disabled:hover {
+  background-color: #f5f5f5;
 }
 
 .checkbox-input {
@@ -423,8 +472,14 @@
 /* Responsive design */
 @media (max-width: 768px) {
   .onboarding-container {
-    padding: 15px;
-    margin: 10px;
+    padding: 0 15px 15px 15px;
+    margin: 0;
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   .onboarding-header h1 {
@@ -460,8 +515,8 @@
 
 @media (max-width: 480px) {
   .onboarding-container {
-    padding: 10px;
-    margin: 5px;
+    padding: 0 10px 10px 10px;
+    margin: 0;
   }
 
   .section-header {

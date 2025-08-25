@@ -10,9 +10,10 @@ interface QuestionComponentsProps {
   value: any;
   error?: string;
   onChange: (value: any) => void;
+  formData?: any; // Add formData prop for accessing other field values
 }
 
-const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value, error, onChange }) => {
+const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value, error, onChange, formData = {} }) => {
   const [timeInputs, setTimeInputs] = useState({
     hours: '',
     minutes: '',
@@ -91,10 +92,26 @@ const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value
   const renderMultiSelect = () => {
     const selectedValues = Array.isArray(value) ? value : [];
     
+    // Special handling for workout_days to limit selection based on training_days_per_week
+    const maxSelections = question.field === 'workout_days' && formData.training_days_per_week 
+      ? parseInt(formData.training_days_per_week) 
+      : undefined;
+    
     const handleOptionToggle = (optionValue: string) => {
-      const newValues = selectedValues.includes(optionValue)
-        ? selectedValues.filter(v => v !== optionValue)
-        : [...selectedValues, optionValue];
+      let newValues;
+      
+      if (selectedValues.includes(optionValue)) {
+        // Remove option
+        newValues = selectedValues.filter(v => v !== optionValue);
+      } else {
+        // Add option - check if we're at the limit for workout_days
+        if (maxSelections && selectedValues.length >= maxSelections) {
+          // Don't allow adding more if at limit
+          return;
+        }
+        newValues = [...selectedValues, optionValue];
+      }
+      
       onChange(newValues);
     };
 
@@ -103,19 +120,30 @@ const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value
         <label className="question-label">
           {question.title}
           {question.required && <span className="required">*</span>}
+          {maxSelections && (
+            <span style={{ fontSize: '12px', color: '#666', fontWeight: 'normal', marginLeft: '8px' }}>
+              (Select up to {maxSelections} days)
+            </span>
+          )}
         </label>
         <div className="multi-select-container">
-          {question.options?.map((option, index) => (
-            <label key={index} className="checkbox-item">
-              <input
-                type="checkbox"
-                checked={selectedValues.includes(option.value as string)}
-                onChange={() => handleOptionToggle(option.value as string)}
-                className="checkbox-input"
-              />
-              <span className="checkbox-label">{option.label}</span>
-            </label>
-          ))}
+          {question.options?.map((option, index) => {
+            const isSelected = selectedValues.includes(option.value as string);
+            const isDisabled = maxSelections && !isSelected && selectedValues.length >= maxSelections;
+            
+            return (
+              <label key={index} className={`checkbox-item ${isDisabled ? 'disabled' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => handleOptionToggle(option.value as string)}
+                  className="checkbox-input"
+                  disabled={isDisabled}
+                />
+                <span className="checkbox-label">{option.label}</span>
+              </label>
+            );
+          })}
         </div>
         {error && <span className="error-message">{error}</span>}
       </div>

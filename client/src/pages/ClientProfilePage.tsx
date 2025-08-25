@@ -1898,7 +1898,7 @@ export default function ClientDashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen">
         {/* Enhanced Header */}
         <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -2057,33 +2057,33 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Permanent Card Sections - Only on Overview tab */}
-      {activeTab === 'overview' && (
-        <div className="px-6 py-6">
-          {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
-          <ClientOverviewSection
-            client={client}
-            lastAIRecommendation={lastAIRecommendation}
-            trainerNotes={trainerNotes}
-            setTrainerNotes={setTrainerNotes}
-            handleSaveTrainerNotes={handleSaveTrainerNotes}
-            isSavingNotes={isSavingNotes}
-            isEditingNotes={isEditingNotes}
-            setIsEditingNotes={setIsEditingNotes}
-            notesDraft={notesDraft}
-            setNotesDraft={setNotesDraft}
-            notesError={notesError}
-            setNotesError={setNotesError}
-            isGeneratingAnalysis={isGeneratingAnalysis}
-            handleSummarizeNotes={handleSummarizeNotes}
-            isSummarizingNotes={isSummarizingNotes}
-            refreshClientData={refreshClientData}
-          />
-        </div>
-      )}
-
       {/* Enhanced Content Area */}
-      <div className="space-y-8 px-6 py-6">
+      <div className={`flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-6 py-6'}`}>
+
+        {/* Overview tab content */}
+        {activeTab === 'overview' && (
+          <div className="h-full flex flex-col">
+            {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
+            <ClientOverviewSection
+              client={client}
+              lastAIRecommendation={lastAIRecommendation}
+              trainerNotes={trainerNotes}
+              setTrainerNotes={setTrainerNotes}
+              handleSaveTrainerNotes={handleSaveTrainerNotes}
+              isSavingNotes={isSavingNotes}
+              isEditingNotes={isEditingNotes}
+              setIsEditingNotes={setIsEditingNotes}
+              notesDraft={notesDraft}
+              setNotesDraft={setNotesDraft}
+              notesError={notesError}
+              setNotesError={setNotesError}
+              isGeneratingAnalysis={isGeneratingAnalysis}
+              handleSummarizeNotes={handleSummarizeNotes}
+              isSummarizingNotes={isSummarizingNotes}
+              refreshClientData={refreshClientData}
+            />
+          </div>
+        )}
 
         {/* Tab Content Sections */}
         {activeTab === "metrics" && (

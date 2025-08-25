@@ -49,6 +49,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
   const [completionPercentage, setCompletionPercentage] = useState(0);
   const [sections, setSections] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(false);
 
   // Initialize component
   useEffect(() => {
@@ -228,6 +229,36 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
     await saveProgress();
   };
 
+  // Check if a question is incomplete
+  const isQuestionIncomplete = (question: any) => {
+    if (!question.required) return false;
+    
+    const value = formData[question.field];
+    if (value === undefined || value === null || value === '') return true;
+    if (Array.isArray(value) && value.length === 0) return true;
+    return false;
+  };
+
+  // Check if a section has incomplete questions
+  const hasIncompleteQuestions = (sectionName: string) => {
+    const sectionQuestions = getQuestionsBySection(sectionName);
+    return sectionQuestions.some(isQuestionIncomplete);
+  };
+
+  // Get filtered sections based on filter state
+  const getFilteredSections = () => {
+    if (!showOnlyIncomplete) return sections;
+    return sections.filter(hasIncompleteQuestions);
+  };
+
+  // Auto-expand sections with incomplete questions when filter is active
+  useEffect(() => {
+    if (showOnlyIncomplete) {
+      const sectionsWithIncomplete = sections.filter(hasIncompleteQuestions);
+      setExpandedSections(new Set(sectionsWithIncomplete));
+    }
+  }, [showOnlyIncomplete, sections, formData]);
+
   if (loading) {
     return (
       <div className="onboarding-container">
@@ -243,7 +274,14 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
     <div className="onboarding-container">
       {/* Header */}
       <div className="onboarding-header">
-        <h1>Client Onboarding</h1>
+        <div className="header-top">
+          <h1>Client Onboarding</h1>
+          {showOnlyIncomplete && (
+            <div className="filter-indicator">
+              <span className="filter-badge">Filtered: Incomplete Questions Only</span>
+            </div>
+          )}
+        </div>
         {showProgress && (
           <div className="progress-section">
             <div className="progress-bar">
@@ -257,6 +295,12 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
         )}
         
         <div className="header-actions">
+          <button 
+            className={`btn ${showOnlyIncomplete ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}
+          >
+            {showOnlyIncomplete ? 'Show All Questions' : 'Show Only Incomplete'}
+          </button>
           <button 
             className="btn btn-secondary"
             onClick={expandAllSections}
@@ -281,7 +325,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
 
       {/* Form Content */}
       <div className="onboarding-content">
-        {sections.map(section => {
+        {getFilteredSections().map(section => {
           const sectionQuestions = getQuestionsBySection(section);
           const isExpanded = expandedSections.has(section);
           const sectionProgress = calculateCompletionPercentage(
@@ -289,6 +333,11 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
               sectionQuestions.map(q => [q.field, formData[q.field]])
             )
           );
+          
+          // Filter questions within section if showing only incomplete
+          const filteredQuestions = showOnlyIncomplete 
+            ? sectionQuestions.filter(isQuestionIncomplete)
+            : sectionQuestions;
           
           return (
             <div key={section} className="question-section">
@@ -301,6 +350,11 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
                   <span className="section-progress">
                     {sectionProgress}% Complete
                   </span>
+                  {showOnlyIncomplete && filteredQuestions.length > 0 && (
+                    <span className="section-incomplete-count">
+                      ({filteredQuestions.length} incomplete)
+                    </span>
+                  )}
                 </div>
                 <div className="section-toggle">
                   {isExpanded ? '−' : '+'}
@@ -309,7 +363,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
               
               {isExpanded && (
                 <div className="section-content">
-                  {sectionQuestions.map(question => (
+                  {filteredQuestions.map(question => (
                     <div 
                       key={question.id} 
                       className="question-item"
@@ -320,6 +374,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
                         value={formData[question.field]}
                         error={errors[question.field]}
                         onChange={(value) => handleFieldChange(question.field, value)}
+                        formData={formData}
                       />
                     </div>
                   ))}

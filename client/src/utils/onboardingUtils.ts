@@ -40,7 +40,7 @@ export const cleanDataForDatabase = (data: any) => {
     'cl_sex', 'cl_activity_level', 'cl_primary_goal', 'specific_outcome',
     'goal_timeline', 'obstacles', 'training_experience', 'previous_training',
     'training_time_per_session', 'training_location', 'injuries_limitations',
-    'eating_habits', 'food_allergies', 'cl_gastric_issues', 'cl_supplements',
+    'training_obstacles', 'eating_habits', 'food_allergies', 'cl_gastric_issues', 'cl_supplements',
     'cl_alcohol', 'cl_stress', 'motivation_style'
   ];
 
