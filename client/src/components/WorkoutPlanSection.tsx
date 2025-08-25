@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -999,7 +999,6 @@ const WorkoutPlanSection = ({
 }: WorkoutPlanSectionProps) => {
   const { toast } = useToast();
   const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
-  const [planStartDay, setPlanStartDay] = useState<string>(client?.plan_start_day || 'Sunday');
   
   // Enhanced state management for better UX
   const [workoutPlanState, setWorkoutPlanState] = useState<WorkoutPlanState>({
@@ -1095,6 +1094,13 @@ const WorkoutPlanSection = ({
 
   const clearLoading = () => {
     setLoadingState({ type: null, message: '' });
+  };
+
+  // Helper function to check if the selected date is in the past
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+    return date < today;
   };
 
   const updateWorkoutPlanState = (updates: Partial<WorkoutPlanState>) => {
@@ -1324,11 +1330,10 @@ const WorkoutPlanSection = ({
   // Ensure clientId is a number and not undefined
   const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
 
-  // Sync planStartDay from client prop and keep planStartDate aligned
+  // Sync planStartDate with client's plan start day
   useEffect(() => {
     const dayFromClient = client?.plan_start_day as string | undefined;
-    if (dayFromClient && dayFromClient !== planStartDay) {
-      setPlanStartDay(dayFromClient);
+    if (dayFromClient) {
       const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
       const targetIdx = weekdays.indexOf(dayFromClient);
       const now = new Date();
@@ -1339,19 +1344,20 @@ const WorkoutPlanSection = ({
     }
   }, [client?.plan_start_day]);
 
-  // Always align selected date to the selected start weekday
+  // Always align selected date to the client's plan start day
   useEffect(() => {
     const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const targetIdx = weekdays.indexOf(planStartDay);
+    const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+    const targetIdx = weekdays.indexOf(clientPlanStartDay);
     if (targetIdx === -1) return;
-    if (weekdays[planStartDate.getDay()] !== planStartDay) {
+    if (weekdays[planStartDate.getDay()] !== clientPlanStartDay) {
       const base = new Date();
       const delta = (targetIdx - base.getDay() + 7) % 7;
       const aligned = new Date(base);
       aligned.setDate(base.getDate() + delta);
       setPlanStartDate(aligned);
     }
-  }, [planStartDay]);
+  }, [client?.plan_start_day, planStartDate]);
 
   // --- Workout Target Edit Grid Component ---
   const WorkoutTargetEditGrid = () => {
@@ -2098,7 +2104,7 @@ const WorkoutPlanSection = ({
     console.log('[WorkoutPlanSection] === DATE NAVIGATION DEBUG ===');
     console.log('[WorkoutPlanSection] Client ID:', numericClientId);
     console.log('[WorkoutPlanSection] Plan Start Date:', planStartDate?.toISOString());
-    console.log('[WorkoutPlanSection] Plan Start Day:', planStartDay);
+    console.log('[WorkoutPlanSection] Plan Start Day:', client?.plan_start_day || 'Sunday');
     console.log('[WorkoutPlanSection] Has AI Generated Plan:', hasAIGeneratedPlan);
     console.log('[WorkoutPlanSection] Current Workout Plan:', workoutPlan ? 'exists' : 'null');
     
@@ -2109,7 +2115,7 @@ const WorkoutPlanSection = ({
     
     console.log('[WorkoutPlanSection] Triggering fetchPlan...');
     fetchPlan();
-  }, [numericClientId, planStartDate, planStartDay, hasAIGeneratedPlan]);
+  }, [numericClientId, planStartDate, client?.plan_start_day, hasAIGeneratedPlan]);
 
   // Reset AI generated plan flag when client or date changes
   useEffect(() => {
@@ -2741,41 +2747,6 @@ const WorkoutPlanSection = ({
               1
             </div>
             <div className="flex flex-row items-center gap-3">
-              {/* Step 1: Plan Start Day */}
-              <div className="flex items-center gap-2">
-                <Label className="text-sm text-gray-700 dark:text-gray-300">Plan Start Day</Label>
-                <Select
-                  value={planStartDay}
-                  onValueChange={async (val) => {
-                    try {
-                      setPlanStartDay(val);
-                      if (numericClientId) {
-                        await supabase.from('client').update({ plan_start_day: val }).eq('client_id', numericClientId);
-                      }
-                      // Move planStartDate to the next occurrence of selected weekday
-                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      const targetIdx = weekdays.indexOf(val);
-                      const d = new Date();
-                      const delta = (targetIdx - d.getDay() + 7) % 7;
-                      const next = new Date(d);
-                      next.setDate(d.getDate() + delta);
-                      setPlanStartDate(next);
-                    } catch (e) {
-                      console.error('Failed to save plan_start_day', e);
-                      toast({ title: 'Save failed', description: 'Could not save Plan Start Day', variant: 'destructive' });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d => (
-                      <SelectItem key={d} value={d}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               {/* Step 1: Plan Start Date */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -2791,15 +2762,17 @@ const WorkoutPlanSection = ({
                   <Calendar
                     mode="single"
                     selected={planStartDate}
-                    // Disable all dates that are not the chosen weekday
+                    // Disable all dates that are not the client's plan start day
                     disabled={(date: Date) => {
                       const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      return weekdays[date.getDay()] !== planStartDay;
+                      const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+                      return weekdays[date.getDay()] !== clientPlanStartDay;
                     }}
                     onSelect={(date) => {
                       if (!date) return;
                       const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      if (weekdays[date.getDay()] === planStartDay) {
+                      const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+                      if (weekdays[date.getDay()] === clientPlanStartDay) {
                         setPlanStartDate(date);
                       }
                     }}
@@ -2808,6 +2781,18 @@ const WorkoutPlanSection = ({
                 </PopoverContent>
               </Popover>
             </div>
+            
+            {/* Warning message for past dates */}
+            {isPastDate(planStartDate) && (
+              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                    Past date selected. Please choose a future date to generate a workout plan.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 2: Generate Workout Plan */}
@@ -2818,9 +2803,12 @@ const WorkoutPlanSection = ({
             <div className="flex gap-2">
               <Button
                 onClick={handleGeneratePlan}
-                disabled={loadingState.type !== null || !numericClientId}
+                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
                 size="lg"
-                className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+                className={`bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px] ${
+                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate workout plan'}
               >
                 {loadingState.type === 'generating' ? (
                   <>
@@ -2838,10 +2826,13 @@ const WorkoutPlanSection = ({
               {/* Enhanced generation button */}
               <Button
                 onClick={handleGenerateSearchPlan}
-                disabled={loadingState.type !== null || !numericClientId}
+                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
                 variant="outline"
                 size="lg"
-                className="border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20"
+                className={`border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20 ${
+                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate enhanced workout plan'}
               >
                 {loadingState.type === 'generating' ? (
                   <>

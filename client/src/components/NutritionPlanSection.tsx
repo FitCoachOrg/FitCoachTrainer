@@ -25,7 +25,8 @@ import {
   Brain,
   FileText,
   Dumbbell,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -138,6 +139,13 @@ const NutritionPlanSection = ({
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingGroceryList, setIsGeneratingGroceryList] = useState(false);
+
+  // Helper function to check if the selected date is in the past
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+    return date < today;
+  };
   const [showGroceryListPopup, setShowGroceryListPopup] = useState(false);
   const [groceryItems, setGroceryItems] = useState<{ id: string; text: string; checked: boolean }[]>([]);
   const [groceryCategories, setGroceryCategories] = useState<{ name: string; items: { id: string; text: string; checked: boolean }[] }[]>([]);
@@ -1495,6 +1503,18 @@ const NutritionPlanSection = ({
                 />
               </PopoverContent>
             </Popover>
+            
+            {/* Warning message for past dates */}
+            {isPastDate(planStartDate) && (
+              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                    Past date selected. Please choose a future date to generate a nutrition plan.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Step 2: Generate New Plan */}
@@ -1504,9 +1524,12 @@ const NutritionPlanSection = ({
             </div>
             <Button
               onClick={handleGeneratePlan}
-              disabled={isGenerating}
+              disabled={isGenerating || isPastDate(planStartDate)}
               size="lg"
-              className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]"
+              className={`bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px] ${
+                isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate nutrition plan'}
             >
               {isGenerating ? (
                 <>
@@ -1556,14 +1579,16 @@ const NutritionPlanSection = ({
             </div>
             <Button
               onClick={handleGenerateGroceryList}
-              disabled={isGeneratingGroceryList}
+              disabled={isGeneratingGroceryList || isPastDate(planStartDate)}
               size="lg"
               className={`${
                 isShiftHeld 
                   ? 'bg-gradient-to-r from-red-500 to-purple-500 hover:from-red-600 hover:to-purple-600' 
                   : 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600'
-              } text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px]`}
-              title="Hold Shift while clicking to force regenerate (ignore cached version)"
+              } text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px] ${
+                isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title={isPastDate(planStartDate) ? 'Cannot generate grocery list for past dates' : 'Hold Shift while clicking to force regenerate (ignore cached version)'}
             >
               {isGeneratingGroceryList ? (
                 <>

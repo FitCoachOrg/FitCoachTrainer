@@ -572,23 +572,6 @@ export const onboardingQuestions: OnboardingQuestion[] = [
     multiline: true,
     required: false
   },
-  {
-    id: 'motivation_style',
-    section: 'Fitness Goals',
-    title: 'Motivational factors',
-    type: 'select',
-    field: 'motivation_style',
-    options: [
-      { value: 'seeing_physical_results', label: 'Seeing physical results' },
-      { value: 'competition_challenges', label: 'Competition and challenges' },
-      { value: 'health_wellness', label: 'Health and wellness benefits' },
-      { value: 'feeling_energized', label: 'Feeling energized and strong' },
-      { value: 'social_connection', label: 'Social connection and community' },
-      { value: 'stress_relief', label: 'Stress relief and mental health' },
-      { value: 'structured_routine', label: 'Having a structured routine' }
-    ],
-    required: true
-  }
 ];
 
 // Helper function to get questions by section

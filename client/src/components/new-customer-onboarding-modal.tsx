@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import { convertLocalTimeToUTC, convertTimezoneTimeToUTC, convertClientTimeToUTC } from "@/lib/timezone-utils"
-import { addDays, addMonths, format, parseISO } from "date-fns"
+import { convertLocalTimeToUTC, convertTimezoneTimeToUTC, convertClientTimeToUTC, convertUTCToClientTime } from "@/lib/timezone-utils"
+import { addDays, addMonths, format, parseISO, isAfter, startOfDay } from "date-fns"
 import { Wand2 } from "lucide-react"
 import { askCerebras } from "@/lib/cerebras-service"
 
@@ -22,7 +22,7 @@ interface ProgramConfigRow {
   enabled: boolean
   startDate: string // yyyy-MM-dd
   frequency: Frequency
-  time: string // HH:mm
+  time: string // HH:mm (in client's timezone for UI display)
   coachTip: string
   eventName: string
 }
@@ -86,6 +86,9 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
   const { toast } = useToast()
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), [])
 
+  // Use clientTimezone as the primary timezone for this modal
+  const effectiveClientTimezone = clientTimezone || selectedTimezone || 'UTC'
+
   const [rows, setRows] = useState<ProgramConfigRow[]>(
     PROGRAM_DEFAULTS.map(d => ({
       key: d.key,
@@ -98,6 +101,9 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       eventName: d.eventName,
     }))
   )
+
+  // Track previous state to detect changes
+  const [previousRows, setPreviousRows] = useState<ProgramConfigRow[]>([])
 
   // Load existing programs data when modal opens
   useEffect(() => {
@@ -123,22 +129,49 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         try {
           const existingPrograms = JSON.parse(clientData.programs)
           if (Array.isArray(existingPrograms)) {
-            // Update rows with existing data
-            setRows(prev => prev.map(row => {
-              const existing = existingPrograms.find((p: any) => p.key === row.key)
+            // Update rows with existing data, converting times from UTC to client timezone
+            const updatedRows = PROGRAM_DEFAULTS.map(d => {
+              const existing = existingPrograms.find((p: any) => p.key === d.key)
               if (existing) {
+                // Convert time from UTC to client timezone for display
+                let displayTime = d.time // Default time
+                if (existing.time) {
+                  // If the stored time is in UTC, convert it to client timezone
+                  // Check if the time was stored with timezone info
+                  if (existing.details_json?.original_local_time) {
+                    // Use the original local time that was stored
+                    displayTime = existing.details_json.original_local_time
+                  } else {
+                    // Convert from UTC to client timezone
+                    displayTime = convertUTCToClientTime(existing.time, effectiveClientTimezone)
+                  }
+                }
+
                 return {
-                  ...row,
+                  key: d.key,
+                  label: d.label,
                   enabled: existing.enabled || false,
                   startDate: existing.startDate || today,
-                  frequency: existing.frequency || row.frequency,
-                  time: existing.time || row.time,
+                  frequency: existing.frequency || d.frequency,
+                  time: displayTime,
                   coachTip: existing.coachTip || "",
-                  eventName: existing.eventName || row.eventName,
+                  eventName: existing.eventName || d.eventName,
                 }
               }
-              return row
-            }))
+              return {
+                key: d.key,
+                label: d.label,
+                enabled: false,
+                startDate: today,
+                frequency: d.frequency,
+                time: d.time,
+                coachTip: "",
+                eventName: d.eventName,
+              }
+            })
+            
+            setRows(updatedRows)
+            setPreviousRows(updatedRows) // Store initial state
           }
         } catch (parseError) {
           console.error('Error parsing existing programs JSON:', parseError)
@@ -148,13 +181,59 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       console.error('Error loading existing programs:', error)
     }
   }
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [generatingKey, setGeneratingKey] = useState<ProgramConfigRow["key"] | null>(null)
   const [generatingAll, setGeneratingAll] = useState(false)
 
-
   const updateRow = (key: ProgramConfigRow["key"], updates: Partial<ProgramConfigRow>) => {
     setRows(prev => prev.map(r => r.key === key ? { ...r, ...updates } : r))
+  }
+
+  // Function to remove future tasks for deselected programs
+  const removeFutureTasksForDeselectedPrograms = async (deselectedPrograms: ProgramConfigRow[]) => {
+    if (deselectedPrograms.length === 0) return
+
+    try {
+      const today = new Date()
+      const todayStr = format(today, "yyyy-MM-dd")
+
+      // Get all program types that were deselected
+      const deselectedTypes = deselectedPrograms.map(p => p.key)
+
+      console.log(`🗑️ Removing future tasks for deselected programs: ${deselectedTypes.join(', ')}`)
+
+      // Delete future schedule entries for deselected program types
+      const { error: deleteError } = await supabase
+        .from('schedule')
+        .delete()
+        .eq('client_id', clientId)
+        .in('type', deselectedTypes)
+        .gte('for_date', todayStr)
+
+      if (deleteError) {
+        console.error('Error removing future tasks:', deleteError)
+        throw deleteError
+      }
+
+      console.log(`✅ Successfully removed future tasks for deselected programs`)
+      
+      // Show success message
+      const programNames = deselectedPrograms.map(p => p.label).join(', ')
+      toast({ 
+        title: "Programs Removed", 
+        description: `Future ${programNames} tasks have been removed from the schedule.` 
+      })
+
+    } catch (error: any) {
+      console.error('Error removing future tasks:', error)
+      toast({ 
+        title: "Error", 
+        description: `Failed to remove future tasks: ${error.message}`, 
+        variant: "destructive" 
+      })
+      throw error
+    }
   }
 
   const handleSubmit = async () => {
@@ -162,6 +241,16 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
     if (selected.length === 0) {
       toast({ title: "Select programs", description: "Enable at least one program to add.", variant: "destructive" })
       return
+    }
+
+    // Identify deselected programs (programs that were enabled before but are now disabled)
+    const deselectedPrograms = previousRows.filter(prev => 
+      prev.enabled && !rows.find(curr => curr.key === prev.key)?.enabled
+    )
+
+    // Remove future tasks for deselected programs
+    if (deselectedPrograms.length > 0) {
+      await removeFutureTasksForDeselectedPrograms(deselectedPrograms)
     }
 
     // Build entries across all selected rows
@@ -182,6 +271,9 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       const endStr = dates[dates.length - 1]
       if (!maxEndDate || endStr > maxEndDate) maxEndDate = endStr
 
+      // Convert time from client timezone to UTC for database storage
+      const utcTime = convertClientTimeToUTC(r.time, effectiveClientTimezone)
+
       if (r.key === "body_measurement") {
         dates.forEach(for_date => {
           allEntries.push({
@@ -190,7 +282,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
             summary: r.eventName,
             type: r.key,
             for_date,
-            for_time: clientTimezone ? convertClientTimeToUTC(r.time, clientTimezone) : convertLocalTimeToUTC(r.time),
+            for_time: utcTime, // Store in UTC
             icon: getIconNameForType(r.key),
             coach_tip: r.coachTip || r.label,
             details_json: {
@@ -198,8 +290,8 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               frequency: r.frequency,
               program_name: r.eventName,
               selected_measurements: ["hip", "waist", "bicep", "thigh"],
-              original_local_time: r.time,
-              timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+              original_local_time: r.time, // Store original client timezone time
+              timezone: effectiveClientTimezone // Store client timezone
             }
           })
         })
@@ -211,15 +303,15 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
             summary: r.eventName,
             type: r.key,
             for_date,
-            for_time: clientTimezone ? convertClientTimeToUTC(r.time, clientTimezone) : convertLocalTimeToUTC(r.time),
+            for_time: utcTime, // Store in UTC
             icon: getIconNameForType(r.key),
             coach_tip: r.coachTip || r.label,
             details_json: {
               task_type: r.key,
               frequency: r.frequency,
               program_name: r.eventName,
-              original_local_time: r.time,
-              timezone: clientTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+              original_local_time: r.time, // Store original client timezone time
+              timezone: effectiveClientTimezone // Store client timezone
             }
           })
         })
@@ -263,9 +355,13 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         enabled: row.enabled,
         startDate: row.startDate,
         frequency: row.frequency,
-        time: row.time,
+        time: row.time, // Store the time as displayed in client timezone
         coachTip: row.coachTip,
         eventName: row.eventName,
+        details_json: {
+          original_local_time: row.time, // Store original client timezone time
+          timezone: effectiveClientTimezone // Store client timezone
+        }
       }))
 
       const { error: updateError } = await supabase
@@ -278,12 +374,19 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         // Don't throw error here as the schedule entries were already saved
       }
 
-      toast({ title: "Onboarding added", description: `Inserted ${newEntries.length} schedule items for ${clientName}.` })
+      // Update previous rows state to reflect current state
+      setPreviousRows(rows)
+
+      const actionMessage = deselectedPrograms.length > 0 
+        ? `Updated programs and removed ${deselectedPrograms.length} deselected program(s).`
+        : `Inserted ${newEntries.length} schedule items for ${clientName}.`
+
+      toast({ title: "Onboarding updated", description: actionMessage })
 
       onCompleted()
       onClose()
     } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to add onboarding programs.", variant: "destructive" })
+      toast({ title: "Error", description: err?.message || "Failed to update onboarding programs.", variant: "destructive" })
     } finally {
       setIsSubmitting(false)
     }
@@ -301,7 +404,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
 Task Type: ${program} (${row.key})
 Event Name: ${eventName}
 Frequency: ${freq}
-Reminder Time (local): ${time}
+Reminder Time (client timezone): ${time}
 
 Requirements:
 - Keep to 1–2 short sentences.
@@ -329,7 +432,7 @@ Requirements:
   "program": "${r.label}",
   "event_name": "${r.eventName || r.label}",
   "frequency": "${r.frequency}",
-  "reminder_time_local": "${r.time}"
+  "reminder_time_client_timezone": "${r.time}"
 }`
     ))
     return `You are an encouraging certified fitness coach. For each of the following reminder tasks, write a concise, actionable coach tip.
@@ -395,8 +498,14 @@ ${items.join(',\n')}
 
         <div className="space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Configure which standard programs to start for {clientName}. Enable the ones you want, set the start date, frequency, reminder time, coach tip, and event name. Submitting will add them to the schedule for the next 3 months.
+            Configure which standard programs to start for {clientName}. Enable the ones you want, set the start date, frequency, reminder time, coach tip, and event name. Submitting will add them to the schedule for the next 3 months. <strong>Note: Deselecting a program will remove all future tasks of that type from the schedule.</strong>
           </p>
+
+          {effectiveClientTimezone && (
+            <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <strong>Client Timezone:</strong> {effectiveClientTimezone} - All times will be displayed and stored in this timezone.
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <Button
@@ -421,7 +530,7 @@ ${items.join(',\n')}
                   <th className="p-2 border-b text-left">Program</th>
                   <th className="p-2 border-b">Program Start Date</th>
                   <th className="p-2 border-b">Frequency</th>
-                  <th className="p-2 border-b">Reminder Time</th>
+                  <th className="p-2 border-b">Reminder Time ({effectiveClientTimezone})</th>
                   <th className="p-2 border-b">
                     <div className="flex items-center gap-2 justify-center">
                       <span>Coach Tip</span>
@@ -469,7 +578,12 @@ ${items.join(',\n')}
                         </Select>
                       </td>
                       <td className="p-2 border-b">
-                        <Input type="time" value={r.time} onChange={e => updateRow(r.key, { time: e.target.value })} />
+                        <Input 
+                          type="time" 
+                          value={r.time} 
+                          onChange={e => updateRow(r.key, { time: e.target.value })}
+                          title={`Time in ${effectiveClientTimezone} timezone`}
+                        />
                       </td>
                       <td className="p-2 border-b">
                         <div className="flex items-center gap-2">
@@ -507,12 +621,13 @@ ${items.join(',\n')}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? "Adding..." : "Submit"}</Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? "Updating..." : "Submit"}</Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   )
 }
+
 
 

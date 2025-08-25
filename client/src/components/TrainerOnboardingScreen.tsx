@@ -16,6 +16,7 @@ import { NewCustomerOnboardingModal } from './new-customer-onboarding-modal';
 import { 
   cleanDataForDatabase, 
   calculateCompletionPercentage, 
+  getSectionProgress,
   validateFormData,
   debounce,
   convertUTCToLocal,
@@ -370,11 +371,7 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
         {getFilteredSections().map(section => {
           const sectionQuestions = getQuestionsBySection(section);
           const isExpanded = expandedSections.has(section);
-          const sectionProgress = calculateCompletionPercentage(
-            Object.fromEntries(
-              sectionQuestions.map(q => [q.field, formData[q.field]])
-            )
-          );
+          const sectionProgress = getSectionProgress(formData, section).percentage;
           
           // Filter questions within section if showing only incomplete
           const filteredQuestions = showOnlyIncomplete 
