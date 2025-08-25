@@ -1049,9 +1049,23 @@ const WorkoutPlanSection = ({
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const { trainer } = useAuth();
   
+  // Monthly view state
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  const [monthlyData, setMonthlyData] = useState<any[][]>([]);
+  
   // Enhanced UX functions
   const setLoading = (type: LoadingState['type'], message: string) => {
     setLoadingState({ type, message });
+  };
+
+  // Get the appropriate data for the table based on view mode
+  const getTableData = () => {
+    if (viewMode === 'monthly' && monthlyData.length > 0) {
+      // Flatten the 4 weeks into a single array of 28 days
+      return monthlyData.flat();
+    }
+    // Return the current week data for weekly view
+    return workoutPlan?.week || [];
   };
 
   // Debug function to help troubleshoot approval status
@@ -3030,7 +3044,7 @@ const WorkoutPlanSection = ({
             <Card className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold">
-                  7-Day Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
+                  {viewMode === 'monthly' ? '28-Day' : '7-Day'} Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + (viewMode === 'monthly' ? 27 : 6) * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
                 </h3>
               </div>
               <WeeklyPlanHeader
@@ -3039,6 +3053,8 @@ const WorkoutPlanSection = ({
                 onReorder={handlePlanChange}
                 onPlanChange={handlePlanChange}
                 clientId={numericClientId}
+                onViewModeChange={setViewMode}
+                onMonthlyDataChange={setMonthlyData}
               />
             </Card>
 
@@ -3099,12 +3115,13 @@ const WorkoutPlanSection = ({
             {/* Workout Plan Table */}
             {workoutPlan.hasAnyWorkouts ? (
               <WorkoutPlanTable 
-                week={workoutPlan.week}
+                week={getTableData()}
                 clientId={numericClientId}
                 onPlanChange={handlePlanChange}
                 planStartDate={planStartDate}
                 clientName={client?.name}
                 onImportSuccess={handleImportSuccess}
+                viewMode={viewMode}
               />
             ) : (
               <Card className="flex flex-col items-center justify-center p-8 text-center">

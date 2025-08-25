@@ -27,6 +27,8 @@ interface WeeklyPlanHeaderProps {
   onPlanChange: (updatedWeek: WeekDay[]) => void;
   onMonthlyChange?: (updatedMonthlyData: WeekDay[][]) => void;
   clientId?: number; // Add clientId for fetching multi-week data
+  onViewModeChange?: (viewMode: 'weekly' | 'monthly') => void;
+  onMonthlyDataChange?: (monthlyData: WeekDay[][]) => void;
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -46,7 +48,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -212,6 +214,20 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       fetchMultiWeekData();
     }
   }, [viewMode, clientId, planStartDate]);
+
+  // Notify parent when viewMode changes
+  useEffect(() => {
+    if (onViewModeChange) {
+      onViewModeChange(viewMode);
+    }
+  }, [viewMode, onViewModeChange]);
+
+  // Notify parent when monthlyData changes
+  useEffect(() => {
+    if (onMonthlyDataChange && monthlyData.length > 0) {
+      onMonthlyDataChange(monthlyData);
+    }
+  }, [monthlyData, onMonthlyDataChange]);
 
   // Function to persist monthly changes to the database
   const persistMonthlyChangeToDatabase = async (targetDate: string, sourceDay: WeekDay) => {

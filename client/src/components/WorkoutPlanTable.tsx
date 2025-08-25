@@ -64,6 +64,7 @@ interface WorkoutPlanTableProps {
   // New flags for template mode (read/write local only, no DB persistence)
   isTemplateMode?: boolean;
   hideDates?: boolean;
+  viewMode?: 'weekly' | 'monthly';
 }
 
 // Helper to get a focus icon
@@ -181,10 +182,12 @@ const SortableExerciseRow = ({
   );
 };
 
-// Helper to get a 7-day array for the week, filling missing days as null
-function getFullWeek(startDate: Date, week: any[]) {
+// Helper to get a full array for the week/month, filling missing days as null
+function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly' = 'weekly') {
   const days = [];
-  for (let i = 0; i < 7; i++) {
+  const totalDays = viewMode === 'monthly' ? 28 : 7;
+  
+  for (let i = 0; i < totalDays; i++) {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
     const dateStr = format(date, 'yyyy-MM-dd');
     const day = week.find((d) => d && d.date === dateStr);
@@ -193,7 +196,7 @@ function getFullWeek(startDate: Date, week: any[]) {
   return days;
 }
 
-export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false }: WorkoutPlanTableProps) => {
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly' }: WorkoutPlanTableProps) => {
   // Debug logging
   console.log('[WorkoutPlanTable] Rendering with week data:', week);
   
@@ -324,14 +327,14 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     }
   };
 
-  // Always render 7 days, filling missing days as null
+  // Always render the appropriate number of days, filling missing days as null
   // Use useMemo to recalculate when editableWeek changes
   const fullWeek = useMemo(() => {
     console.log('[WorkoutPlanTable] Recalculating fullWeek with editableWeek:', editableWeek);
-    const result = getFullWeek(planStartDate, editableWeek);
+    const result = getFullWeek(planStartDate, editableWeek, viewMode);
     console.log('[WorkoutPlanTable] fullWeek result:', result);
     return result;
-  }, [planStartDate, editableWeek]);
+  }, [planStartDate, editableWeek, viewMode]);
 
 
   // Helper: persist updated exercises array for a given date to schedule_preview
