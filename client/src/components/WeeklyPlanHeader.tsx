@@ -62,7 +62,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     
     const weeks = [];
     for (let i = 0; i < 4; i++) {
-      const weekStartDate = addWeeks(planStartDate, i);
+      // For the first week, start from the selected date
+      // For subsequent weeks, add weeks to the selected date
+      const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
       const weekDays = [];
       
       for (let j = 0; j < 7; j++) {
@@ -313,15 +315,16 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const renderMonthlyView = () => (
     <div className="space-y-6">
       {monthlyData.map((week, weekIndex) => {
-        const weekStart = startOfWeek(addWeeks(planStartDate, weekIndex), { weekStartsOn: 0 });
-        const weekEnd = endOfWeek(addWeeks(planStartDate, weekIndex), { weekStartsOn: 0 });
+        // Calculate the actual start and end dates for this week
+        const weekStartDate = weekIndex === 0 ? planStartDate : addWeeks(planStartDate, weekIndex);
+        const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
         
         return (
           <div key={weekIndex} className="space-y-3">
             <div className="flex items-center gap-2 px-2 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
               <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                Week {weekIndex + 1}: {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')}
+                Week {weekIndex + 1}: {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
               </div>
             </div>
             <div className="grid grid-cols-7 gap-2 text-sm">
