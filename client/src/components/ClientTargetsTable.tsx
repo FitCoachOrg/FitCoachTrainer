@@ -78,7 +78,7 @@ const TARGET_CATEGORIES = {
     targets: [
       { key: 'sleep_hours', label: 'Sleep Hours', unit: 'hours', icon: Clock, description: 'Target hours of sleep per night' },
       { key: 'heart_rate_rest', label: 'Resting Heart Rate', unit: 'bpm', icon: Heart, description: 'Target resting heart rate' },
-      { key: 'water_intake', label: 'Water Intake', unit: 'L', icon: Droplets, description: 'Daily water intake in liters' },
+      { key: 'water_intake', label: 'Water Intake', unit: 'mL', icon: Droplets, description: 'Daily water intake in milliliters' },
     ]
   },
   performance: {
@@ -390,7 +390,7 @@ export const ClientTargetsTable: React.FC<ClientTargetsTableProps> = ({
                   <TableHeader>
                     <TableRow className="bg-gray-50/50 dark:bg-gray-800/50">
                       <TableHead className="w-1/3">Target</TableHead>
-                      <TableHead className="w-1/4">Current Value</TableHead>
+                      <TableHead className="w-1/4">Target Value</TableHead>
                       <TableHead className="w-1/4">Actions</TableHead>
                     </TableRow>
                   </TableHeader>

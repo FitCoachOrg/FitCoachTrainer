@@ -575,9 +575,10 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         <th className="text-left p-3">Weight</th>
                         <th className="text-left p-3">Duration</th>
                         <th className="text-left p-3">Equipment</th>
-                        <th className="text-left p-3">Coach Tip</th>
-                        <th className="text-left p-3">Trainer Notes</th>
-                        <th className="text-left p-3">Progression</th>
+                        <th className="text-left p-3">Tempo & RPE</th>
+                        {/* <th className="text-left p-3">Coach Tip</th> */}
+                        {/* <th className="text-left p-3">Trainer Notes</th> */}
+                        {/* <th className="text-left p-3">Progression</th> */}
                         <th className="text-left p-3">Video Link</th>
                         <th className="text-right p-3 w-8"></th>
                       </tr>
@@ -713,8 +714,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                               </PopoverTrigger>
                               <PopoverContent className="w-72">
                                 <div className="flex flex-col gap-2">
-                                  <label className="text-xs">Coach Tip</label>
-                                  <textarea rows={4} value={editCoachTip} onChange={e => setEditCoachTip(e.target.value)} className="border rounded px-2 py-1" />
+                                  <label className="text-xs">Tempo & RPE</label>
+                                  <textarea rows={4} value={editCoachTip} onChange={e => setEditCoachTip(e.target.value)} className="border rounded px-2 py-1" placeholder="Enter tempo (e.g., 3-1-3) and RPE (e.g., RPE 7)" />
                                   <button 
                                     className="mt-2 bg-blue-600 text-white rounded px-3 py-1" 
                                     onClick={async () => {
@@ -732,66 +733,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="p-3">
-                            {/* Trainer Notes Display */}
-                            <div className="text-xs text-gray-600 max-w-xs">
-                              {ex.coach_tip && ex.coach_tip.includes('🚨') && (
-                                <div className="mb-1">
-                                  <span className="text-red-600 font-semibold">🚨 Injury Avoidance:</span>
-                                  <span className="ml-1">{ex.coach_tip.split('🚨')[1]?.split('|')[0]?.trim()}</span>
-                                </div>
-                              )}
-                              {ex.coach_tip && ex.coach_tip.includes('💡') && (
-                                <div className="mb-1">
-                                  <span className="text-blue-600 font-semibold">💡 Form Focus:</span>
-                                  <span className="ml-1">{ex.coach_tip.split('💡')[1]?.split('|')[0]?.trim()}</span>
-                                </div>
-                              )}
-                              {ex.coach_tip && ex.coach_tip.includes('📈') && (
-                                <div className="mb-1">
-                                  <span className="text-green-600 font-semibold">📈 Progression:</span>
-                                  <span className="ml-1">{ex.coach_tip.split('📈')[1]?.split('|')[0]?.trim()}</span>
-                                </div>
-                              )}
-                              {ex.coach_tip && ex.coach_tip.includes('🏃‍♂️') && (
-                                <div className="mb-1">
-                                  <span className="text-purple-600 font-semibold">🏃‍♂️ Equipment:</span>
-                                  <span className="ml-1">{ex.coach_tip.split('🏃‍♂️')[1]?.split('|')[0]?.trim()}</span>
-                                </div>
-                                                             )}
-                             </div>
-                           </td>
-                           <td className="p-3">
-                             {/* Progression Display */}
-                             {ex.progression_applied && (
-                               <div className="text-xs text-gray-600 max-w-xs">
-                                 <div className="mb-1">
-                                   <span className="text-green-600 font-semibold">📈 Sets:</span>
-                                   <span className="ml-1">{ex.progression_applied.sets}</span>
-                                 </div>
-                                 <div className="mb-1">
-                                   <span className="text-blue-600 font-semibold">🔄 Reps:</span>
-                                   <span className="ml-1">{ex.progression_applied.reps}</span>
-                                 </div>
-                                 <div className="mb-1">
-                                   <span className="text-purple-600 font-semibold">⚖️ Weight:</span>
-                                   <span className="ml-1">{ex.progression_applied.weight}</span>
-                                 </div>
-                                 {ex.progression_applied.confidence && (
-                                   <div className="mb-1">
-                                     <span className="text-orange-600 font-semibold">🎯 Confidence:</span>
-                                     <span className="ml-1 capitalize">{ex.progression_applied.confidence}</span>
-                                   </div>
-                                 )}
-                                 {ex.performance_trend && (
-                                   <div className="mb-1">
-                                     <span className="text-indigo-600 font-semibold">📊 Trend:</span>
-                                     <span className="ml-1 capitalize">{ex.performance_trend}</span>
-                                   </div>
-                                 )}
-                               </div>
-                             )}
-                           </td>
+                          {/* Commented out trainer notes display for now */}
+                          {/* Commented out progression display for now */}
                            <td className="p-3">
                             {ex.video_link ? (
                               <div className="flex items-center gap-2">

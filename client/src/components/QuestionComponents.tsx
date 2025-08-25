@@ -3,7 +3,6 @@
 
 import React, { useState } from 'react';
 import { OnboardingQuestion } from '../data/onboardingQuestions';
-import { formatTimeForDisplay, parseTimeFromDisplay } from '../utils/onboardingUtils';
 
 interface QuestionComponentsProps {
   question: OnboardingQuestion;
@@ -19,6 +18,25 @@ const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value
     minutes: '',
     ampm: 'AM'
   });
+
+  // Simple time formatting function
+  const formatTimeForDisplay = (timeString: string) => {
+    if (!timeString) return '';
+    // If it's already in 12-hour format, return as is
+    if (timeString.includes('AM') || timeString.includes('PM')) {
+      return timeString;
+    }
+    // For 24-hour format, convert to 12-hour
+    const match = timeString.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      const hours = parseInt(match[1]);
+      const minutes = match[2];
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes} ${ampm}`;
+    }
+    return timeString;
+  };
 
   // Initialize time inputs when value changes
   React.useEffect(() => {
@@ -138,7 +156,7 @@ const QuestionComponents: React.FC<QuestionComponentsProps> = ({ question, value
                   checked={isSelected}
                   onChange={() => handleOptionToggle(option.value as string)}
                   className="checkbox-input"
-                  disabled={isDisabled}
+                  disabled={Boolean(isDisabled)}
                 />
                 <span className="checkbox-label">{option.label}</span>
               </label>

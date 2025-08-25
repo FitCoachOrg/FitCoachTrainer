@@ -4,20 +4,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { NewCustomerOnboardingModal } from './new-customer-onboarding-modal';
+import { onboardingQuestions, getQuestionsBySection, getSections } from '../data/onboardingQuestions';
+import QuestionComponents from './QuestionComponents';
 import '../styles/onboardingStyles.css';
-
-// Mock data and functions for missing modules
-const onboardingQuestions: any[] = [
-  // Add your onboarding questions here
-];
-
-const getQuestionsBySection = (section: string): any[] => {
-  return onboardingQuestions.filter((q: any) => q.section === section);
-};
-
-const getSections = () => {
-  return ['Personal Information', 'Fitness Goals', 'Training Preferences', 'Nutrition', 'Health'];
-};
 
 // Mock functions for missing utilities
 const getClientOnboardingData = async (clientId: string) => {
@@ -71,22 +60,46 @@ const cleanDataForDatabase = (data: any) => {
 };
 
 const calculateCompletionPercentage = (data: any) => {
-  const requiredFields = ['cl_name', 'cl_age', 'cl_weight', 'cl_height'];
-  const completedFields = requiredFields.filter(field => data[field]);
-  return Math.round((completedFields.length / requiredFields.length) * 100);
+  const requiredQuestions = onboardingQuestions.filter(q => q.required);
+  const completedFields = requiredQuestions.filter(question => {
+    const value = data[question.field];
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  });
+  return Math.round((completedFields.length / requiredQuestions.length) * 100);
 };
 
 const getSectionProgress = (data: any, section: string) => {
-  return { percentage: 50 }; // Mock progress
+  const sectionQuestions = getQuestionsBySection(section);
+  if (sectionQuestions.length === 0) {
+    return { percentage: 0 };
+  }
+  
+  const requiredQuestions = sectionQuestions.filter(q => q.required);
+  if (requiredQuestions.length === 0) {
+    return { percentage: 100 }; // All optional questions
+  }
+  
+  const completedRequired = requiredQuestions.filter(q => {
+    const value = data[q.field];
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  });
+  
+  const percentage = Math.round((completedRequired.length / requiredQuestions.length) * 100);
+  return { percentage };
 };
 
 const validateFormData = (data: any) => {
   const errors: Record<string, string> = {};
-  const requiredFields = ['cl_name', 'cl_age', 'cl_weight', 'cl_height'];
+  const requiredQuestions = onboardingQuestions.filter(q => q.required);
   
-  requiredFields.forEach(field => {
-    if (!data[field]) {
-      errors[field] = `${field} is required`;
+  requiredQuestions.forEach(question => {
+    const value = data[question.field];
+    if (!value || (Array.isArray(value) && value.length === 0)) {
+      errors[question.field] = `${question.title} is required`;
     }
   });
   
@@ -110,39 +123,66 @@ const convertUTCToLocal = (time: string) => {
 
 const generateDefaultFormData = (): any => {
   return {
-    cl_name: '',
+    // Client Settings
+    timezone: 'UTC',
+    plan_start_day: '',
+    
+    // Personal Information
     cl_age: '',
-    cl_weight: '',
     cl_height: '',
+    cl_weight: '',
+    waist: '',
+    hip: '',
+    thigh: '',
+    bicep: '',
     cl_sex: '',
     cl_activity_level: '',
+    
+    // Fitness Goals
     cl_primary_goal: '',
-    timezone: 'UTC',
-    plan_start_day: ''
+    specific_outcome: '',
+    goal_timeline: '',
+    focus_areas: [],
+    obstacles: '',
+    confidence_level: '',
+    motivation_style: '',
+    
+    // Training
+    training_experience: '',
+    previous_training: '',
+    training_days_per_week: '',
+    workout_days: [],
+    training_time_per_session: '',
+    training_location: '',
+    available_equipment: [],
+    injuries_limitations: '',
+    training_obstacles: '',
+    
+    // Nutrition
+    eating_habits: '',
+    diet_preferences: [],
+    food_allergies: '',
+    preferred_meals_per_day: '',
+    
+    // Timing
+    wake_time: '',
+    bed_time: '',
+    workout_time: '',
+    bf_time: '',
+    lunch_time: '',
+    dinner_time: '',
+    snack_time: '',
+    
+    // Wellness
+    sleep_hours: '',
+    cl_stress: '',
+    cl_alcohol: '',
+    cl_supplements: '',
+    cl_gastric_issues: ''
   };
 };
 
-// Mock QuestionComponents
-const QuestionComponents: React.FC<{
-  question: any;
-  value: any;
-  error: string;
-  onChange: (value: any) => void;
-  formData: any;
-}> = ({ question, value, error, onChange, formData }) => {
-  return (
-    <div className="question-component">
-      <label>{question.label}</label>
-      <input
-        type="text"
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={question.placeholder}
-      />
-      {error && <span className="error">{error}</span>}
-    </div>
-  );
-};
+
 
 interface TrainerOnboardingScreenProps {
   clientId: string;
@@ -496,6 +536,11 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
           const filteredQuestions = showOnlyIncomplete 
             ? sectionQuestions.filter(isQuestionIncomplete)
             : sectionQuestions;
+          
+          // Skip sections with no questions
+          if (filteredQuestions.length === 0) {
+            return null;
+          }
           
           return (
             <div key={section} className="question-section">
