@@ -2059,7 +2059,7 @@ export default function ClientDashboard() {
 
       {/* Permanent Card Sections - Only on Overview tab */}
       {activeTab === 'overview' && (
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="px-6 py-6">
           {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
           <ClientOverviewSection
             client={client}
@@ -2083,23 +2083,7 @@ export default function ClientDashboard() {
       )}
 
       {/* Enhanced Content Area */}
-      <div className="space-y-8">
-        {activeTab === "overview" && (
-            <div className="space-y-8">
-              {/* Fitness Score Visualization */}
-              <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-                <CardHeader className="pb-0">
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                    Fitness Score Overview
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FitnessScoreVisualization clientId={clientId || 34} />
-                </CardContent>
-              </Card>
-            </div>
-        )}
+      <div className="space-y-8 px-6 py-6">
 
         {/* Tab Content Sections */}
         {activeTab === "metrics" && (
