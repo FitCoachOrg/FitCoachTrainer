@@ -10,6 +10,7 @@ import {
   checkClientExists,
   createClientRecord
 } from '../utils/supabaseClient';
+import { supabase } from '../lib/supabase';
 import { calculateAllTargets } from '../utils/targetCalculations';
 import { 
   cleanDataForDatabase, 
@@ -94,7 +95,14 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
       // Load existing data
       const existingData = await getClientOnboardingData(clientId);
       
-      if (existingData) {
+      // Load client table data for timezone and plan_start_day
+      const { data: clientData } = await supabase
+        .from('client')
+        .select('timezone, plan_start_day')
+        .eq('client_id', clientId)
+        .single();
+      
+      if (existingData || clientData) {
         // Convert UTC times to local display format
         const convertedData = { ...existingData };
         const timeFields = ['wake_time', 'bed_time', 'bf_time', 'lunch_time', 'dinner_time', 'snack_time', 'workout_time'];
@@ -104,6 +112,12 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
             convertedData[field] = convertUTCToLocal(convertedData[field]);
           }
         });
+        
+        // Add client table data
+        if (clientData) {
+          convertedData.timezone = clientData.timezone;
+          convertedData.plan_start_day = clientData.plan_start_day;
+        }
         
         setFormData(convertedData);
       }
@@ -150,6 +164,22 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
       
       const cleanedData = cleanDataForDatabase(data);
       await updateClientOnboardingData(clientId, cleanedData);
+      
+      // Save timezone and plan_start_day to client table
+      if (data.timezone || data.plan_start_day) {
+        const clientUpdateData: any = {};
+        if (data.timezone) clientUpdateData.timezone = data.timezone;
+        if (data.plan_start_day) clientUpdateData.plan_start_day = data.plan_start_day;
+        
+        const { error: clientError } = await supabase
+          .from('client')
+          .update(clientUpdateData)
+          .eq('client_id', clientId);
+        
+        if (clientError) {
+          console.error('Error updating client table:', clientError);
+        }
+      }
       
       if (onSave) {
         onSave(cleanedData);

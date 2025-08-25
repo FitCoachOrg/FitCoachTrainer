@@ -37,7 +37,7 @@ export const cleanDataForDatabase = (data: any) => {
 
   // Handle string fields
   const stringFields = [
-    'cl_sex', 'cl_activity_level', 'cl_primary_goal', 'specific_outcome',
+    'timezone', 'plan_start_day', 'cl_sex', 'cl_activity_level', 'cl_primary_goal', 'specific_outcome',
     'goal_timeline', 'obstacles', 'training_experience', 'previous_training',
     'training_time_per_session', 'training_location', 'injuries_limitations',
     'training_obstacles', 'eating_habits', 'food_allergies', 'cl_gastric_issues', 'cl_supplements',
@@ -311,6 +311,9 @@ export const generateDefaultFormData = () => {
       defaultData[question.field] = '';
     }
   });
+
+  // Set default values for specific fields
+  defaultData.plan_start_day = 'Sunday';
 
   return defaultData;
 };

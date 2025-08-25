@@ -19,6 +19,60 @@ export interface OnboardingQuestion {
 }
 
 export const onboardingQuestions: OnboardingQuestion[] = [
+  // Client Settings Section
+  {
+    id: 'timezone',
+    section: 'Client Settings',
+    title: 'Customer Time Zone',
+    type: 'select',
+    field: 'timezone',
+    options: [
+      { value: 'America/New_York', label: 'Eastern Time (ET)' },
+      { value: 'America/Chicago', label: 'Central Time (CT)' },
+      { value: 'America/Denver', label: 'Mountain Time (MT)' },
+      { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+      { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+      { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+      { value: 'America/Toronto', label: 'Eastern Time - Toronto' },
+      { value: 'America/Vancouver', label: 'Pacific Time - Vancouver' },
+      { value: 'America/Mexico_City', label: 'Central Time - Mexico' },
+      { value: 'Europe/London', label: 'Greenwich Mean Time (GMT)' },
+      { value: 'Europe/Paris', label: 'Central European Time (CET)' },
+      { value: 'Europe/Berlin', label: 'Central European Time - Berlin' },
+      { value: 'Europe/Rome', label: 'Central European Time - Rome' },
+      { value: 'Europe/Madrid', label: 'Central European Time - Madrid' },
+      { value: 'Europe/Amsterdam', label: 'Central European Time - Amsterdam' },
+      { value: 'Europe/Stockholm', label: 'Central European Time - Stockholm' },
+      { value: 'Europe/Vienna', label: 'Central European Time - Vienna' },
+      { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST)' },
+      { value: 'Asia/Shanghai', label: 'China Standard Time (CST)' },
+      { value: 'Asia/Seoul', label: 'Korea Standard Time (KST)' },
+      { value: 'Asia/Singapore', label: 'Singapore Time (SGT)' },
+      { value: 'Asia/Kolkata', label: 'India Standard Time (IST)' },
+      { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET)' },
+      { value: 'Australia/Perth', label: 'Australian Western Time (AWT)' },
+      { value: 'Pacific/Auckland', label: 'New Zealand Standard Time (NZST)' }
+    ],
+    required: true
+  },
+  {
+    id: 'plan_start_day',
+    section: 'Client Settings',
+    title: 'Program Start Date',
+    type: 'select',
+    field: 'plan_start_day',
+    options: [
+      { value: 'Sunday', label: 'Sunday' },
+      { value: 'Monday', label: 'Monday' },
+      { value: 'Tuesday', label: 'Tuesday' },
+      { value: 'Wednesday', label: 'Wednesday' },
+      { value: 'Thursday', label: 'Thursday' },
+      { value: 'Friday', label: 'Friday' },
+      { value: 'Saturday', label: 'Saturday' }
+    ],
+    required: true
+  },
+
   // Personal Information Section
   {
     id: 'cl_age',

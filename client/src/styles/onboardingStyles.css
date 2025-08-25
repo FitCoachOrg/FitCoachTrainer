@@ -163,6 +163,30 @@
   overflow: hidden;
 }
 
+/* Special styling for Client Settings section (first section) */
+.question-section:first-child {
+  border: 2px solid #3b82f6;
+  background-color: #f8fafc;
+  margin-bottom: 30px;
+}
+
+.question-section:first-child .section-header {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.question-section:first-child .section-header .section-name {
+  color: white;
+}
+
+.question-section:first-child .section-header .section-progress {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.question-section:first-child .section-header:hover {
+  background-color: #2563eb;
+}
+
 .section-header {
   background-color: #f8f9fa;
   padding: 15px 20px;
