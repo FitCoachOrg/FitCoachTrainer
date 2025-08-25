@@ -144,7 +144,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                   </Popover>
 
                   <div className="font-medium">{day.focus}</div>
-                  <div className="text-xs">{format(parseISO(day.date), 'MMM d')}</div>
+                  <div className="text-xs">{format(parseISO(day.date), 'MMM d')} • {format(parseISO(day.date), 'EEEE')}</div>
                   <div className="text-xs mt-1">
                     {day.exercises.length > 0 ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` : 'Rest day'}
                   </div>
