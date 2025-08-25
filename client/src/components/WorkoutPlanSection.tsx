@@ -3084,6 +3084,7 @@ const WorkoutPlanSection = ({
                 planStartDate={planStartDate}
                 onReorder={handlePlanChange}
                 onPlanChange={handlePlanChange}
+                clientId={numericClientId}
               />
             </Card>
 

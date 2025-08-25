@@ -1,5 +1,5 @@
 "use client"
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { format, parseISO, addWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
 
 type WeekDay = {
   date: string;
@@ -20,6 +21,7 @@ interface WeeklyPlanHeaderProps {
   onReorder: (updatedWeek: WeekDay[]) => void;
   onPlanChange: (updatedWeek: WeekDay[]) => void;
   onMonthlyChange?: (updatedMonthlyData: WeekDay[][]) => void;
+  clientId?: number; // Add clientId for fetching multi-week data
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -39,7 +41,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -50,6 +52,13 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [copySourceDate, setCopySourceDate] = useState<string | null>(null);
   const [copyTargetDate, setCopyTargetDate] = useState<string | null>(null);
   const [localMonthlyData, setLocalMonthlyData] = useState<WeekDay[][]>([]);
+  const [multiWeekData, setMultiWeekData] = useState<WeekDay[][]>([]);
+  const [isLoadingMultiWeek, setIsLoadingMultiWeek] = useState(false);
+  
+  // Week-level copy/paste state
+  const [copySourceWeek, setCopySourceWeek] = useState<number | null>(null);
+  const [copyTargetWeek, setCopyTargetWeek] = useState<number | null>(null);
+  const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
 
   // Generate monthly data (4 weeks) from the current week data
   const monthlyData = useMemo(() => {
@@ -60,6 +69,12 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       return localMonthlyData;
     }
     
+    // If we have fetched multi-week data, use it
+    if (multiWeekData.length > 0) {
+      return multiWeekData;
+    }
+    
+    // Fallback to generating placeholder data
     const weeks = [];
     for (let i = 0; i < 4; i++) {
       // For the first week, start from the selected date
@@ -81,9 +96,285 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       weeks.push(weekDays);
     }
     return weeks;
-  }, [week, planStartDate, viewMode, localMonthlyData]);
+  }, [week, planStartDate, viewMode, localMonthlyData, multiWeekData]);
 
-  const days = useMemo(() => week || [], [week]);
+  // For weekly view, ensure we're using the planStartDate consistently
+  const days = useMemo(() => {
+    if (viewMode === 'weekly') {
+      // Always generate week data from planStartDate to ensure consistency
+      const weekDays = [];
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+        const dateStr = dayDate.toISOString().slice(0, 10);
+        
+        // Find matching data from the week prop if it exists
+        const existingDay = week?.find(d => d.date === dateStr);
+        if (existingDay) {
+          weekDays.push(existingDay);
+        } else {
+          weekDays.push({ date: dateStr, focus: 'Rest Day', exercises: [] });
+        }
+      }
+      return weekDays;
+    }
+    return week || [];
+  }, [week, planStartDate, viewMode]);
+
+  // Function to fetch multi-week data
+  const fetchMultiWeekData = async () => {
+    if (!clientId || viewMode !== 'monthly') return;
+    
+    setIsLoadingMultiWeek(true);
+    try {
+      const weeks = [];
+      for (let i = 0; i < 4; i++) {
+        const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
+        const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+        
+        // Strategy 1: Try schedule_preview first (draft plans)
+        let { data: weekData, error } = await supabase
+          .from('schedule_preview')
+          .select('*')
+          .eq('client_id', clientId)
+          .eq('type', 'workout')
+          .gte('for_date', weekStartDate.toISOString().slice(0, 10))
+          .lte('for_date', weekEndDate.toISOString().slice(0, 10))
+          .order('for_date');
+        
+        if (error) {
+          console.error('Error fetching from schedule_preview:', error);
+        }
+        
+        // Strategy 2: If no data in schedule_preview, try schedule table (approved plans)
+        if (!weekData || weekData.length === 0) {
+          console.log('No data in schedule_preview, trying schedule table for week', i + 1);
+          const { data: scheduleData, error: scheduleError } = await supabase
+            .from('schedule')
+            .select('*')
+            .eq('client_id', clientId)
+            .eq('type', 'workout')
+            .gte('for_date', weekStartDate.toISOString().slice(0, 10))
+            .lte('for_date', weekEndDate.toISOString().slice(0, 10))
+            .order('for_date');
+          
+          if (scheduleError) {
+            console.error('Error fetching from schedule:', scheduleError);
+          } else {
+            weekData = scheduleData;
+          }
+        }
+        
+        // Convert database data to WeekDay format (matching the structure from WorkoutPlanSection)
+        const weekDays = [];
+        for (let j = 0; j < 7; j++) {
+          const dayDate = new Date(weekStartDate.getTime() + j * 24 * 60 * 60 * 1000);
+          const dateStr = dayDate.toISOString().slice(0, 10);
+          
+          // Find matching data for this date
+          const dayData = weekData?.find(d => d.for_date === dateStr);
+          
+          if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
+            weekDays.push({
+              date: dateStr,
+              focus: dayData.summary || 'Workout',
+              exercises: dayData.details_json.exercises
+            });
+          } else {
+            weekDays.push({
+              date: dateStr,
+              focus: 'Rest Day',
+              exercises: []
+            });
+          }
+        }
+        weeks.push(weekDays);
+      }
+      setMultiWeekData(weeks);
+    } catch (error) {
+      console.error('Error fetching multi-week data:', error);
+    } finally {
+      setIsLoadingMultiWeek(false);
+    }
+  };
+
+  // Fetch multi-week data when view mode changes to monthly
+  useEffect(() => {
+    if (viewMode === 'monthly' && clientId) {
+      fetchMultiWeekData();
+    }
+  }, [viewMode, clientId, planStartDate]);
+
+  // Function to persist monthly changes to the database
+  const persistMonthlyChangeToDatabase = async (targetDate: string, sourceDay: WeekDay) => {
+    if (!clientId) return;
+    
+    try {
+      console.log(`Persisting workout copy from ${copySourceDate} to ${targetDate}`);
+      
+      // ALWAYS save to schedule_preview to match the parent component's strategy
+      // The parent component (WorkoutPlanSection) tries schedule_preview first, then falls back to schedule
+      const tableName = 'schedule_preview';
+      
+      // Prepare the data to insert/update
+      const workoutData = {
+        client_id: clientId,
+        type: 'workout',
+        task: 'workout',
+        icon: 'dumbell',
+        summary: sourceDay.focus,
+        for_date: targetDate,
+        for_time: '16:00:00', // Default time, could be made configurable
+        workout_id: crypto.randomUUID(), // Generate new workout ID
+        details_json: {
+          focus: sourceDay.focus,
+          exercises: sourceDay.exercises || []
+        },
+        is_approved: false
+      };
+      
+      // Check if there's already an entry for this date
+      const { data: existingData, error: checkError } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .eq('for_date', targetDate)
+        .single();
+      
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error checking existing data:', checkError);
+        return;
+      }
+      
+      let result;
+      if (existingData) {
+        // Update existing entry
+        result = await supabase
+          .from(tableName)
+          .update(workoutData)
+          .eq('id', existingData.id);
+      } else {
+        // Insert new entry
+        result = await supabase
+          .from(tableName)
+          .insert(workoutData);
+      }
+      
+      if (result.error) {
+        console.error('Error persisting workout data:', result.error);
+      } else {
+        console.log(`Successfully persisted workout data to ${tableName} for ${targetDate}`);
+      }
+    } catch (error) {
+      console.error('Error in persistMonthlyChangeToDatabase:', error);
+    }
+  };
+
+  // Function to persist deletions to the database
+  const persistDeletionToDatabase = async (date: string) => {
+    if (!clientId) return;
+    
+    try {
+      console.log(`Persisting workout deletion for ${date}`);
+      
+      // ALWAYS delete from schedule_preview to match the parent component's strategy
+      const tableName = 'schedule_preview';
+      
+      // Delete the workout entry for this date
+      const { error } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .eq('for_date', date);
+      
+      if (error) {
+        console.error('Error deleting workout data:', error);
+      } else {
+        console.log(`Successfully deleted workout data from ${tableName} for ${date}`);
+      }
+    } catch (error) {
+      console.error('Error in persistDeletionToDatabase:', error);
+    }
+  };
+
+  // Function to persist week copy to the database
+  const persistWeekCopyToDatabase = async (sourceWeekIndex: number, targetWeekIndex: number, sourceWeek: WeekDay[]) => {
+    if (!clientId) return;
+    
+    try {
+      console.log(`Persisting week copy from week ${sourceWeekIndex + 1} to week ${targetWeekIndex + 1}`);
+      
+      // Calculate the date offset between source and target weeks
+      const weekOffset = targetWeekIndex - sourceWeekIndex;
+      const daysOffset = weekOffset * 7;
+      
+      // Process each day in the source week
+      for (const sourceDay of sourceWeek) {
+        if (sourceDay.exercises.length === 0) continue; // Skip rest days
+        
+        // Calculate the target date
+        const sourceDate = new Date(sourceDay.date);
+        const targetDate = new Date(sourceDate.getTime() + daysOffset * 24 * 60 * 60 * 1000);
+        const targetDateStr = targetDate.toISOString().slice(0, 10);
+        
+        // Prepare the data to insert/update
+        const workoutData = {
+          client_id: clientId,
+          type: 'workout',
+          task: 'workout',
+          icon: 'dumbell',
+          summary: sourceDay.focus,
+          for_date: targetDateStr,
+          for_time: '16:00:00', // Default time
+          workout_id: crypto.randomUUID(), // Generate new workout ID
+          details_json: {
+            focus: sourceDay.focus,
+            exercises: sourceDay.exercises || []
+          },
+          is_approved: false
+        };
+        
+        // Check if there's already an entry for this date
+        const { data: existingData, error: checkError } = await supabase
+          .from('schedule_preview')
+          .select('id')
+          .eq('client_id', clientId)
+          .eq('type', 'workout')
+          .eq('for_date', targetDateStr)
+          .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Error checking existing data:', checkError);
+          continue;
+        }
+        
+        let result;
+        if (existingData) {
+          // Update existing entry
+          result = await supabase
+            .from('schedule_preview')
+            .update(workoutData)
+            .eq('id', existingData.id);
+        } else {
+          // Insert new entry
+          result = await supabase
+            .from('schedule_preview')
+            .insert(workoutData);
+        }
+        
+        if (result.error) {
+          console.error('Error persisting workout data:', result.error);
+        } else {
+          console.log(`Successfully persisted workout data for ${targetDateStr}`);
+        }
+      }
+      
+      console.log(`Successfully completed week copy from week ${sourceWeekIndex + 1} to week ${targetWeekIndex + 1}`);
+    } catch (error) {
+      console.error('Error in persistWeekCopyToDatabase:', error);
+    }
+  };
 
   // Create a flat array of all days for monthly operations
   const allDays = useMemo(() => {
@@ -137,7 +428,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     setMenuOpenFor(null);
   };
 
-  const deleteWorkout = (date: string) => {
+  const deleteWorkout = async (date: string) => {
     if (viewMode === 'weekly') {
       // For weekly view, update the current week
       const updated = days.map((d) => (d.date === date ? { ...d, focus: 'Rest Day', exercises: [] } : d));
@@ -163,6 +454,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       if (onMonthlyChange) {
         onMonthlyChange(updatedMonthlyData);
       }
+      
+      // Persist the deletion to the database
+      await persistDeletionToDatabase(date);
     }
     setMenuOpenFor(null);
   };
@@ -173,7 +467,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     setCopyTargetDate(date);
   };
 
-  const confirmPaste = () => {
+  const confirmPaste = async () => {
     if (copySourceDate == null || copyTargetDate == null) return;
     
     if (viewMode === 'weekly') {
@@ -212,6 +506,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       if (onMonthlyChange) {
         onMonthlyChange(updatedMonthlyData);
       }
+      
+      // Persist the change to the database
+      await persistMonthlyChangeToDatabase(copyTargetDate, sourceDay);
     }
     
     setCopySourceDate(null);
@@ -221,6 +518,67 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const cancelPaste = () => {
     setCopySourceDate(null);
     setCopyTargetDate(null);
+  };
+
+  // Week-level copy/paste functions
+  const startWeekCopy = (weekIndex: number) => {
+    setCopySourceWeek(weekIndex);
+    setCopyTargetWeek(null);
+    setMenuOpenFor(null);
+  };
+
+  const selectWeekTarget = (weekIndex: number) => {
+    if (copySourceWeek == null) return;
+    if (weekIndex === copySourceWeek) return;
+    setCopyTargetWeek(weekIndex);
+    setShowWeekCopyConfirm(true);
+  };
+
+  const confirmWeekPaste = async () => {
+    if (copySourceWeek == null || copyTargetWeek == null) return;
+    
+    try {
+      const sourceWeek = monthlyData[copySourceWeek];
+      if (!sourceWeek) return;
+      
+      // Update the entire monthly data structure
+      const updatedMonthlyData = monthlyData.map((week, weekIndex) => 
+        weekIndex === copyTargetWeek 
+          ? sourceWeek.map(day => ({
+              ...day,
+              date: new Date(new Date(day.date).getTime() + (copyTargetWeek - copySourceWeek) * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+            }))
+          : week
+      );
+      
+      // Update local state to reflect changes
+      setLocalMonthlyData(updatedMonthlyData);
+      
+      // Update the current week data (for backward compatibility)
+      const updatedCurrentWeek = updatedMonthlyData[0];
+      onPlanChange(updatedCurrentWeek);
+      
+      // If we have the monthly change callback, also update the full monthly data
+      if (onMonthlyChange) {
+        onMonthlyChange(updatedMonthlyData);
+      }
+      
+      // Persist the week copy to the database
+      await persistWeekCopyToDatabase(copySourceWeek, copyTargetWeek, sourceWeek);
+      
+      // Reset state
+      setCopySourceWeek(null);
+      setCopyTargetWeek(null);
+      setShowWeekCopyConfirm(false);
+    } catch (error) {
+      console.error('Error in confirmWeekPaste:', error);
+    }
+  };
+
+  const cancelWeekPaste = () => {
+    setCopySourceWeek(null);
+    setCopyTargetWeek(null);
+    setShowWeekCopyConfirm(false);
   };
 
   const renderDayBox = (day: WeekDay, index: number, weekIndex: number = 0) => {
@@ -314,30 +672,121 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
 
   const renderMonthlyView = () => (
     <div className="space-y-6">
-      {monthlyData.map((week, weekIndex) => {
-        // Calculate the actual start and end dates for this week
-        const weekStartDate = weekIndex === 0 ? planStartDate : addWeeks(planStartDate, weekIndex);
-        const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-        
-        return (
-          <div key={weekIndex} className="space-y-3">
-            <div className="flex items-center gap-2 px-2 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                Week {weekIndex + 1}: {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
+      {isLoadingMultiWeek ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Loading workout data...</p>
+          </div>
+        </div>
+      ) : (
+        monthlyData.map((week, weekIndex) => {
+          // Calculate the actual start and end dates for this week
+          const weekStartDate = weekIndex === 0 ? planStartDate : addWeeks(planStartDate, weekIndex);
+          const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+          
+          return (
+            <div key={weekIndex} className="space-y-3">
+              <div className={`flex items-center justify-between px-2 py-1 rounded-lg border ${
+                copySourceWeek === weekIndex 
+                  ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-600' 
+                  : copyTargetWeek === weekIndex 
+                  ? 'bg-green-100 border-green-300 dark:bg-green-900/40 dark:border-green-600'
+                  : 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    copySourceWeek === weekIndex 
+                      ? 'bg-blue-600' 
+                      : copyTargetWeek === weekIndex 
+                      ? 'bg-green-600'
+                      : 'bg-blue-500'
+                  }`}></div>
+                  <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Week {weekIndex + 1}: {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
+                  </div>
+                </div>
+                
+                {/* Week-level copy/paste controls */}
+                <div className="flex items-center gap-1">
+                  {copySourceWeek === null && (
+                    <button
+                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      onClick={() => startWeekCopy(weekIndex)}
+                      title="Copy entire week"
+                    >
+                      Copy Week
+                    </button>
+                  )}
+                  
+                  {copySourceWeek !== null && copySourceWeek !== weekIndex && (
+                    <button
+                      className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      onClick={() => selectWeekTarget(weekIndex)}
+                      title="Paste week here"
+                    >
+                      Paste Week
+                    </button>
+                  )}
+                  
+                  {copySourceWeek === weekIndex && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-blue-600 font-medium">Source</span>
+                      <button
+                        className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                        onClick={cancelWeekPaste}
+                        title="Cancel copy"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-2 text-sm">
+                {week.map((day, dayIndex) => renderDayBox(day, dayIndex, weekIndex))}
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-2 text-sm">
-              {week.map((day, dayIndex) => renderDayBox(day, dayIndex, weekIndex))}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 
   return (
     <div className="space-y-4">
+      {/* Week Copy Confirmation Dialog */}
+      {showWeekCopyConfirm && copySourceWeek !== null && copyTargetWeek !== null && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl border border-gray-200 dark:border-gray-700 transform -translate-y-8">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                Copy Week {copySourceWeek + 1} to Week {copyTargetWeek + 1}?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                This will copy all workouts from Week {copySourceWeek + 1} to Week {copyTargetWeek + 1}. 
+                Any existing workouts in the target week will be replaced.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={cancelWeekPaste}
+                  className="px-4 py-2"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmWeekPaste}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Confirm Copy
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* View Toggle */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
