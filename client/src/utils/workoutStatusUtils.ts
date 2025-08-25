@@ -62,6 +62,7 @@ export async function checkWorkoutApprovalStatus(
       console.error('Preview check error:', previewError);
     }
 
+    // Get data from schedule table for comparison (but UI still only uses schedule_preview)
     const { data: scheduleData, error: scheduleError } = await supabase
       .from('schedule')
       .select('id, for_date, details_json')
@@ -292,3 +293,4 @@ export function getStatusDisplay(status: WorkoutStatus, isMonthly = false) {
       };
   }
 }
+

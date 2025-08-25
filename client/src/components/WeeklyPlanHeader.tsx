@@ -153,7 +153,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
             // Find matching data for this date from preview data (primary source)
             let dayData = weekData.previewData?.find(d => d.for_date === dateStr);
             
-            // If no preview data, try schedule data
+            // If no preview data, try schedule data (for comparison only)
             if (!dayData) {
               dayData = weekData.scheduleData?.find(d => d.for_date === dateStr);
             }

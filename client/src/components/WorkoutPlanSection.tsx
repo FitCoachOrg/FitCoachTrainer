@@ -1814,12 +1814,8 @@ const WorkoutPlanSection = ({
         console.log('[WorkoutPlanSection] Using preview data as primary source:', weeklyResult.previewData.length, 'entries');
         data = weeklyResult.previewData;
         isFromPreview = true;
-      } else if (weeklyResult.scheduleData && weeklyResult.scheduleData.length > 0) {
-        console.log('[WorkoutPlanSection] No preview data, using schedule data as fallback:', weeklyResult.scheduleData.length, 'entries');
-        data = weeklyResult.scheduleData;
-        isFromPreview = false;
       } else {
-        console.log('[WorkoutPlanSection] No data found in either table, looking for template');
+        console.log('[WorkoutPlanSection] No data found in schedule_preview table, looking for template');
         
         // Strategy 3: Try to find the most recent plan and use it as a template
         // Try to find the most recent plan from schedule_preview first
@@ -1836,24 +1832,50 @@ const WorkoutPlanSection = ({
           data = recentPreviewData;
           isFromPreview = true;
           setIsDraftPlan(true);
-        } else {
-          // Only fallback to schedule if no preview data exists
-          console.log('[WorkoutPlanSection] No recent preview data, checking schedule table as fallback');
-          let { data: recentScheduleData, error: recentScheduleError } = await supabase
-            .from('schedule')
-            .select('*')
-            .eq('client_id', numericClientId)
-            .eq('type', 'workout')
-            .order('for_date', { ascending: false })
-            .limit(1);
-          
-          if (!recentScheduleError && recentScheduleData && recentScheduleData.length > 0) {
-            console.log('[WorkoutPlanSection] Found recent plan in schedule, using as template');
-            data = recentScheduleData;
-            isFromPreview = false;
-            setIsDraftPlan(false);
-          }
         }
+        
+        // FALLBACK LOGIC COMMENTED OUT - UI should ONLY get data from schedule_preview table
+        // } else if (weeklyResult.scheduleData && weeklyResult.scheduleData.length > 0) {
+        //   console.log('[WorkoutPlanSection] No preview data, using schedule data as fallback:', weeklyResult.scheduleData.length, 'entries');
+        //   data = weeklyResult.scheduleData;
+        //   isFromPreview = false;
+        // } else {
+        //   console.log('[WorkoutPlanSection] No data found in either table, looking for template');
+        //   
+        //   // Strategy 3: Try to find the most recent plan and use it as a template
+        //   // Try to find the most recent plan from schedule_preview first
+        //   let { data: recentPreviewData, error: recentPreviewError } = await supabase
+        //     .from('schedule_preview')
+        //     .select('*')
+        //     .eq('client_id', numericClientId)
+        //     .eq('type', 'workout')
+        //     .order('for_date', { ascending: false })
+        //     .limit(1);
+        //   
+        //   if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
+        //     console.log('[WorkoutPlanSection] Found recent plan in schedule_preview, using as template');
+        //     data = recentPreviewData;
+        //     isFromPreview = true;
+        //     setIsDraftPlan(true);
+        //   } else {
+        //     // Only fallback to schedule if no preview data exists
+        //     console.log('[WorkoutPlanSection] No recent preview data, checking schedule table as fallback');
+        //     let { data: recentScheduleData, error: recentScheduleError } = await supabase
+        //       .from('schedule')
+        //       .select('*')
+        //       .eq('client_id', numericClientId)
+        //       .eq('type', 'workout')
+        //       .order('for_date', { ascending: false })
+        //       .limit(1);
+        //     
+        //     if (!recentScheduleError && recentScheduleData && recentScheduleData.length > 0) {
+        //       console.log('[WorkoutPlanSection] Found recent plan in schedule, using as template');
+        //       data = recentScheduleData;
+        //       isFromPreview = false;
+        //       setIsDraftPlan(false);
+        //     }
+        //   }
+        // }
       }
 
       console.log('[WorkoutPlanSection] Final data result:', {

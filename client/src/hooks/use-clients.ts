@@ -115,18 +115,19 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
         
         let isFromPreview = true;
         
-        if (!data || data.length === 0) {
-          // Only fallback to schedule if no preview data exists
-          console.log('No preview data found, checking schedule table as fallback');
-          ({ data, error } = await supabase
-            .from('schedule')
-            .select('*')
-            .eq('client_id', clientId)
-            .gte('for_date', startDate)
-            .lte('for_date', endDate)
-            .order('for_date', { ascending: true }))
-          isFromPreview = false;
-        }
+        // FALLBACK LOGIC COMMENTED OUT - UI should ONLY get data from schedule_preview table
+        // if (!data || data.length === 0) {
+        //   // Only fallback to schedule if no preview data exists
+        //   console.log('No preview data found, checking schedule table as fallback');
+        //   ({ data, error } = await supabase
+        //     .from('schedule')
+        //     .select('*')
+        //     .eq('client_id', clientId)
+        //     .gte('for_date', startDate)
+        //     .lte('for_date', endDate)
+        //     .order('for_date', { ascending: true }))
+        //   isFromPreview = false;
+        // }
         
         // Set draft status based on data source
         setIsDraftPlan(isFromPreview);

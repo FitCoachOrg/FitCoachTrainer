@@ -186,3 +186,4 @@ The UI consistency issues have been **completely resolved**. The application now
 - **Maintains clear status indicators** based on data source
 
 **Status**: ✅ **FIXED - UI Now Consistently Uses schedule_preview**
+
