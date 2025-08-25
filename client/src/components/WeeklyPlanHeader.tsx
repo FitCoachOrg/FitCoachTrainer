@@ -393,13 +393,13 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (viewMode === 'weekly') {
       const activeIndex = parseInt(activeId.replace('hdr-', ''), 10);
       const overIndex = parseInt(overId.replace('hdr-', ''), 10);
-      const reordered = arrayMove(days, activeIndex, overIndex);
-      const updated = reordered.map((day, idx) => {
-        const newDate = new Date(planStartDate.getTime() + idx * 24 * 60 * 60 * 1000);
-        const newDateStr = newDate.toISOString().slice(0, 10);
-        return { ...day, date: newDateStr };
-      });
-      onReorder(updated);
+    const reordered = arrayMove(days, activeIndex, overIndex);
+    const updated = reordered.map((day, idx) => {
+      const newDate = new Date(planStartDate.getTime() + idx * 24 * 60 * 60 * 1000);
+      const newDateStr = newDate.toISOString().slice(0, 10);
+      return { ...day, date: newDateStr };
+    });
+    onReorder(updated);
     } else {
       // For monthly view, we'll handle drag and drop within the same week for now
       // This could be expanded to allow cross-week dragging
@@ -432,7 +432,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (viewMode === 'weekly') {
       // For weekly view, update the current week
       const updated = days.map((d) => (d.date === date ? { ...d, focus: 'Rest Day', exercises: [] } : d));
-      onPlanChange(updated);
+    onPlanChange(updated);
     } else {
       // For monthly view, update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -480,7 +480,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           ? { ...d, focus: sourceDay.focus, exercises: [...(sourceDay.exercises || [])] }
           : d
       );
-      onPlanChange(updated);
+    onPlanChange(updated);
     } else {
       // For monthly view, find source and target days in all days
       const sourceDay = allDays.find(d => d.date === copySourceDate);
@@ -587,8 +587,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     const isCopyMode = copySourceDate != null;
     
     let baseColors = day.exercises.length > 0 ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200';
-    const sourceColors = 'bg-blue-600 text-white border-blue-700';
-    const targetColors = 'bg-blue-100 text-blue-800 border-blue-200';
+            const sourceColors = 'bg-blue-600 text-white border-blue-700';
+            const targetColors = 'bg-blue-100 text-blue-800 border-blue-200';
     const copyModeColors = 'bg-yellow-50 text-gray-700 border border-yellow-300';
     
     let boxClasses = baseColors;
@@ -603,65 +603,65 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     const boxId = viewMode === 'weekly' ? `hdr-${index}` : `hdr-${weekIndex}-${index}`;
     const menuId = `menu-${day.date}`;
 
-    return (
+            return (
       <SortableHeaderBox key={boxId} id={boxId} disabled={copySourceDate != null}>
-        <div
-          className={`relative p-2 rounded text-center ${boxClasses}`}
-          onClick={() => {
+                <div
+                  className={`relative p-2 rounded text-center ${boxClasses}`}
+                  onClick={() => {
             if (copySourceDate != null) selectTarget(day.date);
-          }}
-        >
-          {/* 3-dots menu (popover) */}
+                  }}
+                >
+                  {/* 3-dots menu (popover) */}
           <Popover open={menuOpenFor === menuId} onOpenChange={(open) => setMenuOpenFor(open ? menuId : null)}>
-            <PopoverTrigger asChild>
-              <button
-                className="absolute top-1 right-1 p-1 rounded hover:bg-black/10"
-                title="More"
-                onMouseDown={(e) => { e.stopPropagation(); }}
-                onPointerDown={(e) => { e.stopPropagation(); }}
-                onPointerUp={(e) => { e.stopPropagation(); }}
-                onClick={(e) => { e.stopPropagation(); }}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" side="right" className="w-40 p-1" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-              <button
-                className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                    <PopoverTrigger asChild>
+                      <button
+                        className="absolute top-1 right-1 p-1 rounded hover:bg-black/10"
+                        title="More"
+                        onMouseDown={(e) => { e.stopPropagation(); }}
+                        onPointerDown={(e) => { e.stopPropagation(); }}
+                        onPointerUp={(e) => { e.stopPropagation(); }}
+                        onClick={(e) => { e.stopPropagation(); }}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" side="right" className="w-40 p-1" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+                      <button
+                        className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={(e) => { e.stopPropagation(); startCopy(day.date); }}
-              >
-                Copy workout
-              </button>
-              <button
-                className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        Copy workout
+                      </button>
+                      <button
+                        className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 onClick={(e) => { e.stopPropagation(); deleteWorkout(day.date); }}
-              >
-                Delete workout
-              </button>
-            </PopoverContent>
-          </Popover>
+                      >
+                        Delete workout
+                      </button>
+                    </PopoverContent>
+                  </Popover>
 
-          <div className="font-medium">{day.focus}</div>
+                  <div className="font-medium">{day.focus}</div>
           <div className="text-xs">{format(parseISO(day.date), 'MMM d')} • {format(parseISO(day.date), 'EEEE')}</div>
-          <div className="text-xs mt-1">
-            {day.exercises.length > 0 ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` : 'Rest day'}
-          </div>
+                  <div className="text-xs mt-1">
+                    {day.exercises.length > 0 ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` : 'Rest day'}
+                  </div>
 
-          {/* Paste controls on target */}
-          {isTarget && (
-            <div className="absolute top-1 left-1 flex gap-1"
-                 onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-              <button className="p-1 rounded bg-white/80 hover:bg-white" title="Save" onClick={confirmPaste}>
-                <Check className="h-4 w-4 text-green-600" />
-              </button>
-              <button className="p-1 rounded bg-white/80 hover:bg-white" title="Cancel" onClick={cancelPaste}>
-                <X className="h-4 w-4 text-red-600" />
-              </button>
-            </div>
-          )}
-        </div>
-      </SortableHeaderBox>
-    );
+                  {/* Paste controls on target */}
+                  {isTarget && (
+                    <div className="absolute top-1 left-1 flex gap-1"
+                         onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                      <button className="p-1 rounded bg-white/80 hover:bg-white" title="Save" onClick={confirmPaste}>
+                        <Check className="h-4 w-4 text-green-600" />
+                      </button>
+                      <button className="p-1 rounded bg-white/80 hover:bg-white" title="Cancel" onClick={cancelPaste}>
+                        <X className="h-4 w-4 text-red-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </SortableHeaderBox>
+            );
   };
 
   const renderWeeklyView = () => (
@@ -828,8 +828,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           strategy={horizontalListSortingStrategy}
         >
           {viewMode === 'weekly' ? renderWeeklyView() : renderMonthlyView()}
-        </SortableContext>
-      </DndContext>
+      </SortableContext>
+    </DndContext>
     </div>
   );
 }
