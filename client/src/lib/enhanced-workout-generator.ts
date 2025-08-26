@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabase';
 import { ProgressiveOverloadSystem } from './progressive-overload';
 
 // Exercise history interface for variety tracking
@@ -32,11 +32,6 @@ interface WeeklyExercisePool {
     };
   };
 }
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
 
 // Enhanced workout generator with all new features
 export class EnhancedWorkoutGenerator {
