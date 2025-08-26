@@ -229,6 +229,8 @@ export async function checkMonthlyWorkoutStatus(
  * Compare workout data between preview and schedule tables
  */
 export function compareWorkoutData(previewData: any[], scheduleData: any[]): boolean {
+  console.log('[compareWorkoutData] Starting comparison with', previewData.length, 'preview rows and', scheduleData.length, 'schedule rows');
+  
   if (previewData.length !== scheduleData.length) {
     console.log('[compareWorkoutData] Length mismatch:', previewData.length, 'vs', scheduleData.length);
     return false;
@@ -237,6 +239,9 @@ export function compareWorkoutData(previewData: any[], scheduleData: any[]): boo
   // Sort both arrays by date for comparison
   const sortedPreview = previewData.sort((a, b) => a.for_date.localeCompare(b.for_date));
   const sortedSchedule = scheduleData.sort((a, b) => a.for_date.localeCompare(b.for_date));
+  
+  console.log('[compareWorkoutData] Preview dates:', sortedPreview.map(p => p.for_date));
+  console.log('[compareWorkoutData] Schedule dates:', sortedSchedule.map(s => s.for_date));
   
   for (let i = 0; i < sortedPreview.length; i++) {
     const preview = sortedPreview[i];
@@ -253,6 +258,8 @@ export function compareWorkoutData(previewData: any[], scheduleData: any[]): boo
     
     if (previewJson !== scheduleJson) {
       console.log('[compareWorkoutData] Data mismatch for date', preview.for_date);
+      console.log('[compareWorkoutData] Preview data:', preview.details_json);
+      console.log('[compareWorkoutData] Schedule data:', schedule.details_json);
       return false;
     }
   }

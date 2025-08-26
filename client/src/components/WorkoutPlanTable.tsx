@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed, ChevronDown, ChevronUp, Calendar, Clock, Target, Play, Edit3, X, Check } from 'lucide-react';
+import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed, ChevronDown, ChevronUp, Calendar, Clock, Target, Play, Edit3, X, Check, CheckCircle, Clock as ClockIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -170,7 +170,7 @@ const EditableCell = ({
   };
 
   if (isEditing) {
-    return (
+      return (
       <div className="flex items-center gap-1">
         <Input
           type={type}
@@ -192,16 +192,16 @@ const EditableCell = ({
     );
   }
 
-  return (
+    return (
     <div 
       className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 ${className}`}
       onClick={() => setIsEditing(true)}
     >
       <span className="truncate">{value || placeholder}</span>
       <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-    </div>
-  );
-};
+      </div>
+    );
+  };
 
 // Video Cell Component
 const VideoCell = ({ 
@@ -235,7 +235,7 @@ const VideoCell = ({
   };
 
   if (isEditing) {
-    return (
+  return (
       <div className="flex items-center gap-1">
         <Input
           value={editValue}
@@ -517,13 +517,13 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     // Calculate the global day index across all weeks
     const globalDayIdx = weekIdx * 7 + dayIdx;
     const currentDate = new Date(planStartDate.getTime() + globalDayIdx * 24 * 60 * 60 * 1000);
-    const dateStr = currentDate.toISOString().slice(0, 10);
-    const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-    const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const dateStr = currentDate.toISOString().slice(0, 10);
+        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+        const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-    if (!day) {
-      // Plan Not Generated
-      return (
+        if (!day) {
+          // Plan Not Generated
+          return (
         <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-yellow-400 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -536,24 +536,24 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
-                  </div>
+                </div>
                   <h4 className="text-lg font-bold text-yellow-800 dark:text-yellow-200">Plan Not Generated</h4>
                   <p className="text-sm text-yellow-700 dark:text-yellow-300">No workout plan exists for this day.</p>
-                </div>
+              </div>
               </div>
               <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
                 <PlusCircle className="h-4 w-4" />
                 Add Exercise
-              </Button>
-            </div>
+                </Button>
+              </div>
           </CardContent>
         </Card>
-      );
-    }
+          );
+        }
 
-    if (day.exercises.length === 0) {
-      // Rest Day
-      return (
+        if (day.exercises.length === 0) {
+          // Rest Day
+          return (
         <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -566,40 +566,40 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
-                  </div>
+                </div>
                   <h4 className="text-lg font-bold text-blue-800 dark:text-blue-200">Rest Day</h4>
                   <p className="text-sm text-blue-700 dark:text-blue-300">Enjoy your recovery and prepare for the next workout!</p>
-                </div>
+              </div>
               </div>
               <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
                 <PlusCircle className="h-4 w-4" />
                 Add Exercise
-              </Button>
-            </div>
+                </Button>
+              </div>
           </CardContent>
         </Card>
-      );
-    }
+          );
+        }
 
     // Workout Day
-    return (
+        return (
       <Card key={globalDayIdx} className="mb-4 border-l-4 border-l-green-400 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-green-100 dark:bg-green-900/40 rounded-lg">
-                {getFocusIcon(day.focus)}
+                    {getFocusIcon(day.focus)}
               </div>
-              <div>
+                    <div>
                 <div className="flex items-center gap-3 mb-2">
                   <Calendar className="w-4 h-4 text-gray-500" />
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{dateDisplay}</span>
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">{dayName}</span>
-                </div>
+                      </div>
                 <h3 className="text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                   {day.focus}
                 </h3>
-                {day.timeBreakdown && (
+                      {day.timeBreakdown && (
                   <div className="flex items-center gap-4 mt-2 text-xs text-gray-600 dark:text-gray-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -608,16 +608,16 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <span className="flex items-center gap-1">
                       <Target className="w-3 h-3" />
                       {day.exercises.length} exercises
-                    </span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" className="gap-2" onClick={() => openPickerForDay(globalDayIdx, dateStr)}>
                 <PlusCircle className="h-4 w-4" />
                 Add Exercise
-              </Button>
+                </Button>
               <Button 
                 size="sm" 
                 variant="outline" 
@@ -627,7 +627,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                 <Trash2 className="h-4 w-4" />
                 Delete Day
               </Button>
-            </div>
+              </div>
           </div>
         </CardHeader>
         
@@ -795,8 +795,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         <span className="text-sm text-gray-500 dark:text-gray-400">
                           {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
                         </span>
-                      </div>
-                    </div>
+                                </div>
+                                </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -804,7 +804,44 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         </span>
                         <div className="text-xs text-gray-400 dark:text-gray-500">
                           Click to {workoutDaysCount > 0 ? 'expand' : 'view'}
-                        </div>
+                                </div>
+                                </div>
+                      {/* Approval Status Indicator */}
+                      <div className="flex items-center gap-1">
+                        {(() => {
+                          const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
+                          const totalWorkoutDays = workoutDaysCount;
+                          
+                          if (totalWorkoutDays === 0) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-gray-400">
+                                <ClockIcon className="h-3 w-3" />
+                                <span>No workouts</span>
+                                </div>
+                            );
+                          } else if (approvedDays === totalWorkoutDays) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-green-600">
+                                <CheckCircle className="h-3 w-3" />
+                                <span>Approved</span>
+                              </div>
+                            );
+                          } else if (approvedDays > 0) {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-yellow-600">
+                                <ClockIcon className="h-3 w-3" />
+                                <span>Partial ({approvedDays}/{totalWorkoutDays})</span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <ClockIcon className="h-3 w-3" />
+                                <span>Pending</span>
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -812,11 +849,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                 <AccordionContent className="px-0">
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
                     {weekDays.map((day, dayIdx) => renderDay(day, dayIdx, weekIdx))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+        );
+      })}
         </Accordion>
       ) : (
         // Weekly view (unchanged)
@@ -842,6 +879,41 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length} workout days
                     </span>
+                    {/* Approval Status Indicator */}
+                    {(() => {
+                      const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
+                      const totalWorkoutDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
+                      
+                      if (totalWorkoutDays === 0) {
+                        return (
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <ClockIcon className="h-3 w-3" />
+                            <span>No workouts</span>
+                          </div>
+                        );
+                      } else if (approvedDays === totalWorkoutDays) {
+                        return (
+                          <div className="flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Approved</span>
+                          </div>
+                        );
+                      } else if (approvedDays > 0) {
+                        return (
+                          <div className="flex items-center gap-1 text-xs text-yellow-600">
+                            <ClockIcon className="h-3 w-3" />
+                            <span>Partial ({approvedDays}/{totalWorkoutDays})</span>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <ClockIcon className="h-3 w-3" />
+                            <span>Pending</span>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               </CardHeader>

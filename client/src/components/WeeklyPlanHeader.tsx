@@ -29,6 +29,7 @@ interface WeeklyPlanHeaderProps {
   clientId?: number; // Add clientId for fetching multi-week data
   onViewModeChange?: (viewMode: 'weekly' | 'monthly') => void;
   onMonthlyDataChange?: (monthlyData: WeekDay[][]) => void;
+  onApprovalStatusCheck?: () => void; // Callback to trigger approval status check
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -48,7 +49,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -220,7 +221,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (!clientId) return;
     
     try {
-      console.log(`Persisting workout copy from ${copySourceDate} to ${targetDate}`);
+      console.log(`[WeeklyPlanHeader] Persisting workout copy from ${copySourceDate} to ${targetDate}`);
+      console.log('[WeeklyPlanHeader] Source day data:', sourceDay);
       
       // ALWAYS save to schedule_preview to match the parent component's strategy
       // The parent component (WorkoutPlanSection) tries schedule_preview first, then falls back to schedule
@@ -243,6 +245,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         is_approved: false
       };
       
+      console.log('[WeeklyPlanHeader] Prepared workout data:', workoutData);
+      
       // Check if there's already an entry for this date
       const { data: existingData, error: checkError } = await supabase
         .from(tableName)
@@ -253,31 +257,36 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         .single();
       
       if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error checking existing data:', checkError);
+        console.error('[WeeklyPlanHeader] Error checking existing data:', checkError);
         return;
       }
+      
+      console.log('[WeeklyPlanHeader] Existing data check result:', existingData);
       
       let result;
       if (existingData) {
         // Update existing entry
+        console.log('[WeeklyPlanHeader] Updating existing entry with ID:', existingData.id);
         result = await supabase
           .from(tableName)
           .update(workoutData)
           .eq('id', existingData.id);
       } else {
         // Insert new entry
+        console.log('[WeeklyPlanHeader] Inserting new entry');
         result = await supabase
           .from(tableName)
           .insert(workoutData);
       }
       
       if (result.error) {
-        console.error('Error persisting workout data:', result.error);
+        console.error('[WeeklyPlanHeader] Error persisting workout data:', result.error);
       } else {
-        console.log(`Successfully persisted workout data to ${tableName} for ${targetDate}`);
+        console.log(`[WeeklyPlanHeader] Successfully persisted workout data to ${tableName} for ${targetDate}`);
+        console.log('[WeeklyPlanHeader] Database result:', result);
       }
     } catch (error) {
-      console.error('Error in persistMonthlyChangeToDatabase:', error);
+      console.error('[WeeklyPlanHeader] Error in persistMonthlyChangeToDatabase:', error);
     }
   };
 
@@ -443,7 +452,16 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (viewMode === 'weekly') {
       // For weekly view, update the current week
       const updated = days.map((d) => (d.date === date ? { ...d, focus: 'Rest Day', exercises: [] } : d));
-    onPlanChange(updated);
+      
+      // Call onPlanChange to trigger auto-save in parent component
+      onPlanChange(updated);
+      
+      // Trigger approval status check after a short delay to ensure save completes
+      setTimeout(() => {
+        if (onApprovalStatusCheck) {
+          onApprovalStatusCheck();
+        }
+      }, 2000);
     } else {
       // For monthly view, update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -466,8 +484,13 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         onMonthlyChange(updatedMonthlyData);
       }
       
-      // Persist the deletion to the database
+      // Persist the deletion to the database immediately
       await persistDeletionToDatabase(date);
+      
+      // Trigger approval status check after database persistence
+      if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
     }
     setMenuOpenFor(null);
   };
@@ -481,21 +504,44 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const confirmPaste = async () => {
     if (copySourceDate == null || copyTargetDate == null) return;
     
+    console.log('[WeeklyPlanHeader] confirmPaste triggered:', { copySourceDate, copyTargetDate, viewMode });
+    
     if (viewMode === 'weekly') {
       // For weekly view, find source and target days in current week
       const sourceDay = days.find(d => d.date === copySourceDate);
-      if (!sourceDay) return;
+      if (!sourceDay) {
+        console.error('[WeeklyPlanHeader] Source day not found:', copySourceDate);
+        return;
+      }
+      
+      console.log('[WeeklyPlanHeader] Source day found:', sourceDay);
       
       const updated = days.map((d) => 
         d.date === copyTargetDate 
           ? { ...d, focus: sourceDay.focus, exercises: [...(sourceDay.exercises || [])] }
           : d
       );
-    onPlanChange(updated);
+      
+      console.log('[WeeklyPlanHeader] Updated week data:', updated);
+      
+      // Call onPlanChange to trigger auto-save in parent component
+      onPlanChange(updated);
+      
+      // Trigger approval status check after a short delay to ensure save completes
+      setTimeout(() => {
+        if (onApprovalStatusCheck) {
+          onApprovalStatusCheck();
+        }
+      }, 2000);
     } else {
       // For monthly view, find source and target days in all days
       const sourceDay = allDays.find(d => d.date === copySourceDate);
-      if (!sourceDay) return;
+      if (!sourceDay) {
+        console.error('[WeeklyPlanHeader] Source day not found in monthly view:', copySourceDate);
+        return;
+      }
+      
+      console.log('[WeeklyPlanHeader] Source day found in monthly view:', sourceDay);
       
       // Update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -518,10 +564,16 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         onMonthlyChange(updatedMonthlyData);
       }
       
-      // Persist the change to the database
+      // Persist the change to the database immediately
       await persistMonthlyChangeToDatabase(copyTargetDate, sourceDay);
+      
+      // Trigger approval status check after database persistence
+      if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
     }
     
+    console.log('[WeeklyPlanHeader] Copy operation completed');
     setCopySourceDate(null);
     setCopyTargetDate(null);
   };
@@ -576,6 +628,11 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       
       // Persist the week copy to the database
       await persistWeekCopyToDatabase(copySourceWeek, copyTargetWeek, sourceWeek);
+      
+      // Trigger approval status check after database persistence
+      if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
       
       // Reset state
       setCopySourceWeek(null);

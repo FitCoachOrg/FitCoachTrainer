@@ -806,62 +806,120 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
 
 // Add approvePlan implementation to copy from schedule_preview to schedule
 async function approvePlan(clientId: number, planStartDate: Date) {
+  console.log('[approvePlan] Starting approval process for client:', clientId, 'date:', planStartDate);
+  
   try {
     // 1. Get the week range
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
     const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log('[approvePlan] Date range:', startDateStr, 'to', endDateStr);
 
     // 2. Fetch all rows from schedule_preview for this client/week/type
-    const { data: previewRows, error: fetchError } = await supabase
-      .from('schedule_preview')
-      .select('*')
-      .eq('client_id', clientId)
-      .eq('type', 'workout')
-      .gte('for_date', startDateStr)
-      .lte('for_date', endDateStr);
-    if (fetchError) {
-      console.error('[approvePlan] Error fetching from schedule_preview:', fetchError);
-      return { success: false, error: fetchError.message };
+    console.log('[approvePlan] Fetching from schedule_preview...');
+    console.log('[approvePlan] Query parameters:', { clientId, startDateStr, endDateStr });
+    
+    let previewRows: any[] = [];
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      console.log('[approvePlan] Supabase query completed');
+      
+      if (fetchError) {
+        console.error('[approvePlan] Error fetching from schedule_preview:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+      
+      previewRows = data || [];
+      console.log('[approvePlan] Found', previewRows.length, 'preview rows');
+      if (previewRows.length > 0) {
+        console.log('[approvePlan] Preview row dates:', previewRows.map(row => row.for_date));
+      }
+    } catch (fetchException) {
+      console.error('[approvePlan] Exception during fetch:', fetchException);
+      return { success: false, error: `Fetch exception: ${fetchException}` };
     }
-    if (!previewRows || previewRows.length === 0) {
+    
+    if (previewRows.length === 0) {
+      console.log('[approvePlan] No draft plan found to approve');
       return { success: false, error: 'No draft plan found to approve.' };
     }
 
     // 3. Delete any existing rows in schedule for this client/week/type
-    const { error: deleteError } = await supabase
-      .from('schedule')
-      .delete()
-      .eq('client_id', clientId)
-      .eq('type', 'workout')
-      .gte('for_date', startDateStr)
-      .lte('for_date', endDateStr);
-    if (deleteError) {
-      console.error('[approvePlan] Error deleting old schedule rows:', deleteError);
-      return { success: false, error: deleteError.message };
+    console.log('[approvePlan] Deleting existing schedule rows...');
+    try {
+      const { error: deleteError } = await supabase
+        .from('schedule')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      console.log('[approvePlan] Delete query completed');
+      
+      if (deleteError) {
+        console.error('[approvePlan] Error deleting old schedule rows:', deleteError);
+        return { success: false, error: deleteError.message };
+      }
+      
+      console.log('[approvePlan] Successfully deleted existing schedule rows');
+    } catch (deleteException) {
+      console.error('[approvePlan] Exception during delete:', deleteException);
+      return { success: false, error: `Delete exception: ${deleteException}` };
     }
 
     // 4. Insert the preview rows into schedule (remove id, created_at, is_approved fields)
-    const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }) => rest);
-    const { error: insertError } = await supabase
-      .from('schedule')
-      .insert(rowsToInsert);
-    if (insertError) {
-      console.error('[approvePlan] Error inserting into schedule:', insertError);
-      return { success: false, error: insertError.message };
-    }
-    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    console.log('[approvePlan] Preparing rows for schedule insertion...');
+    const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
+    console.log('[approvePlan] Inserting', rowsToInsert.length, 'rows into schedule...');
+    
     try {
-      await supabase
+      const { error: insertError } = await supabase
+        .from('schedule')
+        .insert(rowsToInsert);
+      
+      console.log('[approvePlan] Insert query completed');
+      
+      if (insertError) {
+        console.error('[approvePlan] Error inserting into schedule:', insertError);
+        return { success: false, error: insertError.message };
+      }
+      
+      console.log('[approvePlan] Successfully inserted rows into schedule');
+    } catch (insertException) {
+      console.error('[approvePlan] Exception during insert:', insertException);
+      return { success: false, error: `Insert exception: ${insertException}` };
+    }
+    
+    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    console.log('[approvePlan] Updating is_approved flag in schedule_preview...');
+    try {
+      const { error: updateError } = await supabase
         .from('schedule_preview')
         .update({ is_approved: true })
         .eq('client_id', clientId)
         .eq('type', 'workout')
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
+      
+      if (updateError) {
+        console.warn('[approvePlan] Warning: Could not update is_approved to true after approval:', updateError);
+      } else {
+        console.log('[approvePlan] Successfully updated is_approved flag');
+      }
     } catch (updateErr) {
       console.warn('[approvePlan] Warning: Could not update is_approved to true after approval.', updateErr);
     }
+    
+    console.log('[approvePlan] Approval process completed successfully');
     return { success: true };
   } catch (err: any) {
     console.error('[approvePlan] Unexpected error:', err);
@@ -1005,7 +1063,45 @@ const WorkoutPlanSection = ({
   ...props
 }: WorkoutPlanSectionProps) => {
   const { toast } = useToast();
-  const [planStartDate, setPlanStartDate] = useState<Date>(new Date());
+  
+  // Initialize planStartDate from localStorage or URL parameters, fallback to today
+  const [planStartDate, setPlanStartDate] = useState<Date>(() => {
+    // Try to get date from URL parameters first
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    
+    if (dateParam) {
+      try {
+        const parsedDate = new Date(dateParam);
+        if (!isNaN(parsedDate.getTime())) {
+          console.log('[WorkoutPlanSection] Initializing date from URL parameter:', dateParam);
+          return parsedDate;
+        }
+      } catch (error) {
+        console.warn('[WorkoutPlanSection] Failed to parse date from URL:', dateParam);
+      }
+    }
+    
+    // Try to get date from localStorage (only if clientId is available)
+    if (clientId) {
+      const storedDate = localStorage.getItem(`workoutPlanDate_${clientId}`);
+      if (storedDate) {
+        try {
+          const parsedDate = new Date(storedDate);
+          if (!isNaN(parsedDate.getTime())) {
+            console.log('[WorkoutPlanSection] Initializing date from localStorage:', storedDate);
+            return parsedDate;
+          }
+        } catch (error) {
+          console.warn('[WorkoutPlanSection] Failed to parse date from localStorage:', storedDate);
+        }
+      }
+    }
+    
+    // Fallback to today's date
+    console.log('[WorkoutPlanSection] Initializing date to today');
+    return new Date();
+  });
   
   // Enhanced state management for better UX
   const [workoutPlanState, setWorkoutPlanState] = useState<WorkoutPlanState>({
@@ -1058,6 +1154,8 @@ const WorkoutPlanSection = ({
     setLoadingState({ type, message });
   };
 
+
+
   // Get the appropriate data for the table based on view mode
   const getTableData = () => {
     if (viewMode === 'monthly' && monthlyData.length > 0) {
@@ -1066,6 +1164,26 @@ const WorkoutPlanSection = ({
     }
     // Return the current week data for weekly view
     return workoutPlan?.week || [];
+  };
+
+  // Test Supabase connection
+  const testSupabaseConnection = async () => {
+    console.log('🔍 === TESTING SUPABASE CONNECTION ===');
+    try {
+      const { data, error } = await supabase
+        .from('schedule_preview')
+        .select('count')
+        .limit(1);
+      
+      if (error) {
+        console.error('🔍 Supabase connection error:', error);
+      } else {
+        console.log('🔍 Supabase connection successful');
+      }
+    } catch (exception) {
+      console.error('🔍 Supabase connection exception:', exception);
+    }
+    console.log('🔍 === END CONNECTION TEST ===');
   };
 
   // Debug function to help troubleshoot approval status
@@ -1085,7 +1203,7 @@ const WorkoutPlanSection = ({
     // Check schedule table
     const { data: scheduleData, error: scheduleError } = await supabase
       .from('schedule')
-      .select('id, for_date')
+      .select('id, for_date, details_json')
       .eq('client_id', numericClientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
@@ -1094,12 +1212,13 @@ const WorkoutPlanSection = ({
     console.log('🔍 Schedule table data:', scheduleData?.length || 0, 'entries');
     if (scheduleData) {
       console.log('🔍 Schedule dates:', scheduleData.map(row => row.for_date));
+      console.log('🔍 Schedule details_json:', scheduleData.map(row => ({ date: row.for_date, details: row.details_json })));
     }
     
     // Check schedule_preview table
     const { data: previewData, error: previewError } = await supabase
       .from('schedule_preview')
-      .select('id, for_date, is_approved')
+      .select('id, for_date, is_approved, details_json')
       .eq('client_id', numericClientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
@@ -1108,7 +1227,13 @@ const WorkoutPlanSection = ({
     console.log('🔍 Schedule_preview table data:', previewData?.length || 0, 'entries');
     if (previewData) {
       console.log('🔍 Preview dates and approval status:', previewData.map(row => ({ date: row.for_date, approved: row.is_approved })));
+      console.log('🔍 Preview details_json:', previewData.map(row => ({ date: row.for_date, details: row.details_json })));
     }
+    
+    // Run the status check to see what it determines
+    console.log('🔍 Running status check...');
+    const statusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
+    console.log('🔍 Status check result:', statusResult);
     
     console.log('🔍 === END DEBUG ===');
   };
@@ -2137,6 +2262,8 @@ const WorkoutPlanSection = ({
 
   // Handle date changes with unsaved changes protection
   const handleDateChange = async (newDate: Date) => {
+    console.log('[WorkoutPlanSection] Date change requested:', newDate.toISOString());
+    
     if (workoutPlanState.hasUnsavedChanges) {
       const confirmed = await showConfirmationDialog(
         'Unsaved Changes',
@@ -2148,8 +2275,26 @@ const WorkoutPlanSection = ({
       }
     }
     
+    // Update the state
     setPlanStartDate(newDate);
     updateWorkoutPlanState({ hasUnsavedChanges: false });
+    
+    // Persist to localStorage
+    if (clientId) {
+      localStorage.setItem(`workoutPlanDate_${clientId}`, newDate.toISOString());
+      console.log('[WorkoutPlanSection] Date saved to localStorage');
+    }
+    
+    // Update URL parameter
+    const url = new URL(window.location.href);
+    url.searchParams.set('date', newDate.toISOString().split('T')[0]); // Use YYYY-MM-DD format
+    window.history.replaceState({}, '', url.toString());
+    console.log('[WorkoutPlanSection] URL updated with date parameter');
+    
+    // Notify parent component if callback exists
+    if (props.onDateChange) {
+      props.onDateChange(newDate);
+    }
   };
 
   // Clear workout plan when client changes (but not when we have AI data)
@@ -2333,6 +2478,24 @@ const WorkoutPlanSection = ({
       checkPlanApprovalStatus();
     }
   }, [numericClientId, planStartDate, workoutPlan, workoutPlanState.status]);
+
+  // Load date from localStorage when clientId changes
+  useEffect(() => {
+    if (clientId) {
+      const storedDate = localStorage.getItem(`workoutPlanDate_${clientId}`);
+      if (storedDate) {
+        try {
+          const parsedDate = new Date(storedDate);
+          if (!isNaN(parsedDate.getTime())) {
+            console.log('[WorkoutPlanSection] Loading date from localStorage for client:', clientId, 'date:', storedDate);
+            setPlanStartDate(parsedDate);
+          }
+        } catch (error) {
+          console.warn('[WorkoutPlanSection] Failed to parse date from localStorage for client:', clientId, 'date:', storedDate);
+        }
+      }
+    }
+  }, [clientId]);
 
   // Enhanced search-based generation handler
   const handleGenerateSearchPlan = async () => {
@@ -2777,7 +2940,7 @@ const WorkoutPlanSection = ({
                       const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                       const clientPlanStartDay = client?.plan_start_day || 'Sunday';
                       if (weekdays[date.getDay()] === clientPlanStartDay) {
-                        setPlanStartDate(date);
+                        handleDateChange(date);
                       }
                     }}
                     initialFocus
@@ -2871,6 +3034,26 @@ const WorkoutPlanSection = ({
             </div>
           </div>
 
+          {/* Debug Buttons */}
+          <div className="flex items-center gap-3 mb-4">
+            <Button
+              onClick={testSupabaseConnection}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              🔌 Test Connection
+            </Button>
+            <Button
+              onClick={debugApprovalStatus}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              🔍 Debug Status
+            </Button>
+          </div>
+
           {/* Step 3: Approve Plan */}
           {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
             <div className="flex items-center gap-3">
@@ -2879,13 +3062,24 @@ const WorkoutPlanSection = ({
               </div>
               <Button
                 onClick={async () => {
+                  console.log('[Approval Button] Approve button clicked');
                   setLoading('approving', 'Approving plan...');
                   setIsApproving(true);
                   
                   try {
-                    const result = await approvePlan(numericClientId, planStartDate);
+                    console.log('[Approval Button] Calling approvePlan function...');
+                    
+                    // Add a timeout to prevent hanging
+                    const approvalPromise = approvePlan(numericClientId, planStartDate);
+                    const timeoutPromise = new Promise((_, reject) => 
+                      setTimeout(() => reject(new Error('Approval timeout after 30 seconds')), 30000)
+                    );
+                    
+                    const result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
+                    console.log('[Approval Button] approvePlan result:', result);
                     
                     if (result.success) {
+                      console.log('[Approval Button] Approval successful, updating UI...');
                       toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
                       
                       // Update state immediately
@@ -2898,17 +3092,23 @@ const WorkoutPlanSection = ({
                       });
                       
                       // Refresh approval status to ensure consistency
+                      console.log('[Approval Button] Refreshing approval status...');
                       await checkPlanApprovalStatus();
                       
                       // Refresh the plan data to show approved version
+                      console.log('[Approval Button] Refreshing plan data...');
                       await fetchPlan();
+                      
+                      console.log('[Approval Button] Approval process completed successfully');
                     } else {
+                      console.error('[Approval Button] Approval failed:', result.error);
                       toast({ title: 'Approval Failed', description: result.error || 'Could not approve plan.', variant: 'destructive' });
                     }
                   } catch (error) {
-                    console.error('Approval error:', error);
+                    console.error('[Approval Button] Approval error:', error);
                     toast({ title: 'Approval Failed', description: 'An unexpected error occurred during approval.', variant: 'destructive' });
                   } finally {
+                    console.log('[Approval Button] Cleaning up approval state...');
                     setIsApproving(false);
                     clearLoading();
                   }
@@ -3055,6 +3255,7 @@ const WorkoutPlanSection = ({
                 clientId={numericClientId}
                 onViewModeChange={setViewMode}
                 onMonthlyDataChange={setMonthlyData}
+                onApprovalStatusCheck={checkPlanApprovalStatus}
               />
             </Card>
 
