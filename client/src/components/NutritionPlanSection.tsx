@@ -133,7 +133,8 @@ const NutritionPlanSection = ({
   setNotesError,
   isGeneratingAnalysis,
   handleSummarizeNotes,
-  isSummarizingNotes
+  isSummarizingNotes,
+  setLastAIRecommendation
 }: NutritionPlanSectionProps) => {
   // --- All hooks at the top ---
   const [loading, setLoading] = useState(false);
@@ -769,7 +770,7 @@ const NutritionPlanSection = ({
         
         console.log('✅ === NUTRITION PLAN SAVED ===');
         console.log('📊 Records saved:', recordsToInsert.length);
-        console.log('📋 Meal types saved:', [...new Set(recordsToInsert.map(r => r.task))]);
+        console.log('📋 Meal types saved:', Array.from(new Set(recordsToInsert.map(r => r.task))));
         console.log('📅 Date range:', `${startDate.toISOString().split('T')[0]} to ${format(addDays(startDate, 6), 'yyyy-MM-dd')}`);
         
         // Update approval status after saving
