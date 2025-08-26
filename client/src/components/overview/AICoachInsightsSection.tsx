@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Brain, Sparkles, Target, Calendar, TrendingUp, AlertTriangle, CheckCircle, Zap, Star, Clock, Users, BarChart3, Lightbulb, Activity, ArrowRight, MessageSquare, Settings, Dumbbell, Utensils, Heart, Timer, Award, ThumbsUp } from "lucide-react"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { useToast } from "@/hooks/use-toast"
+import { AICoachInsightsState } from "@/types/ai-coach-insights"
 
 interface AICoachInsightsSectionProps {
   lastAIRecommendation: any
@@ -14,6 +15,7 @@ interface AICoachInsightsSectionProps {
   client?: any
   trainerNotes?: string
   setLastAIRecommendation?: (analysis: any) => void
+  aiCoachInsights?: AICoachInsightsState
 }
 
 interface ActionItem {
@@ -30,7 +32,8 @@ export function AICoachInsightsSection({
   onViewFullAnalysis, 
   client, 
   trainerNotes,
-  setLastAIRecommendation 
+  setLastAIRecommendation,
+  aiCoachInsights
 }: AICoachInsightsSectionProps) {
   const { toast } = useToast()
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false)
@@ -48,9 +51,63 @@ export function AICoachInsightsSection({
     setCompletedActions(newCompleted)
   }
 
+  // Helper function to convert trainer notes to proper format for AI analysis
+  const convertTrainerNotesToText = (notes: string): string => {
+    if (!notes || typeof notes !== 'string') {
+      return ''
+    }
+    
+    try {
+      // Try to parse as JSON (structured notes format)
+      const parsedNotes = JSON.parse(notes)
+      if (Array.isArray(parsedNotes)) {
+        // Convert array of note objects to text
+        return parsedNotes.map(note => 
+          `Date: ${note.date}\nNotes: ${note.notes}`
+        ).join('\n\n')
+      }
+    } catch (error) {
+      // If not JSON, treat as plain text
+      console.log('📝 Notes are not JSON, treating as plain text')
+    }
+    
+    // Return as-is if it's already plain text
+    return notes
+  }
+
   // Function to generate AI analysis from trainer notes
   const handleGenerateAIAnalysis = async () => {
-    if (!client?.client_id || !trainerNotes || !setLastAIRecommendation) {
+    // Use unified AI Coach Insights if available, otherwise fall back to individual props
+    const currentClient = client || aiCoachInsights?.client;
+    const currentTrainerNotes = aiCoachInsights?.trainerNotes || trainerNotes;
+    const currentSetLastAIRecommendation = aiCoachInsights?.setLastAIRecommendation || setLastAIRecommendation;
+    const currentIsGeneratingAnalysis = aiCoachInsights?.isGeneratingAnalysis;
+    const currentSetIsGeneratingAnalysis = aiCoachInsights?.setIsGeneratingAnalysis;
+    
+    console.log('🔍 AI Analysis Debug Info:')
+    console.log('👤 client:', currentClient)
+    console.log('👤 client?.client_id:', currentClient?.client_id)
+    console.log('📝 trainerNotes:', currentTrainerNotes)
+    console.log('📝 trainerNotes type:', typeof currentTrainerNotes)
+    console.log('📝 trainerNotes length:', currentTrainerNotes?.length)
+    console.log('🔧 setLastAIRecommendation:', currentSetLastAIRecommendation)
+    console.log('🔧 setLastAIRecommendation type:', typeof currentSetLastAIRecommendation)
+    console.log('🔧 aiCoachInsights available:', !!aiCoachInsights)
+    
+    // Create a fallback function if setLastAIRecommendation is not provided
+    const updateAIRecommendation = currentSetLastAIRecommendation || ((analysis: any) => {
+      console.log('📊 AI Analysis completed (no setter function):', analysis)
+      toast({
+        title: "AI Analysis Complete",
+        description: "Analysis generated successfully, but cannot be saved to parent component.",
+      })
+    })
+    
+    if (!currentClient?.client_id || !currentTrainerNotes) {
+      console.log('❌ Validation failed:')
+      console.log('  - client?.client_id:', !!currentClient?.client_id)
+      console.log('  - trainerNotes:', !!currentTrainerNotes)
+      
       toast({
         title: "Cannot Generate Analysis",
         description: "Please ensure trainer notes are available and client information is loaded.",
@@ -58,20 +115,41 @@ export function AICoachInsightsSection({
       })
       return
     }
+    
+    // Check if trainer notes have sufficient content
+    if (currentTrainerNotes.trim().length < 20) {
+      console.log('❌ Trainer notes too short:', currentTrainerNotes.trim().length, 'characters')
+      toast({
+        title: "Insufficient Notes",
+        description: "Please add more trainer notes (minimum 20 characters) before generating AI analysis.",
+        variant: "destructive"
+      })
+      return
+    }
 
-    setIsGeneratingAnalysis(true)
+    // Use unified state management if available
+    if (currentSetIsGeneratingAnalysis) {
+      currentSetIsGeneratingAnalysis(true);
+    } else {
+      setIsGeneratingAnalysis(true);
+    }
     
     try {
       console.log('🤖 Generating AI analysis from trainer notes...')
       
+      // Convert trainer notes to proper format
+      const notesText = convertTrainerNotesToText(currentTrainerNotes)
+      console.log('📝 Converted notes text:', notesText)
+      console.log('📝 Converted notes length:', notesText.length)
+      
       const result = await performComprehensiveCoachAnalysis(
-        client.client_id,
-        trainerNotes,
+        currentClient.client_id,
+        notesText,
         '' // No todo items for now
       )
 
       if (result.success && result.analysis) {
-        setLastAIRecommendation(result.analysis)
+        updateAIRecommendation(result.analysis)
         toast({
           title: "AI Analysis Complete",
           description: "Comprehensive analysis has been generated based on your trainer notes.",
@@ -92,17 +170,23 @@ export function AICoachInsightsSection({
         variant: "destructive"
       })
     } finally {
-      setIsGeneratingAnalysis(false)
+      // Use unified state management if available
+      if (currentSetIsGeneratingAnalysis) {
+        currentSetIsGeneratingAnalysis(false);
+      } else {
+        setIsGeneratingAnalysis(false);
+      }
     }
   }
 
   // Helper function to extract action items
   const getActionItems = (): ActionItem[] => {
-    const actions = lastAIRecommendation?.action_plan?.immediate_actions || 
-                  lastAIRecommendation?.immediate_actions || 
-                  lastAIRecommendation?.action_items?.immediate_actions || 
-                  lastAIRecommendation?.recommendations?.immediate_actions ||
-                  lastAIRecommendation?.actions ||
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    const actions = currentRecommendation?.action_plan?.immediate_actions || 
+                  currentRecommendation?.immediate_actions || 
+                  currentRecommendation?.action_items?.immediate_actions || 
+                  currentRecommendation?.recommendations?.immediate_actions ||
+                  currentRecommendation?.actions ||
                   [];
     
     return actions.map((action: any, index: number) => ({
@@ -119,23 +203,26 @@ export function AICoachInsightsSection({
 
   // Helper function to get progress assessment
   const getProgressAssessment = () => {
-    return lastAIRecommendation?.summary?.progress_assessment || 
-           lastAIRecommendation?.progress_assessment ||
-           lastAIRecommendation?.assessment?.progress;
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    return currentRecommendation?.summary?.progress_assessment || 
+           currentRecommendation?.progress_assessment ||
+           currentRecommendation?.assessment?.progress;
   }
 
   // Helper function to get positive developments
   const getPositiveDevelopments = () => {
-    return lastAIRecommendation?.summary?.positive_developments || 
-           lastAIRecommendation?.positive_developments ||
-           lastAIRecommendation?.assessment?.positive_developments ||
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    return currentRecommendation?.summary?.positive_developments || 
+           currentRecommendation?.positive_developments ||
+           currentRecommendation?.assessment?.positive_developments ||
            [];
   }
 
   // Helper function to get immediate concerns
   const getImmediateConcerns = () => {
-    return lastAIRecommendation?.summary?.immediate_concerns || 
-           lastAIRecommendation?.immediate_concerns ||
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    return currentRecommendation?.summary?.immediate_concerns || 
+           currentRecommendation?.immediate_concerns ||
            [];
   }
 
@@ -208,25 +295,44 @@ export function AICoachInsightsSection({
               </div>
               <span className="text-lg font-semibold text-gray-900 dark:text-white">AI Coach Insights</span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateAIAnalysis}
-              disabled={!client?.client_id || !trainerNotes || isGeneratingAnalysis}
-              className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
-            >
-              {isGeneratingAnalysis ? (
-                <>
-                  <Brain className="h-4 w-4 mr-2 animate-pulse" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  AI Analysis
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateAIAnalysis}
+                disabled={!client?.client_id || !trainerNotes || isGeneratingAnalysis || aiCoachInsights?.isGeneratingAnalysis}
+                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/20"
+              >
+                {(isGeneratingAnalysis || aiCoachInsights?.isGeneratingAnalysis) ? (
+                  <>
+                    <Brain className="h-4 w-4 mr-2 animate-pulse" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    AI Analysis
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log('🔍 Manual Debug Check:')
+                  console.log('👤 client:', client)
+                  console.log('👤 client?.client_id:', client?.client_id)
+                  console.log('📝 trainerNotes:', trainerNotes)
+                  console.log('📝 trainerNotes type:', typeof trainerNotes)
+                  console.log('📝 trainerNotes length:', trainerNotes?.length)
+                  console.log('🔧 setLastAIRecommendation:', setLastAIRecommendation)
+                  console.log('🔧 setLastAIRecommendation type:', typeof setLastAIRecommendation)
+                }}
+                className="text-gray-600 border-gray-200 hover:bg-gray-50"
+              >
+                Debug
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
       </Card>

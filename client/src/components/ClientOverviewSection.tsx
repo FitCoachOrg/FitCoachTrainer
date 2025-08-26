@@ -7,8 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import TrainerOnboardingScreen from "./TrainerOnboardingScreen";
 import ClientTargetsTable from "./ClientTargetsTable";
 
+import { AICoachInsightsState } from "@/types/ai-coach-insights";
+
 interface ClientOverviewSectionProps {
   client: any;
+  aiCoachInsights?: AICoachInsightsState;
   lastAIRecommendation: any;
   trainerNotes: string;
   setTrainerNotes: (notes: string) => void;
@@ -23,6 +26,7 @@ interface ClientOverviewSectionProps {
   isGeneratingAnalysis: boolean;
   handleSummarizeNotes: () => void;
   isSummarizingNotes: boolean;
+  setLastAIRecommendation?: (analysis: any) => void;
   refreshClientData: () => void;
 }
 
@@ -30,6 +34,7 @@ type OverviewTab = 'onboarding' | 'targets';
 
 const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   client,
+  aiCoachInsights,
   lastAIRecommendation,
   trainerNotes,
   setTrainerNotes,
@@ -44,6 +49,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   isGeneratingAnalysis,
   handleSummarizeNotes,
   isSummarizingNotes,
+  setLastAIRecommendation,
   refreshClientData,
 }) => {
   // Local state for popups
@@ -159,8 +165,10 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
         context={{
           client,
           onGoalsSaved: refreshClientData,
-          lastAIRecommendation,
+          aiCoachInsights,
           onViewFullAnalysis: () => {},
+          // Legacy props for backward compatibility
+          lastAIRecommendation,
           trainerNotes,
           setTrainerNotes,
           handleSaveTrainerNotes,
@@ -173,7 +181,8 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
           setNotesError,
           isGeneratingAnalysis,
           handleSummarizeNotes,
-          isSummarizingNotes
+          isSummarizingNotes,
+          setLastAIRecommendation
         }}
       />
     </div>

@@ -30,13 +30,14 @@ export const trainerPopups: Record<PopupKey, TrainerPopupConfigEntry> = {
     key: 'aiCoachInsights',
     title: 'AI Coach Insights',
     icon: <Brain className="h-5 w-5 text-white" />,
-    render: ({ lastAIRecommendation, onViewFullAnalysis, client, trainerNotes, setLastAIRecommendation }: any) => (
+    render: ({ aiCoachInsights, onViewFullAnalysis, client, lastAIRecommendation, trainerNotes, setLastAIRecommendation }: any) => (
       <AICoachInsightsSection
-        lastAIRecommendation={lastAIRecommendation}
+        lastAIRecommendation={aiCoachInsights?.lastAIRecommendation || lastAIRecommendation}
         onViewFullAnalysis={onViewFullAnalysis || (() => {})}
         client={client}
-        trainerNotes={trainerNotes}
-        setLastAIRecommendation={setLastAIRecommendation}
+        trainerNotes={aiCoachInsights?.trainerNotes || trainerNotes}
+        setLastAIRecommendation={aiCoachInsights?.setLastAIRecommendation || setLastAIRecommendation}
+        aiCoachInsights={aiCoachInsights}
       />
     )
   },

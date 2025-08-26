@@ -1335,7 +1335,8 @@ export function ProgramsScreen({
           setNotesError: () => {},
           isGeneratingAnalysis: false,
           handleSummarizeNotes: () => {},
-          isSummarizingNotes: false
+          isSummarizingNotes: false,
+          setLastAIRecommendation: () => {}
         }}
       />
 

@@ -116,6 +116,7 @@ export function TrainerNotesSection({
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState<TrainerNote | null>(null)
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+  const [isSavingNote, setIsSavingNote] = useState(false)
   
   // Voice-to-text functionality
   const [isRecording, setIsRecording] = useState(false)
@@ -217,28 +218,69 @@ export function TrainerNotesSection({
   // Voice-to-text functions
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
+      // Request high-quality audio for better speech recognition
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
+        } 
+      })
+      
+      // Use WebM format with better audio quality, with fallback
+      let mimeType = 'audio/webm;codecs=opus'
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm'
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4'
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = '' // Use default
+          }
+        }
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType || undefined
+      })
+      
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
       mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data)
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
       }
 
       mediaRecorder.onstop = async () => {
         setIsProcessingVoice(true)
         try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+          // Use the same format as recorded for better compatibility
+          const audioBlob = new Blob(audioChunksRef.current, { 
+            type: mediaRecorderRef.current?.mimeType || 'audio/webm' 
+          })
+          console.log('🎤 Audio recording completed, size:', audioBlob.size, 'bytes')
+          
           const text = await convertSpeechToText(audioBlob)
-          if (text) {
-            setNewNote(prev => ({ ...prev, notes: prev.notes + (prev.notes ? '\n' : '') + text }))
+          if (text && text.trim()) {
+            setNewNote(prev => ({ 
+              ...prev, 
+              notes: prev.notes + (prev.notes ? '\n' : '') + text.trim() 
+            }))
             toast({
               title: "Voice Note Added",
-              description: "Your voice note has been converted to text and added to the notes.",
+              description: `"${text.trim()}" has been added to your notes.`,
+            })
+          } else {
+            toast({
+              title: "No Speech Detected",
+              description: "Please try speaking more clearly or for a longer duration.",
+              variant: "destructive"
             })
           }
         } catch (error: any) {
+          console.error('❌ Voice recognition error:', error)
           toast({
             title: "Voice Recognition Failed",
             description: error.message || "Failed to convert speech to text",
@@ -260,7 +302,7 @@ export function TrainerNotesSection({
 
       toast({
         title: "Recording Started",
-        description: "Speak your notes now. Click the microphone again to stop.",
+        description: "Speak clearly into your microphone. Click the microphone again to stop recording.",
       })
     } catch (error: any) {
       toast({
@@ -273,6 +315,23 @@ export function TrainerNotesSection({
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Check if recording is too short
+      if (recordingTime < 1) {
+        toast({
+          title: "Recording Too Short",
+          description: "Please record for at least 1 second for better recognition.",
+          variant: "destructive"
+        })
+        // Stop recording but don't process
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+        setIsRecording(false)
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current)
+          recordingIntervalRef.current = null
+        }
+        return
+      }
+      
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
       setIsRecording(false)
@@ -285,55 +344,110 @@ export function TrainerNotesSection({
   }
 
   const convertSpeechToText = async (audioBlob: Blob): Promise<string> => {
-    // For now, we'll use a simple approach with the Web Speech API
-    // In a production environment, you might want to use a more robust service like Google Speech-to-Text
+    // Check if browser supports speech recognition
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      throw new Error('Speech recognition not supported in this browser')
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     
     return new Promise((resolve, reject) => {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        reject(new Error('Speech recognition not supported in this browser'))
-        return
-      }
-
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
       const recognition = new SpeechRecognition()
       
+      // Configure recognition settings
       recognition.continuous = false
       recognition.interimResults = false
       recognition.lang = 'en-US'
+      recognition.maxAlternatives = 1
+
+      let transcript = ''
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript
-        resolve(transcript)
+        if (event.results.length > 0) {
+          transcript = event.results[0][0].transcript
+          console.log('🎤 Speech recognition result:', transcript)
+        }
       }
 
       recognition.onerror = (event) => {
+        console.error('❌ Speech recognition error:', event.error)
         reject(new Error(`Speech recognition error: ${event.error}`))
       }
 
       recognition.onend = () => {
-        // Recognition ended
+        console.log('🔚 Speech recognition ended')
+        if (transcript) {
+          resolve(transcript)
+        } else {
+          reject(new Error('No speech detected'))
+        }
       }
 
-      // Start recognition
-      recognition.start()
+      // Convert audio blob to audio element and play it for recognition
+      const audioUrl = URL.createObjectURL(audioBlob)
+      const audio = new Audio(audioUrl)
+      
+      audio.onloadedmetadata = () => {
+        console.log('🎵 Audio loaded, starting recognition...')
+        recognition.start()
+        audio.play()
+      }
+
+      audio.onerror = (error) => {
+        console.error('❌ Audio playback error:', error)
+        URL.revokeObjectURL(audioUrl)
+        reject(new Error('Failed to play recorded audio'))
+      }
+
+      audio.onended = () => {
+        console.log('🔚 Audio playback ended')
+        URL.revokeObjectURL(audioUrl)
+        // Recognition will continue for a short time after audio ends
+        setTimeout(() => {
+          if (recognition.state === 'recording') {
+            recognition.stop()
+          }
+        }, 1000)
+      }
     })
   }
 
   // Save notes to database and parent component
   const saveNotesToDatabase = async (notesToSave: TrainerNote[]) => {
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database operation timed out')), 30000); // 30 seconds
+    });
+    
     try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔍 saveNotesToDatabase called with:', notesToSave)
+      
+      const { data: sessionData, error: sessionError } = await Promise.race([
+        supabase.auth.getSession(),
+        timeoutPromise
+      ]);
+      console.log('🔍 Session data:', sessionData)
+      console.log('🔍 Session error:', sessionError)
+      
       if (sessionError || !sessionData?.session?.user?.email) {
         throw new Error("Not logged in");
       }
       const trainerEmail = sessionData.session.user.email;
+      console.log('🔍 Trainer email:', trainerEmail)
       
       // Get trainer ID
-      const { data: trainerData, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", trainerEmail)
-        .single();
+      const { data: trainerData, error: trainerError } = await Promise.race([
+        supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", trainerEmail)
+          .single(),
+        timeoutPromise
+      ]);
+      
+      console.log('🔍 Trainer data:', trainerData)
+      console.log('🔍 Trainer error:', trainerError)
+      console.log('🔍 Client ID:', client?.client_id)
       
       if (trainerError || !trainerData?.id || !client?.client_id) {
         throw new Error("Failed to get trainer or client information");
@@ -341,33 +455,140 @@ export function TrainerNotesSection({
       
       // Convert notes to JSON string
       const notesString = JSON.stringify(notesToSave)
+      console.log('🔍 Notes string to save:', notesString)
       
       // Save to database
-      const { error: saveError } = await supabase
-        .from("trainer_client_web")
-        .update({ trainer_notes: notesString })
-        .eq("trainer_id", trainerData.id)
-        .eq("client_id", client.client_id);
+      console.log('🔍 Attempting database update...')
+      console.log('🔍 trainer_id:', trainerData.id)
+      console.log('🔍 client_id:', client.client_id)
+      console.log('🔍 notesString length:', notesString.length)
+      
+      // First check if the record exists
+      console.log('🔍 Checking if record exists...')
+      const { data: existingRecord, error: checkError } = await Promise.race([
+        supabase
+          .from("trainer_client_web")
+          .select("trainer_id, client_id")
+          .eq("trainer_id", trainerData.id)
+          .eq("client_id", client.client_id)
+          .single(),
+        timeoutPromise
+      ]);
+      
+      console.log('🔍 Existing record check:', existingRecord)
+      console.log('🔍 Check error:', checkError)
+      
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('❌ Error checking existing record:', checkError)
+        throw new Error(`Failed to check existing record: ${checkError.message}`);
+      }
+      
+      if (!existingRecord) {
+        console.log('🔍 Record does not exist, creating new record...')
+        // Try to insert a new record
+        const { data: insertData, error: insertError } = await Promise.race([
+          supabase
+            .from("trainer_client_web")
+            .insert({ 
+              trainer_id: trainerData.id, 
+              client_id: client.client_id,
+              trainer_notes: notesString 
+            })
+            .select(),
+          timeoutPromise
+        ]);
         
-      if (saveError) {
-        throw new Error(saveError.message);
+        console.log('🔍 Insert data:', insertData)
+        console.log('🔍 Insert error:', insertError)
+        
+        if (insertError) {
+          console.error('❌ Insert error:', insertError)
+          throw new Error(`Failed to create record: ${insertError.message}`);
+        }
+        
+        console.log('✅ New record created successfully')
+      } else {
+        console.log('🔍 Record exists, updating...')
+        // Update existing record
+        const { data: updateData, error: saveError } = await Promise.race([
+          supabase
+            .from("trainer_client_web")
+            .update({ trainer_notes: notesString })
+            .eq("trainer_id", trainerData.id)
+            .eq("client_id", client.client_id)
+            .select(),
+          timeoutPromise
+        ]);
+        
+        console.log('🔍 Update data:', updateData)
+        console.log('🔍 Save error:', saveError)
+        
+        if (saveError) {
+          console.error('❌ Database save error:', saveError)
+          
+          // Try to provide more specific error information
+          if (saveError.code === '23505') {
+            throw new Error('Duplicate entry - this note already exists');
+          } else if (saveError.code === '23503') {
+            throw new Error('Foreign key constraint failed - invalid trainer or client ID');
+          } else if (saveError.code === '42501') {
+            throw new Error('Permission denied - you do not have access to update this record');
+          } else {
+            throw new Error(`Database error: ${saveError.message}`);
+          }
+        }
+        
+        console.log('✅ Database update successful')
       }
       
       // Update parent component
-      setTrainerNotes(notesString)
+      if (setTrainerNotes) {
+        setTrainerNotes(notesString)
+        console.log('✅ Parent component updated')
+      } else {
+        console.warn('⚠️ setTrainerNotes function not provided')
+      }
+      console.log('✅ Notes saved successfully')
       
       return true
     } catch (error: any) {
-      console.error('Error saving notes:', error)
+      console.error('❌ Error saving notes:', error)
       throw error
     }
   }
 
   // Add new note
   const handleAddNote = async () => {
-    if (!newNote.notes.trim()) return
+    console.log('🔍 handleAddNote called')
+    console.log('📝 newNote:', newNote)
+    console.log('📝 newNote.notes:', newNote.notes)
+    console.log('📝 newNote.notes.trim():', newNote.notes.trim())
+    console.log('👤 client:', client)
+    console.log('👤 client?.client_id:', client?.client_id)
+    
+    if (!client?.client_id) {
+      console.log('❌ No client ID, returning early')
+      toast({
+        title: "Client Error",
+        description: "Client information is missing. Please refresh the page.",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    if (!newNote.notes.trim()) {
+      console.log('❌ No notes content, returning early')
+      toast({
+        title: "No Content",
+        description: "Please add some notes before saving.",
+        variant: "destructive"
+      })
+      return
+    }
     
     try {
+      setIsSavingNote(true)
+      console.log('✅ Creating new note...')
       const note: TrainerNote = {
         id: Date.now().toString(),
         date: newNote.date,
@@ -375,8 +596,14 @@ export function TrainerNotesSection({
         createdAt: new Date().toISOString()
       }
       
+      console.log('📋 Created note:', note)
       const updatedNotes = [note, ...notes]
+      console.log('📋 Updated notes array:', updatedNotes)
+      
+      console.log('💾 Saving to database...')
       await saveNotesToDatabase(updatedNotes)
+      console.log('✅ Database save successful')
+      
       setNotes(updatedNotes)
       
       setNewNote({ date: new Date().toISOString().split('T')[0], notes: "" })
@@ -390,15 +617,19 @@ export function TrainerNotesSection({
       // Trigger AI analysis with recent notes (last 2 weeks)
       const recentNotes = getRecentNotes(updatedNotes)
       if (recentNotes.length > 0) {
+        console.log('🤖 Triggering AI analysis...')
         await generateAIAnalysis(recentNotes)
       }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add note",
-        variant: "destructive"
-      })
-    }
+          } catch (error: any) {
+        console.error('❌ Error in handleAddNote:', error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to add note",
+          variant: "destructive"
+        })
+      } finally {
+        setIsSavingNote(false)
+      }
   }
 
   // Update note
@@ -571,12 +802,16 @@ export function TrainerNotesSection({
               </div>
               <div className="flex gap-2">
                 <Button 
-                  onClick={handleAddNote} 
+                  type="button"
+                  onClick={() => {
+                    console.log('🔘 Save Note button clicked!')
+                    handleAddNote()
+                  }} 
                   className="bg-green-600 hover:bg-green-700"
-                  disabled={isGeneratingAI}
+                  disabled={isGeneratingAI || isProcessingVoice || isSavingNote}
                 >
                   <Save className="h-4 w-4 mr-2" />
-                  {isGeneratingAI ? "Saving..." : "Save Note"}
+                  {isSavingNote ? "Saving..." : isGeneratingAI ? "Processing..." : isProcessingVoice ? "Processing..." : "Save Note"}
                 </Button>
                 <Button 
                   variant="outline" 

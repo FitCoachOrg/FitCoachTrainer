@@ -121,6 +121,7 @@ import { supabase } from "@/lib/supabase"
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { Progress } from "@/components/ui/progress"
+import { AICoachInsightsState, createDefaultAICoachInsightsState } from "@/types/ai-coach-insights"
 
 // Helper functions to format and parse trainer notes with AI recommendations
 const formatNotesWithAI = (notes: string, aiAnalysis: any): string => {
@@ -1346,6 +1347,9 @@ export default function ClientDashboard() {
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
+  
+  // Unified AI Coach Insights State
+  const [aiCoachInsights, setAiCoachInsights] = useState<AICoachInsightsState | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
   
   // Unified popup state for placeholder cards
@@ -1461,6 +1465,36 @@ export default function ClientDashboard() {
     console.log("Todo saved:", todoItems)
   }
 
+  // Unified AI Coach Insights Management
+  const handleGenerateAIAnalysis = async () => {
+    if (!client?.client_id || !trainerNotes) {
+      console.log("Cannot generate AI analysis: missing client or trainer notes");
+      return;
+    }
+
+    try {
+      setIsGeneratingAnalysis(true);
+      console.log('🤖 Generating AI analysis from trainer notes...');
+      
+      const result = await performComprehensiveCoachAnalysis(
+        client.client_id,
+        trainerNotes,
+        '' // No todo items for now
+      );
+
+      if (result.success && result.analysis) {
+        setLastAIRecommendation(result.analysis);
+        console.log('✅ AI analysis generated successfully:', result.analysis);
+      } else {
+        console.error('❌ AI analysis failed:', result.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Error generating AI analysis:', error);
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  };
+
   const handleSummarizeNotes = async () => {
     if (!trainerNotes || trainerNotes.trim().length === 0) {
       console.log("No trainer notes to summarize");
@@ -1541,6 +1575,47 @@ export default function ClientDashboard() {
       setIsSummarizingNotes(false);
     }
   };
+
+  // Initialize unified AI Coach Insights state
+  useEffect(() => {
+    if (client && clientId) {
+      const unifiedState = createDefaultAICoachInsightsState(
+        setLastAIRecommendation,
+        setTrainerNotes,
+        setNotesDraft,
+        setIsEditingNotes,
+        setIsSavingNotes,
+        setNotesError,
+        handleSaveTrainerNotes,
+        handleGenerateAIAnalysis,
+        isSummarizingNotes,
+        handleSummarizeNotes
+      );
+      
+      // Update with current values
+      unifiedState.lastAIRecommendation = lastAIRecommendation;
+      unifiedState.isGeneratingAnalysis = isGeneratingAnalysis;
+      unifiedState.trainerNotes = trainerNotes;
+      unifiedState.notesDraft = notesDraft;
+      unifiedState.isEditingNotes = isEditingNotes;
+      unifiedState.isSavingNotes = isSavingNotes;
+      unifiedState.notesError = notesError;
+      unifiedState.isSummarizingNotes = isSummarizingNotes;
+      
+      setAiCoachInsights(unifiedState);
+    }
+  }, [
+    client, 
+    clientId, 
+    lastAIRecommendation, 
+    isGeneratingAnalysis, 
+    trainerNotes, 
+    notesDraft, 
+    isEditingNotes, 
+    isSavingNotes, 
+    notesError, 
+    isSummarizingNotes
+  ]);
 
 
 
@@ -2066,6 +2141,7 @@ export default function ClientDashboard() {
             {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
             <ClientOverviewSection
               client={client}
+              aiCoachInsights={aiCoachInsights}
               lastAIRecommendation={lastAIRecommendation}
               trainerNotes={trainerNotes}
               setTrainerNotes={setTrainerNotes}
@@ -2093,6 +2169,7 @@ export default function ClientDashboard() {
                 clientId={clientId} 
                 isActive={activeTab === "metrics"}
                 client={client}
+                aiCoachInsights={aiCoachInsights}
                 lastAIRecommendation={lastAIRecommendation}
                 trainerNotes={trainerNotes}
                 setTrainerNotes={setTrainerNotes}
@@ -2119,6 +2196,7 @@ export default function ClientDashboard() {
               <WorkoutPlanSection 
                 clientId={client?.client_id}
                 client={client}
+                aiCoachInsights={aiCoachInsights}
                 lastAIRecommendation={lastAIRecommendation}
                 trainerNotes={trainerNotes}
                 setTrainerNotes={setTrainerNotes}
@@ -2145,6 +2223,7 @@ export default function ClientDashboard() {
                 clientId={clientId} 
                 isActive={activeTab === "nutrition"}
                 client={client}
+                aiCoachInsights={aiCoachInsights}
                 lastAIRecommendation={lastAIRecommendation}
                 trainerNotes={trainerNotes}
                 setTrainerNotes={setTrainerNotes}
@@ -2169,8 +2248,8 @@ export default function ClientDashboard() {
             clientId={clientId}
             client={client}
             onGoalsSaved={refreshClientData}
+            aiCoachInsights={aiCoachInsights}
             lastAIRecommendation={lastAIRecommendation}
-
           />
         )}
       </div>
@@ -2191,8 +2270,10 @@ export default function ClientDashboard() {
           context={{
             client,
             onGoalsSaved: refreshClientData,
-            lastAIRecommendation,
+            aiCoachInsights,
             onViewFullAnalysis: () => {},
+            // Legacy props for backward compatibility
+            lastAIRecommendation,
             trainerNotes,
             setTrainerNotes,
             handleSaveTrainerNotes,

@@ -144,6 +144,7 @@ interface WorkoutPlanSectionProps {
   isGeneratingAnalysis?: boolean;
   handleSummarizeNotes?: () => void;
   isSummarizingNotes?: boolean;
+  setLastAIRecommendation?: (analysis: any) => void;
   onDateChange?: (newDate: Date) => void;
 }
 
@@ -3237,7 +3238,8 @@ const WorkoutPlanSection = ({
           setNotesError: props.setNotesError || (() => {}),
           isGeneratingAnalysis: props.isGeneratingAnalysis || false,
           handleSummarizeNotes: props.handleSummarizeNotes || (() => {}),
-          isSummarizingNotes: props.isSummarizingNotes || false
+          isSummarizingNotes: props.isSummarizingNotes || false,
+          setLastAIRecommendation: props.setLastAIRecommendation || (() => {})
         }}
       />
     </div>

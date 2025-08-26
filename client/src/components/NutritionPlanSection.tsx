@@ -100,6 +100,7 @@ interface NutritionPlanSectionProps {
   isGeneratingAnalysis?: boolean
   handleSummarizeNotes?: () => void
   isSummarizingNotes?: boolean
+  setLastAIRecommendation?: (analysis: any) => void
 }
 
 // Loading Spinner Component
@@ -1646,7 +1647,8 @@ const NutritionPlanSection = ({
           setNotesError: setNotesError || (() => {}),
           isGeneratingAnalysis: isGeneratingAnalysis || false,
           handleSummarizeNotes: handleSummarizeNotes || (() => {}),
-          isSummarizingNotes: isSummarizingNotes || false
+          isSummarizingNotes: isSummarizingNotes || false,
+          setLastAIRecommendation: setLastAIRecommendation || (() => {})
         }}
       />
 
