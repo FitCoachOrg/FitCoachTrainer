@@ -569,7 +569,7 @@ const TrainerRegistration = () => {
 
           if (result.success) {
             setAccountCreated(true);
-            setAccountUserId(result.authUserId);
+            setAccountUserId(result.authUserId || null);
             
             toast({
               title: "Account Created Successfully!",
