@@ -121,12 +121,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     
     setIsLoadingMultiWeek(true);
     try {
-      console.log('[fetchMultiWeekData] Fetching monthly workout data using unified logic');
-      
       // Use the unified monthly status function
       const monthlyResult: WorkoutStatusResult = await checkMonthlyWorkoutStatus(supabase, clientId, planStartDate);
-      
-      console.log('[fetchMultiWeekData] Monthly status result:', monthlyResult);
       
       // Set the monthly status for display
       setMonthlyStatus(monthlyResult);
@@ -165,10 +161,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         });
         
         setMultiWeekData(weeks);
-        console.log('[fetchMultiWeekData] Set multi-week data:', weeks.length, 'weeks');
       } else {
         // Fallback to generating placeholder data if no breakdown available
-        console.log('[fetchMultiWeekData] No weekly breakdown, generating placeholder data');
         const weeks = [];
         for (let i = 0; i < 4; i++) {
           const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
@@ -221,9 +215,6 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (!clientId) return;
     
     try {
-      console.log(`[WeeklyPlanHeader] Persisting workout copy from ${copySourceDate} to ${targetDate}`);
-      console.log('[WeeklyPlanHeader] Source day data:', sourceDay);
-      
       // ALWAYS save to schedule_preview to match the parent component's strategy
       // The parent component (WorkoutPlanSection) tries schedule_preview first, then falls back to schedule
       const tableName = 'schedule_preview';
@@ -245,8 +236,6 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         is_approved: false
       };
       
-      console.log('[WeeklyPlanHeader] Prepared workout data:', workoutData);
-      
       // Check if there's already an entry for this date
       const { data: existingData, error: checkError } = await supabase
         .from(tableName)
@@ -261,19 +250,15 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         return;
       }
       
-      console.log('[WeeklyPlanHeader] Existing data check result:', existingData);
-      
       let result;
       if (existingData) {
         // Update existing entry
-        console.log('[WeeklyPlanHeader] Updating existing entry with ID:', existingData.id);
         result = await supabase
           .from(tableName)
           .update(workoutData)
           .eq('id', existingData.id);
       } else {
         // Insert new entry
-        console.log('[WeeklyPlanHeader] Inserting new entry');
         result = await supabase
           .from(tableName)
           .insert(workoutData);
@@ -281,9 +266,6 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       
       if (result.error) {
         console.error('[WeeklyPlanHeader] Error persisting workout data:', result.error);
-      } else {
-        console.log(`[WeeklyPlanHeader] Successfully persisted workout data to ${tableName} for ${targetDate}`);
-        console.log('[WeeklyPlanHeader] Database result:', result);
       }
     } catch (error) {
       console.error('[WeeklyPlanHeader] Error in persistMonthlyChangeToDatabase:', error);
@@ -295,8 +277,6 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (!clientId) return;
     
     try {
-      console.log(`Persisting workout deletion for ${date}`);
-      
       // ALWAYS delete from schedule_preview to match the parent component's strategy
       const tableName = 'schedule_preview';
       
@@ -309,12 +289,10 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         .eq('for_date', date);
       
       if (error) {
-        console.error('Error deleting workout data:', error);
-      } else {
-        console.log(`Successfully deleted workout data from ${tableName} for ${date}`);
+        console.error('[WeeklyPlanHeader] Error deleting workout data:', error);
       }
     } catch (error) {
-      console.error('Error in persistDeletionToDatabase:', error);
+      console.error('[WeeklyPlanHeader] Error in persistDeletionToDatabase:', error);
     }
   };
 
@@ -323,7 +301,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     if (!clientId) return;
     
     try {
-      console.log(`Persisting week copy from week ${sourceWeekIndex + 1} to week ${targetWeekIndex + 1}`);
+
       
       // Calculate the date offset between source and target weeks
       const weekOffset = targetWeekIndex - sourceWeekIndex;
@@ -385,12 +363,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         
         if (result.error) {
           console.error('Error persisting workout data:', result.error);
-        } else {
-          console.log(`Successfully persisted workout data for ${targetDateStr}`);
         }
       }
-      
-      console.log(`Successfully completed week copy from week ${sourceWeekIndex + 1} to week ${targetWeekIndex + 1}`);
     } catch (error) {
       console.error('Error in persistWeekCopyToDatabase:', error);
     }
@@ -504,25 +478,18 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const confirmPaste = async () => {
     if (copySourceDate == null || copyTargetDate == null) return;
     
-    console.log('[WeeklyPlanHeader] confirmPaste triggered:', { copySourceDate, copyTargetDate, viewMode });
-    
     if (viewMode === 'weekly') {
       // For weekly view, find source and target days in current week
       const sourceDay = days.find(d => d.date === copySourceDate);
       if (!sourceDay) {
-        console.error('[WeeklyPlanHeader] Source day not found:', copySourceDate);
         return;
       }
-      
-      console.log('[WeeklyPlanHeader] Source day found:', sourceDay);
       
       const updated = days.map((d) => 
         d.date === copyTargetDate 
           ? { ...d, focus: sourceDay.focus, exercises: [...(sourceDay.exercises || [])] }
           : d
       );
-      
-      console.log('[WeeklyPlanHeader] Updated week data:', updated);
       
       // Call onPlanChange to trigger auto-save in parent component
       onPlanChange(updated);
@@ -537,11 +504,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // For monthly view, find source and target days in all days
       const sourceDay = allDays.find(d => d.date === copySourceDate);
       if (!sourceDay) {
-        console.error('[WeeklyPlanHeader] Source day not found in monthly view:', copySourceDate);
         return;
       }
-      
-      console.log('[WeeklyPlanHeader] Source day found in monthly view:', sourceDay);
       
       // Update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -573,7 +537,6 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       }
     }
     
-    console.log('[WeeklyPlanHeader] Copy operation completed');
     setCopySourceDate(null);
     setCopyTargetDate(null);
   };

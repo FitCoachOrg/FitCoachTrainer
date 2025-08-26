@@ -314,8 +314,6 @@ const VideoCell = ({
 };
 
 export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly' }: WorkoutPlanTableProps) => {
-  // Debug logging
-  console.log('[WorkoutPlanTable] Rendering with week data:', week);
   
   // State for delete confirmation
   const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
@@ -359,17 +357,13 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   }));
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
-    console.log(`[WorkoutPlanTable] handlePlanChange triggered. Day: ${dayIdx}, Ex: ${exIdx}, Field: ${field}, Value:`, value);
-    
     const updatedWeek = [...normalizedWeek];
     const newExercises = [...updatedWeek[dayIdx].exercises];
     newExercises[exIdx] = { ...newExercises[exIdx], [field]: value };
     updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
     
-    console.log('[WorkoutPlanTable] Setting editableWeek to:', updatedWeek);
     setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
     onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
-    console.log('[WorkoutPlanTable] Called onPlanChange with updated week:', updatedWeek);
   };
 
   const { toast } = useToast();
@@ -409,10 +403,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   // Always render the appropriate number of days, filling missing days as null
   // Use useMemo to recalculate when editableWeek changes
   const fullWeek = useMemo(() => {
-    console.log('[WorkoutPlanTable] Recalculating fullWeek with editableWeek:', editableWeek);
-    const result = getFullWeek(planStartDate, editableWeek, viewMode);
-    console.log('[WorkoutPlanTable] fullWeek result:', result);
-    return result;
+    return getFullWeek(planStartDate, editableWeek, viewMode);
   }, [planStartDate, editableWeek, viewMode]);
 
   // Organize days into weeks
@@ -469,12 +460,13 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
       exercise: selected.exercise_name,
       category: selected.category || '',
       body_part: selected.target_muscle || selected.primary_muscle || '',
-      sets: '',
-      reps: '',
-      duration: '',
-      weight: '',
+      sets: '3',
+      reps: '10',
+      duration: '15',
+      weight: 'Bodyweight',
       equipment: selected.equipment || '',
-      coach_tip: '',
+      coach_tip: 'Focus on proper form',
+      rest: '60',
       video_link: selected.video_link || '',
       date: targetDate,
     } as any;
@@ -503,14 +495,32 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   };
 
   const handleDeleteExercise = async (dayIdx: number, exIdx: number) => {
-    const day = editableWeek[dayIdx];
-    const newExercises = [...(day.exercises || [])];
+    // Find the actual day in editableWeek that corresponds to the global day index
+    const fullWeekArray = getFullWeek(planStartDate, editableWeek, viewMode);
+    const targetDay = fullWeekArray[dayIdx];
+    
+    if (!targetDay) {
+      return;
+    }
+    
+    // Find the day in editableWeek by date
+    const dayInEditableWeek = editableWeek.find(d => d && d.date === targetDay.date);
+    if (!dayInEditableWeek) {
+      return;
+    }
+    
+    const newExercises = [...(dayInEditableWeek.exercises || [])];
     newExercises.splice(exIdx, 1);
-    const updatedWeek = [...editableWeek];
-    updatedWeek[dayIdx] = { ...day, exercises: newExercises };
+    
+    const updatedWeek = editableWeek.map(d => 
+      d && d.date === targetDay.date 
+        ? { ...d, exercises: newExercises }
+        : d
+    );
+    
     setEditableWeek(updatedWeek);
     onPlanChange(updatedWeek);
-    await persistExercisesForDate(day.date, newExercises, day.focus || 'Workout');
+    await persistExercisesForDate(targetDay.date, newExercises, dayInEditableWeek.focus || 'Workout');
   };
 
   const renderDay = (day: any, dayIdx: number, weekIdx: number) => {
@@ -748,30 +758,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   return (
     <div className="space-y-8">
-      {/* Professional Header with Legend */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-6 text-sm">
-              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
-                <Bed className="w-4 h-4 text-blue-600" />
-                <span className="text-gray-700 dark:text-gray-300">Rest Day</span>
-              </span>
-              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
-                <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                <span className="text-gray-700 dark:text-gray-300">Plan Not Generated</span>
-              </span>
-              <span className="flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 rounded-full border">
-                <Dumbbell className="w-4 h-4 text-green-600" />
-                <span className="text-gray-700 dark:text-gray-300">Workout Day</span>
-              </span>
-            </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400">
-              💡 Click any cell to edit inline • Press Enter to save • Press Escape to cancel
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Weeks Organization */}
       {viewMode === 'monthly' ? (
