@@ -476,29 +476,38 @@ const EventCard: React.FC<{
   
   return (
     <div 
-      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-10`}
+      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-40`}
       style={{ 
         borderLeftColor: event.color || typeColor.border,
         borderLeftWidth: '4px'
       }}
       onClick={(e) => {
+        console.log('Event card clicked:', event.title)
         e.stopPropagation()
         onEdit(event)
       }}
     >
       {compact ? (
-        // Single row layout for weekly view (same as daily)
-        <div className="flex items-center h-full p-1 justify-between">
-          {/* Main content in a single row */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* Title */}
-            <h4 className={`font-medium text-xs leading-tight truncate flex-1 ${typeColor.text}`}>{event.title}</h4>
-            
+        // Multi-line layout for weekly view to accommodate more text
+        <div className="flex flex-col h-full p-1.5 relative">
+          {/* Title - First line, can wrap to multiple lines */}
+          <h4 className={`font-medium text-xs leading-tight ${typeColor.text} break-words flex-1 min-h-0`} style={{ 
+            lineHeight: '1.2',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}>
+            {event.title}
+          </h4>
+          
+          {/* Second line - Client name and time info */}
+          <div className="flex items-center gap-2 mt-0.5 flex-shrink-0">
             {/* Client name */}
             {event.clientName && (
               <div className="flex items-center gap-1 flex-shrink-0">
                 <User className="h-2 w-2 text-gray-500 dark:text-gray-400" />
-                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-16">{event.clientName}</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
               </div>
             )}
             
@@ -520,7 +529,7 @@ const EventCard: React.FC<{
           </div>
           
           {/* Action buttons for compact view */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-20">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-50">
             <Button
               variant="ghost"
               size="sm"
@@ -599,7 +608,7 @@ const EventCard: React.FC<{
         </div>
         
                  {/* Action buttons - Enhanced with better contrast */}
-         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-20">
+         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-50">
           <Button
             variant="ghost"
             size="sm"
@@ -654,7 +663,7 @@ const EventCard: React.FC<{
 const ProfessionalCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"daily" | "weekly" | "monthly">("weekly")
-  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
   const [isLoading, setIsLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | undefined>()
@@ -730,7 +739,10 @@ const ProfessionalCalendar: React.FC = () => {
         color: event.color
       }))
       
-      setEvents(calendarEvents)
+      console.log('📅 Loaded events:', calendarEvents.length, calendarEvents)
+      // Merge loaded events with initial events for testing
+      const allEvents = [...initialEvents, ...calendarEvents]
+      setEvents(allEvents)
     } catch (error) {
       console.error('Error loading events:', error)
     } finally {
@@ -850,6 +862,7 @@ const ProfessionalCalendar: React.FC = () => {
   }
 
   const handleEditEvent = (event: CalendarEvent) => {
+    console.log('handleEditEvent called with:', event.title)
     setEditingEvent(event)
     setIsDialogOpen(true)
   }
@@ -912,6 +925,7 @@ const ProfessionalCalendar: React.FC = () => {
   // Render different views
   const renderDailyView = () => {
     const dayEvents = getEventsForDay(currentDate, events)
+    console.log('📅 Daily view events for', currentDate, ':', dayEvents.length, dayEvents)
     
     // Google Calendar style - more zoomed in with better spacing
     const startHour = 6
@@ -995,11 +1009,15 @@ const ProfessionalCalendar: React.FC = () => {
             return (
               <div
                 key={event.id}
-                className="absolute left-2 right-2 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200"
+                className="absolute left-2 right-2 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
                 style={{ 
                   top: `${top}px`, 
                   height: `${height}px`,
                   minHeight: '24px' // Minimum height for visibility
+                }}
+                onClick={(e) => {
+                  console.log('Daily view event container clicked:', event.title)
+                  e.stopPropagation()
                 }}
               >
                 <EventCard
@@ -1014,7 +1032,7 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
         
               {/* Add event button overlay - Google Calendar style */}
-      <div className="absolute inset-0 ml-20 pointer-events-none z-30">
+      <div className="absolute inset-0 ml-20 pointer-events-none z-25">
           <div className="relative h-full">
             {timeSlots.map((time) => {
               const [hours, minutes] = time.split(':').map(Number)
@@ -1052,6 +1070,7 @@ const ProfessionalCalendar: React.FC = () => {
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
     const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 })
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd })
+    console.log('📅 Weekly view events:', events.length, events)
     
     // Enhanced weekly view with increased height and 30-minute ticks
     const startHour = 6
@@ -1163,16 +1182,20 @@ const ProfessionalCalendar: React.FC = () => {
                     const top = minutesFromStart * pixelsPerMinute
                     
                     // Calculate height based on duration for proportional display
-                    const height = Math.max(event.duration * pixelsPerMinute, 20) // Minimum 20px height
+                    const height = Math.max(event.duration * pixelsPerMinute, 32) // Increased minimum height for multi-line layout
                     
                     return (
                       <div
                         key={event.id}
-                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-20"
+                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
                         style={{ 
                           top: `${top}px`, 
                           height: `${height}px`,
-                          minHeight: '20px' // Minimum height for visibility
+                          minHeight: '32px' // Increased minimum height for multi-line layout
+                        }}
+                        onClick={(e) => {
+                          console.log('Weekly view event container clicked:', event.title)
+                          e.stopPropagation()
                         }}
                       >
                         <EventCard
@@ -1187,7 +1210,7 @@ const ProfessionalCalendar: React.FC = () => {
                   })}
                   
                   {/* Add event button overlay - Enhanced for 30-minute slots */}
-                  <div className="absolute inset-0 pointer-events-none z-30">
+                  <div className="absolute inset-0 pointer-events-none z-25">
                     {timeSlots.map((time) => {
                       const [hours, minutes] = time.split(':').map(Number)
                       const minutesFromStart = (hours - startHour) * 60 + minutes
