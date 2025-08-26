@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -41,19 +42,23 @@ import {
   User, 
   Calendar,
   Grid3X3,
-  List
+  List,
+  X
 } from "lucide-react"
 import { ScheduleService, ScheduleUtils, type ScheduleEvent, type CreateScheduleEvent } from "@/lib/schedule-service"
+import { supabase } from "@/lib/supabase"
 
 interface CalendarEvent {
   id: string
   date: Date
   title: string
-  description: string
+  description?: string
   type: "consultation" | "check-in" | "meeting" | "fitness" | "nutrition" | "assessment" | "follow-up" | "group_session"
   time: string
   duration: number // in minutes
   clientName?: string
+  clientEmail?: string
+  meetingUrl?: string
   color?: string
 }
 
@@ -141,62 +146,236 @@ const EventForm: React.FC<{
   onSave: (event: CalendarEvent) => void
   onClose: () => void
 }> = ({ event, selectedDate, onSave, onClose }) => {
+  const [clients, setClients] = useState<{client_id: number, cl_name: string, cl_email: string}[]>([])
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
   const [formData, setFormData] = useState({
     title: event?.title || "",
-    description: event?.description || "",
+    clientName: event?.clientName || "",
+    clientEmail: event?.clientEmail || "",
     type: event?.type || "consultation",
     time: event?.time || "09:00",
     duration: event?.duration || 60,
-    clientName: event?.clientName || "",
     date: event?.date || selectedDate || new Date(),
+    meetingUrl: event?.meetingUrl || "",
     color: event?.color || "#3B82F6"
   })
 
+  // Load trainer's clients on component mount
+  useEffect(() => {
+    const loadClients = async () => {
+      // Add a small delay to ensure component is fully mounted
+      await new Promise(resolve => setTimeout(resolve, 100))
+      try {
+        setIsLoadingClients(true)
+        console.log('🔄 Loading trainer clients...')
+        
+        // Check authentication status first
+        console.log('🔍 Checking authentication status...')
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        console.log('🔍 Session:', session)
+        console.log('🔍 Session error:', sessionError)
+        
+        if (!session) {
+          console.log('❌ No active session found - user not authenticated')
+          setClients([])
+          return
+        }
+        
+        console.log('✅ User authenticated:', session.user.email)
+        console.log('📊 Using direct database access...')
+        
+                // Get clients directly by trainer_email
+        console.log('🔍 Getting clients for trainer_email:', session.user.email)
+        console.log('🔍 Session user:', session.user)
+        console.log('🔍 Session access token length:', session.access_token?.length || 'undefined')
+        
+        const { data, error } = await supabase
+          .from('trainer_client_web')
+          .select(`
+            client_id,
+            cl_email,
+            trainer_name
+          `)
+          .eq('trainer_email', session.user.email)
+          .eq('status', 'active')
+          .order('client_id', { ascending: true })
+
+        if (error) {
+          console.error('❌ Error getting client relationships:', error)
+          setClients([])
+          return
+        }
+
+        console.log('✅ Found', data.length, 'client relationships')
+
+        if (data.length === 0) {
+          console.log('❌ No client relationships found')
+          setClients([])
+          return
+        }
+
+        // Get client details separately
+        const clientIds = data.map(item => item.client_id)
+        const { data: clientData, error: clientError } = await supabase
+          .from('client')
+          .select('client_id, cl_name, cl_email')
+          .in('client_id', clientIds)
+          .order('cl_name', { ascending: true })
+
+        if (clientError) {
+          console.error('❌ Error getting client details:', clientError)
+          setClients([])
+          return
+        }
+
+        console.log('✅ Found', clientData.length, 'client details')
+
+        // Merge the data
+        const trainerClients = data.map(item => {
+          const client = clientData.find(c => c.client_id === item.client_id)
+          return {
+            client_id: item.client_id,
+            cl_name: client?.cl_name || 'Unknown Client',
+            cl_email: item.cl_email || client?.cl_email || ''
+          }
+        })
+
+        console.log('✅ Final client list:', trainerClients)
+        setClients(trainerClients)
+        
+      } catch (error) {
+        console.error('❌ Error loading clients:', error)
+        setClients([])
+      } finally {
+        setIsLoadingClients(false)
+      }
+    }
+    loadClients()
+  }, [])
+
+  // Handle client selection - auto-populate email
+  const handleClientChange = (clientId: string) => {
+    if (clientId === 'custom') {
+      // Custom client - clear email for manual input
+      setFormData(prev => ({ ...prev, clientName: '', clientEmail: '' }))
+    } else {
+      // Selected client - auto-populate name and email
+      const selectedClient = clients.find(client => client.client_id.toString() === clientId)
+      if (selectedClient) {
+        setFormData(prev => ({ 
+          ...prev, 
+          clientName: selectedClient.cl_name,
+          clientEmail: selectedClient.cl_email || ''
+        }))
+      }
+    }
+  }
+
+  // Handle custom client name input
+  const handleCustomClientNameChange = (name: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      clientName: name,
+      // Clear email if it was auto-populated from a selected client
+      clientEmail: prev.clientEmail && clients.some(c => c.cl_email === prev.clientEmail) ? '' : prev.clientEmail
+    }))
+  }
+
+  // Get the current selected value for the dropdown
+  const getSelectedValue = () => {
+    if (!formData.clientName) return ''
+    // Check if the current client name matches any client in the list
+    const matchingClient = clients.find(client => client.cl_name === formData.clientName)
+    return matchingClient ? matchingClient.client_id.toString() : 'custom'
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('📝 Form submitted with data:', formData)
+    
     const newEvent: CalendarEvent = {
       id: event?.id || Date.now().toString(),
       ...formData,
     }
+    console.log('📅 Created calendar event:', newEvent)
+    
     onSave(newEvent)
     onClose()
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="title">Event Title</Label>
-          <Input
-            id="title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="clientName">Client Name (Optional)</Label>
-          <Input
-            id="clientName"
-            value={formData.clientName}
-            onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-          />
-        </div>
-      </div>
-
+      {/* Event Name */}
       <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          rows={3}
+        <Label htmlFor="title">Event Name *</Label>
+        <Input
+          id="title"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          placeholder="Enter event name"
+          required
         />
       </div>
 
+      {/* Client Name */}
+      <div>
+        <Label htmlFor="clientName">Client Name</Label>
+        {isLoadingClients && <div className="text-sm text-gray-500 mb-2">Loading clients...</div>}
+        <Select 
+          value={getSelectedValue()} 
+          onValueChange={handleClientChange}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select client or enter custom name" />
+          </SelectTrigger>
+          <SelectContent>
+            {clients.length === 0 ? (
+              <SelectItem value="custom" disabled>No clients found</SelectItem>
+            ) : (
+              <>
+                <SelectItem value="custom">+ Add Custom Name</SelectItem>
+                {clients.map((client) => (
+                  <SelectItem key={client.client_id} value={client.client_id.toString()}>
+                    {client.cl_name} (ID: {client.client_id})
+                  </SelectItem>
+                ))}
+              </>
+            )}
+          </SelectContent>
+        </Select>
+        {formData.clientName && (
+          <Input
+            className="mt-2"
+            value={formData.clientName}
+            onChange={(e) => handleCustomClientNameChange(e.target.value)}
+            placeholder="Enter client name"
+          />
+        )}
+        <div className="text-xs text-gray-500 mt-1">
+          {isLoadingClients ? 'Loading clients...' : 
+           clients.length > 0 ? `${clients.length} clients available` : 'No clients found'}
+          {formData.clientName && !clients.some(c => c.cl_name === formData.clientName) && (
+            <span className="ml-2 text-blue-600">(Custom name)</span>
+          )}
+        </div>
+      </div>
+
+      {/* Email Address */}
+      <div>
+        <Label htmlFor="clientEmail">Email Address</Label>
+        <Input
+          id="clientEmail"
+          type="email"
+          value={formData.clientEmail}
+          onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
+          placeholder="Enter email address"
+        />
+      </div>
+
+      {/* Type, Time, Duration */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="type">Type *</Label>
           <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as any })}>
             <SelectTrigger>
               <SelectValue />
@@ -207,11 +386,14 @@ const EventForm: React.FC<{
               <SelectItem value="meeting">Meeting</SelectItem>
               <SelectItem value="fitness">Fitness</SelectItem>
               <SelectItem value="nutrition">Nutrition</SelectItem>
+              <SelectItem value="assessment">Assessment</SelectItem>
+              <SelectItem value="follow-up">Follow-up</SelectItem>
+              <SelectItem value="group_session">Group Session</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label htmlFor="time">Time</Label>
+          <Label htmlFor="time">Time *</Label>
           <Input
             id="time"
             type="time"
@@ -221,7 +403,7 @@ const EventForm: React.FC<{
           />
         </div>
         <div>
-          <Label htmlFor="duration">Duration (min)</Label>
+          <Label htmlFor="duration">Duration (min) *</Label>
           <Input
             id="duration"
             type="number"
@@ -235,14 +417,27 @@ const EventForm: React.FC<{
         </div>
       </div>
 
+      {/* Date */}
       <div>
-        <Label htmlFor="date">Date</Label>
+        <Label htmlFor="date">Date *</Label>
         <Input
           id="date"
           type="date"
           value={format(formData.date, "yyyy-MM-dd")}
           onChange={(e) => setFormData({ ...formData, date: new Date(e.target.value) })}
           required
+        />
+      </div>
+
+      {/* Zoom/Google Meet Link */}
+      <div>
+        <Label htmlFor="meetingUrl">Zoom/Google Meet Link</Label>
+        <Input
+          id="meetingUrl"
+          type="url"
+          value={formData.meetingUrl}
+          onChange={(e) => setFormData({ ...formData, meetingUrl: e.target.value })}
+          placeholder="https://zoom.us/j/... or https://meet.google.com/..."
         />
       </div>
 
@@ -269,8 +464,9 @@ const EventCard: React.FC<{
   
   return (
     <div 
-      className={`${typeColor.bg} ${typeColor.border} ${typeColor.text} ${typeColor.dark} rounded-lg p-2 border-l-4 cursor-pointer hover:shadow-md transition-all duration-200`}
+      className={`group ${typeColor.bg} ${typeColor.border} ${typeColor.text} ${typeColor.dark} rounded-lg p-2 border-l-4 cursor-pointer hover:shadow-md transition-all duration-200`}
       style={{ borderLeftColor: event.color }}
+      onClick={() => onEdit(event)}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -286,8 +482,15 @@ const EventCard: React.FC<{
               <span className="text-xs opacity-75">{event.clientName}</span>
             </div>
           )}
-          {!compact && event.description && (
-            <p className="text-xs mt-1 opacity-75 line-clamp-2">{event.description}</p>
+          {event.clientEmail && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-xs opacity-75">{event.clientEmail}</span>
+            </div>
+          )}
+          {!compact && event.meetingUrl && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-xs opacity-75 text-blue-600">🔗 Meeting Link</span>
+            </div>
           )}
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -302,17 +505,38 @@ const EventCard: React.FC<{
           >
             <Edit2 className="h-3 w-3" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-red-600"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(event.id)
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(event.id)
+                  }}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>
@@ -328,6 +552,7 @@ const ProfessionalCalendar: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | undefined>()
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+  const [session, setSession] = useState<any>(null)
 
   // Navigation functions
   const handlePrev = () => {
@@ -393,6 +618,8 @@ const ProfessionalCalendar: React.FC = () => {
         time: ScheduleUtils.formatTime(event.start_time),
         duration: event.duration_minutes,
         clientName: event.client_name,
+        clientEmail: event.client_email,
+        meetingUrl: event.meeting_url,
         color: event.color
       }))
       
@@ -404,6 +631,15 @@ const ProfessionalCalendar: React.FC = () => {
     }
   }
 
+  // Get session on component mount
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setSession(session)
+    }
+    getSession()
+  }, [])
+
   // Load events when view or date changes
   useEffect(() => {
     loadEvents()
@@ -412,40 +648,69 @@ const ProfessionalCalendar: React.FC = () => {
   const handleSaveEvent = async (event: CalendarEvent) => {
     try {
       setIsLoading(true)
+      console.log('🔄 Saving event:', event)
       
       if (editingEvent) {
+        console.log('📝 Updating existing event...')
         // Update existing event
+        // Calculate start_time and end_time properly
+        const startTime = new Date(event.date)
+        const [hours, minutes] = event.time.split(':').map(Number)
+        startTime.setHours(hours, minutes, 0, 0)
+        
+        const endTime = new Date(startTime.getTime() + event.duration * 60000)
+        
         const updateData: any = {
           title: event.title,
           description: event.description,
           event_type: event.type,
-          start_time: event.date.toISOString(),
-          end_time: new Date(event.date.getTime() + event.duration * 60000).toISOString(),
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
           duration_minutes: event.duration,
           client_name: event.clientName,
+          client_email: event.clientEmail,
+          meeting_url: event.meetingUrl,
           color: event.color || ScheduleUtils.getEventTypeColor(event.type)
+          // Note: updated_by will be set by ScheduleService.updateEvent using trainer profile
         }
         
-        await ScheduleService.updateEvent({
+        console.log('📊 Update data:', updateData)
+        const updatedEvent = await ScheduleService.updateEvent({
           id: event.id,
           ...updateData
         })
+        console.log('✅ Event updated:', updatedEvent)
         
         setEvents(prev => prev.map(e => e.id === event.id ? event : e))
       } else {
+        console.log('➕ Creating new event...')
         // Create new event
+        // Calculate start_time and end_time properly
+        const startTime = new Date(event.date)
+        const [hours, minutes] = event.time.split(':').map(Number)
+        startTime.setHours(hours, minutes, 0, 0)
+        
+        const endTime = new Date(startTime.getTime() + event.duration * 60000)
+        
         const createData: CreateScheduleEvent = {
           title: event.title,
           description: event.description,
           event_type: event.type,
-          start_time: event.date.toISOString(),
-          end_time: new Date(event.date.getTime() + event.duration * 60000).toISOString(),
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
           duration_minutes: event.duration,
           client_name: event.clientName,
-          color: event.color || ScheduleUtils.getEventTypeColor(event.type)
+          client_email: event.clientEmail,
+          meeting_url: event.meetingUrl,
+          color: event.color || ScheduleUtils.getEventTypeColor(event.type),
+          // Add trainer information from session
+          trainer_id: session.user.id,
+          trainer_email: session.user.email
         }
         
+        console.log('📊 Create data:', createData)
         const newEvent = await ScheduleService.createEvent(createData)
+        console.log('✅ Event created:', newEvent)
         
         // Add to local state
         const calendarEvent = {
@@ -457,16 +722,21 @@ const ProfessionalCalendar: React.FC = () => {
           time: ScheduleUtils.formatTime(newEvent.start_time),
           duration: newEvent.duration_minutes,
           clientName: newEvent.client_name,
+          clientEmail: newEvent.client_email,
+          meetingUrl: newEvent.meeting_url,
           color: newEvent.color
         }
         
+        console.log('📅 Calendar event to add:', calendarEvent)
         setEvents(prev => [...prev, calendarEvent])
+        console.log('✅ Event added to local state')
       }
       
       setEditingEvent(undefined)
       setSelectedDate(undefined)
+      console.log('✅ Event save completed successfully')
     } catch (error) {
-      console.error('Error saving event:', error)
+      console.error('❌ Error saving event:', error)
     } finally {
       setIsLoading(false)
     }
@@ -477,8 +747,28 @@ const ProfessionalCalendar: React.FC = () => {
     setIsDialogOpen(true)
   }
 
-  const handleDeleteEvent = (id: string) => {
-    setEvents(prev => prev.filter(e => e.id !== id))
+  const handleDeleteEvent = async (id: string) => {
+    try {
+      console.log('🗑️ Deleting event with ID:', id)
+      
+      // Convert string ID to number for database
+      const numericId = parseInt(id)
+      if (isNaN(numericId)) {
+        console.error('❌ Invalid event ID:', id)
+        return
+      }
+      
+      // Delete from database
+      await ScheduleService.deleteEvent(numericId)
+      console.log('✅ Event deleted from database')
+      
+      // Remove from local state
+      setEvents(prev => prev.filter(e => e.id !== id))
+      console.log('✅ Event removed from local state')
+    } catch (error) {
+      console.error('❌ Error deleting event:', error)
+      // You might want to show a toast notification here
+    }
   }
 
   const handleAddEvent = (date: Date) => {
