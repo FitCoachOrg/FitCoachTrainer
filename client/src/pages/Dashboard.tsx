@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useNavigate } from "react-router-dom"
 import ProfessionalCalendar from "@/components/dashboard/ProfessionalCalendar"
+import TodoList from "@/components/dashboard/TodoList"
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
@@ -68,9 +69,17 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="px-4 md:px-6 lg:px-8 max-w-[1600px] mx-auto py-6">
-        <div className="mb-8">
-          <ProfessionalCalendar />
+      <div className="px-4 md:px-6 lg:px-8 py-6 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-3rem)]">
+          {/* Professional Calendar - Left Side */}
+          <div className="h-full">
+            <ProfessionalCalendar />
+          </div>
+          
+          {/* To-Do List - Right Side */}
+          <div className="h-full">
+            <TodoList />
+          </div>
         </div>
       </div>
     </div>

@@ -938,7 +938,7 @@ const ProfessionalCalendar: React.FC = () => {
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-[800px] overflow-y-auto relative bg-white dark:bg-gray-900">
+      <div className="h-[600px] overflow-y-auto relative bg-white dark:bg-gray-900">
               {/* Time grid background - Google Calendar style */}
       <div className="absolute inset-0 ml-20 z-0">
           {hourSlots.map((time, index) => {
@@ -1072,16 +1072,16 @@ const ProfessionalCalendar: React.FC = () => {
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd })
     console.log('📅 Weekly view events:', events.length, events)
     
-    // Enhanced weekly view with increased height and 30-minute ticks
+    // Weekly view with consistent time span (same as Daily view)
     const startHour = 6
     const endHour = 22
     const totalMinutes = (endHour - startHour) * 60
-    const containerHeight = 1200 - 48 // Increased height for better zoom
+    const containerHeight = 1200 // Same as Daily view for consistent spacing
+    const timeSlotHeight = 60 // Same as Daily view: 60px per 30-minute slot
     const pixelsPerMinute = containerHeight / totalMinutes
-    const timeSlotHeight = 120 // 120px per hour (60px per 30-minute slot)
     
     return (
-      <div className="h-[1200px] overflow-y-auto bg-white dark:bg-gray-900">
+      <div className="h-[600px] overflow-y-auto bg-white dark:bg-gray-900">
         <div className="grid grid-cols-8 gap-0">
                   {/* Time column - Enhanced with 30-minute ticks */}
         <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10">
@@ -1090,27 +1090,21 @@ const ProfessionalCalendar: React.FC = () => {
               <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
             </div>
             
-            {/* Time labels with 30-minute ticks */}
-            <div className="relative h-[1152px]">
-              {timeSlots.map((time) => {
-                const [hours, minutes] = time.split(':').map(Number)
-                const minutesFromStart = (hours - startHour) * 60 + minutes
+            {/* Time labels - Hour only (like Daily view) */}
+            <div className="relative h-[552px]">
+              {hourSlots.map((time) => {
+                const [hours] = time.split(':').map(Number)
+                const minutesFromStart = (hours - startHour) * 60
                 const top = minutesFromStart * pixelsPerMinute
-                const isHourMark = minutes === 0
                 
                 return (
                   <div 
                     key={time} 
                     className="absolute flex items-start justify-end w-full pr-2 pt-1"
-                    style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+                    style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
                   >
-                    <span className={`font-medium text-gray-600 dark:text-gray-400 ${
-                      isHourMark ? 'text-sm' : 'text-xs'
-                    }`}>
-                      {isHourMark 
-                        ? (hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`)
-                        : `${minutes}`
-                      }
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      {hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`}
                     </span>
                   </div>
                 )
@@ -1139,8 +1133,8 @@ const ProfessionalCalendar: React.FC = () => {
                   </span>
                 </div>
                 
-                {/* Time grid background - Enhanced with 30-minute ticks */}
-                <div className="relative h-[1152px]">
+                {/* Time grid background - Hour only (like Daily view) */}
+                <div className="relative h-[552px]">
                   {/* Hour lines */}
                   {hourSlots.map((time) => {
                     const [hours] = time.split(':').map(Number)
@@ -1156,7 +1150,7 @@ const ProfessionalCalendar: React.FC = () => {
                     )
                   })}
                   
-                  {/* 30-minute lines */}
+                  {/* Half-hour lines (lighter) */}
                   {timeSlots.filter((_, index) => index % 2 === 1).map((time) => {
                     const [hours, minutes] = time.split(':').map(Number)
                     const minutesFromStart = (hours - startHour) * 60 + minutes
@@ -1209,7 +1203,7 @@ const ProfessionalCalendar: React.FC = () => {
                     )
                   })}
                   
-                  {/* Add event button overlay - Enhanced for 30-minute slots */}
+                  {/* Add event button overlay - Simplified timeline */}
                   <div className="absolute inset-0 pointer-events-none z-25">
                     {timeSlots.map((time) => {
                       const [hours, minutes] = time.split(':').map(Number)
