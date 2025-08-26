@@ -476,12 +476,15 @@ const EventCard: React.FC<{
   
   return (
     <div 
-      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative`}
+      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-10`}
       style={{ 
         borderLeftColor: event.color || typeColor.border,
         borderLeftWidth: '4px'
       }}
-      onClick={() => onEdit(event)}
+      onClick={(e) => {
+        e.stopPropagation()
+        onEdit(event)
+      }}
     >
       {compact ? (
         // Single row layout for weekly view (same as daily)
@@ -517,7 +520,7 @@ const EventCard: React.FC<{
           </div>
           
           {/* Action buttons for compact view */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-20">
             <Button
               variant="ghost"
               size="sm"
@@ -595,8 +598,8 @@ const EventCard: React.FC<{
           )}
         </div>
         
-        {/* Action buttons - Enhanced with better contrast */}
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto">
+                 {/* Action buttons - Enhanced with better contrast */}
+         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-20">
           <Button
             variant="ghost"
             size="sm"
@@ -922,8 +925,8 @@ const ProfessionalCalendar: React.FC = () => {
     
     return (
       <div className="h-[800px] overflow-y-auto relative bg-white dark:bg-gray-900">
-        {/* Time grid background - Google Calendar style */}
-        <div className="absolute inset-0 ml-20">
+              {/* Time grid background - Google Calendar style */}
+      <div className="absolute inset-0 ml-20 z-0">
           {hourSlots.map((time, index) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60
@@ -954,8 +957,8 @@ const ProfessionalCalendar: React.FC = () => {
           })}
         </div>
         
-        {/* Time labels - Google Calendar style */}
-        <div className="absolute left-0 top-0 w-20 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+              {/* Time labels - Google Calendar style */}
+      <div className="absolute left-0 top-0 w-20 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10">
           {hourSlots.map((time) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60
@@ -975,8 +978,8 @@ const ProfessionalCalendar: React.FC = () => {
           })}
         </div>
         
-        {/* Events positioned absolutely with proportional sizing */}
-        <div className="ml-20 relative h-full">
+              {/* Events positioned absolutely with proportional sizing */}
+      <div className="ml-20 relative h-full z-20">
           {dayEvents.map((event) => {
             const eventDate = new Date(event.date)
             const eventHours = eventDate.getHours()
@@ -1010,8 +1013,8 @@ const ProfessionalCalendar: React.FC = () => {
           })}
         </div>
         
-        {/* Add event button overlay - Google Calendar style */}
-        <div className="absolute inset-0 ml-20 pointer-events-none">
+              {/* Add event button overlay - Google Calendar style */}
+      <div className="absolute inset-0 ml-20 pointer-events-none z-30">
           <div className="relative h-full">
             {timeSlots.map((time) => {
               const [hours, minutes] = time.split(':').map(Number)
@@ -1061,8 +1064,8 @@ const ProfessionalCalendar: React.FC = () => {
     return (
       <div className="h-[1200px] overflow-y-auto bg-white dark:bg-gray-900">
         <div className="grid grid-cols-8 gap-0">
-          {/* Time column - Enhanced with 30-minute ticks */}
-          <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                  {/* Time column - Enhanced with 30-minute ticks */}
+        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10">
             {/* Time header */}
             <div className="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
               <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
@@ -1103,10 +1106,10 @@ const ProfessionalCalendar: React.FC = () => {
             
             return (
               <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700">
-                {/* Day header - Google Calendar style */}
-                <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center ${
-                  isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
-                }`}>
+                              {/* Day header - Google Calendar style */}
+              <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center z-10 ${
+                isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
+              }`}>
                   <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                     {format(day, 'EEE')}
                   </span>
@@ -1128,7 +1131,7 @@ const ProfessionalCalendar: React.FC = () => {
                     return (
                       <div 
                         key={time} 
-                        className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700"
+                        className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700 z-0"
                         style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
                       />
                     )
@@ -1143,7 +1146,7 @@ const ProfessionalCalendar: React.FC = () => {
                     return (
                       <div 
                         key={time} 
-                        className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800"
+                        className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800 z-0"
                         style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
                       />
                     )
@@ -1165,7 +1168,7 @@ const ProfessionalCalendar: React.FC = () => {
                     return (
                       <div
                         key={event.id}
-                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200"
+                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-20"
                         style={{ 
                           top: `${top}px`, 
                           height: `${height}px`,
@@ -1184,7 +1187,7 @@ const ProfessionalCalendar: React.FC = () => {
                   })}
                   
                   {/* Add event button overlay - Enhanced for 30-minute slots */}
-                  <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute inset-0 pointer-events-none z-30">
                     {timeSlots.map((time) => {
                       const [hours, minutes] = time.split(':').map(Number)
                       const minutesFromStart = (hours - startHour) * 60 + minutes
