@@ -85,9 +85,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     // Fallback to generating placeholder data
     const weeks = [];
     for (let i = 0; i < 4; i++) {
-      // For the first week, start from the selected date
-      // For subsequent weeks, add weeks to the selected date
-      const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
+              // For the first week, start from the selected date
+        // For subsequent weeks, add weeks to the selected date
+        const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
       const weekDays = [];
       
       for (let j = 0; j < 7; j++) {
@@ -106,27 +106,13 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     return weeks;
   }, [week, planStartDate, viewMode, localMonthlyData, multiWeekData]);
 
-  // For weekly view, ensure we're using the planStartDate consistently
+  // For weekly view, use the week prop directly
   const days = useMemo(() => {
     if (viewMode === 'weekly') {
-      // Always generate week data from planStartDate to ensure consistency
-      const weekDays = [];
-      for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
-        const dateStr = dayDate.toISOString().slice(0, 10);
-        
-        // Find matching data from the week prop if it exists
-        const existingDay = week?.find(d => d.date === dateStr);
-        if (existingDay) {
-          weekDays.push(existingDay);
-        } else {
-          weekDays.push({ date: dateStr, focus: 'Rest Day', exercises: [] });
-        }
-      }
-      return weekDays;
+      return week || [];
     }
     return week || [];
-  }, [week, planStartDate, viewMode]);
+  }, [week, viewMode]);
 
   // Function to fetch multi-week data using unified status logic
   const fetchMultiWeekData = async () => {

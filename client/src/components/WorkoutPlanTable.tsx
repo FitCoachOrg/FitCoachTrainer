@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, addWeeks } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -778,7 +778,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         // Monthly view with accordion at week level
         <Accordion type="multiple" className="space-y-4">
           {weeks.map((weekDays, weekIdx) => {
-            const weekStartDate = new Date(planStartDate.getTime() + weekIdx * 7 * 24 * 60 * 60 * 1000);
+            const weekStartDate = weekIdx === 0 ? planStartDate : addWeeks(planStartDate, weekIdx);
             const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
             const workoutDaysCount = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
             
@@ -821,7 +821,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
       ) : (
         // Weekly view (unchanged)
         weeks.map((weekDays, weekIdx) => {
-          const weekStartDate = new Date(planStartDate.getTime() + weekIdx * 7 * 24 * 60 * 60 * 1000);
+          const weekStartDate = weekIdx === 0 ? planStartDate : addWeeks(planStartDate, weekIdx);
           const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
           
           return (
