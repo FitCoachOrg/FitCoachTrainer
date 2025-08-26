@@ -283,10 +283,17 @@ const EventForm: React.FC<{
 
   // Get the current selected value for the dropdown
   const getSelectedValue = () => {
-    if (!formData.clientName) return ''
+    if (!formData.clientName) return 'custom'
     // Check if the current client name matches any client in the list
     const matchingClient = clients.find(client => client.cl_name === formData.clientName)
     return matchingClient ? matchingClient.client_id.toString() : 'custom'
+  }
+
+  // Check if we should show the custom input field
+  const shouldShowCustomInput = () => {
+    if (!formData.clientName) return true // Always show if no client name
+    // Show if it's a custom name (not matching any client in the list)
+    return !clients.some(client => client.cl_name === formData.clientName)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -326,11 +333,11 @@ const EventForm: React.FC<{
           onValueChange={handleClientChange}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select client or enter custom name" />
+            <SelectValue placeholder="Select existing client or add custom name" />
           </SelectTrigger>
           <SelectContent>
             {clients.length === 0 ? (
-              <SelectItem value="custom" disabled>No clients found</SelectItem>
+              <SelectItem value="custom">+ Add Custom Name</SelectItem>
             ) : (
               <>
                 <SelectItem value="custom">+ Add Custom Name</SelectItem>
@@ -343,20 +350,23 @@ const EventForm: React.FC<{
             )}
           </SelectContent>
         </Select>
-        {formData.clientName && (
-          <Input
-            className="mt-2"
-            value={formData.clientName}
-            onChange={(e) => handleCustomClientNameChange(e.target.value)}
-            placeholder="Enter client name"
-          />
+        {shouldShowCustomInput() && (
+          <div className="mt-2">
+            <Input
+              value={formData.clientName}
+              onChange={(e) => handleCustomClientNameChange(e.target.value)}
+              placeholder="Enter custom client name"
+              className="border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+            <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+              <span>✏️</span>
+              <span>Custom client - not in your client list</span>
+            </div>
+          </div>
         )}
         <div className="text-xs text-gray-500 mt-1">
           {isLoadingClients ? 'Loading clients...' : 
-           clients.length > 0 ? `${clients.length} clients available` : 'No clients found'}
-          {formData.clientName && !clients.some(c => c.cl_name === formData.clientName) && (
-            <span className="ml-2 text-blue-600">(Custom name)</span>
-          )}
+           clients.length > 0 ? `${clients.length} existing clients available` : 'No existing clients found'}
         </div>
       </div>
 
@@ -407,11 +417,12 @@ const EventForm: React.FC<{
           <Input
             id="duration"
             type="number"
-            min="15"
+            min="1"
             max="480"
-            step="15"
+            step="1"
             value={formData.duration}
-            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 1 })}
+            placeholder="Enter duration in minutes"
             required
           />
         </div>
@@ -453,64 +464,156 @@ const EventForm: React.FC<{
   )
 }
 
-// Event Card Component
+// Event Card Component - Enhanced with better contrast and type-specific colors
 const EventCard: React.FC<{
   event: CalendarEvent
   onEdit: (event: CalendarEvent) => void
   onDelete: (id: string) => void
   compact?: boolean
-}> = ({ event, onEdit, onDelete, compact = false }) => {
+  proportional?: boolean // New prop for proportional rendering
+}> = ({ event, onEdit, onDelete, compact = false, proportional = false }) => {
   const typeColor = eventTypeColors[event.type]
   
   return (
     <div 
-      className={`group ${typeColor.bg} ${typeColor.border} ${typeColor.text} ${typeColor.dark} rounded-lg p-2 border-l-4 cursor-pointer hover:shadow-md transition-all duration-200`}
-      style={{ borderLeftColor: event.color }}
+      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative`}
+      style={{ 
+        borderLeftColor: event.color || typeColor.border,
+        borderLeftWidth: '4px'
+      }}
       onClick={() => onEdit(event)}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-3 w-3 flex-shrink-0" />
-            <span className="text-xs font-medium">{event.time}</span>
-            <span className="text-xs opacity-75">({event.duration}min)</span>
+      {compact ? (
+        // Single row layout for weekly view (same as daily)
+        <div className="flex items-center h-full p-1 justify-between">
+          {/* Main content in a single row */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Title */}
+            <h4 className={`font-medium text-xs leading-tight truncate flex-1 ${typeColor.text}`}>{event.title}</h4>
+            
+            {/* Client name */}
+            {event.clientName && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <User className="h-2 w-2 text-gray-500 dark:text-gray-400" />
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-16">{event.clientName}</span>
+              </div>
+            )}
+            
+            {/* Time and duration */}
+            <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+              <Clock className="h-2 w-2" />
+              <span>{event.time}</span>
+              {event.duration > 0 && (
+                <span>• {event.duration}m</span>
+              )}
+            </div>
+            
+            {/* Meeting link indicator */}
+            {event.meetingUrl && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <span className="text-xs text-blue-600 dark:text-blue-400">🔗</span>
+              </div>
+            )}
           </div>
-          <h4 className="font-medium text-sm truncate">{event.title}</h4>
+          
+          {/* Action buttons for compact view */}
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(event)
+              }}
+            >
+              <Edit2 className="h-2 w-2 text-gray-600 dark:text-gray-300" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 p-0 text-red-600 hover:text-red-700 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <X className="h-2 w-2" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(event.id)
+                    }}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      ) : (
+      <div className="flex items-center h-full p-2 justify-between">
+        {/* Main content in a single row */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Title */}
+          <h4 className={`font-medium text-sm leading-tight truncate flex-1 ${typeColor.text}`}>{event.title}</h4>
+          
+          {/* Client name */}
           {event.clientName && (
-            <div className="flex items-center gap-1 mt-1">
-              <User className="h-3 w-3" />
-              <span className="text-xs opacity-75">{event.clientName}</span>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <User className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
             </div>
           )}
-          {event.clientEmail && (
-            <div className="flex items-center gap-1 mt-1">
-              <span className="text-xs opacity-75">{event.clientEmail}</span>
-            </div>
-          )}
-          {!compact && event.meetingUrl && (
-            <div className="flex items-center gap-1 mt-1">
-              <span className="text-xs opacity-75 text-blue-600">🔗 Meeting Link</span>
+          
+          {/* Time and duration */}
+          <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+            <Clock className="h-3 w-3" />
+            <span>{event.time}</span>
+            {event.duration > 0 && (
+              <span>• {event.duration}min</span>
+            )}
+          </div>
+          
+          {/* Meeting link indicator */}
+          {event.meetingUrl && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className={`text-xs ${typeColor.text} font-medium`}>🔗 Meeting</span>
             </div>
           )}
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        
+        {/* Action buttons - Enhanced with better contrast */}
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto">
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 p-0"
+            className="h-6 w-6 p-0 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
             onClick={(e) => {
               e.stopPropagation()
               onEdit(event)
             }}
           >
-            <Edit2 className="h-3 w-3" />
+            <Edit2 className="h-3 w-3 text-gray-600 dark:text-gray-300" />
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                className="h-6 w-6 p-0 text-red-600 hover:text-red-700 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
                 onClick={(e) => e.stopPropagation()}
               >
                 <X className="h-3 w-3" />
@@ -539,6 +642,7 @@ const EventCard: React.FC<{
           </AlertDialog>
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -783,7 +887,7 @@ const ProfessionalCalendar: React.FC = () => {
     setSelectedDate(undefined)
   }
 
-  // Time slots for daily view
+  // Time slots for daily view - Google Calendar style with better spacing
   const timeSlots = useMemo(() => {
     const slots = []
     for (let hour = 6; hour <= 22; hour++) {
@@ -793,35 +897,138 @@ const ProfessionalCalendar: React.FC = () => {
     return slots
   }, [])
 
+  // Hour slots for better time display
+  const hourSlots = useMemo(() => {
+    const slots = []
+    for (let hour = 6; hour <= 22; hour++) {
+      slots.push(`${hour.toString().padStart(2, '0')}:00`)
+    }
+    return slots
+  }, [])
+
   // Render different views
   const renderDailyView = () => {
     const dayEvents = getEventsForDay(currentDate, events)
     
+    // Google Calendar style - more zoomed in with better spacing
+    const startHour = 6
+    const endHour = 22
+    const totalMinutes = (endHour - startHour) * 60
+    const containerHeight = 1200 // Increased height for better zoom
+    const timeSlotHeight = 60 // 60px per 30-minute slot
+    
+    // Calculate pixels per minute for proportional display
+    const pixelsPerMinute = containerHeight / totalMinutes
+    
     return (
-      <div className="h-[600px] overflow-y-auto">
-        <div className="grid grid-cols-1 gap-0">
-          {timeSlots.map((time) => {
-            const timeEvents = getEventsForTimeSlot(currentDate, time, events)
+      <div className="h-[800px] overflow-y-auto relative bg-white dark:bg-gray-900">
+        {/* Time grid background - Google Calendar style */}
+        <div className="absolute inset-0 ml-20">
+          {hourSlots.map((time, index) => {
+            const [hours] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60
+            const top = minutesFromStart * pixelsPerMinute
+            
             return (
-              <div key={time} className="relative min-h-[60px] border-b border-gray-200 dark:border-gray-700">
-                <div className="absolute left-0 top-0 w-16 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{time}</span>
-                </div>
-                <div className="ml-16 p-2 min-h-[60px]">
-                  {timeEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onEdit={handleEditEvent}
-                      onDelete={handleDeleteEvent}
-                    />
-                  ))}
+              <div 
+                key={time} 
+                className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700"
+                style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+              />
+            )
+          })}
+          
+          {/* Half-hour lines */}
+          {timeSlots.filter((_, index) => index % 2 === 1).map((time) => {
+            const [hours, minutes] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60 + minutes
+            const top = minutesFromStart * pixelsPerMinute
+            
+            return (
+              <div 
+                key={time} 
+                className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800"
+                style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+              />
+            )
+          })}
+        </div>
+        
+        {/* Time labels - Google Calendar style */}
+        <div className="absolute left-0 top-0 w-20 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+          {hourSlots.map((time) => {
+            const [hours] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60
+            const top = minutesFromStart * pixelsPerMinute
+            
+            return (
+              <div 
+                key={time} 
+                className="absolute flex items-start justify-end w-full pr-2 pt-1"
+                style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+              >
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  {hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        
+        {/* Events positioned absolutely with proportional sizing */}
+        <div className="ml-20 relative h-full">
+          {dayEvents.map((event) => {
+            const eventDate = new Date(event.date)
+            const eventHours = eventDate.getHours()
+            const eventMinutes = eventDate.getMinutes()
+            
+            // Calculate position based on start time
+            const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
+            const top = minutesFromStart * pixelsPerMinute
+            
+            // Calculate height based on duration for proportional display
+            const height = Math.max(event.duration * pixelsPerMinute, 24) // Minimum 24px height
+            
+            return (
+              <div
+                key={event.id}
+                className="absolute left-2 right-2 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200"
+                style={{ 
+                  top: `${top}px`, 
+                  height: `${height}px`,
+                  minHeight: '24px' // Minimum height for visibility
+                }}
+              >
+                <EventCard
+                  event={event}
+                  onEdit={handleEditEvent}
+                  onDelete={handleDeleteEvent}
+                  proportional={true}
+                />
+              </div>
+            )
+          })}
+        </div>
+        
+        {/* Add event button overlay - Google Calendar style */}
+        <div className="absolute inset-0 ml-20 pointer-events-none">
+          <div className="relative h-full">
+            {timeSlots.map((time) => {
+              const [hours, minutes] = time.split(':').map(Number)
+              const minutesFromStart = (hours - startHour) * 60 + minutes
+              const top = minutesFromStart * pixelsPerMinute
+              
+              return (
+                <div 
+                  key={time}
+                  className="absolute left-0 right-0 flex justify-center pointer-events-auto"
+                  style={{ top: `${top}px`, height: '60px' }}
+                >
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity"
+                    className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-700"
                     onClick={() => {
-                      const [hours, minutes] = time.split(':').map(Number)
                       const eventDate = new Date(currentDate)
                       eventDate.setHours(hours, minutes, 0, 0)
                       handleAddEvent(eventDate)
@@ -830,9 +1037,9 @@ const ProfessionalCalendar: React.FC = () => {
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     )
@@ -843,28 +1050,62 @@ const ProfessionalCalendar: React.FC = () => {
     const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 })
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd })
     
+    // Enhanced weekly view with increased height and 30-minute ticks
+    const startHour = 6
+    const endHour = 22
+    const totalMinutes = (endHour - startHour) * 60
+    const containerHeight = 1200 - 48 // Increased height for better zoom
+    const pixelsPerMinute = containerHeight / totalMinutes
+    const timeSlotHeight = 120 // 120px per hour (60px per 30-minute slot)
+    
     return (
-      <div className="h-[600px] overflow-y-auto">
+      <div className="h-[1200px] overflow-y-auto bg-white dark:bg-gray-900">
         <div className="grid grid-cols-8 gap-0">
-          {/* Time column */}
-          <div className="border-r border-gray-200 dark:border-gray-700">
-            {timeSlots.map((time) => (
-              <div key={time} className="h-[60px] border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{time}</span>
-              </div>
-            ))}
+          {/* Time column - Enhanced with 30-minute ticks */}
+          <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            {/* Time header */}
+            <div className="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
+            </div>
+            
+            {/* Time labels with 30-minute ticks */}
+            <div className="relative h-[1152px]">
+              {timeSlots.map((time) => {
+                const [hours, minutes] = time.split(':').map(Number)
+                const minutesFromStart = (hours - startHour) * 60 + minutes
+                const top = minutesFromStart * pixelsPerMinute
+                const isHourMark = minutes === 0
+                
+                return (
+                  <div 
+                    key={time} 
+                    className="absolute flex items-start justify-end w-full pr-2 pt-1"
+                    style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+                  >
+                    <span className={`font-medium text-gray-600 dark:text-gray-400 ${
+                      isHourMark ? 'text-sm' : 'text-xs'
+                    }`}>
+                      {isHourMark 
+                        ? (hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`)
+                        : `${minutes}`
+                      }
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           
-          {/* Day columns */}
+          {/* Day columns with proportional event positioning */}
           {weekDays.map((day) => {
             const dayEvents = getEventsForDay(day, events)
             const isCurrentDay = isToday(day)
             
             return (
               <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700">
-                {/* Day header */}
+                {/* Day header - Google Calendar style */}
                 <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center ${
-                  isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                  isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
                 }`}>
                   <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                     {format(day, 'EEE')}
@@ -876,23 +1117,102 @@ const ProfessionalCalendar: React.FC = () => {
                   </span>
                 </div>
                 
-                {/* Time slots */}
-                {timeSlots.map((time) => {
-                  const timeEvents = getEventsForTimeSlot(day, time, events)
-                  return (
-                    <div key={time} className="relative h-[60px] border-b border-gray-200 dark:border-gray-700 p-1">
-                      {timeEvents.map((event) => (
+                {/* Time grid background - Enhanced with 30-minute ticks */}
+                <div className="relative h-[1152px]">
+                  {/* Hour lines */}
+                  {hourSlots.map((time) => {
+                    const [hours] = time.split(':').map(Number)
+                    const minutesFromStart = (hours - startHour) * 60
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    return (
+                      <div 
+                        key={time} 
+                        className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700"
+                        style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+                      />
+                    )
+                  })}
+                  
+                  {/* 30-minute lines */}
+                  {timeSlots.filter((_, index) => index % 2 === 1).map((time) => {
+                    const [hours, minutes] = time.split(':').map(Number)
+                    const minutesFromStart = (hours - startHour) * 60 + minutes
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    return (
+                      <div 
+                        key={time} 
+                        className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800"
+                        style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+                      />
+                    )
+                  })}
+                  
+                  {/* Events positioned absolutely with proportional sizing */}
+                  {dayEvents.map((event) => {
+                    const eventDate = new Date(event.date)
+                    const eventHours = eventDate.getHours()
+                    const eventMinutes = eventDate.getMinutes()
+                    
+                    // Calculate position based on start time
+                    const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    // Calculate height based on duration for proportional display
+                    const height = Math.max(event.duration * pixelsPerMinute, 20) // Minimum 20px height
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200"
+                        style={{ 
+                          top: `${top}px`, 
+                          height: `${height}px`,
+                          minHeight: '20px' // Minimum height for visibility
+                        }}
+                      >
                         <EventCard
-                          key={event.id}
                           event={event}
                           onEdit={handleEditEvent}
                           onDelete={handleDeleteEvent}
                           compact={true}
+                          proportional={true}
                         />
-                      ))}
-                    </div>
-                  )
-                })}
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Add event button overlay - Enhanced for 30-minute slots */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {timeSlots.map((time) => {
+                      const [hours, minutes] = time.split(':').map(Number)
+                      const minutesFromStart = (hours - startHour) * 60 + minutes
+                      const top = minutesFromStart * pixelsPerMinute
+                      
+                      return (
+                        <div 
+                          key={time}
+                          className="absolute left-0 right-0 flex justify-center pointer-events-auto"
+                          style={{ top: `${top}px`, height: '60px' }}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-700/80"
+                            onClick={() => {
+                              const eventDate = new Date(day)
+                              eventDate.setHours(hours, minutes, 0, 0)
+                              handleAddEvent(eventDate)
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             )
           })}
@@ -990,33 +1310,45 @@ const ProfessionalCalendar: React.FC = () => {
           </CardTitle>
           
           <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
+            {/* View Toggle - Improved styling for better clickability */}
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm relative z-10">
               <Button
-                variant={view === "daily" ? "default" : "outline"}
+                variant={view === "daily" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("daily")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "daily" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <List className="h-4 w-4 mr-1" />
+                <List className="h-4 w-4 mr-2" />
                 Daily
               </Button>
               <Button
-                variant={view === "weekly" ? "default" : "outline"}
+                variant={view === "weekly" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("weekly")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "weekly" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <Grid3X3 className="h-4 w-4 mr-1" />
+                <Grid3X3 className="h-4 w-4 mr-2" />
                 Weekly
               </Button>
               <Button
-                variant={view === "monthly" ? "default" : "outline"}
+                variant={view === "monthly" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("monthly")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "monthly" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <Calendar className="h-4 w-4 mr-1" />
+                <Calendar className="h-4 w-4 mr-2" />
                 Monthly
               </Button>
             </div>

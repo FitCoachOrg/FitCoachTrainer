@@ -178,10 +178,12 @@ export const ScheduleUtils = {
   },
 
   /**
-   * Format time for display
+   * Format time for display in local timezone
    */
   formatTime(time: string): string {
-    return format(parseISO(time), 'HH:mm')
+    // Parse ISO string and format in local timezone
+    const date = parseISO(time)
+    return format(date, 'HH:mm')
   },
 
   /**
