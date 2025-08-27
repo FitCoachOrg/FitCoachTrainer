@@ -351,9 +351,6 @@ const TodoList: React.FC = () => {
           <table className="w-full border-collapse text-sm table-fixed rounded-lg overflow-hidden">
             <thead>
               <tr className="border-b border-border bg-muted/50">
-                <th className="text-left py-2 px-2 font-medium text-foreground w-12">
-                  <Checkbox />
-                </th>
                 <th className="text-left py-2 px-2 font-medium text-foreground w-1/3">
                   Task
                 </th>
@@ -383,12 +380,6 @@ const TodoList: React.FC = () => {
                   }`}
                 >
                   <td className="py-2 px-2 align-top">
-                    <Checkbox
-                      checked={todo.completed}
-                      onCheckedChange={() => handleToggleTodo(todo.id)}
-                    />
-                  </td>
-                  <td className="py-2 px-2 align-top">
                     {editingId === todo.id ? (
                       <Input
                         value={editTitle}
@@ -401,13 +392,20 @@ const TodoList: React.FC = () => {
                         placeholder="Task title"
                       />
                     ) : (
-                      <span className={`font-medium break-words ${
-                        todo.completed 
-                          ? 'line-through text-muted-foreground' 
-                          : 'text-foreground'
-                      }`}>
-                        {todo.title}
-                      </span>
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          checked={todo.completed}
+                          onCheckedChange={() => handleToggleTodo(todo.id)}
+                          className="mt-0.5 flex-shrink-0"
+                        />
+                        <span className={`font-medium break-words ${
+                          todo.completed 
+                            ? 'line-through text-muted-foreground' 
+                            : 'text-foreground'
+                        }`}>
+                          {todo.title}
+                        </span>
+                      </div>
                     )}
                   </td>
                   <td className="py-2 px-2 align-top">
