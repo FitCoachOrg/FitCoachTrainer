@@ -14,7 +14,7 @@ import { addDays, addMonths, format, parseISO, isAfter, startOfDay } from "date-
 import { Wand2 } from "lucide-react"
 import { askCerebras } from "@/lib/cerebras-service"
 
-type Frequency = "daily" | "weekly" | "monthly"
+type Frequency = "daily" | "weekly" | "monthly" | "custom"
 
 interface ProgramConfigRow {
   key: "wakeup" | "bedtime" | "hydration" | "progresspicture" | "weight" | "body_measurement" | "workout_plan" | "nutritional_plan"
@@ -25,6 +25,7 @@ interface ProgramConfigRow {
   time: string // HH:mm (in client's timezone for UI display)
   coachTip: string
   eventName: string
+  customDays?: number
 }
 
 interface NewCustomerOnboardingModalProps {
@@ -62,7 +63,7 @@ function getIconNameForType(type: ProgramConfigRow["key"]): string {
   }
 }
 
-function generateDatesForRange(startDateStr: string, frequency: Frequency): string[] {
+function generateDatesForRange(startDateStr: string, frequency: Frequency, customDays?: number): string[] {
   const start = parseISO(startDateStr)
   const end = addMonths(start, 3)
   const dates: string[] = []
@@ -74,8 +75,11 @@ function generateDatesForRange(startDateStr: string, frequency: Frequency): stri
       current = addDays(current, 1)
     } else if (frequency === "weekly") {
       current = addDays(current, 7)
-    } else {
+    } else if (frequency === "monthly") {
       current = addMonths(current, 1)
+    } else {
+      const step = typeof customDays === 'number' && customDays > 0 ? customDays : 1
+      current = addDays(current, step)
     }
   }
 
@@ -156,6 +160,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
                   time: displayTime,
                   coachTip: existing.coachTip || existing.details_json?.coach_tip || "",
                   eventName: existing.eventName || d.eventName,
+                  customDays: existing.details_json?.custom_days
                 }
               }
               return {
@@ -167,6 +172,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
                 time: d.time,
                 coachTip: "",
                 eventName: d.eventName,
+                customDays: undefined
               }
             })
             
@@ -266,7 +272,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         return
       }
 
-      const dates = generateDatesForRange(r.startDate, r.frequency)
+      const dates = generateDatesForRange(r.startDate, r.frequency, r.customDays)
       if (dates.length === 0) continue
 
       // Track range no longer needed when using upsert
@@ -291,6 +297,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               program_name: r.eventName,
               selected_measurements: ["hip", "waist", "bicep", "thigh"],
               coach_tip: r.coachTip || r.label,
+              custom_days: r.frequency === 'custom' ? r.customDays : undefined,
               original_local_time: r.time, // Store original client timezone time
               timezone: effectiveClientTimezone // Store client timezone
             }
@@ -312,6 +319,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               frequency: r.frequency,
               program_name: r.eventName,
               coach_tip: r.coachTip || r.label,
+              custom_days: r.frequency === 'custom' ? r.customDays : undefined,
               original_local_time: r.time, // Store original client timezone time
               timezone: effectiveClientTimezone // Store client timezone
             }
@@ -384,6 +392,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         eventName: row.eventName,
         details_json: {
           coach_tip: row.coachTip,
+          custom_days: row.frequency === 'custom' ? row.customDays : undefined,
           original_local_time: row.time, // Store original client timezone time
           timezone: effectiveClientTimezone // Store client timezone
         }
@@ -590,8 +599,8 @@ ${items.join(',\n')}
                       <td className="p-2 border-b">
                         <Input type="date" value={r.startDate} onChange={e => updateRow(r.key, { startDate: e.target.value })} />
                       </td>
-                      <td className="p-2 border-b min-w-[120px]">
-                        <Select value={r.frequency} onValueChange={(v: any) => updateRow(r.key, { frequency: v })}>
+                      <td className="p-2 border-b min-w-[160px]">
+                        <Select value={r.frequency} onValueChange={(v: any) => updateRow(r.key, { frequency: v as Frequency })}>
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -599,8 +608,23 @@ ${items.join(',\n')}
                             <SelectItem value="daily">Daily</SelectItem>
                             <SelectItem value="weekly">Weekly</SelectItem>
                             <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
                           </SelectContent>
                         </Select>
+                        {r.frequency === 'custom' && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Input 
+                              type="number" 
+                              min={1} 
+                              value={r.customDays ?? ''} 
+                              onChange={e => updateRow(r.key, { customDays: Number(e.target.value) || undefined })}
+                              placeholder="Days"
+                              className="w-24"
+                              title="Repeat every N days"
+                            />
+                            <span className="text-xs text-gray-600 dark:text-gray-400">days</span>
+                          </div>
+                        )}
                       </td>
                       <td className="p-2 border-b">
                         <Input 
