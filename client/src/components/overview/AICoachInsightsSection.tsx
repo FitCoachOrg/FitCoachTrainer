@@ -896,10 +896,6 @@ export function AICoachInsightsSection({
                 {/* Action Button Row */}
                 <div className="flex justify-between items-center pt-3 border-t border-blue-200/50 dark:border-blue-800/50">
                   <div className="flex items-center gap-3">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Click individual items to add them to your todo list
-                    </div>
-                    
                     {/* Toggle to show/hide added items */}
                     {totalActions > 0 && addedActions > 0 && (
                       <Button
@@ -911,30 +907,32 @@ export function AICoachInsightsSection({
                         {showAddedItems ? 'Hide Added' : `Show Added (${addedActions})`}
                       </Button>
                     )}
+                    
+                    {/* Add All button moved to left */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddAllToTodos}
+                      disabled={allActionsAdded || remainingActions === 0}
+                      className={`transition-all duration-200 ${
+                        allActionsAdded || remainingActions === 0
+                          ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 cursor-not-allowed"
+                          : "text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
+                      }`}
+                    >
+                      {allActionsAdded || remainingActions === 0 ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          All Items Added
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Add All ({remainingActions})
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddAllToTodos}
-                    disabled={allActionsAdded || remainingActions === 0}
-                    className={`transition-all duration-200 ${
-                      allActionsAdded || remainingActions === 0
-                        ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 cursor-not-allowed"
-                        : "text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
-                    }`}
-                  >
-                    {allActionsAdded || remainingActions === 0 ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        All Items Added
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Add All Remaining ({remainingActions})
-                      </>
-                    )}
-                  </Button>
                   
                   {/* Show summary of added items */}
                   {totalActions > 0 && (
@@ -1053,7 +1051,10 @@ export function AICoachInsightsSection({
                                 ? "bg-blue-500 text-white animate-pulse"
                                 : "opacity-70 group-hover:opacity-100 text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
                             }`}
-                            onAddSuccess={() => handleActionAdded(item.id)}
+                            onAddSuccess={(addedRecommendation) => {
+                              // Extract the correct actionId from the item, since the recommendation passed might be modified
+                              handleActionAdded(item.id)
+                            }}
                             disabled={processingTodos.has(item.id)}
                           >
                             {processingTodos.has(item.id) ? "⏳ Adding..." : "Add to Todo"}

@@ -7,7 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Plus, CheckCircle, Sparkles } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { format } from 'date-fns'
+import { CalendarIcon, Plus, CheckCircle, Sparkles, Edit3 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { useTodos } from '@/hooks/use-todos'
 import { convertAIRecommendationToTodo, getAvailableCategories } from '@/utils/ai-todo-converter'
@@ -20,7 +25,7 @@ interface AddToTodoButtonProps {
   variant?: 'default' | 'outline' | 'ghost'
   size?: 'sm' | 'default'
   className?: string
-  onAddSuccess?: () => void
+  onAddSuccess?: (recommendation?: any) => void
   disabled?: boolean
 }
 
@@ -40,6 +45,11 @@ export function AddToTodoButton({
   const [isConverting, setIsConverting] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [selectedPriority, setSelectedPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  
+  // New editable fields
+  const [editedTitle, setEditedTitle] = useState<string>('')
+  const [selectedDueDate, setSelectedDueDate] = useState<Date | undefined>(undefined)
+  const [isEditMode, setIsEditMode] = useState(false)
 
   // Get available categories
   const availableCategories = getAvailableCategories()
@@ -49,12 +59,35 @@ export function AddToTodoButton({
     availableCategories.find(cat => cat.toLowerCase() === recommendation.category.toLowerCase()) || 'personal' 
     : 'personal'
 
-  // Initialize selected category
+  // Initialize all fields when dialog opens
   React.useEffect(() => {
-    if (!selectedCategory) {
-      setSelectedCategory(defaultCategory)
+    if (showDialog) {
+      if (!selectedCategory) {
+        setSelectedCategory(defaultCategory)
+      }
+      if (!editedTitle) {
+        setEditedTitle(getTitle())
+      }
+      // Set default priority from recommendation
+      const aiPriority = recommendation.priority?.toLowerCase()
+      if (aiPriority && ['low', 'medium', 'high'].includes(aiPriority)) {
+        setSelectedPriority(aiPriority as 'low' | 'medium' | 'high')
+      }
     }
-  }, [defaultCategory, selectedCategory])
+  }, [showDialog, selectedCategory, defaultCategory, editedTitle, recommendation])
+
+  // Reset form when dialog closes
+  const handleDialogClose = (open: boolean) => {
+    setShowDialog(open)
+    if (!open) {
+      // Reset all fields
+      setEditedTitle('')
+      setSelectedDueDate(undefined)
+      setIsEditMode(false)
+      setSelectedCategory('')
+      setSelectedPriority('medium')
+    }
+  }
 
     // Handle conversion to todo with enhanced duplicate prevention
   const handleConvertToTodo = async () => {
@@ -62,8 +95,11 @@ export function AddToTodoButton({
     setIsConverting(true)
 
     try {
-      // Enhanced duplicate checking
-      const existingTodos = await checkExistingTodos(recommendation, clientId)
+      // Enhanced duplicate checking with current title
+      const existingTodos = await checkExistingTodos({ 
+        ...recommendation, 
+        text: editedTitle.trim() || getTitle() 
+      }, clientId)
       if (existingTodos.length > 0) {
         console.log(`⚠️ Found ${existingTodos.length} existing similar todos:`, existingTodos)
         
@@ -74,21 +110,25 @@ export function AddToTodoButton({
           description: `Found ${existingTodos.length} similar todo(s): "${duplicateTitles}". Please check your existing todos.`,
           variant: "destructive"
         })
-        setShowDialog(false)
+        handleDialogClose(false)
         return
       }
 
       console.log(`✅ No duplicates found, proceeding with creation`)
 
-      const todoData = convertAIRecommendationToTodo(
-        recommendation,
-        clientId,
-        selectedCategory
-      )
-
-      // Override priority if user selected different one
-      if (selectedPriority !== todoData.priority) {
-        todoData.priority = selectedPriority
+      // Create custom todo data with edited values
+      const todoData = {
+        title: editedTitle.trim() || getTitle(),
+        client_id: clientId,
+        priority: selectedPriority,
+        category: selectedCategory,
+        due_date: selectedDueDate ? selectedDueDate.toISOString() : null,
+        source: 'ai_recommendation',
+        ai_context: JSON.stringify({
+          original_recommendation: recommendation,
+          edited_by_user: isEditMode,
+          created_at: new Date().toISOString()
+        })
       }
 
       console.log(`📝 Creating todo with data:`, todoData)
@@ -100,8 +140,8 @@ export function AddToTodoButton({
           title: "Todo Created Successfully",
           description: `"${todoData.title}" has been added to your todo list.`,
         })
-        setShowDialog(false)
-        onAddSuccess?.() // Call success callback
+        handleDialogClose(false)
+        onAddSuccess?.(recommendation) // Call success callback with recommendation data
       } else {
         console.log(`❌ Todo creation failed`)
         toast({
@@ -216,97 +256,174 @@ export function AddToTodoButton({
         {disabled ? 'Added' : 'Add Todo'}
       </Button>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-600" />
-            Add to Todo
-          </DialogTitle>
+      <Dialog open={showDialog} onOpenChange={handleDialogClose}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Add AI Recommendation to Todo</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-normal">
+                  Review and customize the todo details before adding
+                </p>
+              </div>
+            </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4">
-            {/* Preview */}
-            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Task
-              </Label>
-              <p className="text-sm text-gray-900 dark:text-white mt-1 line-clamp-2">
-                {getTitle()}
-              </p>
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {recommendation.priority && (
-                  <Badge 
-                    variant={recommendation.priority === 'High' ? 'destructive' : recommendation.priority === 'Medium' ? 'default' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {recommendation.priority}
-                  </Badge>
-                )}
-                {recommendation.category && (
-                  <Badge variant="outline" className="text-xs">
-                    {recommendation.category}
-                  </Badge>
-                )}
+          <div className="space-y-5">
+            {/* Editable Todo Details */}
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-white">Todo Details</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditMode(!isEditMode)}
+                  className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                >
+                  <Edit3 className="h-4 w-4 mr-1" />
+                  {isEditMode ? 'Disable Edit' : 'Enable Edit'}
+                </Button>
               </div>
-            </div>
 
-            {/* Category and Priority Selection */}
-            <div className="grid grid-cols-2 gap-4">
+              {/* Title */}
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                <Label htmlFor="title" className="text-sm font-medium">
+                  Task Title <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="title"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  placeholder="Enter task title..."
+                  disabled={!isEditMode}
+                  className={cn(
+                    "transition-all duration-200",
+                    !isEditMode && "bg-gray-50 dark:bg-gray-800"
+                  )}
+                />
+              </div>
+
+              {/* Category, Priority, and Due Date Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="category" className="text-sm font-medium">
+                    Category
+                  </Label>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCategories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority" className="text-sm font-medium">
+                    Priority
+                  </Label>
+                  <Select value={selectedPriority} onValueChange={(value: 'low' | 'medium' | 'high') => setSelectedPriority(value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                          Low Priority
+                        </div>
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      <SelectItem value="medium">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                          Medium Priority
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="high">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          High Priority
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="priority">Priority</Label>
-                <Select value={selectedPriority} onValueChange={(value: 'low' | 'medium' | 'high') => setSelectedPriority(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    Due Date (Optional)
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !selectedDueDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDueDate ? format(selectedDueDate, "MMM dd, yyyy") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDueDate}
+                        onSelect={setSelectedDueDate}
+                        initialFocus
+                        disabled={(date) => date < new Date()}
+                      />
+                      {selectedDueDate && (
+                        <div className="p-2 border-t">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedDueDate(undefined)}
+                            className="w-full"
+                          >
+                            Clear Date
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
-              onClick={() => setShowDialog(false)}
+              onClick={() => handleDialogClose(false)}
               disabled={isConverting}
+              className="border-gray-300 hover:bg-gray-50"
             >
               Cancel
             </Button>
             <Button
               onClick={handleConvertToTodo}
-              disabled={isConverting}
-              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isConverting || !editedTitle.trim()}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg"
             >
               {isConverting ? (
                 <>
                   <CheckCircle className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
+                  Creating Todo...
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add Todo
+                  Add to Todo List
                 </>
               )}
             </Button>
