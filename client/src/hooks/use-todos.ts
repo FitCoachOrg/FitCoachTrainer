@@ -103,7 +103,9 @@ export function useTodos() {
           client_id: todoData.client_id,
           priority: todoData.priority || 'medium',
           due_date: todoData.due_date,
-          category: todoData.category
+          category: todoData.category,
+          source: todoData.source || 'manual',
+          ai_context: todoData.ai_context
         })
         .select()
         .single()

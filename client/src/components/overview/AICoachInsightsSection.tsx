@@ -8,6 +8,8 @@ import { Brain, Sparkles, Target, Calendar, TrendingUp, AlertTriangle, CheckCirc
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { useToast } from "@/hooks/use-toast"
 import { AICoachInsightsState } from "@/types/ai-coach-insights"
+import { SmartTodoSuggestions } from "@/components/ai-todo/SmartTodoSuggestions"
+import { AddToTodoButton } from "@/components/ai-todo/AddToTodoButton"
 
 interface AICoachInsightsSectionProps {
   lastAIRecommendation: any
@@ -40,6 +42,12 @@ export function AICoachInsightsSection({
   
   // State to track completed actions
   const [completedActions, setCompletedActions] = useState<Set<string>>(new Set())
+  
+  // State to track actions added to todos
+  const [addedToTodos, setAddedToTodos] = useState<Set<string>>(new Set())
+  
+  // State for Smart Todo Suggestions
+  const [showSmartTodoSuggestions, setShowSmartTodoSuggestions] = useState(false)
 
   const handleActionToggle = (actionId: string) => {
     const newCompleted = new Set(completedActions)
@@ -49,6 +57,11 @@ export function AICoachInsightsSection({
       newCompleted.add(actionId)
     }
     setCompletedActions(newCompleted)
+  }
+
+  // Handle action added to todos
+  const handleActionAdded = (actionId: string) => {
+    setAddedToTodos(prev => new Set([...prev, actionId]))
   }
 
   // Helper function to convert trainer notes to proper format for AI analysis
@@ -189,16 +202,18 @@ export function AICoachInsightsSection({
                   currentRecommendation?.actions ||
                   [];
     
-    return actions.map((action: any, index: number) => ({
-      id: `action-${index}`,
-      text: typeof action === 'string' ? action : 
-            typeof action === 'object' && action.action ? action.action :
-            String(action),
-      completed: completedActions.has(`action-${index}`),
-      priority: action.priority || 'Medium',
-      category: action.category || 'General',
-      timeframe: action.timeframe || 'This week'
-    }));
+    return actions
+      .map((action: any, index: number) => ({
+        id: `action-${index}`,
+        text: typeof action === 'string' ? action : 
+              typeof action === 'object' && action.action ? action.action :
+              String(action),
+        completed: completedActions.has(`action-${index}`),
+        priority: action.priority || 'Medium',
+        category: action.category || 'General',
+        timeframe: action.timeframe || 'This week'
+      }))
+      .filter(action => !addedToTodos.has(action.id)); // Filter out actions added to todos
   }
 
   // Helper function to get progress assessment
@@ -315,6 +330,20 @@ export function AICoachInsightsSection({
                   </>
                 )}
               </Button>
+              
+              {/* Smart Todo Suggestions Button */}
+              {lastAIRecommendation && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSmartTodoSuggestions(!showSmartTodoSuggestions)}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/20"
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  {showSmartTodoSuggestions ? 'Hide' : 'Show'} Suggestions
+                </Button>
+              )}
+              
               <Button
                 variant="outline"
                 size="sm"
@@ -337,6 +366,18 @@ export function AICoachInsightsSection({
         </CardHeader>
       </Card>
 
+      {/* Smart Todo Suggestions Section */}
+      {showSmartTodoSuggestions && lastAIRecommendation && (
+        <SmartTodoSuggestions
+          aiAnalysis={lastAIRecommendation}
+          clientId={client?.client_id}
+          onClose={() => setShowSmartTodoSuggestions(false)}
+          onTodosCreated={(todoIds) => {
+            setAddedToTodos(prev => new Set([...prev, ...todoIds]))
+          }}
+        />
+      )}
+
       {/* Action Plan Card - Moved to top */}
       {actionItems.length > 0 && (
         <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 shadow-lg">
@@ -356,14 +397,14 @@ export function AICoachInsightsSection({
                   <Checkbox
                     checked={item.completed}
                     onCheckedChange={() => handleActionToggle(item.id)}
-                    className="mt-1"
+                    className="mt-1 flex-shrink-0"
                   />
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <span className={`text-sm font-medium ${item.completed ? 'line-through text-gray-500' : 'text-blue-800 dark:text-blue-300'}`}>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className={`text-sm font-medium break-words ${item.completed ? 'line-through text-gray-500' : 'text-blue-800 dark:text-blue-300'}`}>
                         {item.text}
                       </span>
-                      <div className="flex gap-2 ml-2">
+                      <div className="flex gap-1 flex-wrap flex-shrink-0">
                         {item.priority && (
                           <Badge 
                             variant={item.priority === 'High' ? 'destructive' : item.priority === 'Medium' ? 'default' : 'secondary'}
@@ -385,6 +426,18 @@ export function AICoachInsightsSection({
                         {item.timeframe}
                       </div>
                     )}
+                  </div>
+                  {/* Add to Todo Button - Moved outside flex container */}
+                  <div className="flex-shrink-0">
+                    <AddToTodoButton
+                      recommendation={item}
+                      clientId={client?.client_id}
+                      variant="ghost"
+                      size="sm"
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                      onAddSuccess={() => handleActionAdded(item.id)}
+                      disabled={addedToTodos.has(item.id)}
+                    />
                   </div>
                 </div>
               ))}

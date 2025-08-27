@@ -10,8 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Search, RefreshCw, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, RefreshCw, X, ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import AddExerciseModal from "@/components/AddExerciseModal"
+import { exerciseService, Exercise } from "@/lib/exercise-service"
 
 type ExerciseRaw = {
   id: number
@@ -23,6 +25,7 @@ type ExerciseRaw = {
   primary_muscle: string | null
   equipment: string | null
   category: string | null
+  source?: 'default' | 'custom' // To distinguish between default and custom exercises
 }
 
 export default function ExerciseLibrary() {
@@ -33,6 +36,7 @@ export default function ExerciseLibrary() {
   const [primaryFilter, setPrimaryFilter] = useState<string[]>([])
   const [equipmentFilter, setEquipmentFilter] = useState<string[]>([])
   const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'default' | 'custom'>('all')
 
   const [rows, setRows] = useState<ExerciseRaw[]>([])
   const [loading, setLoading] = useState(false)
@@ -48,6 +52,9 @@ export default function ExerciseLibrary() {
 
   const pageSize = 50
   const [page, setPage] = useState(0)
+  
+  // Add exercise modal state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   const uniq = (arr: (string | null | undefined)[]) =>
     Array.from(new Set(arr.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b))
@@ -68,17 +75,24 @@ export default function ExerciseLibrary() {
       setLoading(true)
       setError(null)
 
-      let query = supabase
-        .from("exercises_raw")
-        .select("id, exercise_name, video_link, video_explanation, expereince_level, target_muscle, primary_muscle, equipment, category")
-        .order("exercise_name", { ascending: true })
-        .range(page * pageSize, page * pageSize + pageSize - 1)
+      // Use the exercise service to fetch all exercises
+      const allExercises = await exerciseService.getAllExercises();
 
-      query = applyAllFilters(query)
+      // Apply filters using the service
+      const filteredExercises = exerciseService.filterExercises(allExercises, {
+        nameFilter,
+        experienceFilter,
+        targetFilter,
+        primaryFilter,
+        equipmentFilter,
+        categoryFilter,
+        sourceFilter
+      });
 
-      const { data, error } = await query
-      if (error) throw error
-      setRows((data || []) as ExerciseRaw[])
+      // Apply pagination using the service
+      const paginatedExercises = exerciseService.paginateExercises(filteredExercises, page, pageSize);
+
+      setRows(paginatedExercises as ExerciseRaw[]);
     } catch (err: any) {
       setError(err.message || "Failed to load exercises")
       setRows([])
@@ -87,27 +101,25 @@ export default function ExerciseLibrary() {
     }
   }
 
-  // Dynamic options loader with spinner (single query, applies current filters)
+  // Dynamic options loader using the service
   const optionsReqId = useRef(0)
   const fetchDynamicOptions = async () => {
     optionsReqId.current += 1
     const rid = optionsReqId.current
     setOptionsLoading(true)
     try {
-      let q = supabase
-        .from("exercises_raw")
-        .select("expereince_level, target_muscle, primary_muscle, equipment, category")
-        .limit(10000)
-      q = applyAllFilters(q)
-      const { data, error } = await q
-      if (error) throw error
-      if (rid !== optionsReqId.current) return
-      const list = (data || []) as any[]
-      setExperienceOptions(uniq(list.map(r => r.expereince_level)))
-      setTargetOptions(uniq(list.map(r => r.target_muscle)))
-      setPrimaryOptions(uniq(list.map(r => r.primary_muscle)))
-      setEquipmentOptions(uniq(list.map(r => r.equipment)))
-      setCategoryOptions(uniq(list.map(r => r.category)))
+      // Use the exercise service to get options
+      const options = await exerciseService.getExerciseOptions();
+
+      if (rid !== optionsReqId.current) return;
+
+      setExperienceOptions(options.experienceOptions)
+      setTargetOptions(options.targetOptions)
+      setPrimaryOptions(options.primaryOptions)
+      setEquipmentOptions(options.equipmentOptions)
+      setCategoryOptions(options.categoryOptions)
+    } catch (error) {
+      console.error("Error fetching dynamic options:", error);
     } finally {
       if (rid === optionsReqId.current) setOptionsLoading(false)
     }
@@ -125,7 +137,7 @@ export default function ExerciseLibrary() {
       fetchDynamicOptions()
     }, 250)
     return () => clearTimeout(t)
-  }, [nameFilter, experienceFilter, targetFilter, primaryFilter, equipmentFilter, categoryFilter, page])
+  }, [nameFilter, experienceFilter, targetFilter, primaryFilter, equipmentFilter, categoryFilter, sourceFilter, page])
 
   const clearFilters = () => {
     setNameFilter("")
@@ -134,6 +146,7 @@ export default function ExerciseLibrary() {
     setPrimaryFilter([])
     setEquipmentFilter([])
     setCategoryFilter([])
+    setSourceFilter('all')
     setPage(0)
     fetchDynamicOptions()
   }
@@ -145,7 +158,8 @@ export default function ExerciseLibrary() {
   }
 
   const canPrev = page > 0
-  const canNext = rows.length === pageSize
+  // Update pagination logic to work with client-side filtering
+  const canNext = rows.length === pageSize && (page + 1) * pageSize < 1000 // Reasonable limit for client-side pagination
 
   const MultiSelect = ({ label, value, setValue, options }: { label: string, value: string[], setValue: (v: string[]) => void, options: string[] }) => (
     <div>
@@ -199,6 +213,42 @@ export default function ExerciseLibrary() {
         <Button variant="outline" className="gap-2" onClick={clearFilters}>
           <RefreshCw className="h-4 w-4" /> Reset All
         </Button>
+        <Button onClick={() => setIsAddModalOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" /> Add Exercise
+        </Button>
+      </div>
+
+      {/* Source Filter Toggle */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="text-sm font-medium text-foreground">Show:</div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={sourceFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setPage(0); setSourceFilter('all') }}
+          >
+            All Exercises
+          </Button>
+          <Button
+            variant={sourceFilter === 'default' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setPage(0); setSourceFilter('default') }}
+          >
+            Standard Only
+          </Button>
+          <Button
+            variant={sourceFilter === 'custom' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setPage(0); setSourceFilter('custom') }}
+          >
+            Custom Only
+          </Button>
+        </div>
+        {sourceFilter !== 'all' && (
+          <div className="text-xs text-muted-foreground">
+            Showing {sourceFilter === 'default' ? 'standard' : 'custom'} exercises only
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -270,8 +320,17 @@ export default function ExerciseLibrary() {
               </TableRow>
             )}
             {rows.map((r) => (
-              <TableRow key={r.id} className="hover:bg-muted/50 transition-colors">
-                <TableCell className="font-medium">{r.exercise_name}</TableCell>
+              <TableRow key={`${r.source}-${r.id}`} className="hover:bg-muted/50 transition-colors">
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    {r.exercise_name}
+                    {r.source === 'custom' && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        Custom
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{r.video_link ? (
                   <a href={r.video_link} target="_blank" rel="noreferrer" className="text-primary hover:text-primary/80 underline transition-colors">Link</a>
                 ) : "-"}</TableCell>
@@ -310,6 +369,17 @@ export default function ExerciseLibrary() {
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Add Exercise Modal */}
+      <AddExerciseModal
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={() => {
+          // Refresh the exercise list after adding a new exercise
+          fetchExercises();
+          fetchDynamicOptions();
+        }}
+      />
     </div>
   )
 }

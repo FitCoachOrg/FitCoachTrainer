@@ -28,7 +28,7 @@ import ClientProfilePage from "./pages/ClientProfilePage"
 import HomePage from "./pages/HomePage"
 import Navbar from "./components/layout/Navbar"
 import { cn } from "@/lib/utils"
-import ExerciseLibrary from "./pages/ExcerciseLibrary"
+import ExerciseLibrary from "./pages/ExerciseLibrary"
 import FitnessCalendar from "./pages/Calendar-excercise"
 import SignupPage from "./pages/Signup"
 import AllProgramsPage from './pages/programs'
@@ -265,7 +265,7 @@ function App() {
                   }
                 /> 
                 <Route
-                  path="/excercise-lib"
+                  path="/exercise-lib"
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>

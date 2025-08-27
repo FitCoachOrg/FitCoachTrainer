@@ -1,6 +1,7 @@
 -- Todo List Table Schema for FitCoachTrainer (FIXED VERSION)
 -- This schema supports all features from the TodoList component
 -- Fixed: Removed overly restrictive due_date constraint
+-- Enhanced: Added AI integration fields for converting AI recommendations to todos
 
 -- Create the todos table
 CREATE TABLE IF NOT EXISTS todos (
@@ -14,6 +15,10 @@ CREATE TABLE IF NOT EXISTS todos (
     category VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- AI Integration Fields (Minimal)
+    source VARCHAR(50) DEFAULT 'manual' CHECK (source IN ('manual', 'ai_recommendation')),
+    ai_context TEXT, -- Simple text field for original AI recommendation
     
     -- Add constraints (removed the restrictive due_date constraint)
     CONSTRAINT todos_title_not_empty CHECK (title != '')
@@ -29,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_todos_due_date ON todos(due_date);
 CREATE INDEX IF NOT EXISTS idx_todos_created_at ON todos(created_at);
 CREATE INDEX IF NOT EXISTS idx_todos_trainer_completed ON todos(trainer_id, completed);
 CREATE INDEX IF NOT EXISTS idx_todos_trainer_priority ON todos(trainer_id, priority);
+CREATE INDEX IF NOT EXISTS idx_todos_source ON todos(source);
 
 -- Create a function to automatically update the updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

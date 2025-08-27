@@ -38,7 +38,7 @@ const Clients: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [engagementFilter, setEngagementFilter] = useState("all");
-  const [outcomeFilter, setOutcomeFilter] = useState("all");
+
   const [activityFilter, setActivityFilter] = useState("all");
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -368,8 +368,7 @@ const Clients: React.FC = () => {
 
     // Engagement score filter (mocked for now)
     const matchesEngagement = true;
-    // Outcome score filter (mocked for now)
-    const matchesOutcome = true;
+
     // Activity filter
     const matchesActivity = 
       activityFilter === "all" ||
@@ -377,7 +376,7 @@ const Clients: React.FC = () => {
       (activityFilter === "moderate" && daysSinceActivity !== null && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
       (activityFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
-    return matchesSearch && matchesStatus && matchesEngagement && matchesOutcome && matchesActivity;
+    return matchesSearch && matchesStatus && matchesEngagement && matchesActivity;
   });
 
   const sortedClients = [...filteredClients].sort((a, b) => {
@@ -465,9 +464,7 @@ const Clients: React.FC = () => {
       const bValue = bSession ? 1 : 0;
       
       comparisonResult = aValue - bValue;
-    } else if (sortColumn === 'outcome_score') {
-      // Currently showing 100% for all - treat as equal
-      comparisonResult = 0;
+
     } else if (sortColumn === 'status') {
       const aStatus = a.status || 'pending';
       const bStatus = b.status || 'pending';
@@ -597,17 +594,7 @@ const Clients: React.FC = () => {
                     <option value="medium">Medium (50-79)</option>
                     <option value="low">Low (0-49)</option>
                   </select>
-                  <select
-                    value={outcomeFilter}
-                    onChange={(e) => setOutcomeFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Outcome Score"
-                  >
-                    <option value="all">Outcome: All</option>
-                    <option value="high">High (80-100)</option>
-                    <option value="medium">Medium (50-79)</option>
-                    <option value="low">Low (0-49)</option>
-                  </select>
+
                   <select
                     value={activityFilter}
                     onChange={(e) => setActivityFilter(e.target.value)}
@@ -622,7 +609,6 @@ const Clients: React.FC = () => {
                   <button 
                     onClick={() => {
                       setEngagementFilter("all");
-                      setOutcomeFilter("all");
                       setActivityFilter("all");
                       setStatusFilter("all");
                       setSearchQuery("");
@@ -684,9 +670,7 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
                       Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
-                      Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
-                    </th>
+
                   </tr>
                 </thead>
                 <tbody>
@@ -836,22 +820,13 @@ const Clients: React.FC = () => {
                               {client.status === 'active' ? 'Active' : 'Pending'}
                             </span>
                           </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                100%
-                              </span>
-                            </div>
-                          </td>
+
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={10} className="text-center py-16">
+                      <td colSpan={9} className="text-center py-16">
                         <div className="flex flex-col items-center">
                           <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                             <Icons.SearchIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
