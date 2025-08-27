@@ -154,7 +154,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
                   startDate: existing.startDate || today,
                   frequency: existing.frequency || d.frequency,
                   time: displayTime,
-                  coachTip: existing.coachTip || "",
+                  coachTip: existing.coachTip || existing.details_json?.coach_tip || "",
                   eventName: existing.eventName || d.eventName,
                 }
               }
@@ -243,6 +243,10 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       return
     }
 
+    // Exclude custom program creation for Workout and Nutritional plans (temporary behavior)
+    const excludedTypes: ProgramConfigRow["key"][] = ["workout_plan", "nutritional_plan"]
+    const actionableSelected = selected.filter(r => !excludedTypes.includes(r.key))
+
     // Identify deselected programs (programs that were enabled before but are now disabled)
     const deselectedPrograms = previousRows.filter(prev => 
       prev.enabled && !rows.find(curr => curr.key === prev.key)?.enabled
@@ -255,10 +259,8 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
 
     // Build entries across all selected rows
     const allEntries: any[] = []
-    let minStartDate: string | null = null
-    let maxEndDate: string | null = null
 
-    for (const r of selected) {
+    for (const r of actionableSelected) {
       if (!r.startDate || !r.time || !r.eventName) {
         toast({ title: "Missing fields", description: `Please complete all fields for ${r.label}.`, variant: "destructive" })
         return
@@ -267,9 +269,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       const dates = generateDatesForRange(r.startDate, r.frequency)
       if (dates.length === 0) continue
 
-      if (!minStartDate || r.startDate < minStartDate) minStartDate = r.startDate
-      const endStr = dates[dates.length - 1]
-      if (!maxEndDate || endStr > maxEndDate) maxEndDate = endStr
+      // Track range no longer needed when using upsert
 
       // Convert time from client timezone to UTC for database storage
       const utcTime = convertClientTimeToUTC(r.time, effectiveClientTimezone)
@@ -290,6 +290,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               frequency: r.frequency,
               program_name: r.eventName,
               selected_measurements: ["hip", "waist", "bicep", "thigh"],
+              coach_tip: r.coachTip || r.label,
               original_local_time: r.time, // Store original client timezone time
               timezone: effectiveClientTimezone // Store client timezone
             }
@@ -310,6 +311,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
               task_type: r.key,
               frequency: r.frequency,
               program_name: r.eventName,
+              coach_tip: r.coachTip || r.label,
               original_local_time: r.time, // Store original client timezone time
               timezone: effectiveClientTimezone // Store client timezone
             }
@@ -318,56 +320,57 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       }
     }
 
-    if (allEntries.length === 0 || !minStartDate || !maxEndDate) {
-      toast({ title: "No entries to add", description: "Nothing to insert based on current selections.", variant: "destructive" })
+    if (allEntries.length === 0) {
+      // No schedule items to create (likely only excluded types selected). Still save programs JSON and finish.
+      try {
+        setIsSubmitting(true)
+        const programsData = rows.map(row => ({
+          key: row.key,
+          label: row.label,
+          enabled: row.enabled,
+          startDate: row.startDate,
+          frequency: row.frequency,
+          time: row.time,
+          coachTip: row.coachTip,
+          eventName: row.eventName,
+          details_json: {
+            original_local_time: row.time,
+            timezone: effectiveClientTimezone
+          }
+        }))
+
+        const { error: updateError } = await supabase
+          .from('client')
+          .update({ programs: JSON.stringify(programsData) })
+          .eq('client_id', clientId)
+
+        if (updateError) {
+          throw updateError
+        }
+
+        setPreviousRows(rows)
+        const actionMessage = deselectedPrograms.length > 0
+          ? `Updated programs and removed ${deselectedPrograms.length} deselected program(s).`
+          : `Saved program settings. No schedule items created.`
+        toast({ title: 'Onboarding updated', description: actionMessage })
+        onCompleted()
+        onClose()
+      } catch (err: any) {
+        toast({ title: 'Error', description: err?.message || 'Failed to save programs.', variant: 'destructive' })
+      } finally {
+        setIsSubmitting(false)
+      }
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Fetch existing entries to avoid duplicates
-      const types = Array.from(new Set(selected.map(r => r.key)))
-      const { data: existingData, error: existingError } = await supabase
+      // Single bulk upsert to insert or update in one operation.
+      // Assumes a unique constraint on (client_id, for_date, type) in schedule table.
+      const { error: upsertError } = await supabase
         .from("schedule")
-        .select("for_date,type")
-        .eq("client_id", clientId)
-        .gte("for_date", minStartDate)
-        .lte("for_date", maxEndDate)
-        .in("type", types)
-
-      if (existingError) throw existingError
-
-      const existingSet = new Set((existingData || []).map((e: any) => `${e.for_date}-${e.type}`))
-      const newEntries = allEntries.filter(e => !existingSet.has(`${e.for_date}-${e.type}`))
-
-      // Insert new entries if any exist
-      if (newEntries.length > 0) {
-        const { error: insertError } = await supabase.from("schedule").insert(newEntries)
-        if (insertError) throw insertError
-      }
-
-      // Update existing entries with any changes (coach tips, times, etc.)
-      const existingEntries = allEntries.filter(e => existingSet.has(`${e.for_date}-${e.type}`))
-      if (existingEntries.length > 0) {
-        for (const entry of existingEntries) {
-          const { error: updateError } = await supabase
-            .from("schedule")
-            .update({
-              for_time: entry.for_time,
-              coach_tip: entry.coach_tip,
-              summary: entry.summary,
-              details_json: entry.details_json
-            })
-            .eq("client_id", clientId)
-            .eq("for_date", entry.for_date)
-            .eq("type", entry.type)
-          
-          if (updateError) {
-            console.error('Error updating existing entry:', updateError)
-            // Continue with other updates even if one fails
-          }
-        }
-      }
+        .upsert(allEntries, { onConflict: 'client_id,for_date,type' })
+      if (upsertError) throw upsertError
 
       // Save programs data to client table in JSON format
       const programsData = rows.map(row => ({
@@ -380,6 +383,7 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
         coachTip: row.coachTip,
         eventName: row.eventName,
         details_json: {
+          coach_tip: row.coachTip,
           original_local_time: row.time, // Store original client timezone time
           timezone: effectiveClientTimezone // Store client timezone
         }
@@ -398,12 +402,9 @@ export function NewCustomerOnboardingModal({ clientId, clientName = "Client", is
       // Update previous rows state to reflect current state
       setPreviousRows(rows)
 
-      const existingEntriesCount = allEntries.filter(e => existingSet.has(`${e.for_date}-${e.type}`)).length
       const actionMessage = deselectedPrograms.length > 0 
         ? `Updated programs and removed ${deselectedPrograms.length} deselected program(s).`
-        : newEntries.length > 0 
-          ? `Inserted ${newEntries.length} new schedule items and updated ${existingEntriesCount} existing items for ${clientName}.`
-          : `Updated ${existingEntriesCount} existing schedule items for ${clientName}.`
+        : `Upserted ${allEntries.length} schedule items for ${clientName}.`
 
       toast({ title: "Onboarding updated", description: actionMessage })
 
