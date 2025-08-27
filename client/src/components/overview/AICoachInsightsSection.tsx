@@ -74,6 +74,21 @@ export function AICoachInsightsSection({
     return () => { cancelled = true }
   }, [client?.client_id])
 
+  // Initialize completed state from JSON data when recommendation changes
+  useEffect(() => {
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    if (currentRecommendation?.actions) {
+      const completedIds = new Set<string>();
+      currentRecommendation.actions.forEach((action: any, index: number) => {
+        if (action.completed === true) {
+          completedIds.add(`action-${index}`);
+        }
+      });
+      setCompletedActions(completedIds);
+      console.log(`🔄 Initialized completed actions from JSON:`, Array.from(completedIds));
+    }
+  }, [aiCoachInsights?.lastAIRecommendation, lastAIRecommendation])
+
   const handleActionToggle = (actionId: string) => {
     const newCompleted = new Set(completedActions)
     if (newCompleted.has(actionId)) {
@@ -82,6 +97,32 @@ export function AICoachInsightsSection({
       newCompleted.add(actionId)
     }
     setCompletedActions(newCompleted)
+
+    // Persist the completed state in the JSON data
+    const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
+    if (currentRecommendation?.actions) {
+      const updatedRecommendation = {
+        ...currentRecommendation,
+        actions: currentRecommendation.actions.map((action: any, index: number) => {
+          const itemId = `action-${index}`;
+          if (itemId === actionId) {
+            const isCompleted = newCompleted.has(actionId);
+            console.log(`🔄 Marking action ${itemId} as completed: ${isCompleted}`)
+            return { ...action, completed: isCompleted };
+          }
+          return action;
+        })
+      };
+
+      // Update the state with the modified recommendation
+      if (aiCoachInsights?.setLastAIRecommendation) {
+        console.log(`🔄 Updating aiCoachInsights state for completion`)
+        aiCoachInsights.setLastAIRecommendation(updatedRecommendation);
+      } else if (setLastAIRecommendation) {
+        console.log(`🔄 Updating local lastAIRecommendation state for completion`)
+        setLastAIRecommendation(updatedRecommendation);
+      }
+    }
   }
 
   // Centralized todo management state
@@ -99,12 +140,21 @@ export function AICoachInsightsSection({
       return false
     }
 
+    // Check if item is completed (grey out when completed)
+    if (completedActions.has(actionId)) {
+      return false
+    }
+
     // Check JSON flag
     const currentRecommendation = aiCoachInsights?.lastAIRecommendation || lastAIRecommendation;
     if (currentRecommendation?.actions) {
       const actionIndex = parseInt(actionId.replace('action-', ''))
       const action = currentRecommendation.actions[actionIndex]
       if (action?.added_to_todo === true) {
+        return false
+      }
+      // Also check JSON completed flag
+      if (action?.completed === true) {
         return false
       }
     }
@@ -396,18 +446,23 @@ export function AICoachInsightsSection({
                   [];
 
     return actions
-      .map((action: any, index: number) => ({
-        id: `action-${index}`,
-        text: typeof action === 'string' ? action :
-              typeof action === 'object' && action.text ? action.text :
-              typeof action === 'object' && action.action ? action.action :
-              String(action),
-        completed: completedActions.has(`action-${index}`),
-        priority: action.priority || action.reason_tag || 'Medium',
-        category: action.category || 'General',
-        timeframe: action.timeframe || 'This week',
-        added_to_todo: action.added_to_todo || false
-      }))
+      .map((action: any, index: number) => {
+        const itemId = `action-${index}`;
+        const isCompleted = completedActions.has(itemId) || action.completed === true;
+        
+        return {
+          id: itemId,
+          text: typeof action === 'string' ? action :
+                typeof action === 'object' && action.text ? action.text :
+                typeof action === 'object' && action.action ? action.action :
+                String(action),
+          completed: isCompleted,
+          priority: action.priority || action.reason_tag || 'Medium',
+          category: action.category || 'General',
+          timeframe: action.timeframe || 'This week',
+          added_to_todo: action.added_to_todo || false
+        };
+      })
       .filter(item => {
         // Filter out items that have been added to todos (unless showAddedItems is true)
         const isAddedToTodo = addedToTodos.has(item.id) || item.added_to_todo
@@ -427,18 +482,23 @@ export function AICoachInsightsSection({
                   [];
 
     return actions
-      .map((action: any, index: number) => ({
-        id: `action-${index}`,
-        text: typeof action === 'string' ? action :
-              typeof action === 'object' && action.text ? action.text :
-              typeof action === 'object' && action.action ? action.action :
-              String(action),
-        completed: completedActions.has(`action-${index}`),
-        priority: action.priority || action.reason_tag || 'Medium',
-        category: action.category || 'General',
-        timeframe: action.timeframe || 'This week',
-        added_to_todo: action.added_to_todo || false
-      }))
+      .map((action: any, index: number) => {
+        const itemId = `action-${index}`;
+        const isCompleted = completedActions.has(itemId) || action.completed === true;
+        
+        return {
+          id: itemId,
+          text: typeof action === 'string' ? action :
+                typeof action === 'object' && action.text ? action.text :
+                typeof action === 'object' && action.action ? action.action :
+                String(action),
+          completed: isCompleted,
+          priority: action.priority || action.reason_tag || 'Medium',
+          category: action.category || 'General',
+          timeframe: action.timeframe || 'This week',
+          added_to_todo: action.added_to_todo || false
+        };
+      })
   }
 
   // Helper function to get progress assessment
@@ -1032,10 +1092,17 @@ export function AICoachInsightsSection({
                       {/* Add to Todo Button - Bottom Right */}
                       <div className="flex justify-end pt-2">
                         {!canAddToTodo(item.id) ? (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 rounded-md text-sm font-medium">
-                            <CheckCircle className="h-4 w-4" />
-                            Added to Todo
-                          </div>
+                          item.completed ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 border border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 rounded-md text-sm font-medium">
+                              <CheckCircle className="h-4 w-4" />
+                              Completed
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 border border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 rounded-md text-sm font-medium">
+                              <CheckCircle className="h-4 w-4" />
+                              Added to Todo
+                            </div>
+                          )
                         ) : (
                           <AddToTodoButton
                             recommendation={item}
