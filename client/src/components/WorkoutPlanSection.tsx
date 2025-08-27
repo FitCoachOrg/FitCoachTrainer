@@ -2711,12 +2711,13 @@ const WorkoutPlanSection = ({
               {/* Export Button - Only show when there's workout data */}
               {workoutPlan && workoutPlan.hasAnyWorkouts && (
                 <WorkoutExportButton
-                  weekData={workoutPlan.week}
+                  weekData={getTableData()}
                   clientId={numericClientId}
                   planStartDate={planStartDate}
                   clientName={client?.name}
                   disabled={isGenerating}
                   className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                  viewMode={viewMode}
                 />
               )}
               

@@ -3,6 +3,7 @@
  * 
  * This module provides comprehensive export functionality for workout plans,
  * including CSV and Excel formats with all workout data fields.
+ * Supports both 7-day (weekly) and 30-day (monthly) plan durations.
  */
 
 import { saveAs } from 'file-saver';
@@ -38,6 +39,7 @@ export interface ExportableWorkoutPlan {
 
 /**
  * Convert workout plan data to exportable format
+ * Supports both 7-day (weekly) and 30-day (monthly) plans
  */
 export function prepareWorkoutPlanForExport(
   weekData: Array<{
@@ -46,12 +48,16 @@ export function prepareWorkoutPlanForExport(
     exercises: any[];
   }>,
   clientId: number,
-  planStartDate: Date
+  planStartDate: Date,
+  viewMode: 'weekly' | 'monthly' = 'weekly'
 ): ExportableWorkoutPlan {
   const exercises: ExportableExercise[] = [];
   let totalWorkoutDays = 0;
 
-  // Process each day in the week
+  // Determine the number of days to process based on view mode
+  const totalDays = viewMode === 'monthly' ? 28 : 7; // 28 days for monthly (4 weeks), 7 days for weekly
+
+  // Process each day in the plan
   weekData.forEach((day, dayIndex) => {
     if (day && day.exercises && day.exercises.length > 0) {
       totalWorkoutDays++;
@@ -86,7 +92,9 @@ export function prepareWorkoutPlanForExport(
     }
   });
 
-  const planEndDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+  // Calculate plan end date based on view mode
+  const daysToAdd = viewMode === 'monthly' ? 27 : 6; // 27 for 28-day plan, 6 for 7-day plan
+  const planEndDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
 
   return {
     client_id: clientId,
@@ -100,6 +108,7 @@ export function prepareWorkoutPlanForExport(
 
 /**
  * Export workout plan as CSV
+ * Supports both 7-day (weekly) and 30-day (monthly) plans
  */
 export function exportWorkoutPlanAsCSV(
   weekData: Array<{
@@ -109,9 +118,10 @@ export function exportWorkoutPlanAsCSV(
   }>,
   clientId: number,
   planStartDate: Date,
-  clientName?: string
+  clientName?: string,
+  viewMode: 'weekly' | 'monthly' = 'weekly'
 ): void {
-  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate);
+  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate, viewMode);
   
   // Create CSV headers
   const headers = [
@@ -160,14 +170,16 @@ export function exportWorkoutPlanAsCSV(
     row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
   ).join('\n');
 
-  // Create and download file
+  // Create and download file with duration indicator
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}.csv`;
+  const durationSuffix = viewMode === 'monthly' ? '_30day' : '_7day';
+  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}${durationSuffix}.csv`;
   saveAs(blob, fileName);
 }
 
 /**
  * Export workout plan as Excel with multiple sheets
+ * Supports both 7-day (weekly) and 30-day (monthly) plans
  */
 export function exportWorkoutPlanAsExcel(
   weekData: Array<{
@@ -177,26 +189,29 @@ export function exportWorkoutPlanAsExcel(
   }>,
   clientId: number,
   planStartDate: Date,
-  clientName?: string
+  clientName?: string,
+  viewMode: 'weekly' | 'monthly' = 'weekly'
 ): void {
-  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate);
+  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate, viewMode);
   
   // Create workbook
   const workbook = XLSX.utils.book_new();
 
   // Sheet 1: Overview
+  const planDuration = viewMode === 'monthly' ? '30-Day (4 Weeks)' : '7-Day (1 Week)';
   const overviewData = [
     ['Workout Plan Overview'],
     [''],
     ['Client ID:', exportData.client_id],
     ['Client Name:', clientName || 'N/A'],
+    ['Plan Duration:', planDuration],
     ['Plan Start Date:', exportData.plan_start_date],
     ['Plan End Date:', exportData.plan_end_date],
     ['Total Exercises:', exportData.total_exercises],
     ['Total Workout Days:', exportData.total_workout_days],
     [''],
     ['Plan Summary:'],
-    ['This plan includes exercises for strength training, cardio, and recovery.'],
+    [`This ${planDuration.toLowerCase()} plan includes exercises for strength training, cardio, and recovery.`],
     ['Each exercise includes sets, reps, duration, and coach tips for proper form.']
   ];
 
@@ -246,11 +261,16 @@ export function exportWorkoutPlanAsExcel(
   const exerciseSheet = XLSX.utils.aoa_to_sheet(exerciseData);
   XLSX.utils.book_append_sheet(workbook, exerciseSheet, 'Exercises');
 
-  // Sheet 3: Weekly Summary
-  const weeklySummary = [
-    ['Weekly Summary'],
+  // Sheet 3: Weekly Summary (for monthly view) or Daily Summary (for weekly view)
+  const summaryTitle = viewMode === 'monthly' ? 'Monthly Summary' : 'Weekly Summary';
+  const summaryHeaders = viewMode === 'monthly' 
+    ? ['Week', 'Day', 'Date', 'Focus', 'Exercise Count', 'Total Duration (min)']
+    : ['Day', 'Date', 'Focus', 'Exercise Count', 'Total Duration (min)'];
+
+  const summaryData = [
+    [summaryTitle],
     [''],
-    ['Day', 'Date', 'Focus', 'Exercise Count', 'Total Duration (min)']
+    summaryHeaders
   ];
 
   // Group exercises by day
@@ -268,26 +288,46 @@ export function exportWorkoutPlanAsExcel(
     return acc;
   }, {} as Record<string, any>);
 
+  // Add week information for monthly view
   Object.entries(exercisesByDay).forEach(([date, dayData]) => {
-    weeklySummary.push([
-      dayData.day_name,
-      date,
-      dayData.focus,
-      dayData.exercises.length,
-      dayData.totalDuration
-    ]);
+    const currentDate = new Date(date);
+    const weekNumber = viewMode === 'monthly' 
+      ? Math.floor((currentDate.getTime() - planStartDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1
+      : null;
+    
+    const row = viewMode === 'monthly'
+      ? [
+          `Week ${weekNumber}`,
+          dayData.day_name,
+          date,
+          dayData.focus,
+          dayData.exercises.length,
+          dayData.totalDuration
+        ]
+      : [
+          dayData.day_name,
+          date,
+          dayData.focus,
+          dayData.exercises.length,
+          dayData.totalDuration
+        ];
+    
+    summaryData.push(row);
   });
 
-  const summarySheet = XLSX.utils.aoa_to_sheet(weeklySummary);
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Weekly Summary');
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+  const summarySheetName = viewMode === 'monthly' ? 'Monthly Summary' : 'Weekly Summary';
+  XLSX.utils.book_append_sheet(workbook, summarySheet, summarySheetName);
 
-  // Export file
-  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}.xlsx`;
+  // Export file with duration indicator
+  const durationSuffix = viewMode === 'monthly' ? '_30day' : '_7day';
+  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}${durationSuffix}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 }
 
 /**
  * Export workout plan as JSON (for backup/import purposes)
+ * Supports both 7-day (weekly) and 30-day (monthly) plans
  */
 export function exportWorkoutPlanAsJSON(
   weekData: Array<{
@@ -297,15 +337,19 @@ export function exportWorkoutPlanAsJSON(
   }>,
   clientId: number,
   planStartDate: Date,
-  clientName?: string
+  clientName?: string,
+  viewMode: 'weekly' | 'monthly' = 'weekly'
 ): void {
-  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate);
+  const exportData = prepareWorkoutPlanForExport(weekData, clientId, planStartDate, viewMode);
+  
+  const planDuration = viewMode === 'monthly' ? '30-Day (4 Weeks)' : '7-Day (1 Week)';
   
   const jsonData = {
     metadata: {
       export_date: new Date().toISOString(),
       client_id: exportData.client_id,
       client_name: clientName,
+      plan_duration: planDuration,
       plan_start_date: exportData.plan_start_date,
       plan_end_date: exportData.plan_end_date,
       total_exercises: exportData.total_exercises,
@@ -317,19 +361,22 @@ export function exportWorkoutPlanAsJSON(
   const blob = new Blob([JSON.stringify(jsonData, null, 2)], { 
     type: 'application/json;charset=utf-8;' 
   });
-  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}.json`;
+  const durationSuffix = viewMode === 'monthly' ? '_30day' : '_7day';
+  const fileName = `workout_plan_${clientName || clientId}_${exportData.plan_start_date}${durationSuffix}.json`;
   saveAs(blob, fileName);
 }
 
 /**
- * Generate export filename with timestamp
+ * Generate export filename with timestamp and duration indicator
  */
 export function generateExportFilename(
   clientId: number,
   clientName?: string,
-  format: 'csv' | 'xlsx' | 'json' = 'csv'
+  format: 'csv' | 'xlsx' | 'json' = 'csv',
+  viewMode: 'weekly' | 'monthly' = 'weekly'
 ): string {
   const timestamp = new Date().toISOString().slice(0, 10);
   const name = clientName ? clientName.replace(/[^a-zA-Z0-9]/g, '_') : `client_${clientId}`;
-  return `workout_plan_${name}_${timestamp}.${format}`;
+  const durationSuffix = viewMode === 'monthly' ? '_30day' : '_7day';
+  return `workout_plan_${name}_${timestamp}${durationSuffix}.${format}`;
 } 

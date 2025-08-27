@@ -5,6 +5,8 @@
  * - CSV Export (simple, fast)
  * - Excel Export (detailed with multiple sheets)
  * - JSON Export (for backup/import purposes)
+ * 
+ * Supports both 7-day (weekly) and 30-day (monthly) plan durations.
  */
 
 import React, { useState } from 'react';
@@ -42,6 +44,7 @@ interface WorkoutExportButtonProps {
   clientName?: string;
   disabled?: boolean;
   className?: string;
+  viewMode?: 'weekly' | 'monthly';
 }
 
 export const WorkoutExportButton: React.FC<WorkoutExportButtonProps> = ({
@@ -50,7 +53,8 @@ export const WorkoutExportButton: React.FC<WorkoutExportButtonProps> = ({
   planStartDate,
   clientName,
   disabled = false,
-  className = ''
+  className = '',
+  viewMode = 'weekly'
 }) => {
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
@@ -76,9 +80,10 @@ export const WorkoutExportButton: React.FC<WorkoutExportButtonProps> = ({
     try {
       exportFunction();
       
+      const durationText = viewMode === 'monthly' ? '30-day' : '7-day';
       toast({
         title: `${format} Export Successful`,
-        description: `Your workout plan has been exported as ${format}.`,
+        description: `Your ${durationText} workout plan has been exported as ${format}.`,
         icon: <CheckCircle className="h-4 w-4" />
       });
     } catch (error) {
@@ -97,24 +102,26 @@ export const WorkoutExportButton: React.FC<WorkoutExportButtonProps> = ({
 
   const handleCSVExport = () => {
     handleExport(
-      () => exportWorkoutPlanAsCSV(weekData, clientId, planStartDate, clientName),
+      () => exportWorkoutPlanAsCSV(weekData, clientId, planStartDate, clientName, viewMode),
       'CSV'
     );
   };
 
   const handleExcelExport = () => {
     handleExport(
-      () => exportWorkoutPlanAsExcel(weekData, clientId, planStartDate, clientName),
+      () => exportWorkoutPlanAsExcel(weekData, clientId, planStartDate, clientName, viewMode),
       'Excel'
     );
   };
 
   const handleJSONExport = () => {
     handleExport(
-      () => exportWorkoutPlanAsJSON(weekData, clientId, planStartDate, clientName),
+      () => exportWorkoutPlanAsJSON(weekData, clientId, planStartDate, clientName, viewMode),
       'JSON'
     );
   };
+
+  const durationText = viewMode === 'monthly' ? '30-Day' : '7-Day';
 
   return (
     <DropdownMenu>
@@ -125,11 +132,11 @@ export const WorkoutExportButton: React.FC<WorkoutExportButtonProps> = ({
           className={`gap-2 ${className}`}
         >
           <Download className="h-4 w-4" />
-          {isExporting ? 'Exporting...' : 'Export Plan'}
+          {isExporting ? 'Exporting...' : `Export ${durationText} Plan`}
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem 
           onClick={handleCSVExport}
           disabled={!hasData}
