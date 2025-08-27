@@ -10,80 +10,37 @@ interface CoachAnalysisResponse {
   success: boolean
   message: string
   analysis?: {
-    summary: {
-      key_insights: string[]
-      client_status: string
-      progress_assessment: string
-      immediate_concerns: string[]
-      positive_developments: string[]
+    snapshot: {
+      momentum: 'Up' | 'Flat' | 'Down'
+      adherence_pct: number | null
+      readiness: 'Low' | 'Medium' | 'High' | null
+      one_liner: string
     }
-    action_plan: {
-      immediate_actions: Array<{
-        action: string
-        priority: 'High' | 'Medium' | 'Low'
-        timeframe: string
-        category: 'Training' | 'Nutrition' | 'Motivation' | 'Communication' | 'Assessment' | 'Other'
-      }>
-      weekly_focus: Array<{
-        focus_area: string
-        specific_actions: string[]
-        success_metrics: string[]
-      }>
-    }
-    workout_plan_changes: {
-      exercise_modifications: Array<{
-        exercise: string
-        change: string
-        timeline: string
-      }>
-      intensity_adjustments: Array<{
-        area: string
-        adjustment: string
-      }>
-    }
-    nutritional_plan_changes: {
-      dietary_adjustments: Array<{
-        nutrient: string
-        adjustment: string
-        food_sources: string
-      }>
-      meal_timing_changes: Array<{
-        meal: string
-        change: string
-      }>
-    }
-    recommendations: {
-      training_recommendations: Array<{
-        category: string
-        recommendation: string
-        priority: 'High' | 'Medium' | 'Low'
-      }>
-      nutrition_recommendations: Array<{
-        category: string
-        recommendation: string
-        priority: 'High' | 'Medium' | 'Low'
-      }>
-      lifestyle_recommendations: Array<{
-        category: string
-        recommendation: string
-        priority: 'High' | 'Medium' | 'Low'
-      }>
-    }
-    coaching_recommendations: {
-      training_modifications: string[]
-      communication_strategy: string[]
-      motivation_techniques: string[]
-    }
-    next_session_plan: {
-      primary_objectives: string[]
-      specific_exercises: string[]
-      discussion_topics: string[]
-    }
-    client_insights: {
-      behavioral_patterns: string[]
-      engagement_level: string
-      potential_barriers: string[]
-      success_factors: string[]
+    actions: Array<{
+      text: string
+      reason_tag: 'consistency' | 'recovery' | 'technique' | 'nutrition' | 'adherence'
+      impact?: string
+      add_to_todo_hint?: boolean
+    }>
+    risks: Array<{
+      text: string
+      mitigation: string
+    }>
+    next_session: Array<{
+      text: string
+    }>
+    weekly_focus: Array<{
+      text: string
+      metric?: string
+      target?: string
+    }>
+    positives: Array<{
+      text: string
+    }>
+    metadata: {
+      version: string
+      generated_at: string
+      data_sources: string[]
     }
   }
   usage?: any
@@ -105,224 +62,92 @@ async function generateComprehensiveAnalysis(
   previousAnalysis?: any
 ): Promise<any> {
   console.log('🔑 Checking for OpenRouter API key...');
-  
+
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error('OpenRouter API key not found. Please add VITE_OPENROUTER_API_KEY to your .env file');
   }
-  
+
   console.log('✅ OpenRouter API key found');
-  console.log('📋 Preparing comprehensive coach analysis prompt...');
-  
-  // Create detailed client context
+  console.log('📋 Preparing concise coach analysis prompt...');
+
+  // Filter trainer notes to last 2 weeks only
+  const recentNotes = filterRecentNotes(trainerNotes);
+
+  // Create concise client context
   const clientContext = `
-CLIENT PROFILE:
-- Name: ${clientInfo.cl_name || 'N/A'}
-- Age: ${clientInfo.cl_age || 'N/A'}
-- Sex: ${clientInfo.cl_sex || 'N/A'}
-- Height: ${clientInfo.cl_height || 'N/A'} cm
-- Current Weight: ${clientInfo.cl_weight || 'N/A'} kg
-- Target Weight: ${clientInfo.cl_target_weight || 'N/A'} kg
-- Primary Goal: ${clientInfo.cl_primary_goal || 'N/A'}
-- Activity Level: ${clientInfo.cl_activity_level || 'N/A'}
-- Training Experience: ${clientInfo.training_experience || 'N/A'}
-- Injuries/Limitations: ${clientInfo.injuries_limitations || 'None'}
-- Equipment Available: ${clientInfo.available_equipment || 'N/A'}
-- Training Location: ${clientInfo.training_location || 'N/A'}
-- Session Frequency: ${clientInfo.training_days_per_week || 'N/A'} days/week
-- Session Duration: ${clientInfo.training_time_per_session || 'N/A'}
-- Confidence Level: ${clientInfo.confidence_level || 'N/A'}/10
-- Specific Outcome Desired: ${clientInfo.specific_outcome || 'N/A'}
-- Goal Timeline: ${clientInfo.goal_timeline || 'N/A'}
-- Sleep Hours: ${clientInfo.sleep_hours || 'N/A'}
-- Stress Level: ${clientInfo.stress_level || 'N/A'}
-- Member Since: ${clientInfo.created_at ? new Date(clientInfo.created_at).toLocaleDateString() : 'N/A'}
-- Last Active: ${clientInfo.last_active ? new Date(clientInfo.last_active).toLocaleDateString() : 'N/A'}`;
+CLIENT: ${clientInfo.cl_name || 'Client'}
+GOAL: ${clientInfo.cl_primary_goal || 'General fitness'}
+EXPERIENCE: ${clientInfo.training_experience || 'Beginner'}
+SESSIONS: ${clientInfo.training_days_per_week || '3'}x/week
+GOAL TIMELINE: ${clientInfo.goal_timeline || '3 months'}`;
 
-  const previousAnalysisContext = previousAnalysis ? `
-PREVIOUS ANALYSIS SUMMARY:
-${JSON.stringify(previousAnalysis, null, 2)}
-` : '';
+  const concisePrompt = `You are an elite fitness coach providing a concise, actionable analysis.
 
-  const comprehensivePrompt = `You are an elite fitness coach with 20+ years of experience in personal training, sports psychology, and behavior change. You have just received updated trainer notes about a client, and you need to provide a concise, actionable analysis with bullet-point insights.
-
-IMPORTANT: Focus your analysis on the most recent 2 weeks of trainer notes data. If the notes span more than 2 weeks, only analyze the last 2 weeks of entries.
-
+CLIENT CONTEXT:
 ${clientContext}
 
-CURRENT TRAINER NOTES (Last 2 weeks):
-${trainerNotes}
+TRAINER NOTES (Last 2 weeks only):
+${recentNotes}
 
-CURRENT TO-DO ITEMS:
-${todoItems}
-
-${previousAnalysisContext}
-
-TASK: Provide a concise coaching analysis with bullet-point insights that are easy for trainers to digest quickly. Focus on actionable items and key insights.
-
-Please provide your analysis in the following JSON format:
+TASK: Provide concise analysis in this exact JSON format:
 
 {
-  "summary": {
-    "key_insights": [
-      "• Brief insight point 1",
-      "• Brief insight point 2",
-      "• Brief insight point 3"
-    ],
-    "client_status": "Brief one-sentence status assessment",
-    "progress_assessment": "Brief one-sentence progress summary",
-    "immediate_concerns": [
-      "• Concern 1",
-      "• Concern 2"
-    ],
-    "positive_developments": [
-      "• Development 1",
-      "• Development 2"
-    ]
+  "snapshot": {
+    "momentum": "Up|Flat|Down",
+    "adherence_pct": number or null,
+    "readiness": "Low|Medium|High|null",
+    "one_liner": "≤120 char summary"
   },
-  "action_plan": {
-    "immediate_actions": [
-      {
-        "action": "• Specific action item",
-        "priority": "High|Medium|Low",
-        "timeframe": "This week|Next session|Within 2 weeks",
-        "category": "Training|Nutrition|Motivation|Communication|Assessment|Other"
-      }
-    ],
-    "weekly_focus": [
-      {
-        "focus_area": "Primary focus area",
-        "specific_actions": [
-          "• Action 1",
-          "• Action 2"
-        ],
-        "success_metrics": [
-          "• Metric 1",
-          "• Metric 2"
-        ]
-      }
-    ]
-  },
-  "workout_plan_changes": {
-    "exercise_modifications": [
-      {
-        "exercise": "Exercise name",
-        "change": "• Brief change description",
-        "timeline": "When to implement"
-      }
-    ],
-    "intensity_adjustments": [
-      {
-        "area": "Cardio|Strength|Flexibility|Recovery",
-        "adjustment": "• Brief adjustment description"
-      }
-    ]
-  },
-  "nutritional_plan_changes": {
-    "dietary_adjustments": [
-      {
-        "nutrient": "Protein|Carbs|Fats|Vitamins|Minerals",
-        "adjustment": "• Brief adjustment description",
-        "food_sources": "• Food 1, Food 2"
-      }
-    ],
-    "meal_timing_changes": [
-      {
-        "meal": "Breakfast|Lunch|Dinner|Snacks|Pre-workout|Post-workout",
-        "change": "• Brief timing change"
-      }
-    ]
-  },
-  "recommendations": {
-    "training_recommendations": [
-      {
-        "category": "Exercise|Progression|Recovery|Technique",
-        "recommendation": "• Brief recommendation",
-        "priority": "High|Medium|Low"
-      }
-    ],
-    "nutrition_recommendations": [
-      {
-        "category": "Macros|Meal timing|Hydration|Supplements",
-        "recommendation": "• Brief recommendation",
-        "priority": "High|Medium|Low"
-      }
-    ],
-    "lifestyle_recommendations": [
-      {
-        "category": "Sleep|Stress|Recovery|Habits",
-        "recommendation": "• Brief recommendation",
-        "priority": "High|Medium|Low"
-      }
-    ]
-  },
-  "coaching_recommendations": {
-    "training_modifications": [
-      "• Modification 1",
-      "• Modification 2"
-    ],
-    "communication_strategy": [
-      "• Strategy 1",
-      "• Strategy 2"
-    ],
-    "motivation_techniques": [
-      "• Technique 1",
-      "• Technique 2"
-    ]
-  },
-  "next_session_plan": {
-    "primary_objectives": [
-      "• Objective 1",
-      "• Objective 2"
-    ],
-    "specific_exercises": [
-      "• Exercise 1",
-      "• Exercise 2"
-    ],
-    "discussion_topics": [
-      "• Topic 1",
-      "• Topic 2"
-    ]
-  },
-  "client_insights": {
-    "behavioral_patterns": [
-      "• Pattern 1",
-      "• Pattern 2"
-    ],
-    "engagement_level": "High|Medium|Low with brief explanation",
-    "potential_barriers": [
-      "• Barrier 1",
-      "• Barrier 2"
-    ],
-    "success_factors": [
-      "• Factor 1",
-      "• Factor 2"
-    ]
+  "actions": [
+    {
+      "text": "≤120 char action",
+      "reason_tag": "consistency|recovery|technique|nutrition|adherence",
+      "impact": "optional brief impact",
+      "add_to_todo_hint": true|false
+    }
+  ],
+  "risks": [
+    {
+      "text": "≤120 char risk",
+      "mitigation": "≤100 char mitigation"
+    }
+  ],
+  "next_session": [
+    {
+      "text": "≤100 char focus"
+    }
+  ],
+  "weekly_focus": [
+    {
+      "text": "≤100 char focus",
+      "metric": "optional metric",
+      "target": "optional target"
+    }
+  ],
+  "positives": [
+    {
+      "text": "≤80 char positive"
+    }
+  ],
+  "metadata": {
+    "version": "v1",
+    "generated_at": "ISO timestamp",
+    "data_sources": ["trainer_notes", "client_profile"]
   }
 }
 
 GUIDELINES:
-- Keep all insights concise and bullet-pointed
-- Use bullet points (•) for easy scanning
-- Focus on actionable items
-- Limit each section to 2-4 key points
-- Use brief, clear language
-- Focus analysis on the most recent 2 weeks of trainer notes
-- Prioritize high-impact recommendations
-- Make insights immediately actionable for trainers
-- Avoid lengthy explanations - prefer bullet points
-- Consider the client's individual circumstances and limitations
-- Focus on sustainable long-term progress
-- Include motivational and engagement strategies
-- Consider the client's goal timeline and current progress toward goals
-- For workout plan changes, consider current fitness level, goals, and any limitations
-- For nutritional changes, consider current eating habits, preferences, and goals
-- Ensure all recommendations are realistic and achievable for the client`;
+- Max 3 actions, 2 risks, 3 next_session, 2 weekly_focus, 2 positives
+- Use reason tags: consistency, recovery, technique, nutrition, adherence
+- Focus on last 2 weeks only
+- Keep all text short and actionable
+- Be specific about what trainer should do next`;
 
-  console.log('📝 Comprehensive analysis prompt prepared');
-  
+  console.log('📝 Concise analysis prompt prepared');
+
   try {
-    const response = await askCerebras(comprehensivePrompt);
+    const response = await askCerebras(concisePrompt);
     console.log('✅ AI response received');
     return response;
   } catch (error) {
@@ -421,6 +246,140 @@ async function saveAnalysisToDatabase(clientId: number, analysisData: any) {
     // Don't throw here - analysis can still be returned even if save fails
     return null;
   }
+}
+
+/**
+ * Filter trainer notes to only include entries from the last 2 weeks
+ * @param notesString - Raw trainer notes (JSON string or plain text)
+ * @returns Filtered notes from last 2 weeks only
+ */
+function filterRecentNotes(notesString: string): string {
+  if (!notesString || notesString.trim().length === 0) {
+    return "No trainer notes available.";
+  }
+
+  try {
+    // Try to parse as JSON first (structured notes format)
+    const parsedNotes = JSON.parse(notesString);
+    if (Array.isArray(parsedNotes)) {
+      // Filter to last 2 weeks
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+      const recentNotes = parsedNotes.filter((note: any) => {
+        if (note.date) {
+          const noteDate = new Date(note.date);
+          return noteDate >= twoWeeksAgo;
+        }
+        return false; // Skip notes without dates
+      });
+
+      if (recentNotes.length === 0) {
+        return "No trainer notes from the last 2 weeks.";
+      }
+
+      // Convert back to readable format
+      return recentNotes.map((note: any) =>
+        `Date: ${note.date}\nNotes: ${note.notes}`
+      ).join('\n\n');
+    }
+  } catch (error) {
+    // If not JSON, treat as plain text
+    console.log('📝 Notes are plain text, returning as-is (LLM will focus on recent context)');
+  }
+
+  // For plain text, return as-is but add instruction for LLM
+  return notesString;
+}
+
+/**
+ * Post-process LLM analysis to enforce concise schema and caps
+ * @param analysis - Raw LLM analysis output
+ * @returns Processed analysis matching our schema
+ */
+function postProcessAnalysis(analysis: any): any {
+  if (!analysis || typeof analysis !== 'object') {
+    // Return minimal valid structure if LLM gave us garbage
+    return {
+      snapshot: { momentum: 'Flat', adherence_pct: null, readiness: null, one_liner: 'Analysis unavailable' },
+      actions: [],
+      risks: [],
+      next_session: [],
+      weekly_focus: [],
+      positives: [],
+      metadata: { version: 'v1', generated_at: new Date().toISOString(), data_sources: ['error_fallback'] }
+    };
+  }
+
+  // Truncate function
+  const truncate = (text: string, max: number) => text && text.length > max ? text.slice(0, max).trim() : text;
+
+  // Process snapshot
+  const snapshot = analysis.snapshot || {};
+  const processedSnapshot = {
+    momentum: ['Up', 'Flat', 'Down'].includes(snapshot.momentum) ? snapshot.momentum : 'Flat',
+    adherence_pct: (typeof snapshot.adherence_pct === 'number' && snapshot.adherence_pct >= 0 && snapshot.adherence_pct <= 100)
+      ? snapshot.adherence_pct : null,
+    readiness: ['Low', 'Medium', 'High', null].includes(snapshot.readiness) ? snapshot.readiness : null,
+    one_liner: truncate(snapshot.one_liner || 'Analysis generated', 120)
+  };
+
+  // Process actions (max 3)
+  const actions = (Array.isArray(analysis.actions) ? analysis.actions : []).slice(0, 3)
+    .filter((a: any) => a && a.text)
+    .map((a: any) => ({
+      text: truncate(a.text, 120),
+      reason_tag: ['consistency', 'recovery', 'technique', 'nutrition', 'adherence'].includes(a.reason_tag)
+        ? a.reason_tag : 'consistency',
+      impact: a.impact ? truncate(a.impact, 60) : undefined,
+      add_to_todo_hint: Boolean(a.add_to_todo_hint)
+    }));
+
+  // Process risks (max 2)
+  const risks = (Array.isArray(analysis.risks) ? analysis.risks : []).slice(0, 2)
+    .filter((r: any) => r && r.text && r.mitigation)
+    .map((r: any) => ({
+      text: truncate(r.text, 120),
+      mitigation: truncate(r.mitigation, 100)
+    }));
+
+  // Process next_session (max 3)
+  const next_session = (Array.isArray(analysis.next_session) ? analysis.next_session : []).slice(0, 3)
+    .filter((n: any) => n && n.text)
+    .map((n: any) => ({ text: truncate(n.text, 100) }));
+
+  // Process weekly_focus (max 2)
+  const weekly_focus = (Array.isArray(analysis.weekly_focus) ? analysis.weekly_focus : []).slice(0, 2)
+    .filter((w: any) => w && w.text)
+    .map((w: any) => ({
+      text: truncate(w.text, 100),
+      metric: w.metric ? truncate(w.metric, 50) : undefined,
+      target: w.target ? truncate(w.target, 50) : undefined
+    }));
+
+  // Process positives (max 2)
+  const positives = (Array.isArray(analysis.positives) ? analysis.positives : []).slice(0, 2)
+    .filter((p: any) => p && p.text)
+    .map((p: any) => ({ text: truncate(p.text, 80) }));
+
+  // Add metadata
+  const metadata = {
+    version: analysis.metadata?.version || 'v1',
+    generated_at: analysis.metadata?.generated_at || new Date().toISOString(),
+    data_sources: Array.isArray(analysis.metadata?.data_sources)
+      ? analysis.metadata.data_sources
+      : ['trainer_notes', 'client_profile']
+  };
+
+  return {
+    snapshot: processedSnapshot,
+    actions,
+    risks,
+    next_session,
+    weekly_focus,
+    positives,
+    metadata
+  };
 }
 
 /**
@@ -529,7 +488,7 @@ export async function performComprehensiveCoachAnalysis(
     try {
       console.log('🔍 Raw AI response:', aiResponse.response);
       console.log('🔍 Response type:', typeof aiResponse.response);
-      
+
       const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         console.log('🔍 Found JSON match, parsing...');
@@ -538,8 +497,11 @@ export async function performComprehensiveCoachAnalysis(
         console.log('🔍 No JSON match found, trying to parse entire response...');
         analysisData = JSON.parse(aiResponse.response);
       }
-      
-      console.log('✅ Parsed analysis data:', analysisData);
+
+      // Post-process to enforce concise schema and caps
+      analysisData = postProcessAnalysis(analysisData);
+
+      console.log('✅ Parsed and post-processed analysis data:', analysisData);
       console.log('✅ Analysis data type:', typeof analysisData);
       console.log('✅ Analysis data keys:', Object.keys(analysisData || {}));
     } catch (parseError) {

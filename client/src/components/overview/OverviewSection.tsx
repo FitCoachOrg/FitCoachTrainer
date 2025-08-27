@@ -47,6 +47,20 @@ export function OverviewSection({
 }: OverviewSectionProps) {
   return (
     <div className="space-y-8">
+      {/* AI Coach Insights Section */}
+      <AICoachInsightsSection
+        client={client}
+        trainerNotes={trainerNotes}
+        lastAIRecommendation={lastAIRecommendation}
+        isGeneratingAnalysis={isGeneratingAnalysis}
+        aiCoachInsights={{
+          lastAIRecommendation,
+          setLastAIRecommendation: () => {}, // This will be passed from parent
+          isGeneratingAnalysis,
+          setIsGeneratingAnalysis: () => {} // This will be passed from parent
+        }}
+      />
+
       {/* Enhanced Content Area */}
       <div className="space-y-8">
         <div className="space-y-8">
