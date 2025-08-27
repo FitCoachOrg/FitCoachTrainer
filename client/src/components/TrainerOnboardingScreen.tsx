@@ -418,6 +418,15 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
     setExpandedSections(new Set());
   };
 
+  // Toggle expand/collapse all sections based on current state
+  const toggleExpandAllSections = () => {
+    if (expandedSections.size === sections.length && sections.length > 0) {
+      collapseAllSections();
+    } else {
+      expandAllSections();
+    }
+  };
+
   // Handle manual save
   const handleManualSave = async () => {
     await saveProgress();
@@ -505,15 +514,9 @@ const TrainerOnboardingScreen: React.FC<TrainerOnboardingScreenProps> = ({
           </button>
           <button 
             className="btn btn-secondary"
-            onClick={expandAllSections}
+            onClick={toggleExpandAllSections}
           >
-            Expand All
-          </button>
-          <button 
-            className="btn btn-secondary"
-            onClick={collapseAllSections}
-          >
-            Collapse All
+            {expandedSections.size === sections.length && sections.length > 0 ? 'Collapse All' : 'Expand All'}
           </button>
           <button 
             className="btn btn-primary"

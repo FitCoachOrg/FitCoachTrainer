@@ -136,7 +136,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
                 : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
             }`}
           >
-            <span>Client Onboarding</span>
+            <span>Client Settings and Goals</span>
           </Button>
           <Button
             variant={activeTab === 'targets' ? 'default' : 'ghost'}

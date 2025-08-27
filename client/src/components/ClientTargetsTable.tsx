@@ -85,12 +85,7 @@ const TARGET_CATEGORIES = {
     title: 'Performance Targets',
     icon: Dumbbell,
     color: 'from-purple-500 to-pink-500',
-    targets: [
-      { key: 'bench_press', label: 'Bench Press', unit: 'kg', icon: Dumbbell, description: 'One-rep max bench press target' },
-      { key: 'squat', label: 'Squat', unit: 'kg', icon: Dumbbell, description: 'One-rep max squat target' },
-      { key: 'deadlift', label: 'Deadlift', unit: 'kg', icon: Dumbbell, description: 'One-rep max deadlift target' },
-      { key: 'running_5k', label: '5K Time', unit: 'min', icon: Activity, description: 'Target 5K running time' },
-    ]
+    targets: []
   }
 };
 
