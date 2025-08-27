@@ -344,23 +344,7 @@ export function AICoachInsightsSection({
                 </Button>
               )}
               
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  console.log('🔍 Manual Debug Check:')
-                  console.log('👤 client:', client)
-                  console.log('👤 client?.client_id:', client?.client_id)
-                  console.log('📝 trainerNotes:', trainerNotes)
-                  console.log('📝 trainerNotes type:', typeof trainerNotes)
-                  console.log('📝 trainerNotes length:', trainerNotes?.length)
-                  console.log('🔧 setLastAIRecommendation:', setLastAIRecommendation)
-                  console.log('🔧 setLastAIRecommendation type:', typeof setLastAIRecommendation)
-                }}
-                className="text-gray-600 border-gray-200 hover:bg-gray-50"
-              >
-                Debug
-              </Button>
+              {/* Debug button removed for production */}
             </div>
           </CardTitle>
         </CardHeader>
@@ -972,7 +956,7 @@ export function AICoachInsightsSection({
                   No AI Analysis Available
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Save trainer notes to generate comprehensive AI analysis with workout and nutrition recommendations.
+                  Click the AI Analysis button above to generate a comprehensive AI summary from your trainer notes.
                 </p>
               </div>
             </div>

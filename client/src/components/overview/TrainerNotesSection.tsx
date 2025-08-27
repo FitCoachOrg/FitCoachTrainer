@@ -614,12 +614,7 @@ export function TrainerNotesSection({
         description: "New trainer note has been added successfully.",
       })
 
-      // Trigger AI analysis with recent notes (last 2 weeks)
-      const recentNotes = getRecentNotes(updatedNotes)
-      if (recentNotes.length > 0) {
-        console.log('🤖 Triggering AI analysis...')
-        await generateAIAnalysis(recentNotes)
-      }
+      // Auto AI analysis disabled: AI summary should be triggered only via the AI Analysis button
           } catch (error: any) {
         console.error('❌ Error in handleAddNote:', error)
         toast({
@@ -651,11 +646,7 @@ export function TrainerNotesSection({
         description: "Trainer note has been updated successfully.",
       })
 
-      // Trigger AI analysis with recent notes (last 2 weeks)
-      const recentNotes = getRecentNotes(updatedNotes)
-      if (recentNotes.length > 0) {
-        await generateAIAnalysis(recentNotes)
-      }
+      // Auto AI analysis disabled: AI summary should be triggered only via the AI Analysis button
     } catch (error: any) {
       toast({
         title: "Error",
