@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { 
   checkMonthlyWorkoutStatus, 
@@ -20,6 +21,15 @@ type WeekDay = {
   exercises: any[];
 };
 
+// Week-level approval status for monthly view
+interface WeekApprovalStatus {
+  weekNumber: number;
+  status: 'approved' | 'draft' | 'no_plan';
+  startDate: Date;
+  endDate: Date;
+  canApprove: boolean;
+}
+
 interface WeeklyPlanHeaderProps {
   week: WeekDay[];
   planStartDate: Date;
@@ -30,6 +40,8 @@ interface WeeklyPlanHeaderProps {
   onViewModeChange?: (viewMode: 'weekly' | 'monthly') => void;
   onMonthlyDataChange?: (monthlyData: WeekDay[][]) => void;
   onApprovalStatusCheck?: () => void; // Callback to trigger approval status check
+  weekStatuses?: WeekApprovalStatus[]; // Week-level approval statuses
+  onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -49,7 +61,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -68,6 +80,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [copyTargetWeek, setCopyTargetWeek] = useState<number | null>(null);
   const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
   const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
+
+  // Week approval state
+  const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
 
   // Generate monthly data (4 weeks) from the current week data
   const monthlyData = useMemo(() => {
@@ -608,6 +623,90 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     setShowWeekCopyConfirm(false);
   };
 
+  // Helper function to get equipment icon
+  const getEquipmentIcon = (equipment: string) => {
+    const lowerEquipment = equipment.toLowerCase();
+    if (lowerEquipment.includes('dumbbell')) return '🏋️';
+    if (lowerEquipment.includes('barbell')) return '🏋️‍♂️';
+    if (lowerEquipment.includes('kettlebell')) return '🏋️';
+    if (lowerEquipment.includes('resistance') || lowerEquipment.includes('band')) return '🏋️';
+    if (lowerEquipment.includes('machine')) return '🏋️‍♀️';
+    if (lowerEquipment.includes('bodyweight') || lowerEquipment.includes('none')) return '🏃';
+    return '💪';
+  };
+
+  // Helper function to format tooltip content for exercises
+  const formatExerciseTooltip = (day: WeekDay) => {
+    if (!day.exercises || day.exercises.length === 0) {
+      return (
+        <div className="bg-white rounded-lg shadow-lg p-6 max-w-xs text-center">
+          <div className="text-gray-600 font-medium text-lg">{day.focus || 'Rest Day'}</div>
+          <div className="text-sm text-gray-400 mt-2">No exercises scheduled</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-4 max-w-2xl">
+        <div className="text-center border-b border-gray-200 pb-3 mb-3">
+          <div className="text-gray-800 font-bold text-lg">{day.focus || 'Workout'}</div>
+          <div className="text-sm text-gray-500 mt-1">{day.exercises.length} exercise{day.exercises.length > 1 ? 's' : ''}</div>
+        </div>
+
+        <div className="overflow-x-auto max-h-64 overflow-y-auto">
+          <table className="w-full text-xs border-collapse min-w-max">
+            <thead className="sticky top-0 bg-gray-50 z-10">
+              <tr className="border-b border-gray-300">
+                <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-48">Exercise</th>
+                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-14">Sets</th>
+                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-14">Reps</th>
+                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-16">Weight</th>
+                <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-32">Equipment</th>
+                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-18">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {day.exercises.map((exercise: any, index: number) => {
+                const name = exercise.exercise || exercise.exercise_name || exercise.name || 'Unknown Exercise';
+                const sets = exercise.sets || '3';
+                const reps = exercise.reps || '10';
+                const weight = exercise.weight || exercise.weights || 'BW';
+                const equipment = exercise.equipment || 'None';
+                const duration = exercise.duration || exercise.duration_sec || '15min';
+
+                return (
+                  <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50/30' : 'bg-white'}`}>
+                    <td className="p-2 font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600 text-xs font-bold">#{index + 1}</span>
+                        <span className="break-words max-w-40" title={name}>{name}</span>
+                      </div>
+                    </td>
+                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{sets}</td>
+                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{reps}</td>
+                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{weight}</td>
+                    <td className="p-2 text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm">{getEquipmentIcon(equipment)}</span>
+                        <span className="break-words max-w-28" title={equipment}>{equipment}</span>
+                      </div>
+                    </td>
+                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{duration}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Rest period note */}
+        <div className="text-xs text-gray-500 border-t border-gray-200 pt-2 text-center">
+          💡 Rest: 60-90s between sets
+        </div>
+      </div>
+    );
+  };
+
   const renderDayBox = (day: WeekDay, index: number, weekIndex: number = 0) => {
     const isSource = copySourceDate === day.date;
     const isTarget = copyTargetDate === day.date;
@@ -630,63 +729,105 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     const boxId = viewMode === 'weekly' ? `hdr-${index}` : `hdr-${weekIndex}-${index}`;
     const menuId = `menu-${day.date}`;
 
+    // Determine tooltip position based on box location to prevent cutoff
+    const getTooltipSide = () => {
+      const totalBoxes = 7; // Always 7 days per week regardless of view mode
+      const isFirstBox = index === 0;
+      const isLastBox = index === totalBoxes - 1;
+      const isSecondBox = index === 1;
+      const isSecondToLastBox = index === totalBoxes - 2;
+
+      // For edge boxes, use bottom positioning to avoid screen cutoff
+      if (isFirstBox) return "bottom-start";
+      if (isSecondBox) return "bottom";
+      if (isSecondToLastBox) return "bottom";
+      if (isLastBox) return "bottom-end";
+
+      // For middle boxes, use top (default)
+      return "top";
+    };
+
+    const getTooltipAlign = () => {
+      const totalBoxes = 7;
+      const isFirstBox = index === 0;
+      const isLastBox = index === totalBoxes - 1;
+
+      // Align tooltips to prevent cutoff
+      if (isFirstBox) return "start";
+      if (isLastBox) return "end";
+      return "center";
+    };
+
             return (
       <SortableHeaderBox key={boxId} id={boxId} disabled={copySourceDate != null}>
-                <div
-                  className={`relative p-2 rounded text-center ${boxClasses}`}
-                  onClick={() => {
-            if (copySourceDate != null) selectTarget(day.date);
-                  }}
-                >
-                  {/* 3-dots menu (popover) */}
-          <Popover open={menuOpenFor === menuId} onOpenChange={(open) => setMenuOpenFor(open ? menuId : null)}>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="absolute top-1 right-1 p-1 rounded hover:bg-black/10"
-                        title="More"
-                        onMouseDown={(e) => { e.stopPropagation(); }}
-                        onPointerDown={(e) => { e.stopPropagation(); }}
-                        onPointerUp={(e) => { e.stopPropagation(); }}
-                        onClick={(e) => { e.stopPropagation(); }}
+                <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`relative p-2 rounded text-center ${boxClasses} cursor-pointer`}
+                        onClick={() => {
+                          if (copySourceDate != null) selectTarget(day.date);
+                        }}
                       >
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" side="right" className="w-40 p-1" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
-                      <button
-                        className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={(e) => { e.stopPropagation(); startCopy(day.date); }}
-                      >
-                        Copy workout
-                      </button>
-                      <button
-                        className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                onClick={(e) => { e.stopPropagation(); deleteWorkout(day.date); }}
-                      >
-                        Delete workout
-                      </button>
-                    </PopoverContent>
-                  </Popover>
+                        {/* 3-dots menu (popover) */}
+                        <Popover open={menuOpenFor === menuId} onOpenChange={(open) => setMenuOpenFor(open ? menuId : null)}>
+                          <PopoverTrigger asChild>
+                            <button
+                              className="absolute top-1 right-1 p-1 rounded hover:bg-black/10"
+                              title="More"
+                              onMouseDown={(e) => { e.stopPropagation(); }}
+                              onPointerDown={(e) => { e.stopPropagation(); }}
+                              onPointerUp={(e) => { e.stopPropagation(); }}
+                              onClick={(e) => { e.stopPropagation(); }}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" side="right" className="w-40 p-1" onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+                            <button
+                              className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                              onClick={(e) => { e.stopPropagation(); startCopy(day.date); }}
+                            >
+                              Copy workout
+                            </button>
+                            <button
+                              className="w-full text-left px-2 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                              onClick={(e) => { e.stopPropagation(); deleteWorkout(day.date); }}
+                            >
+                              Delete workout
+                            </button>
+                          </PopoverContent>
+                        </Popover>
 
-                  <div className="font-medium">{day.focus}</div>
-          <div className="text-xs">{format(parseISO(day.date), 'MMM d')} • {format(parseISO(day.date), 'EEEE')}</div>
-                  <div className="text-xs mt-1">
-                    {day.exercises.length > 0 ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` : 'Rest day'}
-                  </div>
+                        <div className="font-medium">{day.focus}</div>
+                        <div className="text-xs">{format(parseISO(day.date), 'MMM d')} • {format(parseISO(day.date), 'EEEE')}</div>
+                        <div className="text-xs mt-1">
+                          {day.exercises.length > 0 ? `${day.exercises.length} exercise${day.exercises.length > 1 ? 's' : ''}` : 'Rest day'}
+                        </div>
 
-                  {/* Paste controls on target */}
-                  {isTarget && (
-                    <div className="absolute top-1 left-1 flex gap-1"
-                         onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                      <button className="p-1 rounded bg-white/80 hover:bg-white" title="Save" onClick={confirmPaste}>
-                        <Check className="h-4 w-4 text-green-600" />
-                      </button>
-                      <button className="p-1 rounded bg-white/80 hover:bg-white" title="Cancel" onClick={cancelPaste}>
-                        <X className="h-4 w-4 text-red-600" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                        {/* Paste controls on target */}
+                        {isTarget && (
+                          <div className="absolute top-1 left-1 flex gap-1"
+                               onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                            <button className="p-1 rounded bg-white/80 hover:bg-white" title="Save" onClick={confirmPaste}>
+                              <Check className="h-4 w-4 text-green-600" />
+                            </button>
+                            <button className="p-1 rounded bg-white/80 hover:bg-white" title="Cancel" onClick={cancelPaste}>
+                              <X className="h-4 w-4 text-red-600" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side={getTooltipSide()}
+                      align={getTooltipAlign()}
+                      className="p-0 border-0 shadow-xl"
+                    >
+                      {formatExerciseTooltip(day)}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </SortableHeaderBox>
             );
   };
@@ -715,52 +856,102 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           return (
             <div key={weekIndex} className="space-y-3">
               <div className={`flex items-center justify-between px-2 py-1 rounded-lg border ${
-                copySourceWeek === weekIndex 
-                  ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-600' 
-                  : copyTargetWeek === weekIndex 
+                copySourceWeek === weekIndex
+                  ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-600'
+                  : copyTargetWeek === weekIndex
                   ? 'bg-green-100 border-green-300 dark:bg-green-900/40 dark:border-green-600'
                   : 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
               }`}>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
-                    copySourceWeek === weekIndex 
-                      ? 'bg-blue-600' 
-                      : copyTargetWeek === weekIndex 
+                    copySourceWeek === weekIndex
+                      ? 'bg-blue-600'
+                      : copyTargetWeek === weekIndex
                       ? 'bg-green-600'
                       : 'bg-blue-500'
                   }`}></div>
                   <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
                     Week {weekIndex + 1}: {format(weekStartDate, 'MMM d')} - {format(weekEndDate, 'MMM d, yyyy')}
                   </div>
+
+                  {/* Status Indicator */}
+                  {weekStatuses && weekStatuses[weekIndex] && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <div className={`w-2 h-2 rounded-full ${
+                          weekStatuses[weekIndex].status === 'approved'
+                            ? 'bg-green-500'
+                            : weekStatuses[weekIndex].status === 'draft'
+                            ? 'bg-blue-500'
+                            : 'bg-gray-400'
+                        }`}></div>
+                        <span className="text-xs font-medium text-gray-600">
+                          {weekStatuses[weekIndex].status === 'approved' ? 'Approved' :
+                           weekStatuses[weekIndex].status === 'draft' ? 'Draft' :
+                           'No Plan'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
-                {/* Week-level copy/paste controls */}
+                {/* Week-level controls */}
                 <div className="flex items-center gap-1">
+                  {/* Approval Button - only show for weeks that can be approved */}
+                  {weekStatuses && weekStatuses[weekIndex]?.canApprove && onApproveWeek && (
+                    <button
+                      onClick={async () => {
+                        setApprovingWeek(weekIndex);
+                        try {
+                          await onApproveWeek(weekIndex);
+                        } finally {
+                          setApprovingWeek(null);
+                        }
+                      }}
+                      disabled={approvingWeek === weekIndex}
+                      className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
+                    >
+                      {approvingWeek === weekIndex ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1 animate-spin" />
+                          Approving...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-3 w-3 mr-1" />
+                          Approve
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Copy/Paste controls */}
                   {copySourceWeek === null && (
                     <button
-                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                       onClick={() => startWeekCopy(weekIndex)}
                       title="Copy entire week"
                     >
                       Copy Week
                     </button>
                   )}
-                  
+
                   {copySourceWeek !== null && copySourceWeek !== weekIndex && (
                     <button
-                      className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                       onClick={() => selectWeekTarget(weekIndex)}
                       title="Paste week here"
                     >
+                      <Check className="h-3 w-3 mr-1" />
                       Paste Week
                     </button>
                   )}
-                  
+
                   {copySourceWeek === weekIndex && (
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-blue-600 font-medium">Source</span>
                       <button
-                        className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                        className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                         onClick={cancelWeekPaste}
                         title="Cancel copy"
                       >

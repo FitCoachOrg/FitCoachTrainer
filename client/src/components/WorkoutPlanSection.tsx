@@ -31,7 +31,7 @@ import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSectio
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addWeeks } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
@@ -120,6 +120,15 @@ interface WorkoutPlanState {
   hasUnsavedChanges: boolean;
   templateDate?: string;
   isAutoSaving: boolean;
+}
+
+// Week-level approval status for monthly view
+interface WeekApprovalStatus {
+  weekNumber: number;
+  status: 'approved' | 'draft' | 'no_plan';
+  startDate: Date;
+  endDate: Date;
+  canApprove: boolean;
 }
 
 interface LoadingState {
@@ -779,9 +788,15 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
     let formattedFocus = 'Rest Day';
     
     if (day.exercises && day.exercises.length > 0) {
-      // If focus exists and is not "Rest Day", just append " Workout"
+      // If focus exists and is not "Rest Day", append " Workout" if not already present
       if (day.focus && day.focus !== 'Rest Day') {
-        formattedFocus = `${day.focus} Workout`;
+        // Check if "Workout" is already at the end to prevent duplication
+        const focusText = String(day.focus).trim();
+        if (focusText.toLowerCase().endsWith(' workout')) {
+          formattedFocus = focusText; // Already has "Workout" at the end
+        } else {
+          formattedFocus = `${focusText} Workout`;
+        }
       } else {
         // Fallback: Get unique categories from exercises
         const categories = Array.from(new Set(day.exercises.map((ex: any) => {
@@ -944,6 +959,119 @@ async function approvePlan(clientId: number, planStartDate: Date) {
   } catch (err: any) {
     const endTime = performance.now();
     console.error('[Approval] Error:', err, `(${(endTime - startTime).toFixed(2)}ms)`);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Approve individual week for monthly view
+ */
+async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: number) {
+  const startTime = performance.now();
+
+  try {
+    // 1. Get the week range (7 days)
+    const startDateStr = format(weekStartDate, 'yyyy-MM-dd');
+    const endDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+
+    // 2. Fetch all rows from schedule_preview for this client/week/type
+    let previewRows: any[] = [];
+    try {
+      const fetchStart = performance.now();
+      const { data, error: fetchError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const fetchEnd = performance.now();
+      console.log(`[Supabase] Fetch preview rows for Week ${weekNumber}:`, `${(fetchEnd - fetchStart).toFixed(2)}ms`);
+
+      if (fetchError) {
+        console.error('[Supabase] Fetch error:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+
+      previewRows = data || [];
+    } catch (fetchException) {
+      console.error('[Supabase] Fetch exception:', fetchException);
+      return { success: false, error: `Fetch exception: ${fetchException}` };
+    }
+
+    if (previewRows.length === 0) {
+      return { success: false, error: `No draft plan found for Week ${weekNumber} to approve.` };
+    }
+
+    // 3. Delete any existing rows in schedule for this client/week/type
+    try {
+      const deleteStart = performance.now();
+      const { error: deleteError } = await supabase
+        .from('schedule')
+        .delete()
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const deleteEnd = performance.now();
+      console.log(`[Supabase] Delete schedule rows for Week ${weekNumber}:`, `${(deleteEnd - deleteStart).toFixed(2)}ms`);
+
+      if (deleteError) {
+        console.error('[Supabase] Delete error:', deleteError);
+        return { success: false, error: deleteError.message };
+      }
+    } catch (deleteException) {
+      console.error('[Supabase] Delete exception:', deleteException);
+      return { success: false, error: `Delete exception: ${deleteException}` };
+    }
+
+    // 4. Insert the preview rows into schedule (remove id, created_at, is_approved fields)
+    const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
+
+    try {
+      const insertStart = performance.now();
+      const { error: insertError } = await supabase
+        .from('schedule')
+        .insert(rowsToInsert);
+      const insertEnd = performance.now();
+      console.log(`[Supabase] Insert schedule rows for Week ${weekNumber}:`, `${(insertEnd - insertStart).toFixed(2)}ms`);
+
+      if (insertError) {
+        console.error('[Supabase] Insert error:', insertError);
+        return { success: false, error: insertError.message };
+      }
+    } catch (insertException) {
+      console.error('[Supabase] Insert exception:', insertException);
+      return { success: false, error: `Insert exception: ${insertException}` };
+    }
+
+    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    try {
+      const updateStart = performance.now();
+      const { error: updateError } = await supabase
+        .from('schedule_preview')
+        .update({ is_approved: true })
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const updateEnd = performance.now();
+      console.log(`[Supabase] Update approval flag for Week ${weekNumber}:`, `${(updateEnd - updateStart).toFixed(2)}ms`);
+
+      if (updateError) {
+        console.warn('[Supabase] Update warning:', updateError);
+      }
+    } catch (updateErr) {
+      console.warn('[Supabase] Update exception:', updateErr);
+    }
+
+    const endTime = performance.now();
+    console.log(`[Approval] Week ${weekNumber} approval total time:`, `${(endTime - startTime).toFixed(2)}ms`);
+    return { success: true };
+  } catch (err: any) {
+    const endTime = performance.now();
+    console.error(`[Approval] Week approval error:`, err, `(${(endTime - startTime).toFixed(2)}ms)`);
     return { success: false, error: err.message };
   }
 }
@@ -1160,6 +1288,9 @@ const WorkoutPlanSection = ({
   const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [planApprovalStatus, setPlanApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
   const [hasAIGeneratedPlan, setHasAIGeneratedPlan] = useState(false);
+
+  // Week-level approval statuses for monthly view
+  const [weekStatuses, setWeekStatuses] = useState<WeekApprovalStatus[]>([]);
 
   // Save Plan for Future (template) state
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
@@ -2690,15 +2821,83 @@ const WorkoutPlanSection = ({
       console.log('[checkPlanApprovalStatus] Already running, skipping...');
       return;
     }
-    
+
     setIsCheckingApproval(true);
 
     try {
-      console.log('[checkPlanApprovalStatus] Checking weekly approval status');
-      
-      // Use the unified utility function
-      const result: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
-      
+      console.log(`[checkPlanApprovalStatus] Checking approval status for ${viewMode} view`);
+
+      let result: WorkoutStatusResult;
+      let weekStatusesArray: WeekApprovalStatus[] = [];
+
+      if (viewMode === 'monthly') {
+        // For monthly view, get detailed week-by-week status
+        const monthlyResult = await checkMonthlyWorkoutStatus(supabase, numericClientId, planStartDate);
+        result = monthlyResult;
+
+
+
+        // Build week statuses array for UI
+        // If no weeklyBreakdown exists, create empty weeks
+        if (monthlyResult.weeklyBreakdown && monthlyResult.weeklyBreakdown.length > 0) {
+          weekStatusesArray = monthlyResult.weeklyBreakdown.map((weekData, index) => {
+            const weekStart = new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000);
+            const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+            // Check if week has draft data that can be approved
+            const weekPreviewData = monthlyResult.previewData.filter(day =>
+              day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+              day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+            );
+
+            const weekScheduleData = monthlyResult.scheduleData.filter(day =>
+              day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+              day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+            );
+
+            // Can approve if: has preview data AND (no schedule data OR data doesn't match)
+            const hasPreviewData = weekPreviewData.length > 0;
+            const hasScheduleData = weekScheduleData.length > 0;
+            const dataMatches = hasPreviewData && hasScheduleData ?
+              compareWorkoutData(weekPreviewData, weekScheduleData) : false;
+
+            const canApprove = hasPreviewData && (!hasScheduleData || !dataMatches);
+
+            return {
+              weekNumber: index + 1,
+              status: weekData.status === 'partial_approved' ? 'draft' : weekData.status,
+              startDate: weekStart,
+              endDate: weekEnd,
+              canApprove
+            };
+          });
+        } else {
+          // No workouts exist at all - create empty weeks
+          console.log('[WorkoutPlanSection] No weekly breakdown found, creating empty weeks');
+          for (let week = 0; week < 4; week++) {
+            const weekStart = new Date(planStartDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+            const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+            weekStatusesArray.push({
+              weekNumber: week + 1,
+              status: 'no_plan',
+              startDate: weekStart,
+              endDate: weekEnd,
+              canApprove: false
+            });
+          }
+        }
+
+        // Update week statuses state
+        setWeekStatuses(weekStatusesArray);
+      } else {
+        // For weekly view, use the existing logic
+        result = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
+
+        // Clear week statuses for weekly view
+        setWeekStatuses([]);
+      }
+
       console.log('[checkPlanApprovalStatus] Status result:', result);
       
       // Map the result to legacy state variables for compatibility
@@ -2752,13 +2951,61 @@ const WorkoutPlanSection = ({
     }
   };
 
-  // Re-check approval status whenever plan, client, or date changes
+  // Handle individual week approval for monthly view
+  const handleApproveWeek = async (weekIndex: number) => {
+    if (!weekStatuses[weekIndex] || !weekStatuses[weekIndex].canApprove) return;
+
+    const weekStatus = weekStatuses[weekIndex];
+
+    try {
+      setLoading('approving', `Approving Week ${weekStatus.weekNumber}...`);
+
+      // Call the approveWeek function
+      const result = await approveWeek(numericClientId, weekStatus.startDate, weekStatus.weekNumber);
+
+      if (result.success) {
+        toast({
+          title: `Week ${weekStatus.weekNumber} Approved`,
+          description: 'The workout week has been approved and saved to the main schedule.',
+          variant: 'default'
+        });
+
+        // Update the week status locally
+        setWeekStatuses(prev => prev.map((week, idx) =>
+          idx === weekIndex
+            ? { ...week, status: 'approved', canApprove: false }
+            : week
+        ));
+
+        // Refresh approval status to ensure consistency
+        await checkPlanApprovalStatus();
+
+      } else {
+        toast({
+          title: 'Approval Failed',
+          description: result.error || 'Could not approve week.',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('[handleApproveWeek] Error:', error);
+      toast({
+        title: 'Approval Failed',
+        description: 'An unexpected error occurred during approval.',
+        variant: 'destructive'
+      });
+    } finally {
+      clearLoading();
+    }
+  };
+
+  // Re-check approval status whenever plan, client, date, or view mode changes
   // Removed workoutPlanState.status from dependencies to prevent infinite loop
   useEffect(() => {
     if (numericClientId && planStartDate) {
       checkPlanApprovalStatus();
     }
-  }, [numericClientId, planStartDate, workoutPlan]);
+  }, [numericClientId, planStartDate, workoutPlan, viewMode]);
 
   // Load date from localStorage when clientId changes
   useEffect(() => {
@@ -3503,6 +3750,8 @@ const WorkoutPlanSection = ({
                 onViewModeChange={setViewMode}
                 onMonthlyDataChange={setMonthlyData}
                 onApprovalStatusCheck={checkPlanApprovalStatus}
+                weekStatuses={weekStatuses}
+                onApproveWeek={handleApproveWeek}
               />
             </Card>
 
