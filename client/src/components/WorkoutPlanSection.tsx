@@ -10,13 +10,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2 } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 
-// Import the real AI workout plan generator
-import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
+// AI generation removed - using search-based generation as default
 import { checkProviderHealth, getCurrentProvider } from "@/lib/llm-service"
 import AIDebugPopup from "@/components/AIDebugPopup"
 import FitnessPlanOverview from "@/components/FitnessPlanOverview"
@@ -36,6 +35,7 @@ import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor,
 import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
 import WeeklyPlanHeader from './WeeklyPlanHeader';
+import MonthlyPlanGenerator from './MonthlyPlanGenerator';
 import { debounce } from 'lodash';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
 import WorkoutExportButton from './WorkoutExportButton';
@@ -197,7 +197,7 @@ const AIResponsePopup = ({
   onShowMetrics?: () => void
 }) => {
   const [activeTab, setActiveTab] = useState<"table" | "raw">("table")
-  const [workoutPlan, setWorkoutPlan] = useState<any[]>([])
+  const [aiWorkoutPlan, setAiWorkoutPlan] = useState<any[]>([])
   const [isEditing, setIsEditing] = useState(false)
 
   // Parse workout plan from AI response
@@ -252,7 +252,7 @@ const AIResponsePopup = ({
             });
             
             console.log('✅ Cleaned workout plan for popup:', cleanedWorkoutPlan);
-            setWorkoutPlan(cleanedWorkoutPlan)
+            setAiWorkoutPlan(cleanedWorkoutPlan)
           }
         }
       } catch (error) {
@@ -262,7 +262,7 @@ const AIResponsePopup = ({
   }, [aiResponse])
 
   const handleWorkoutChange = (index: number, field: string, value: any) => {
-    const updatedPlan = [...workoutPlan]
+    const updatedPlan = [...aiWorkoutPlan]
     
     // Type validation and conversion
     let processedValue = value;
@@ -284,7 +284,7 @@ const AIResponsePopup = ({
     }
     
     updatedPlan[index] = { ...updatedPlan[index], [field]: processedValue }
-    setWorkoutPlan(updatedPlan)
+    setAiWorkoutPlan(updatedPlan)
   }
 
   const addNewWorkout = () => {
@@ -304,17 +304,17 @@ const AIResponsePopup = ({
       progression_notes: "Increase intensity when RPE ≤ 8",
     }
     console.log('➕ Adding new workout with correct types:', newWorkout)
-    setWorkoutPlan([...workoutPlan, newWorkout])
+    setAiWorkoutPlan([...aiWorkoutPlan, newWorkout])
   }
 
   const removeWorkout = (index: number) => {
-    const updatedPlan = workoutPlan.filter((_, i) => i !== index)
-    setWorkoutPlan(updatedPlan)
+    const updatedPlan = aiWorkoutPlan.filter((_, i) => i !== index)
+    setAiWorkoutPlan(updatedPlan)
   }
 
   const saveChanges = () => {
     setIsEditing(false)
-    console.log("Saved workout plan:", workoutPlan)
+    console.log("Saved workout plan:", aiWorkoutPlan)
   }
 
   if (!isOpen || !aiResponse) return null
@@ -325,7 +325,7 @@ const AIResponsePopup = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-2xl">
             <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-              <Sparkles className="h-6 w-6 text-white" />
+              <Brain className="h-6 w-6 text-white" />
             </div>
             <div>
               <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
@@ -376,7 +376,7 @@ const AIResponsePopup = ({
                   <div>
                     <h4 className="font-bold text-xl text-gray-900 dark:text-white">Workout Plan</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {workoutPlan.length} exercises • Personalized for your goals
+                      {aiWorkoutPlan.length} exercises • Personalized for your goals
                     </p>
                   </div>
                 </div>
@@ -403,7 +403,7 @@ const AIResponsePopup = ({
                   )}
                 </div>
               </div>
-              {workoutPlan.length > 0 ? (
+              {aiWorkoutPlan.length > 0 ? (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -422,7 +422,7 @@ const AIResponsePopup = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {workoutPlan.map((workout, index) => (
+                        {aiWorkoutPlan.map((workout, index) => (
                           <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                             <td className="p-4">
                               <div className="flex items-center gap-3">
@@ -1291,6 +1291,9 @@ const WorkoutPlanSection = ({
 
   // Week-level approval statuses for monthly view
   const [weekStatuses, setWeekStatuses] = useState<WeekApprovalStatus[]>([]);
+
+  // Monthly Plan Generator state
+  const [isMonthlyGeneratorOpen, setIsMonthlyGeneratorOpen] = useState(false);
 
   // Save Plan for Future (template) state
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
@@ -2498,10 +2501,10 @@ const WorkoutPlanSection = ({
           title: 'Template Plan Loaded',
           description: `Showing plan from ${templateDate} as template for ${currentDate}. You can generate a new plan for this date.`,
           action: (
-            <Button 
-              onClick={() => handleGeneratePlan()} 
+            <Button
+              onClick={() => handleGenerateSearchPlan()}
               size="sm"
-              className="mt-2"
+              className="mt-2 bg-green-600 hover:bg-green-700"
             >
               Generate New Plan
             </Button>
@@ -2705,7 +2708,8 @@ const WorkoutPlanSection = ({
     }
   }, [numericClientId, hasAIGeneratedPlan]);
 
-  // AI generation handler
+  // AI generation removed - using search-based generation as default
+  /*
   const handleGeneratePlan = async () => {
     setAiError(null); // Clear previous error
     if (!numericClientId) {
@@ -2809,6 +2813,7 @@ const WorkoutPlanSection = ({
       clearLoading();
     }
   };
+  */
 
   // Helper to check approval status for the week using unified utility
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
@@ -3024,6 +3029,62 @@ const WorkoutPlanSection = ({
     }
   }, [clientId]);
 
+  // Monthly generation callbacks
+  const handleMonthlyGenerationComplete = (monthlyPlan: any) => {
+    console.log('✅ Monthly plan generation completed:', monthlyPlan);
+    console.log('📊 Monthly plan structure:', {
+      totalWeeks: monthlyPlan.weeks?.length || 0,
+      weeksWithPlans: monthlyPlan.weeks?.filter((w: any) => w.plan)?.length || 0
+    });
+
+    // Convert monthly plan to weekly format for display
+    const firstWeek = monthlyPlan.weeks?.[0];
+    if (firstWeek && firstWeek.plan && firstWeek.plan.days) {
+      console.log('📅 Setting first week for display:', {
+        weekNumber: firstWeek.weekNumber,
+        daysCount: firstWeek.plan.days.length,
+        startDate: firstWeek.startDate,
+        endDate: firstWeek.endDate
+      });
+
+      const newWorkoutPlan = {
+        week: firstWeek.plan.days,
+        hasAnyWorkouts: firstWeek.plan.days.some((day: any) => day.exercises && day.exercises.length > 0),
+        planStartDate: firstWeek.startDate,
+        planEndDate: firstWeek.endDate
+      };
+
+      setWorkoutPlan(newWorkoutPlan);
+      setHasAIGeneratedPlan(true);
+    } else {
+      console.warn('⚠️ No valid first week found in monthly plan');
+    }
+
+    // Store the full monthly plan for later use
+    if (monthlyPlan.weeks) {
+      const monthlyWeeks = monthlyPlan.weeks.map((week: any) => week.plan?.days || []);
+      setMonthlyData(monthlyWeeks);
+      console.log('💾 Stored monthly data with', monthlyWeeks.length, 'weeks');
+    }
+
+    toast({
+      title: 'Monthly Plan Generated',
+      description: '4-week progressive workout plan created and saved successfully.'
+    });
+
+    setIsMonthlyGeneratorOpen(false);
+  };
+
+  const handleMonthlyGenerationError = (error: string) => {
+    console.error('❌ Monthly plan generation failed:', error);
+    toast({
+      title: 'Monthly Generation Failed',
+      description: error,
+      variant: 'destructive'
+    });
+    setIsMonthlyGeneratorOpen(false);
+  };
+
   // Search-based generation handler
   const handleGenerateSearchPlan = async () => {
     setAiError(null); // Clear previous error
@@ -3031,12 +3092,19 @@ const WorkoutPlanSection = ({
       toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
       return;
     }
-    
+
+    // Check if we're in monthly mode - if so, show the monthly generator modal
+    if (viewMode === 'monthly') {
+      console.log('📅 Monthly mode detected - opening monthly generator modal');
+      setIsMonthlyGeneratorOpen(true);
+      return;
+    }
+
     console.log('🔄 === SEARCH-BASED GENERATION START ===');
     console.log('🔄 Client ID:', numericClientId);
     console.log('🔄 Plan Start Date:', planStartDate.toISOString());
     console.log('🔄 Current loading states:', { isGenerating, isGeneratingSearch });
-    
+
     setLoading('generating', 'Starting search-based workout generation... This may take up to 60 seconds.');
     setIsGeneratingSearch(true);
     
@@ -3289,7 +3357,7 @@ const WorkoutPlanSection = ({
           <div>
             <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 whitespace-nowrap">Workout Planning and Management</h3>
             <p className="text-base text-gray-600 dark:text-gray-400 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-500" />
+              <Brain className="h-4 w-4 text-blue-500" />
               AI-powered workout planning and exercise tracking
             </p>
 
@@ -3487,52 +3555,29 @@ const WorkoutPlanSection = ({
 
           {/* Step 2: Generate Workout Plan */}
           <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+            <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               2
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={handleGeneratePlan}
-                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
-                size="lg"
-                className={`bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px] ${
-                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate workout plan'}
-              >
-                {loadingState.type === 'generating' ? (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3 animate-spin" />
-                    <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3" />
-                    Generate Workout Plan
-                  </>
-                )}
-              </Button>
-              
-              {/* Search-based generation button */}
+              {/* Primary Search-based generation button */}
               <Button
                 onClick={handleGenerateSearchPlan}
                 disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
-                variant="outline"
                 size="lg"
-                className={`border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20 ${
+                className={`bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[220px] ${
                   isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate search-based workout plan'}
+                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : `Generate ${viewMode === 'monthly' ? 'monthly' : 'optimized'} workout plan using smart exercise selection`}
               >
                 {loadingState.type === 'generating' ? (
                   <>
-                    <Search className="h-4 w-4 mr-2 animate-spin" />
-                    Searching...
+                    <Search className="h-5 w-5 mr-3 animate-spin" />
+                    Generating Plan...
                   </>
                 ) : (
                   <>
-                    <Search className="h-4 w-4 mr-2" />
-                    SearchBased
+                    <Search className="h-5 w-5 mr-3" />
+                    {viewMode === 'monthly' ? 'Generate Monthly Plan' : 'Generate Workout Plan'}
                   </>
                 )}
               </Button>
@@ -3559,7 +3604,7 @@ const WorkoutPlanSection = ({
 
 
 
-          {/* Step 3: Approve Plan */}
+          {/* Step 3: Approve Current Plan */}
           {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
@@ -3580,7 +3625,7 @@ const WorkoutPlanSection = ({
                     const result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
                     
                     if (result.success) {
-                      toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
+                      toast({ title: 'Current Plan Approved', description: 'The current workout plan has been approved and saved to the main schedule.', variant: 'default' });
                       
                       // Update state immediately
                       setIsDraftPlan(false);
@@ -3619,7 +3664,7 @@ const WorkoutPlanSection = ({
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
+                    ✅ Approve Current Plan
                   </>
                 )}
               </Button>
@@ -3850,20 +3895,20 @@ const WorkoutPlanSection = ({
                     This could be because no plan has been generated for this date range yet.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      onClick={handleGeneratePlan} 
-                      disabled={isGenerating} 
-                      className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700"
+                    <Button
+                      onClick={handleGenerateSearchPlan}
+                      disabled={isGenerating}
+                      className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700"
                     >
                       {isGenerating ? (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
+                          <Search className="h-4 w-4 mr-2 animate-spin" />
+                          Generating Plan...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Generate with AI
+                          <Search className="h-4 w-4 mr-2" />
+                          Generate Workout Plan
                         </>
                       )}
                     </Button>
@@ -3880,7 +3925,7 @@ const WorkoutPlanSection = ({
                       ) : (
                         <>
                           <Search className="h-4 w-4 mr-2" />
-                          SearchBased
+                          {viewMode === 'monthly' ? 'Monthly SearchBased Plan' : 'SearchBased'}
                         </>
                       )}
                     </Button>
@@ -4029,6 +4074,17 @@ const WorkoutPlanSection = ({
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Monthly Plan Generator Modal */}
+            <MonthlyPlanGenerator
+              isOpen={isMonthlyGeneratorOpen}
+              onClose={() => setIsMonthlyGeneratorOpen(false)}
+              clientId={numericClientId || 0}
+              planStartDate={planStartDate}
+              onGenerationComplete={handleMonthlyGenerationComplete}
+              onGenerationError={handleMonthlyGenerationError}
+              onSaveWeek={savePlanToSchedulePreview}
+            />
           </div>
         ) : (
           <Card className="flex flex-col items-center justify-center h-64 text-center">

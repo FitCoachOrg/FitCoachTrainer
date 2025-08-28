@@ -925,7 +925,7 @@ const NutritionPlanSection = ({
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
       if (updateError) throw updateError;
-      toast({ title: "Plan Approved", description: "The nutrition plan has been approved and saved to the main schedule." });
+      toast({ title: "Current Plan Approved", description: "The current nutrition plan has been approved and saved to the main schedule." });
       // Update status immediately after approval
       setApprovalStatus('approved');
       // Force refresh after approval with a small delay to ensure database consistency
@@ -1609,7 +1609,7 @@ const NutritionPlanSection = ({
             </Button>
           </div>
 
-          {/* Step 3: Approve Plan */}
+          {/* Step 3: Approve Current Plan */}
           {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') && (
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
@@ -1629,7 +1629,7 @@ const NutritionPlanSection = ({
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
+                    ✅ Approve Current Plan
                   </>
                 )}
               </Button>
