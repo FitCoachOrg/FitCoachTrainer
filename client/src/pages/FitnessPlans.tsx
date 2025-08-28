@@ -47,50 +47,21 @@ function startOfWeekMonday(date: Date): Date {
 function mapTemplateToWeek(templateJson: any, selectedDate: Date): WeekDay[] {
   // Compute Monday of the selected week
   const weekStart = startOfWeekMonday(selectedDate)
-  const byWeekday = templateJson?.days_by_weekday
-  const hasByWeekday = byWeekday && typeof byWeekday === 'object'
-
-  const result: WeekDay[] = []
-  weekdayOrder.forEach((wk, idx) => {
-    const dateStr = format(addDays(weekStart, idx), 'yyyy-MM-dd')
-    const src = hasByWeekday ? byWeekday[wk] : (Array.isArray(templateJson?.days) ? templateJson.days[idx] : null)
-    const focus = String(src?.focus ?? 'Workout')
-    const srcExercises = Array.isArray(src?.exercises) ? src.exercises : []
-    const exercises = srcExercises.map((ex: any) => ({
-      exercise: String(ex.exercise ?? ''),
-      category: String(ex.category ?? ''),
-      body_part: String(ex.body_part ?? ''),
-      sets: String(ex.sets ?? ''),
-      reps: String(ex.reps ?? ''),
-      duration: String(ex.duration ?? ''),
-      weight: String(ex.weight ?? ''),
-      equipment: String(ex.equipment ?? ''),
-      coach_tip: String(ex.coach_tip ?? ''),
-      rest: String(ex.rest ?? ''),
-      video_link: String(ex.video_link ?? ''),
-      date: dateStr,
-    }))
-    result.push({ date: dateStr, focus, exercises })
-  })
-  return result
-}
-
-function buildTemplateFromWeek(week: WeekDay[], tags: string[] = []) {
-  // Build a days_by_weekday structure; dates are ignored in storage
-  const days_by_weekday: Record<WeekdayKey, { focus: string; exercises: any[] }> = {
-    mon: { focus: 'Workout', exercises: [] },
-    tue: { focus: 'Workout', exercises: [] },
-    wed: { focus: 'Workout', exercises: [] },
-    thu: { focus: 'Workout', exercises: [] },
-    fri: { focus: 'Workout', exercises: [] },
-    sat: { focus: 'Workout', exercises: [] },
-    sun: { focus: 'Workout', exercises: [] },
-  }
-  week.forEach(day => {
-    const key = toWeekdayKey(day.date)
-    days_by_weekday[key] = {
-      focus: String(day.focus ?? 'Workout'),
-      exercises: (day.exercises || []).map((ex: any) => ({
+  
+  // Check if this is a 30-day template
+  if (templateJson?.duration === '30day' && templateJson?.weeks) {
+    // For 30-day templates, we need to determine which week to use
+    // For now, we'll use the first week (week 1)
+    const firstWeek = templateJson.weeks[0];
+    const byWeekday = firstWeek?.days_by_weekday;
+    
+    const result: WeekDay[] = []
+    weekdayOrder.forEach((wk, idx) => {
+      const dateStr = format(addDays(weekStart, idx), 'yyyy-MM-dd')
+      const src = byWeekday?.[wk];
+      const focus = String(src?.focus ?? 'Workout')
+      const srcExercises = Array.isArray(src?.exercises) ? src.exercises : []
+      const exercises = srcExercises.map((ex: any) => ({
         exercise: String(ex.exercise ?? ''),
         category: String(ex.category ?? ''),
         body_part: String(ex.body_part ?? ''),
@@ -102,10 +73,122 @@ function buildTemplateFromWeek(week: WeekDay[], tags: string[] = []) {
         coach_tip: String(ex.coach_tip ?? ''),
         rest: String(ex.rest ?? ''),
         video_link: String(ex.video_link ?? ''),
+        date: dateStr,
       }))
+      result.push({ date: dateStr, focus, exercises })
+    })
+    return result;
+  } else {
+    // For 7-day templates, use the traditional days_by_weekday structure
+    const byWeekday = templateJson?.days_by_weekday
+    const hasByWeekday = byWeekday && typeof byWeekday === 'object'
+
+    const result: WeekDay[] = []
+    weekdayOrder.forEach((wk, idx) => {
+      const dateStr = format(addDays(weekStart, idx), 'yyyy-MM-dd')
+      const src = hasByWeekday ? byWeekday[wk] : (Array.isArray(templateJson?.days) ? templateJson.days[idx] : null)
+      const focus = String(src?.focus ?? 'Workout')
+      const srcExercises = Array.isArray(src?.exercises) ? src.exercises : []
+      const exercises = srcExercises.map((ex: any) => ({
+        exercise: String(ex.exercise ?? ''),
+        category: String(ex.category ?? ''),
+        body_part: String(ex.body_part ?? ''),
+        sets: String(ex.sets ?? ''),
+        reps: String(ex.reps ?? ''),
+        duration: String(ex.duration ?? ''),
+        weight: String(ex.weight ?? ''),
+        equipment: String(ex.equipment ?? ''),
+        coach_tip: String(ex.coach_tip ?? ''),
+        rest: String(ex.rest ?? ''),
+        video_link: String(ex.video_link ?? ''),
+        date: dateStr,
+      }))
+      result.push({ date: dateStr, focus, exercises })
+    })
+    return result
+  }
+}
+
+function buildTemplateFromWeek(week: WeekDay[], tags: string[] = [], duration: '7day' | '30day' = '7day') {
+  if (duration === '7day') {
+    // Build a days_by_weekday structure; dates are ignored in storage
+    const days_by_weekday: Record<WeekdayKey, { focus: string; exercises: any[] }> = {
+      mon: { focus: 'Workout', exercises: [] },
+      tue: { focus: 'Workout', exercises: [] },
+      wed: { focus: 'Workout', exercises: [] },
+      thu: { focus: 'Workout', exercises: [] },
+      fri: { focus: 'Workout', exercises: [] },
+      sat: { focus: 'Workout', exercises: [] },
+      sun: { focus: 'Workout', exercises: [] },
     }
-  })
-  return { tags, days_by_weekday }
+    week.forEach(day => {
+      const key = toWeekdayKey(day.date)
+      days_by_weekday[key] = {
+        focus: String(day.focus ?? 'Workout'),
+        exercises: (day.exercises || []).map((ex: any) => ({
+          exercise: String(ex.exercise ?? ''),
+          category: String(ex.category ?? ''),
+          body_part: String(ex.body_part ?? ''),
+          sets: String(ex.sets ?? ''),
+          reps: String(ex.reps ?? ''),
+          duration: String(ex.duration ?? ''),
+          weight: String(ex.weight ?? ''),
+          equipment: String(ex.equipment ?? ''),
+          coach_tip: String(ex.coach_tip ?? ''),
+          rest: String(ex.rest ?? ''),
+          video_link: String(ex.video_link ?? ''),
+        }))
+      }
+    })
+    return { tags, duration: '7day', days_by_weekday }
+  } else {
+    // For 30-day templates, we need to group into weeks
+    const weeks: any[] = [];
+    
+    // Group the week data into 4 weeks (assuming week contains 28 days)
+    for (let weekIndex = 0; weekIndex < 4; weekIndex++) {
+      const weekStart = weekIndex * 7;
+      const weekEnd = weekStart + 7;
+      const weekData = week.slice(weekStart, weekEnd);
+      
+      const days_by_weekday: Record<WeekdayKey, { focus: string; exercises: any[] }> = {
+        mon: { focus: 'Workout', exercises: [] },
+        tue: { focus: 'Workout', exercises: [] },
+        wed: { focus: 'Workout', exercises: [] },
+        thu: { focus: 'Workout', exercises: [] },
+        fri: { focus: 'Workout', exercises: [] },
+        sat: { focus: 'Workout', exercises: [] },
+        sun: { focus: 'Workout', exercises: [] },
+      }
+      
+      weekData.forEach(day => {
+        const key = toWeekdayKey(day.date)
+        days_by_weekday[key] = {
+          focus: String(day.focus ?? 'Workout'),
+          exercises: (day.exercises || []).map((ex: any) => ({
+            exercise: String(ex.exercise ?? ''),
+            category: String(ex.category ?? ''),
+            body_part: String(ex.body_part ?? ''),
+            sets: String(ex.sets ?? ''),
+            reps: String(ex.reps ?? ''),
+            duration: String(ex.duration ?? ''),
+            weight: String(ex.weight ?? ''),
+            equipment: String(ex.equipment ?? ''),
+            coach_tip: String(ex.coach_tip ?? ''),
+            rest: String(ex.rest ?? ''),
+            video_link: String(ex.video_link ?? ''),
+          }))
+        }
+      })
+      
+      weeks.push({
+        week_number: weekIndex + 1,
+        days_by_weekday
+      });
+    }
+    
+    return { tags, duration: '30day', weeks }
+  }
 }
 
 const FitnessPlansPage = () => {
@@ -168,18 +251,51 @@ const FitnessPlansPage = () => {
 
   // Helpers to summarize template JSON
   function getExerciseCount(templateJson: any): number {
-    const byWeekday = templateJson?.days_by_weekday
-    if (!byWeekday || typeof byWeekday !== 'object') return 0
-    return Object.values(byWeekday).reduce((sum: number, day: any) => sum + (Array.isArray(day?.exercises) ? day.exercises.length : 0), 0)
+    if (templateJson?.duration === '30day' && templateJson?.weeks) {
+      // For 30-day templates, sum exercises across all weeks
+      return templateJson.weeks.reduce((sum: number, week: any) => {
+        const byWeekday = week?.days_by_weekday;
+        if (!byWeekday || typeof byWeekday !== 'object') return sum;
+        return sum + Object.values(byWeekday).reduce((weekSum: number, day: any) => 
+          weekSum + (Array.isArray(day?.exercises) ? day.exercises.length : 0), 0);
+      }, 0);
+    } else {
+      // For 7-day templates, use the traditional structure
+      const byWeekday = templateJson?.days_by_weekday
+      if (!byWeekday || typeof byWeekday !== 'object') return 0
+      return Object.values(byWeekday).reduce((sum: number, day: any) => sum + (Array.isArray(day?.exercises) ? day.exercises.length : 0), 0)
+    }
   }
+  
   function getFocusSummary(templateJson: any): string {
-    const byWeekday = templateJson?.days_by_weekday
-    if (!byWeekday || typeof byWeekday !== 'object') return '-'
-    const focuses = Object.values(byWeekday)
-      .map((d: any) => String(d?.focus || ''))
-      .filter(Boolean)
-    const unique = Array.from(new Set(focuses))
-    return unique.length ? unique.join(' / ') : '-'
+    if (templateJson?.duration === '30day' && templateJson?.weeks) {
+      // For 30-day templates, get focuses from all weeks
+      const focuses: string[] = [];
+      templateJson.weeks.forEach((week: any) => {
+        const byWeekday = week?.days_by_weekday;
+        if (byWeekday && typeof byWeekday === 'object') {
+          Object.values(byWeekday).forEach((d: any) => {
+            const focus = String(d?.focus || '');
+            if (focus && focus !== 'Workout') focuses.push(focus);
+          });
+        }
+      });
+      const unique = Array.from(new Set(focuses));
+      return unique.length ? unique.join(' / ') : '-';
+    } else {
+      // For 7-day templates, use the traditional structure
+      const byWeekday = templateJson?.days_by_weekday
+      if (!byWeekday || typeof byWeekday !== 'object') return '-'
+      const focuses = Object.values(byWeekday)
+        .map((d: any) => String(d?.focus || ''))
+        .filter(Boolean)
+      const unique = Array.from(new Set(focuses))
+      return unique.length ? unique.join(' / ') : '-'
+    }
+  }
+  
+  function getTemplateDuration(templateJson: any): string {
+    return templateJson?.duration === '30day' ? '30-Day' : '7-Day';
   }
 
   // When selecting a template, set edit fields and week mapping
@@ -203,7 +319,11 @@ const FitnessPlansPage = () => {
     try {
       setIsSaving(true)
       const sourceWeek = editorDraft.current && editorDraft.current.length === 7 ? editorDraft.current : week
-      const newJson = buildTemplateFromWeek(sourceWeek, editTags)
+      
+      // Get the duration from the selected template
+      const duration = selectedTemplate.template_json?.duration || '7day';
+      const newJson = buildTemplateFromWeek(sourceWeek, editTags, duration)
+      
       const { error } = await supabase
         .from('workout_plan_templates')
         .update({ name: editName.trim(), tags: editTags, template_json: newJson })
@@ -419,8 +539,9 @@ const FitnessPlansPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[30%]">Template Name</TableHead>
-                      <TableHead className="w-[30%]">Tags</TableHead>
+                      <TableHead className="w-[25%]">Template Name</TableHead>
+                      <TableHead className="w-[25%]">Tags</TableHead>
+                      <TableHead className="w-[10%]">Duration</TableHead>
                       <TableHead className="w-[15%]"># Exercises</TableHead>
                       <TableHead className="w-[25%]">Focus</TableHead>
                     </TableRow>
@@ -439,6 +560,11 @@ const FitnessPlansPage = () => {
                               <Badge key={tag} variant="secondary">{tag}</Badge>
                             ))}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getTemplateDuration(t.template_json) === '30-Day' ? 'default' : 'secondary'}>
+                            {getTemplateDuration(t.template_json)}
+                          </Badge>
                         </TableCell>
                         <TableCell>{getExerciseCount(t.template_json)}</TableCell>
                         <TableCell className="truncate max-w-[360px]">{getFocusSummary(t.template_json)}</TableCell>

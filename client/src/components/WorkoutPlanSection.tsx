@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -1050,6 +1050,15 @@ const WorkoutPlanSection = ({
   client,
   ...props
 }: WorkoutPlanSectionProps) => {
+  // Early return if client is not available
+  if (!client) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <h3 className="text-lg font-semibold">Loading Client Data</h3>
+        <p className="text-muted-foreground mt-2">Please wait while client information is being loaded.</p>
+      </div>
+    );
+  }
   const { toast } = useToast();
   
   // Initialize planStartDate from localStorage or URL parameters, fallback to today
@@ -1125,9 +1134,68 @@ const WorkoutPlanSection = ({
   const [templateTags, setTemplateTags] = useState<string[]>([]);
   const [templateTagInput, setTemplateTagInput] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [templateDuration, setTemplateDuration] = useState<'7day' | '30day'>('7day');
   const [generatedTemplateJson, setGeneratedTemplateJson] = useState<any | null>(null);
   const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  // Import Plan Template state
+  const [isImportTemplateOpen, setIsImportTemplateOpen] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [templateImportStartDate, setTemplateImportStartDate] = useState<Date>(new Date());
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isImportingTemplate, setIsImportingTemplate] = useState(false);
+
+  // Helper function to parse workout days for import functionality
+  const parseWorkoutDaysForImport = (workoutDays: any): string[] => {
+    // Handle null/undefined cases
+    if (!workoutDays) {
+      return [];
+    }
+    
+    if (Array.isArray(workoutDays)) {
+      return workoutDays.map(day => day?.toLowerCase?.() || '').filter(Boolean);
+    }
+    
+    if (typeof workoutDays === 'string') {
+      // Handle PostgreSQL array format: {mon,wed,fri}
+      if (workoutDays.includes('{') && workoutDays.includes('}')) {
+        const match = workoutDays.match(/\{([^}]+)\}/);
+        if (match) {
+          const days = match[1].split(',').map(day => day.trim().toLowerCase());
+          const dayMapping: Record<string, string> = {
+            'mon': 'monday', 'tue': 'tuesday', 'wed': 'wednesday',
+            'thu': 'thursday', 'fri': 'friday', 'sat': 'saturday', 'sun': 'sunday'
+          };
+          return days.map(day => dayMapping[day] || day).filter(Boolean);
+        }
+      }
+      
+      // Handle JSON array format
+      try {
+        const parsed = JSON.parse(workoutDays);
+        if (Array.isArray(parsed)) {
+          return parsed.map(day => day?.toLowerCase?.() || '').filter(Boolean);
+        }
+      } catch (e) {
+        // fallback: split by comma if not valid JSON array
+        return workoutDays.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+      }
+    }
+    
+    return [];
+  };
+
+  // Memoize parsed workout days to prevent repeated parsing
+  const parsedWorkoutDays = useMemo(() => {
+    try {
+      return parseWorkoutDaysForImport(client?.workout_days || []);
+    } catch (error) {
+      console.error('Error parsing workout days:', error);
+      return [];
+    }
+  }, [client?.workout_days]);
   const { trainer } = useAuth();
   
   // Monthly view state
@@ -1162,38 +1230,6 @@ const WorkoutPlanSection = ({
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
     return date < today;
-  };
-
-  // Helper function to parse workout days for import functionality
-  const parseWorkoutDaysForImport = (workoutDays: any): string[] => {
-    console.log('🔍 [parseWorkoutDaysForImport] Raw workout_days:', workoutDays);
-    
-    if (Array.isArray(workoutDays)) {
-      const result = workoutDays.map(day => day.toLowerCase());
-      console.log('🔍 [parseWorkoutDaysForImport] Array result:', result);
-      return result;
-    }
-    if (typeof workoutDays === 'string') {
-      try {
-        const parsed = JSON.parse(workoutDays);
-        if (Array.isArray(parsed)) {
-          const result = parsed.map(day => day.toLowerCase());
-          console.log('🔍 [parseWorkoutDaysForImport] JSON parsed result:', result);
-          return result;
-        }
-        // fallback: split by comma if not valid JSON array
-        const result = workoutDays.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-        console.log('🔍 [parseWorkoutDaysForImport] Comma-split result:', result);
-        return result;
-      } catch {
-        // fallback: split by comma if JSON.parse fails
-        const result = workoutDays.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-        console.log('🔍 [parseWorkoutDaysForImport] Fallback comma-split result:', result);
-        return result;
-      }
-    }
-    console.log('🔍 [parseWorkoutDaysForImport] No workout days found, returning empty array');
-    return [];
   };
 
   const updateWorkoutPlanState = (updates: Partial<WorkoutPlanState>) => {
@@ -1332,50 +1368,119 @@ const WorkoutPlanSection = ({
 
   const removeTemplateTag = (t: string) => setTemplateTags(prev => prev.filter(x => x !== t));
 
-  const buildWeeklyTemplateJson = (week: WeekDay[], tags: string[]) => {
+  const buildTemplateJson = (weekData: WeekDay[], tags: string[], duration: '7day' | '30day') => {
     const toWeekdayKey = (dateStr: string) => {
       const d = new Date(dateStr);
       const idx = d.getDay(); // 0=Sun..6=Sat
       return ['sun','mon','tue','wed','thu','fri','sat'][idx] as 'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat';
     };
-    const days_by_weekday: Record<'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat', any> = {
-      sun: { focus: 'Workout', exercises: [] },
-      mon: { focus: 'Workout', exercises: [] },
-      tue: { focus: 'Workout', exercises: [] },
-      wed: { focus: 'Workout', exercises: [] },
-      thu: { focus: 'Workout', exercises: [] },
-      fri: { focus: 'Workout', exercises: [] },
-      sat: { focus: 'Workout', exercises: [] },
-    };
-    (week || []).forEach((day) => {
-      const key = toWeekdayKey(day.date);
-      days_by_weekday[key] = {
-        focus: day.focus,
-        exercises: (day.exercises || []).map((ex: any) => ({
-          exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
-          category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
-          body_part: String(ex.body_part || 'Full Body'),
-          sets: String(ex.sets ?? ''),
-          reps: String(ex.reps ?? ''),
-          duration: String(ex.duration ?? ex.time ?? ''),
-          weight: String(ex.weight ?? ex.weights ?? ''),
-          equipment: String(ex.equipment ?? ''),
-          coach_tip: String(ex.coach_tip ?? ''),
-          rest: String(ex.rest ?? ''),
-          video_link: String(ex.video_link ?? '')
-        }))
+
+    if (duration === '7day') {
+      // For 7-day templates, use the traditional days_by_weekday structure
+      const days_by_weekday: Record<'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat', any> = {
+        sun: { focus: 'Workout', exercises: [] },
+        mon: { focus: 'Workout', exercises: [] },
+        tue: { focus: 'Workout', exercises: [] },
+        wed: { focus: 'Workout', exercises: [] },
+        thu: { focus: 'Workout', exercises: [] },
+        fri: { focus: 'Workout', exercises: [] },
+        sat: { focus: 'Workout', exercises: [] },
       };
-    });
-    return { tags, days_by_weekday };
+      
+      (weekData || []).forEach((day) => {
+        const key = toWeekdayKey(day.date);
+        days_by_weekday[key] = {
+          focus: day.focus,
+          exercises: (day.exercises || []).map((ex: any) => ({
+            exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+            category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
+            body_part: String(ex.body_part || 'Full Body'),
+            sets: String(ex.sets ?? ''),
+            reps: String(ex.reps ?? ''),
+            duration: String(ex.duration ?? ex.time ?? ''),
+            weight: String(ex.weight ?? ex.weights ?? ''),
+            equipment: String(ex.equipment ?? ''),
+            coach_tip: String(ex.coach_tip ?? ''),
+            rest: String(ex.rest ?? ''),
+            video_link: String(ex.video_link ?? '')
+          }))
+        };
+      });
+      
+      return { 
+        tags, 
+        duration: '7day',
+        days_by_weekday 
+      };
+    } else {
+      // For 30-day templates, use a weeks structure (4 weeks of 7 days each)
+      const weeks: any[] = [];
+      
+      // Group the data into weeks (assuming weekData contains 28 days for monthly view)
+      for (let weekIndex = 0; weekIndex < 4; weekIndex++) {
+        const weekStart = weekIndex * 7;
+        const weekEnd = weekStart + 7;
+        const currentWeekData = weekData.slice(weekStart, weekEnd);
+        
+        const days_by_weekday: Record<'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat', any> = {
+          sun: { focus: 'Workout', exercises: [] },
+          mon: { focus: 'Workout', exercises: [] },
+          tue: { focus: 'Workout', exercises: [] },
+          wed: { focus: 'Workout', exercises: [] },
+          thu: { focus: 'Workout', exercises: [] },
+          fri: { focus: 'Workout', exercises: [] },
+          sat: { focus: 'Workout', exercises: [] },
+        };
+        
+        currentWeekData.forEach((day) => {
+          const key = toWeekdayKey(day.date);
+          days_by_weekday[key] = {
+            focus: day.focus,
+            exercises: (day.exercises || []).map((ex: any) => ({
+              exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+              category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
+              body_part: String(ex.body_part || 'Full Body'),
+              sets: String(ex.sets ?? ''),
+              reps: String(ex.reps ?? ''),
+              duration: String(ex.duration ?? ex.time ?? ''),
+              weight: String(ex.weight ?? ex.weights ?? ''),
+              equipment: String(ex.equipment ?? ''),
+              coach_tip: String(ex.coach_tip ?? ''),
+              rest: String(ex.rest ?? ''),
+              video_link: String(ex.video_link ?? '')
+            }))
+          };
+        });
+        
+        weeks.push({
+          week_number: weekIndex + 1,
+          days_by_weekday
+        });
+      }
+      
+      return { 
+        tags, 
+        duration: '30day',
+        weeks 
+      };
+    }
   };
 
   const handleGenerateTemplate = () => {
     if (!workoutPlan?.week) return;
-    const json = buildWeeklyTemplateJson(workoutPlan.week, templateTags);
+    
+    // Get the appropriate data based on duration
+    const dataToUse = templateDuration === '30day' && monthlyData.length > 0 
+      ? monthlyData.flat() 
+      : workoutPlan.week;
+    
+    const json = buildTemplateJson(dataToUse, templateTags, templateDuration);
     setGeneratedTemplateJson(json);
     setIsSaveTemplateOpen(false);
     setIsTemplatePreviewOpen(true);
-    toast({ title: 'Template Ready', description: 'Weekly workout plan template generated.' });
+    
+    const durationText = templateDuration === '30day' ? '30-day' : '7-day';
+    toast({ title: 'Template Ready', description: `${durationText} workout plan template generated.` });
   };
 
   const handleSaveTemplateToLibrary = async () => {
@@ -1392,11 +1497,16 @@ const WorkoutPlanSection = ({
         toast({ title: 'No Plan Found', description: 'Generate or load a plan before saving.', variant: 'destructive' });
         return;
       }
+      // Get the appropriate data based on duration
+      const dataToUse = templateDuration === '30day' && monthlyData.length > 0 
+        ? monthlyData.flat() 
+        : workoutPlan.week;
+      
       const payload: any = {
         trainer_id: trainer.id,
         name: templateName.trim(),
         tags: templateTags,
-        template_json: generatedTemplateJson ?? buildWeeklyTemplateJson(workoutPlan.week, templateTags),
+        template_json: generatedTemplateJson ?? buildTemplateJson(dataToUse, templateTags, templateDuration),
       };
 
       setIsSavingTemplate(true);
@@ -1418,6 +1528,195 @@ const WorkoutPlanSection = ({
     } finally {
       setIsSavingTemplate(false);
     }
+  };
+
+  // Load available templates for import
+  const loadAvailableTemplates = async () => {
+    if (!trainer?.id) {
+      toast({ title: 'Not Signed In', description: 'Trainer account not detected. Please sign in again.', variant: 'destructive' });
+      return;
+    }
+
+    setIsLoadingTemplates(true);
+    try {
+      const { data, error } = await supabase
+        .from('workout_plan_templates')
+        .select('id, name, tags, template_json, created_at')
+        .eq('trainer_id', trainer.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading templates:', error);
+        toast({ title: 'Load Failed', description: error.message || 'Could not load templates.', variant: 'destructive' });
+        return;
+      }
+
+      setAvailableTemplates(data || []);
+    } catch (err: any) {
+      console.error('Unexpected error loading templates:', err);
+      toast({ title: 'Load Failed', description: err.message || 'Unexpected error occurred.', variant: 'destructive' });
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  // Handle template import
+  const handleImportTemplate = async () => {
+    if (!selectedTemplateId) {
+      toast({ title: 'No Template Selected', description: 'Please select a template to import.', variant: 'destructive' });
+      return;
+    }
+
+    const selectedTemplate = availableTemplates.find(t => t.id === selectedTemplateId);
+    if (!selectedTemplate) {
+      toast({ title: 'Template Not Found', description: 'Selected template could not be found.', variant: 'destructive' });
+      return;
+    }
+
+    setIsImportingTemplate(true);
+    try {
+      // Use memoized workout days
+      const clientWorkoutDays = parsedWorkoutDays;
+      
+      // Convert template to workout plan format
+      const weekData = convertTemplateToWorkoutPlan(
+        selectedTemplate.template_json,
+        templateImportStartDate,
+        clientWorkoutDays
+      );
+
+      // Update the workout plan state
+      const planStartDate = weekData[0]?.date || templateImportStartDate.toISOString().split('T')[0];
+      const planEndDate = weekData[weekData.length - 1]?.date || templateImportStartDate.toISOString().split('T')[0];
+      
+      setWorkoutPlan({
+        week: weekData,
+        hasAnyWorkouts: weekData.some(day => day.exercises && day.exercises.length > 0),
+        planStartDate,
+        planEndDate
+      });
+      updateWorkoutPlanState({
+        hasUnsavedChanges: true
+      });
+
+      // Close modal and reset state
+      setIsImportTemplateOpen(false);
+      setSelectedTemplateId('');
+      setTemplateImportStartDate(new Date());
+
+      toast({ 
+        title: 'Template Imported', 
+        description: `Successfully imported "${selectedTemplate.name}" template.` 
+      });
+
+    } catch (err: any) {
+      console.error('Error importing template:', err);
+      toast({ 
+        title: 'Import Failed', 
+        description: err.message || 'Failed to import template.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsImportingTemplate(false);
+    }
+  };
+
+  // Convert template JSON to workout plan format with workout day mapping
+  const convertTemplateToWorkoutPlan = (
+    templateJson: any,
+    startDate: Date,
+    workoutDays: string[]
+  ): WeekDay[] => {
+    const toWeekdayKey = (dateStr: string) => {
+      const d = new Date(dateStr);
+      const idx = d.getDay(); // 0=Sun..6=Sat
+      return ['sun','mon','tue','wed','thu','fri','sat'][idx] as 'sun'|'mon'|'tue'|'wed'|'thu'|'fri'|'sat';
+    };
+
+    // Get template data based on duration
+    let templateData: any;
+    if (templateJson?.duration === '30day' && templateJson?.weeks) {
+      // For 30-day templates, use the first week for now
+      templateData = templateJson.weeks[0]?.days_by_weekday;
+    } else {
+      // For 7-day templates
+      templateData = templateJson?.days_by_weekday;
+    }
+
+    if (!templateData) {
+      throw new Error('Invalid template structure');
+    }
+
+    // Create a week of dates starting from the selected start date
+    const weekData: WeekDay[] = [];
+    const weekdays = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const weekdayKey = toWeekdayKey(dateStr);
+      
+      // Get template data for this weekday
+      const templateDay = templateData[weekdayKey];
+      
+      weekData.push({
+        date: dateStr,
+        focus: templateDay?.focus || 'Workout',
+        exercises: templateDay?.exercises || []
+      });
+    }
+
+    // If workout days are specified, map exercises to workout days
+    if (workoutDays && workoutDays.length > 0) {
+      return mapTemplateToWorkoutDays(weekData, startDate, workoutDays);
+    }
+
+    return weekData;
+  };
+
+  // Map template exercises to client's workout days
+  const mapTemplateToWorkoutDays = (
+    weekData: WeekDay[],
+    startDate: Date,
+    workoutDays: string[]
+  ): WeekDay[] => {
+    // Filter to only include workout days
+    const workoutDayData = weekData.filter(day => {
+      const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      return workoutDays.includes(dayName);
+    });
+
+    // Create a new week with exercises mapped to workout days
+    const mappedWeek: WeekDay[] = [];
+    let currentDate = new Date(startDate);
+    let exerciseIndex = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (workoutDays.includes(dayName) && exerciseIndex < workoutDayData.length) {
+        // This is a workout day, use the next exercise day
+        mappedWeek.push({
+          date: dateStr,
+          focus: workoutDayData[exerciseIndex].focus,
+          exercises: workoutDayData[exerciseIndex].exercises
+        });
+        exerciseIndex++;
+      } else {
+        // This is not a workout day, add empty day
+        mappedWeek.push({
+          date: dateStr,
+          focus: 'Rest Day',
+          exercises: []
+        });
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return mappedWeek;
   };
 
   // Ensure clientId is a number and not undefined
@@ -1875,8 +2174,27 @@ const WorkoutPlanSection = ({
       return;
     }
 
+    // Prevent multiple simultaneous calls
+    if (isFetchingPlan) {
+      console.log('🔄 [fetchPlan] Already fetching, skipping...');
+      return;
+    }
+
+    console.log('🔄 [fetchPlan] Starting fetch for client:', numericClientId, 'date:', planStartDate);
     setLoading('fetching', 'Loading workout plan...');
     setIsFetchingPlan(true);
+    
+    // Add timeout protection to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Fetch plan timeout - forcing reset');
+      setIsFetchingPlan(false);
+      clearLoading();
+      toast({ 
+        title: 'Loading Timeout', 
+        description: 'Loading took too long. Please try again.', 
+        variant: 'destructive' 
+      });
+    }, 15000); // Reduced to 15 second timeout
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
     const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
@@ -1886,8 +2204,10 @@ const WorkoutPlanSection = ({
     let isFromPreview = true; // Default to preview as primary source
 
     try {
+      console.log('🔄 [fetchPlan] Calling checkWeeklyWorkoutStatus...');
       // Use the unified weekly status function (same logic as monthly view)
       const weeklyResult: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
+      console.log('🔄 [fetchPlan] checkWeeklyWorkoutStatus completed:', weeklyResult);
       
       // Use preview data as primary source (same as monthly view)
       if (weeklyResult.previewData && weeklyResult.previewData.length > 0) {
@@ -1897,6 +2217,7 @@ const WorkoutPlanSection = ({
         
         // Strategy 3: Try to find the most recent plan and use it as a template
         // Try to find the most recent plan from schedule_preview first
+        console.log('🔄 [fetchPlan] Querying recent preview data...');
         let { data: recentPreviewData, error: recentPreviewError } = await supabase
           .from('schedule_preview')
           .select('*')
@@ -1904,6 +2225,7 @@ const WorkoutPlanSection = ({
           .eq('type', 'workout')
           .order('for_date', { ascending: false })
           .limit(1);
+        console.log('🔄 [fetchPlan] Recent preview query completed:', { data: recentPreviewData?.length, error: recentPreviewError });
         
         if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
           data = recentPreviewData;
@@ -2023,9 +2345,23 @@ const WorkoutPlanSection = ({
           )
         });
       } else if (data.length > 0) {
-        // Use the new consistency-based status logic
-        // The status will be determined by checkPlanApprovalStatus based on data comparison
-        await checkPlanApprovalStatus();
+        // Use the data we already have to determine status instead of making another database call
+        const hasScheduleData = data.some(item => item.is_approved === true);
+        if (hasScheduleData) {
+          setPlanApprovalStatus('approved');
+          setIsDraftPlan(false);
+          updateWorkoutPlanState({
+            status: 'approved',
+            source: 'database'
+          });
+        } else {
+          setPlanApprovalStatus('not_approved');
+          setIsDraftPlan(true);
+          updateWorkoutPlanState({
+            status: 'draft',
+            source: 'generated'
+          });
+        }
       } else {
         updateWorkoutPlanState({
           status: 'no_plan',
@@ -2041,6 +2377,7 @@ const WorkoutPlanSection = ({
       toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
       setWorkoutPlan(null);
     } finally {
+      clearTimeout(timeoutId); // Clear the timeout
       setIsFetchingPlan(false);
       clearLoading();
     }
@@ -2149,12 +2486,15 @@ const WorkoutPlanSection = ({
 
   // Fetch workout plan for client and date
   useEffect(() => {
+    console.log('🔄 [useEffect] fetchPlan trigger - client:', numericClientId, 'date:', planStartDate, 'hasAI:', hasAIGeneratedPlan);
+    
     if (hasAIGeneratedPlan) {
+      console.log('🔄 [useEffect] Skipping fetchPlan due to hasAIGeneratedPlan');
       return;
     }
     
     fetchPlan();
-  }, [numericClientId, planStartDate, client?.plan_start_day, hasAIGeneratedPlan]);
+  }, [numericClientId, planStartDate, hasAIGeneratedPlan]); // Removed client?.plan_start_day to prevent infinite loops
 
   // Reset AI generated plan flag when client or date changes
   useEffect(() => {
@@ -2308,8 +2648,18 @@ const WorkoutPlanSection = ({
   };
 
   // Helper to check approval status for the week using unified utility
+  const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
+
+    // Add debouncing to prevent rapid successive calls
+    if (isCheckingApproval) {
+      console.log('[checkPlanApprovalStatus] Already running, skipping...');
+      return;
+    }
+    
+    setIsCheckingApproval(true);
 
     try {
       console.log('[checkPlanApprovalStatus] Checking weekly approval status');
@@ -2365,15 +2715,18 @@ const WorkoutPlanSection = ({
         status: 'no_plan',
         source: 'database'
       });
+    } finally {
+      setIsCheckingApproval(false);
     }
   };
 
   // Re-check approval status whenever plan, client, or date changes
+  // Removed workoutPlanState.status from dependencies to prevent infinite loop
   useEffect(() => {
     if (numericClientId && planStartDate) {
       checkPlanApprovalStatus();
     }
-  }, [numericClientId, planStartDate, workoutPlan, workoutPlanState.status]);
+  }, [numericClientId, planStartDate, workoutPlan]);
 
   // Load date from localStorage when clientId changes
   useEffect(() => {
@@ -2747,7 +3100,7 @@ const WorkoutPlanSection = ({
                 onImportSuccess={handleImportSuccess}
                 disabled={isGenerating}
                 className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
-                clientWorkoutDays={parseWorkoutDaysForImport(client?.workout_days)}
+                clientWorkoutDays={parsedWorkoutDays}
               />
               
               {/* Export Button - Only show when there's workout data */}
@@ -2772,6 +3125,7 @@ const WorkoutPlanSection = ({
                   onClick={() => { 
                     setTemplateTags([]); 
                     setTemplateTagInput(''); 
+                    setTemplateDuration('7day'); // Default to 7-day
                     setIsSaveTemplateOpen(true); 
                   }}
                 >
@@ -2779,6 +3133,20 @@ const WorkoutPlanSection = ({
                   Save Plan for Future
                 </Button>
               )}
+
+              {/* Import Plan Template Button */}
+              <Button 
+                variant="outline" 
+                size="default"
+                className="bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600 hover:from-green-600 hover:via-emerald-700 hover:to-teal-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                onClick={() => { 
+                  setIsImportTemplateOpen(true);
+                  loadAvailableTemplates();
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" /> 
+                Import Plan Template
+              </Button>
             </div>
           </div>
         </div>
@@ -3110,7 +3478,7 @@ const WorkoutPlanSection = ({
             <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
               <DialogContent className="max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Save Weekly Plan Template</DialogTitle>
+                  <DialogTitle>Save Workout Plan Template</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div>
@@ -3120,6 +3488,24 @@ const WorkoutPlanSection = ({
                       value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
                     />
+                  </div>
+                  <div>
+                    <Label>Plan Duration</Label>
+                    <Select value={templateDuration} onValueChange={(value: '7day' | '30day') => setTemplateDuration(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select duration" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7day">7-Day Plan (1 Week)</SelectItem>
+                        <SelectItem value="30day">30-Day Plan (4 Weeks)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {templateDuration === '30day' 
+                        ? 'Saves 4 weeks of workout data (28 days total)'
+                        : 'Saves 1 week of workout data (7 days total)'
+                      }
+                    </p>
                   </div>
                   <div>
                     <Label>Add Tags</Label>
@@ -3153,7 +3539,7 @@ const WorkoutPlanSection = ({
                     <Button variant="outline" onClick={() => setIsSaveTemplateOpen(false)}>Cancel</Button>
                     <Button onClick={handleGenerateTemplate}>Preview JSON</Button>
                     <Button onClick={handleSaveTemplateToLibrary} disabled={isSavingTemplate}>
-                      {isSavingTemplate ? 'Saving...' : 'Save to Library'}
+                      {isSavingTemplate ? 'Saving...' : `Save ${templateDuration === '30day' ? '30-Day' : '7-Day'} Template`}
                     </Button>
                   </div>
                 </div>
@@ -3243,13 +3629,122 @@ const WorkoutPlanSection = ({
             <Dialog open={isTemplatePreviewOpen} onOpenChange={setIsTemplatePreviewOpen}>
               <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                  <DialogTitle>Weekly Plan Template (JSON)</DialogTitle>
+                  <DialogTitle>
+                    {templateDuration === '30day' ? '30-Day' : '7-Day'} Plan Template (JSON)
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="text-xs whitespace-pre-wrap break-words max-h-[70vh] overflow-auto">
                   {generatedTemplateJson ? JSON.stringify(generatedTemplateJson, null, 2) : ''}
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button onClick={() => setIsTemplatePreviewOpen(false)}>Close</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Import Plan Template Modal */}
+            <Dialog open={isImportTemplateOpen} onOpenChange={setIsImportTemplateOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Import Plan Template</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Select Template</Label>
+                    {isLoadingTemplates ? (
+                      <div className="flex items-center gap-2 p-3 border rounded-md">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm text-muted-foreground">Loading templates...</span>
+                      </div>
+                    ) : availableTemplates.length === 0 ? (
+                      <div className="p-3 border rounded-md text-center text-sm text-muted-foreground">
+                        No templates available. Save a plan first to create templates.
+                      </div>
+                    ) : (
+                      <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTemplates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{template.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {template.template_json?.duration === '30day' ? '30-Day' : '7-Day'} • 
+                                  {template.tags?.length > 0 ? ` ${template.tags.join(', ')}` : ' No tags'}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label>Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(templateImportStartDate, "PPP")}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={templateImportStartDate}
+                          onSelect={(date) => date && setTemplateImportStartDate(date)}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Template exercises will be mapped to your workout days starting from this date.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CalendarDays className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-800">Workout Days</span>
+                    </div>
+                    <p className="text-xs text-blue-700">
+                      Your workout days: {parsedWorkoutDays?.join(', ') || 'None specified'}
+                    </p>
+                    {/* Debug information */}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Debug: client?.workout_days = {JSON.stringify(client?.workout_days)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Debug: parsedWorkoutDays = {JSON.stringify(parsedWorkoutDays)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Debug: client?.client_id = {client?.client_id}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsImportTemplateOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleImportTemplate} 
+                    disabled={!selectedTemplateId || isImportingTemplate}
+                  >
+                    {isImportingTemplate ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      'Import Template'
+                    )}
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
