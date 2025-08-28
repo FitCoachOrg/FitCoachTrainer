@@ -853,14 +853,17 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
 }
 
 // Add approvePlan implementation to copy from schedule_preview to schedule
-async function approvePlan(clientId: number, planStartDate: Date) {
+async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'weekly' | 'monthly' = 'weekly') {
   const startTime = performance.now();
   
   try {
-    // 1. Get the week range
+    // 1. Get the date range based on view mode
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
-    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const daysToAdd = viewMode === 'monthly' ? 27 : 6; // 28 days for monthly (0-27), 7 days for weekly (0-6)
+    const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log(`[approvePlan] Approving ${viewMode} plan: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
 
     // 2. Fetch all rows from schedule_preview for this client/week/type
     let previewRows: any[] = [];
@@ -1364,9 +1367,23 @@ const WorkoutPlanSection = ({
   }, [client?.workout_days]);
   const { trainer } = useAuth();
   
-  // Monthly view state
-  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  // Monthly view state with localStorage persistence
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>(() => {
+    // Try to get viewMode from localStorage, default to 'weekly'
+    if (clientId) {
+      const savedViewMode = localStorage.getItem(`workoutPlanViewMode_${clientId}`);
+      return (savedViewMode as 'weekly' | 'monthly') || 'weekly';
+    }
+    return 'weekly';
+  });
   const [monthlyData, setMonthlyData] = useState<any[][]>([]);
+  
+  // Persist viewMode changes to localStorage
+  useEffect(() => {
+    if (clientId && viewMode) {
+      localStorage.setItem(`workoutPlanViewMode_${clientId}`, viewMode);
+    }
+  }, [viewMode, clientId]);
   
   // Enhanced UX functions
   const setLoading = (type: LoadingState['type'], message: string) => {
@@ -2817,17 +2834,47 @@ const WorkoutPlanSection = ({
 
   // Helper to check approval status for the week using unified utility
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string} | null>(null);
+  const [forceRefreshKey, setForceRefreshKey] = useState(0); // Add force refresh mechanism
+  
+  // Force refresh function to trigger immediate status update
+  const forceRefreshStatus = () => {
+    console.log('[forceRefreshStatus] Triggering force refresh...');
+    setForceRefreshKey(prev => prev + 1);
+    // Clear any cached data to force fresh fetch
+    setLastApprovalCheck(null);
+    // Trigger immediate status check
+    checkPlanApprovalStatus();
+  };
   
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
 
-    // Add debouncing to prevent rapid successive calls
-    if (isCheckingApproval) {
+    // Create a unique key for this check
+    const checkKey = {
+      viewMode,
+      clientId: numericClientId,
+      date: planStartDate.toISOString().split('T')[0]
+    };
+
+    // Check if we're already checking the same data (unless it's a force refresh)
+    if (isCheckingApproval && forceRefreshKey === 0) {
       console.log('[checkPlanApprovalStatus] Already running, skipping...');
       return;
     }
 
+    // Check if we've already checked this exact combination recently (unless it's a force refresh)
+    if (lastApprovalCheck && 
+        lastApprovalCheck.viewMode === checkKey.viewMode &&
+        lastApprovalCheck.clientId === checkKey.clientId &&
+        lastApprovalCheck.date === checkKey.date &&
+        forceRefreshKey === 0) {
+      console.log('[checkPlanApprovalStatus] Already checked this combination recently, skipping...');
+      return;
+    }
+
     setIsCheckingApproval(true);
+    setLastApprovalCheck(checkKey);
 
     try {
       console.log(`[checkPlanApprovalStatus] Checking approval status for ${viewMode} view`);
@@ -2839,8 +2886,6 @@ const WorkoutPlanSection = ({
         // For monthly view, get detailed week-by-week status
         const monthlyResult = await checkMonthlyWorkoutStatus(supabase, numericClientId, planStartDate);
         result = monthlyResult;
-
-
 
         // Build week statuses array for UI
         // If no weeklyBreakdown exists, create empty weeks
@@ -2899,8 +2944,37 @@ const WorkoutPlanSection = ({
         // For weekly view, use the existing logic
         result = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
 
-        // Clear week statuses for weekly view
-        setWeekStatuses([]);
+        // Calculate week status for weekly view (single week)
+        const weekStart = planStartDate;
+        const weekEnd = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+        // Check if week has draft data that can be approved
+        const weekPreviewData = result.previewData.filter(day =>
+          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+        );
+
+        const weekScheduleData = result.scheduleData.filter(day =>
+          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+        );
+
+        // Can approve if: has preview data AND (no schedule data OR data doesn't match)
+        const hasPreviewData = weekPreviewData.length > 0;
+        const hasScheduleData = weekScheduleData.length > 0;
+        const dataMatches = hasPreviewData && hasScheduleData ?
+          compareWorkoutData(weekPreviewData, weekScheduleData) : false;
+
+        const canApprove = hasPreviewData && (!hasScheduleData || !dataMatches);
+
+        // Set single week status for weekly view
+        setWeekStatuses([{
+          weekNumber: 1,
+          status: result.status === 'partial_approved' ? 'draft' : result.status,
+          startDate: weekStart,
+          endDate: weekEnd,
+          canApprove
+        }]);
       }
 
       console.log('[checkPlanApprovalStatus] Status result:', result);
@@ -2953,6 +3027,10 @@ const WorkoutPlanSection = ({
       });
     } finally {
       setIsCheckingApproval(false);
+      // Reset force refresh key after successful check
+      if (forceRefreshKey > 0) {
+        setForceRefreshKey(0);
+      }
     }
   };
 
@@ -3008,9 +3086,14 @@ const WorkoutPlanSection = ({
   // Removed workoutPlanState.status from dependencies to prevent infinite loop
   useEffect(() => {
     if (numericClientId && planStartDate) {
-      checkPlanApprovalStatus();
+      // Add a small delay to prevent rapid successive calls when viewMode changes
+      const timeoutId = setTimeout(() => {
+        checkPlanApprovalStatus();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [numericClientId, planStartDate, workoutPlan, viewMode]);
+  }, [numericClientId, planStartDate, viewMode]); // Removed workoutPlan from dependencies to prevent loops
 
   // Load date from localStorage when clientId changes
   useEffect(() => {
@@ -3265,6 +3348,7 @@ const WorkoutPlanSection = ({
         
         // Refresh approval status after generating and saving plan with timeout protection
         try {
+          console.log('[DEBUG] Triggering approval status check after plan generation...');
           const approvalPromise = checkPlanApprovalStatus();
           await Promise.race([
             approvalPromise,
@@ -3272,6 +3356,7 @@ const WorkoutPlanSection = ({
               setTimeout(() => reject(new Error('Approval check timeout')), 5000)
             )
           ]);
+          console.log('[DEBUG] Approval status check completed after plan generation');
         } catch (approvalError) {
           console.warn('⚠️ Approval status check failed:', approvalError);
           // Don't show error to user for this non-critical operation
@@ -3360,58 +3445,6 @@ const WorkoutPlanSection = ({
               <Brain className="h-4 w-4 text-blue-500" />
               AI-powered workout planning and exercise tracking
             </p>
-
-            {/* Enhanced Status Indicator */}
-            <div className="flex items-center gap-2 mt-2">
-              {workoutPlanState.status === 'approved' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  ✅ Approved Plan
-                </div>
-              )}
-              {workoutPlanState.status === 'draft' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-300 dark:border-blue-700">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  📝 Draft Plan
-                  {workoutPlanState.hasUnsavedChanges && (
-                    <span className="text-xs">(Unsaved)</span>
-                  )}
-                </div>
-              )}
-              {workoutPlanState.status === 'template' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium border border-purple-300 dark:border-purple-700">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  📋 Template Plan
-                  {workoutPlanState.templateDate && (
-                    <span className="text-xs">({format(new Date(workoutPlanState.templateDate), 'MMM d')})</span>
-                  )}
-                </div>
-              )}
-              {workoutPlanState.status === 'no_plan' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-700">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                  ⚪ No Plan
-                </div>
-              )}
-              
-              {/* Loading indicator */}
-              {loadingState.type && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium border border-blue-200 dark:border-blue-800">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  {loadingState.message}
-                </div>
-              )}
-              
-              {/* Auto-save indicator */}
-              {workoutPlanState.isAutoSaving && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium border border-yellow-200 dark:border-yellow-800">
-                  <Save className="h-3 w-3 animate-spin" />
-                  Auto-saving...
-                </div>
-              )}
-              
-
-            </div>
           </div>
         </div>
 
@@ -3612,12 +3645,13 @@ const WorkoutPlanSection = ({
               </div>
               <Button
                 onClick={async () => {
-                  setLoading('approving', 'Approving plan...');
+                  const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
+                  setLoading('approving', `Approving ${planType} plan...`);
                   setIsApproving(true);
                   
                   try {
                     // Add a timeout to prevent hanging
-                    const approvalPromise = approvePlan(numericClientId, planStartDate);
+                    const approvalPromise = approvePlan(numericClientId, planStartDate, viewMode);
                     const timeoutPromise = new Promise((_, reject) => 
                       setTimeout(() => reject(new Error('Approval timeout after 30 seconds')), 30000)
                     );
@@ -3625,7 +3659,12 @@ const WorkoutPlanSection = ({
                     const result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
                     
                     if (result.success) {
-                      toast({ title: 'Current Plan Approved', description: 'The current workout plan has been approved and saved to the main schedule.', variant: 'default' });
+                      const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
+                      toast({ 
+                        title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`, 
+                        description: `The ${planType} workout plan has been approved and saved to the main schedule.`, 
+                        variant: 'default' 
+                      });
                       
                       // Update state immediately
                       setIsDraftPlan(false);
@@ -3794,9 +3833,10 @@ const WorkoutPlanSection = ({
                 clientId={numericClientId}
                 onViewModeChange={setViewMode}
                 onMonthlyDataChange={setMonthlyData}
-                onApprovalStatusCheck={checkPlanApprovalStatus}
-                weekStatuses={weekStatuses}
-                onApproveWeek={handleApproveWeek}
+                              onApprovalStatusCheck={checkPlanApprovalStatus}
+              onForceRefreshStatus={forceRefreshStatus}
+              weekStatuses={weekStatuses}
+              onApproveWeek={handleApproveWeek}
               />
             </Card>
 
