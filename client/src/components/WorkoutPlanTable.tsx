@@ -261,23 +261,15 @@ const VideoCell = ({
       <>
         <div className="flex items-center gap-2">
           <div className="relative group cursor-pointer" onClick={() => setIsVideoModalOpen(true)}>
-            <img 
-              src={getYouTubeThumbnail(videoId)} 
-              alt="Video thumbnail" 
+            <img
+              src={getYouTubeThumbnail(videoId)}
+              alt="Video thumbnail"
               className="w-16 h-12 object-cover rounded border"
             />
             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity">
               <Play className="h-4 w-4 text-white" />
             </div>
           </div>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            onClick={() => setIsEditing(true)}
-            className="h-6 w-6 p-0"
-          >
-            <Edit3 className="h-3 w-3" />
-          </Button>
         </div>
 
         {/* Video Modal */}
@@ -303,12 +295,11 @@ const VideoCell = ({
   }
 
   return (
-    <div 
-      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 text-gray-500"
+    <div
+      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 text-gray-500"
       onClick={() => setIsEditing(true)}
     >
       <span>Add video</span>
-      <Edit3 className="h-3 w-3" />
     </div>
   );
 };
@@ -649,8 +640,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                   <TableRow className="bg-gray-50 dark:bg-gray-700">
                     <TableHead className="w-3">#</TableHead>
                     <TableHead className="w-3">Icon</TableHead>
-                    <TableHead className="w-10 sm:w-14">Exercise</TableHead>
-                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden sm:table-cell w-6 md:w-8' : 'w-10'}>Category</TableHead>
+                    <TableHead className="w-8 sm:w-12">Exercise</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden lg:table-cell w-6 md:w-8' : 'w-10'}>Body Part</TableHead>
                     <TableHead className="w-5 sm:w-6">Sets</TableHead>
                     <TableHead className="w-5 sm:w-6">Reps</TableHead>
@@ -658,7 +648,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-6 md:w-8' : 'w-10'}>Weight</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-5 sm:w-6' : 'w-6'}>Duration</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-6 md:w-8' : 'w-10'}>Equipment</TableHead>
-                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-8 sm:w-10' : 'w-14'}>Video</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-12 sm:w-16' : 'w-20'}>Video</TableHead>
+                    <TableHead className="w-8">Delete</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -667,28 +658,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       <TableCell className="font-medium text-gray-600 dark:text-gray-400">{exIdx + 1}</TableCell>
                       <TableCell className="text-center">{getExerciseIcon(ex)}</TableCell>
                       <TableCell>
-                        <div className="exercise-cell">
-                          <EditableCell
-                            value={ex.exercise}
-                            onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
-                            placeholder="Exercise name"
-                            className="font-medium text-gray-900 dark:text-white flex-1 editable-cell"
-                          />
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}
-                            className="delete-btn hover:bg-red-50 dark:hover:bg-red-900/20"
-                          >
-                            <Trash2 className="h-3 w-3 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell>
                         <EditableCell
-                          value={ex.category}
-                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'category', newValue)}
-                          placeholder="Category"
+                          value={ex.exercise}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
+                          placeholder="Exercise name"
+                          className="font-medium text-gray-900 dark:text-white"
                         />
                       </TableCell>
                       <TableCell>
@@ -748,6 +722,16 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                           videoLink={ex.video_link}
                           onVideoChange={(newLink) => handlePlanChange(globalDayIdx, exIdx, 'video_link', newLink)}
                         />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}
+                          className="delete-btn hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
                       </TableCell>
 
                     </TableRow>
