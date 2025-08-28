@@ -56,17 +56,18 @@ export class CoachTipGenerator {
       parts.push(components.equipmentNotes);
     }
     
-    // Progression notes
-    if (components.progressionNotes) {
+    // Progression notes (only if not empty)
+    if (components.progressionNotes && components.progressionNotes.trim() !== '') {
       parts.push(components.progressionNotes);
     }
     
-    // Injury notes
-    if (components.injuryNotes) {
+    // Injury notes (only if not empty)
+    if (components.injuryNotes && components.injuryNotes.trim() !== '') {
       parts.push(components.injuryNotes);
     }
     
-    return parts.join(', ');
+    // Join all parts and clean up any newlines or extra spaces
+    return parts.join(', ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
   /**

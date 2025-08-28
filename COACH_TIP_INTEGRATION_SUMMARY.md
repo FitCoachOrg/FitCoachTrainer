@@ -112,6 +112,11 @@ Coach Tip: "🚨 Selected to avoid: knee injury | 💡 Focus on proper form and 
 Coach Tip: "RPE 6-7, 2-1-2 tempo, Keep your lower back pressed to the ground, Extend opposite arm and leg, No equipment needed"
 ```
 
+**After Cleanup (Latest):**
+```
+Coach Tip: "RPE 6-7, 2-1-2 tempo, Focus on proper form, Control the movement, Dumbbell exercise"
+```
+
 ### **Search-Based Workout Plan**
 
 **Before Integration:**
@@ -120,6 +125,11 @@ Coach Tip: "RPE 7-8 (2-3 RIR)"
 ```
 
 **After Integration:**
+```
+Coach Tip: "RPE 6.5-7.5, 2-1-2 tempo, Keep your core engaged, Rotate from your torso, Stability ball exercise"
+```
+
+**After Cleanup (Latest):**
 ```
 Coach Tip: "RPE 6.5-7.5, 2-1-2 tempo, Keep your core engaged, Rotate from your torso, Stability ball exercise"
 ```
@@ -208,15 +218,34 @@ Coach Tip: "RPE 6.5-7.5, 2-1-2 tempo, Keep your core engaged, Rotate from your t
 - **Progressive overload** tracking
 - **Injury prevention** algorithms
 
+## 🧹 **Coach Tip Cleanup (Latest Update)**
+
+### **Changes Applied:**
+- ✅ **Removed generic progression message** - No more "Progressive loading will be applied based on performance"
+- ✅ **Standardized injury format** - Multi-line injuries now display as comma-separated list
+- ✅ **Cleaned up formatting** - Removed newlines and extra spaces
+- ✅ **Conditional progression notes** - Only show progression when actually applied
+
+### **Before Cleanup:**
+```
+Coach Tip: "RPE 6-7, 2-1-2 tempo, Focus on proper form, Control the movement, Dumbbell exercise, Progressive loading will be applied based on performance, Selected to avoid: knee injury\nback pain\narm injury"
+```
+
+### **After Cleanup:**
+```
+Coach Tip: "RPE 6-7, 2-1-2 tempo, Focus on proper form, Control the movement, Dumbbell exercise, Selected to avoid: knee injury, back pain, arm injury"
+```
+
 ## 🎉 **Summary**
 
-The Coach Tip system has been **successfully integrated** with both workout generation systems, providing:
+The Coach Tip system has been **successfully integrated and cleaned up** with both workout generation systems, providing:
 
 1. **Enhanced personalization** with goal-based RPE calculations
 2. **Exercise-specific guidance** with actionable form cues
 3. **Equipment-aware tips** for all equipment types in your database
 4. **Tempo recommendations** based on training goals and exercise type
-5. **Zero-cost operation** with no external API dependencies
-6. **100% reliability** with no external service dependencies
+5. **Clean, readable formatting** with no generic messages or formatting issues
+6. **Zero-cost operation** with no external API dependencies
+7. **100% reliability** with no external service dependencies
 
 The integration is **production-ready** and will significantly enhance the quality and personalization of coaching guidance in your fitness application.

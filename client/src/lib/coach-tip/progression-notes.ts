@@ -23,6 +23,6 @@ export class ProgressionNoteGenerator {
       return "Reduced loading to focus on form and recovery";
     }
     
-    return "Progressive loading will be applied based on performance";
+    return ""; // Don't show generic progression message
   }
 }
