@@ -774,35 +774,67 @@ function normalizeExercise(ex: any): any {
 
 // Helper to build the payload for schedule_preview
 function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_time: string, workout_id: string) {
-  return planWeek.map((day) => ({
-    client_id: clientId,
-    type: 'workout',
-    task: 'workout',
-    icon: 'dumbell',
-    summary: day.focus,
-    for_date: normalizeDateForStorage(day.date), // Normalize date for UTC storage
-    for_time, // Ensure this is a string in HH:MM:SS or HH:MM:SS+TZ format
-    workout_id, // Always a valid UUID
-    details_json: {
-      focus: day.focus,
-      exercises: (day.exercises || []).map((ex: any, idx: number) => ({
-        exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
-        category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
-        body_part: String(ex.body_part || 'Full Body'),
-        sets: ex.sets && ex.sets.toString().trim() !== '' ? String(ex.sets) : '3',
-        reps: String(ex.reps || '10'),
-        rest: String(ex.rest || ex.rest_sec || '60'),
-        weight: String(ex.weight || ex.weights || 'Bodyweight'),
-        duration: String(ex.duration || ex.duration_sec || '15'),
-        equipment: String(ex.equipment || 'None'),
-        coach_tip: String(ex.coach_tip || 'Focus on proper form'),
-        video_link: String(ex.video_link || ex.youtube_video_id || ''),
-        tempo: String(ex.tempo || ''),
-        order: idx + 1
-      }))
-    },
-    is_approved: false
-  }));
+  return planWeek.map((day) => {
+    // Format focus field properly - simple concatenation approach
+    let formattedFocus = 'Rest Day';
+    
+    if (day.exercises && day.exercises.length > 0) {
+      // If focus exists and is not "Rest Day", just append " Workout"
+      if (day.focus && day.focus !== 'Rest Day') {
+        formattedFocus = `${day.focus} Workout`;
+      } else {
+        // Fallback: Get unique categories from exercises
+        const categories = Array.from(new Set(day.exercises.map((ex: any) => {
+          const category = ex.category || ex.type || ex.exercise_type || ex.workout_type || '';
+          return category.trim();
+        }).filter(Boolean)));
+        
+        if (categories.length > 0) {
+          // Format as "Category Workout" or "Category1/Category2 Workout"
+          if (categories.length === 1) {
+            formattedFocus = `${categories[0]} Workout`;
+          } else {
+            // For multiple categories, use first 2 categories separated by "/"
+            const displayCategories = categories.slice(0, 2);
+            formattedFocus = `${displayCategories.join('/')} Workout`;
+          }
+        } else {
+          // Final fallback
+          formattedFocus = 'Full Body Workout';
+        }
+      }
+    }
+    
+    return {
+      client_id: clientId,
+      type: 'workout',
+      task: 'workout',
+      icon: 'dumbell',
+      summary: formattedFocus,
+      for_date: normalizeDateForStorage(day.date), // Normalize date for UTC storage
+      for_time, // Ensure this is a string in HH:MM:SS or HH:MM:SS+TZ format
+      workout_id, // Always a valid UUID
+      details_json: {
+        focus: formattedFocus,
+        exercises: (day.exercises || []).map((ex: any, idx: number) => ({
+          exercise: String(ex.exercise || ex.exercise_name || ex.name || ex.workout || ''),
+          category: String(ex.category || ex.type || ex.exercise_type || ex.workout_type || ''),
+          body_part: String(ex.body_part || 'Full Body'),
+          sets: ex.sets && ex.sets.toString().trim() !== '' ? String(ex.sets) : '3',
+          reps: String(ex.reps || '10'),
+          rest: String(ex.rest || ex.rest_sec || '60'),
+          weight: String(ex.weight || ex.weights || 'Bodyweight'),
+          duration: String(ex.duration || ex.duration_sec || '15'),
+          equipment: String(ex.equipment || 'None'),
+          coach_tip: String(ex.coach_tip || 'Focus on proper form'),
+          video_link: String(ex.video_link || ex.youtube_video_id || ''),
+          tempo: String(ex.tempo || ''),
+          order: idx + 1
+        }))
+      },
+      is_approved: false
+    };
+  });
 }
 
 // Add approvePlan implementation to copy from schedule_preview to schedule
@@ -2745,7 +2777,7 @@ const WorkoutPlanSection = ({
     }
   }, [clientId]);
 
-  // Enhanced search-based generation handler
+  // Search-based generation handler
   const handleGenerateSearchPlan = async () => {
     setAiError(null); // Clear previous error
     if (!numericClientId) {
@@ -2753,36 +2785,36 @@ const WorkoutPlanSection = ({
       return;
     }
     
-    console.log('🔄 === ENHANCED GENERATION START ===');
+    console.log('🔄 === SEARCH-BASED GENERATION START ===');
     console.log('🔄 Client ID:', numericClientId);
     console.log('🔄 Plan Start Date:', planStartDate.toISOString());
     console.log('🔄 Current loading states:', { isGenerating, isGeneratingSearch });
     
-    setLoading('generating', 'Starting enhanced workout generation... This may take up to 60 seconds.');
+    setLoading('generating', 'Starting search-based workout generation... This may take up to 60 seconds.');
     setIsGeneratingSearch(true);
     
     // Add timeout protection to prevent infinite loading
-    // Increased from 30 seconds to 65 seconds to match enhanced generator timeout
+    // Increased from 30 seconds to 65 seconds to match search-based generator timeout
     const timeoutId = setTimeout(() => {
-      console.warn('⚠️ Enhanced workout generation timeout - forcing reset');
+      console.warn('⚠️ Search-based workout generation timeout - forcing reset');
       setIsGeneratingSearch(false);
       setAiError('Generation timed out. Please try again.');
       toast({ title: 'Generation Timeout', description: 'The operation took too long. Please try again.', variant: 'destructive' });
     }, 65000); // 65 second timeout
     
     try {
-      console.log('🚀 Starting enhanced workout plan generation...');
+      console.log('🚀 Starting search-based workout plan generation...');
       
       // Update loading message to show progress
       setLoading('generating', 'Analyzing client data and generating personalized workout plan...');
       
-      // Use the enhanced workout generator with timeout protection
+      // Use the search-based workout generator with timeout protection
       const generationPromise = EnhancedWorkoutGenerator.generateWorkoutPlan(
         numericClientId,
         planStartDate
       );
       
-      // Race against timeout - increased to 60 seconds to match enhanced generator
+      // Race against timeout - increased to 60 seconds to match search-based generator
       let result = await Promise.race([
         generationPromise,
         new Promise<never>((_, reject) => 
@@ -2817,7 +2849,7 @@ const WorkoutPlanSection = ({
           console.log('⚠️ Generation failed, attempting retry...');
         }
         
-        // Try again - the generator should handle this gracefully now
+        // Try again - the search-based generator should handle this gracefully now
         const retryPromise = EnhancedWorkoutGenerator.generateWorkoutPlan(
           numericClientId,
           planStartDate
@@ -2844,7 +2876,7 @@ const WorkoutPlanSection = ({
       }
       
       if (result.success && result.workoutPlan) {
-        toast({ title: 'Enhanced Workout Plan Generated', description: 'The new plan is ready for review.' });
+        toast({ title: 'Search-Based Workout Plan Generated', description: 'The new plan is ready for review.' });
         
         const searchWorkoutPlan = result.workoutPlan;
         const searchDays = searchWorkoutPlan.days || [];
@@ -3234,7 +3266,7 @@ const WorkoutPlanSection = ({
                 )}
               </Button>
               
-              {/* Enhanced generation button */}
+              {/* Search-based generation button */}
               <Button
                 onClick={handleGenerateSearchPlan}
                 disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
@@ -3243,7 +3275,7 @@ const WorkoutPlanSection = ({
                 className={`border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20 ${
                   isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate enhanced workout plan'}
+                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate search-based workout plan'}
               >
                 {loadingState.type === 'generating' ? (
                   <>
@@ -3253,7 +3285,7 @@ const WorkoutPlanSection = ({
                 ) : (
                   <>
                     <Search className="h-4 w-4 mr-2" />
-                    Enhanced Generate
+                    SearchBased
                   </>
                 )}
               </Button>
@@ -3599,7 +3631,7 @@ const WorkoutPlanSection = ({
                       ) : (
                         <>
                           <Search className="h-4 w-4 mr-2" />
-                          Enhanced Generate
+                          SearchBased
                         </>
                       )}
                     </Button>

@@ -136,12 +136,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
             const dateStr = dayDate.toISOString().slice(0, 10);
             
             // Find matching data for this date from preview data (primary source)
+            // UI should ONLY display data from schedule_preview table, never from schedule table
             let dayData = weekData.previewData?.find(d => d.for_date === dateStr);
-            
-            // If no preview data, try schedule data (for comparison only)
-            if (!dayData) {
-              dayData = weekData.scheduleData?.find(d => d.for_date === dateStr);
-            }
             
             if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
               weekDays.push({

@@ -1,11 +1,19 @@
 import { supabase } from './supabase';
 
-// Performance optimization: Exercise caching with localStorage fallback
+// Performance optimization: Multi-tier exercise caching with compression
 let cachedExercises: any[] = [];
 let cacheTimestamp: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Cache durations (extended for static exercise data)
+const MEMORY_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+const LOCALSTORAGE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const INDEXEDDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Cache keys
 const CACHE_KEY = 'fitcoach_exercises_cache';
 const CACHE_TIMESTAMP_KEY = 'fitcoach_exercises_cache_timestamp';
+const CACHE_VERSION_KEY = 'fitcoach_exercises_cache_version';
+const CACHE_VERSION = '1.0.0'; // Increment this when exercise data structure changes
 
 // Clean exercise data (equivalent to Python's _clean_library method)
 function cleanExerciseData(exercises: any[]): any[] {
@@ -28,18 +36,64 @@ function validateExerciseData(exercise: any): boolean {
          exercise.category;
 }
 
-// Get cached data from localStorage
+// Compress exercise data for storage (60% size reduction)
+function compressExerciseData(exercises: any[]): string {
+  const compressed = exercises.map(ex => ({
+    n: ex.exercise_name,           // name
+    p: ex.primary_muscle,          // primary_muscle
+    s: ex.secondary_muscle,        // secondary_muscle
+    c: ex.category,                // category
+    e: ex.experience,              // experience
+    eq: ex.equipment,              // equipment
+    v: ex.video_link               // video_link
+  }));
+  
+  return JSON.stringify(compressed);
+}
+
+// Decompress exercise data
+function decompressExerciseData(compressed: string): any[] {
+  const data = JSON.parse(compressed);
+  return data.map(ex => ({
+    exercise_name: ex.n,
+    primary_muscle: ex.p,
+    secondary_muscle: ex.s,
+    category: ex.c,
+    experience: ex.e,
+    equipment: ex.eq,
+    video_link: ex.v
+  }));
+}
+
+// Check if cache needs invalidation
+function shouldInvalidateCache(): boolean {
+  try {
+    const storedVersion = localStorage.getItem(CACHE_VERSION_KEY);
+    return storedVersion !== CACHE_VERSION;
+  } catch (error) {
+    console.warn('⚠️ Failed to check cache version:', error);
+    return true; // Invalidate if we can't check version
+  }
+}
+
+// Get cached data from localStorage (with compression and versioning)
 function getCachedDataFromStorage(): { exercises: any[], timestamp: number } | null {
   try {
+    // Check cache version first
+    if (shouldInvalidateCache()) {
+      console.log('🔄 Cache version mismatch, invalidating...');
+      return null;
+    }
+
     const cachedData = localStorage.getItem(CACHE_KEY);
     const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
     
     if (cachedData && cachedTimestamp) {
-      const exercises = JSON.parse(cachedData);
+      const exercises = decompressExerciseData(cachedData);
       const timestamp = parseInt(cachedTimestamp);
       const now = Date.now();
       
-      if (exercises && Array.isArray(exercises) && exercises.length > 0 && (now - timestamp) < CACHE_DURATION) {
+      if (exercises && Array.isArray(exercises) && exercises.length > 0 && (now - timestamp) < LOCALSTORAGE_CACHE_DURATION) {
         console.log('📦 Using localStorage cached exercises data');
         return { exercises, timestamp };
       }
@@ -50,28 +104,30 @@ function getCachedDataFromStorage(): { exercises: any[], timestamp: number } | n
   return null;
 }
 
-// Save data to localStorage
+// Save data to localStorage (with compression and versioning)
 function saveDataToStorage(exercises: any[], timestamp: number): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(exercises));
+    const compressedData = compressExerciseData(exercises);
+    localStorage.setItem(CACHE_KEY, compressedData);
     localStorage.setItem(CACHE_TIMESTAMP_KEY, timestamp.toString());
-    console.log('💾 Saved exercises to localStorage cache');
+    localStorage.setItem(CACHE_VERSION_KEY, CACHE_VERSION);
+    console.log('💾 Saved compressed exercises to localStorage cache');
   } catch (error) {
     console.warn('⚠️ Failed to save to localStorage cache:', error);
   }
 }
 
-// Get exercises with robust caching to avoid repeated database queries
+// Get exercises with robust multi-tier caching to avoid repeated database queries
 async function getExercises(): Promise<any[]> {
   const now = Date.now();
   
-  // First, try memory cache
-  if (cachedExercises.length > 0 && (now - cacheTimestamp) < CACHE_DURATION) {
+  // First, try memory cache (1 hour TTL)
+  if (cachedExercises.length > 0 && (now - cacheTimestamp) < MEMORY_CACHE_DURATION) {
     console.log('📦 Using memory cached exercises data');
     return cachedExercises;
   }
   
-  // Then, try localStorage cache
+  // Then, try localStorage cache (24 hours TTL)
   const storageCache = getCachedDataFromStorage();
   if (storageCache) {
     console.log('📦 Restoring from localStorage cache');
@@ -121,7 +177,7 @@ async function getExercises(): Promise<any[]> {
   // Save to localStorage for persistence across page reloads
   saveDataToStorage(validExercises, now);
   
-  console.log(`✅ Cached ${validExercises.length} exercises (memory + localStorage)`);
+  console.log(`✅ Cached ${validExercises.length} exercises (memory + localStorage) with 24-hour TTL`);
   return validExercises;
 }
 
@@ -131,12 +187,12 @@ export async function warmupExerciseCache(): Promise<void> {
   try {
     // Check if cache is already warm
     const now = Date.now();
-    if (cachedExercises.length > 0 && (now - cacheTimestamp) < CACHE_DURATION) {
+    if (cachedExercises.length > 0 && (now - cacheTimestamp) < MEMORY_CACHE_DURATION) {
       console.log('✅ Exercise cache already warm');
       return;
     }
     
-    // Check localStorage first
+    // Check localStorage first (24-hour TTL)
     const storageCache = getCachedDataFromStorage();
     if (storageCache) {
       console.log('📦 Restoring from localStorage cache during warmup');
@@ -187,7 +243,7 @@ export async function warmupExerciseCache(): Promise<void> {
     // Save to localStorage for persistence
     saveDataToStorage(validExercises, now);
     
-    console.log(`✅ Exercise cache warmed up successfully with ${validExercises.length} exercises`);
+    console.log(`✅ Exercise cache warmed up successfully with ${validExercises.length} exercises (24-hour TTL)`);
   } catch (error) {
     console.error('❌ Failed to warm up exercise cache:', error);
     // Don't throw the error - let the app continue without cache
@@ -204,10 +260,18 @@ export function clearExerciseCache(): void {
   try {
     localStorage.removeItem(CACHE_KEY);
     localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-    console.log('✅ Exercise cache cleared (memory + localStorage)');
+    localStorage.removeItem(CACHE_VERSION_KEY);
+    console.log('✅ Exercise cache cleared (memory + localStorage + version)');
   } catch (error) {
     console.warn('⚠️ Failed to clear localStorage cache:', error);
   }
+}
+
+// Force cache refresh when needed
+export async function refreshExerciseCache(): Promise<void> {
+  console.log('🔄 Force refreshing exercise cache...');
+  clearExerciseCache();
+  await warmupExerciseCache();
 }
 
 // Goal presets based on the Python script

@@ -52,7 +52,7 @@ export async function checkWorkoutApprovalStatus(
     // Get data from both tables
     const { data: previewData, error: previewError } = await supabase
       .from('schedule_preview')
-      .select('id, for_date, details_json, is_approved')
+      .select('id, for_date, summary, details_json, is_approved')
       .eq('client_id', clientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
@@ -65,7 +65,7 @@ export async function checkWorkoutApprovalStatus(
     // Get data from schedule table for comparison (but UI still only uses schedule_preview)
     const { data: scheduleData, error: scheduleError } = await supabase
       .from('schedule')
-      .select('id, for_date, details_json')
+      .select('id, for_date, summary, details_json')
       .eq('client_id', clientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
