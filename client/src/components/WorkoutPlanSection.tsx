@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2 } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -2836,6 +2836,7 @@ const WorkoutPlanSection = ({
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
   const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string} | null>(null);
   const [forceRefreshKey, setForceRefreshKey] = useState(0); // Add force refresh mechanism
+const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false); // Collapsible Plan Management state
   
   // Force refresh function to trigger immediate status update
   const forceRefreshStatus = () => {
@@ -3458,87 +3459,21 @@ const WorkoutPlanSection = ({
           Workout Plan Workflow
         </h4>
         
-        {/* Prominent Action Bar - Strategic placement for important actions */}
-        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 shadow-md">
-                <Save className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h5 className="text-lg font-bold text-blue-900 dark:text-blue-100">Plan Management</h5>
-                <p className="text-sm text-blue-700 dark:text-blue-300">Import, export, or save your workout plans for future use</p>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Import Button - Always available */}
-              <WorkoutImportButton
-                clientId={numericClientId}
-                clientName={client?.name}
-                planStartDate={planStartDate}
-                onImportSuccess={handleImportSuccess}
-                disabled={isGenerating}
-                className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
-                clientWorkoutDays={parsedWorkoutDays}
-              />
-              
-              {/* Export Button - Only show when there's workout data */}
-              {workoutPlan && workoutPlan.hasAnyWorkouts && (
-                <WorkoutExportButton
-                  weekData={getTableData()}
-                  clientId={numericClientId}
-                  planStartDate={planStartDate}
-                  clientName={client?.name}
-                  disabled={isGenerating}
-                  className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
-                  viewMode={viewMode}
-                />
-              )}
-              
-              {/* Save Plan for Future Button - Only show when there's workout data */}
-              {workoutPlan && workoutPlan.hasAnyWorkouts && (
-                <Button 
-                  variant="outline" 
-                  size="default"
-                  className="bg-gradient-to-r from-purple-500 via-indigo-600 to-blue-600 hover:from-purple-600 hover:via-indigo-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
-                  onClick={() => { 
-                    setTemplateTags([]); 
-                    setTemplateTagInput(''); 
-                    setTemplateDuration('7day'); // Default to 7-day
-                    setIsSaveTemplateOpen(true); 
-                  }}
-                >
-                  <Save className="h-4 w-4 mr-2" /> 
-                  Save Plan for Future
-                </Button>
-              )}
-
-              {/* Import Plan Template Button */}
-              <Button 
-                variant="outline" 
-                size="default"
-                className="bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600 hover:from-green-600 hover:via-emerald-700 hover:to-teal-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
-                onClick={() => { 
-                  setIsImportTemplateOpen(true);
-                  loadAvailableTemplates();
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" /> 
-                Import Plan Template
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex flex-row flex-wrap gap-6 items-center">
-          {/* Step 1: Select Plan Start Date */}
-          <div className="flex items-center gap-3">
+        {/* Step 1: Plan Configuration (Combined Date + View Mode) */}
+        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
             <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               1
             </div>
-            <div className="flex flex-row items-center gap-3">
-              {/* Step 1: Plan Start Date */}
+            <div>
+              <h5 className="text-lg font-bold text-blue-900 dark:text-blue-100">Plan Configuration</h5>
+              <p className="text-sm text-blue-700 dark:text-blue-300">Select your plan start date and duration</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+            {/* Date Picker */}
+            <div className="flex items-center gap-3">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -3549,7 +3484,7 @@ const WorkoutPlanSection = ({
                     {format(planStartDate, "PPP")}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
                   <Calendar
                     mode="single"
                     selected={planStartDate}
@@ -3573,76 +3508,114 @@ const WorkoutPlanSection = ({
               </Popover>
             </div>
             
-            {/* Warning message for past dates */}
-            {isPastDate(planStartDate) && (
-              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                  <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
-                    Past date selected. Please choose a future date to generate a workout plan.
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+              <Button
+                variant={viewMode === 'weekly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('weekly')}
+                className="text-xs"
+              >
+                <Calendar className="h-3 w-3 mr-1" />
+                7 Days
+              </Button>
+              <Button
+                variant={viewMode === 'monthly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('monthly')}
+                className="text-xs"
+              >
+                <CalendarDays className="h-3 w-3 mr-1" />
+                Monthly
+              </Button>
+            </div>
           </div>
-
-          {/* Step 2: Generate Workout Plan */}
-          <div className="flex items-center gap-3">
+          
+          {/* Warning message for past dates */}
+          {isPastDate(planStartDate) && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                  Past date selected. Please choose a future date to generate a workout plan.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Step 2: Generate Workout Plan */}
+        <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
             <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               2
             </div>
-            <div className="flex gap-2">
-              {/* Primary Search-based generation button */}
-              <Button
-                onClick={handleGenerateSearchPlan}
-                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
-                size="lg"
-                className={`bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[220px] ${
-                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : `Generate ${viewMode === 'monthly' ? 'monthly' : 'optimized'} workout plan using smart exercise selection`}
-              >
-                {loadingState.type === 'generating' ? (
-                  <>
-                    <Search className="h-5 w-5 mr-3 animate-spin" />
-                    Generating Plan...
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-5 w-5 mr-3" />
-                    {viewMode === 'monthly' ? 'Generate Monthly Plan' : 'Generate Workout Plan'}
-                  </>
-                )}
-              </Button>
-              
-              {/* Manual reset button for stuck states */}
-              {loadingState.type && (
-                <Button
-                  onClick={() => {
-                    console.log('🔄 Manual reset triggered by user');
-                    clearLoading();
-                    setAiError(null);
-                    toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-              )}
+            <div>
+              <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Generate Plan</h5>
+              <p className="text-sm text-green-700 dark:text-green-300">Create your workout plan using AI-powered exercise selection</p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Primary Search-based generation button */}
+            <Button
+              onClick={handleGenerateSearchPlan}
+              disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
+              size="lg"
+              className={`bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[220px] ${
+                isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : `Generate ${viewMode === 'monthly' ? 'monthly' : 'optimized'} workout plan using smart exercise selection`}
+            >
+              {loadingState.type === 'generating' ? (
+                <>
+                  <Search className="h-5 w-5 mr-3 animate-spin" />
+                  Generating Plan...
+                </>
+              ) : (
+                <>
+                  <Search className="h-5 w-5 mr-3" />
+                  {viewMode === 'monthly' ? 'Generate Monthly Plan' : 'Generate Workout Plan'}
+                </>
+              )}
+            </Button>
+            
+            {/* Manual reset button for stuck states */}
+            {loadingState.type && (
+              <Button
+                onClick={() => {
+                  console.log('🔄 Manual reset triggered by user');
+                  clearLoading();
+                  setAiError(null);
+                  toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
+                }}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
 
 
 
-          {/* Step 3: Approve Current Plan */}
-          {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
-            <div className="flex items-center gap-3">
+        {/* Step 3: Approve Current Plan */}
+        {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
                 3
               </div>
+              <div>
+                <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Approve Plan</h5>
+                <p className="text-sm text-green-700 dark:text-green-300">Approve your draft plan to save it to the main schedule</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
               <Button
                 onClick={async () => {
                   const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
@@ -3708,9 +3681,105 @@ const WorkoutPlanSection = ({
                 )}
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Collapsible Plan Management */}
+      {(workoutPlan?.hasAnyWorkouts || availableTemplates.length > 0) && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
+                <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              </div>
+              <div>
+                <h5 className="text-lg font-bold text-gray-900 dark:text-gray-100">Plan Management</h5>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Import, export, or save your workout plans</p>
+              </div>
+            </div>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsPlanManagementExpanded(!isPlanManagementExpanded)}
+              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
+              {isPlanManagementExpanded ? 'Hide Options' : 'More Options'}
+              {isPlanManagementExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          
+          {/* Collapsible Content */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            isPlanManagementExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Import Button - Always available */}
+                <WorkoutImportButton
+                  clientId={numericClientId}
+                  clientName={client?.name}
+                  planStartDate={planStartDate}
+                  onImportSuccess={handleImportSuccess}
+                  disabled={isGenerating}
+                  className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                  clientWorkoutDays={parsedWorkoutDays}
+                />
+                
+                {/* Export Button - Only show when there's workout data */}
+                {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                  <WorkoutExportButton
+                    weekData={getTableData()}
+                    clientId={numericClientId}
+                    planStartDate={planStartDate}
+                    clientName={client?.name}
+                    disabled={isGenerating}
+                    className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                    viewMode={viewMode}
+                  />
+                )}
+                
+                {/* Save Plan for Future Button - Only show when there's workout data */}
+                {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                  <Button 
+                    variant="outline" 
+                    size="default"
+                    className="bg-gradient-to-r from-purple-500 via-indigo-600 to-blue-600 hover:from-purple-600 hover:via-indigo-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                    onClick={() => { 
+                      setTemplateTags([]); 
+                      setTemplateTagInput(''); 
+                      setTemplateDuration('7day'); // Default to 7-day
+                      setIsSaveTemplateOpen(true); 
+                    }}
+                  >
+                    <Save className="h-4 w-4 mr-2" /> 
+                    Save Plan for Future
+                  </Button>
+                )}
+
+                {/* Import Plan Template Button */}
+                <Button 
+                  variant="outline" 
+                  size="default"
+                  className="bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600 hover:from-green-600 hover:via-emerald-700 hover:to-teal-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                  onClick={() => { 
+                    setIsImportTemplateOpen(true);
+                    loadAvailableTemplates();
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" /> 
+                  Import Plan Template
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Plan Table or Empty State */}
       <div>
