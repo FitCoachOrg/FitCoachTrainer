@@ -58,7 +58,9 @@ interface TrainerData {
   availabilityDays: number[];
   preferredHours: string;
   
-  // Step 5: Account Creation
+  // Step 5: Business Info (continued)
+  
+  // Step 6: Account Creation
   password: string;
   confirmPassword: string;
   termsAccepted: boolean;
@@ -390,7 +392,7 @@ const TrainerRegistration = () => {
         if (data.clientPopulations.length > 0) updateData.client_populations = data.clientPopulations;
       }
 
-      if (currentStep >= 5) {
+              if (currentStep >= 5) {
         // Business Info
         if (data.serviceOfferings.length > 0) updateData.service_offerings = data.serviceOfferings;
         if (data.sessionRate) updateData.session_rate = data.sessionRate;
@@ -976,7 +978,7 @@ const TrainerRegistration = () => {
           </motion.div>
         );
 
-      case 3:
+      case 4:
         return (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -1039,7 +1041,7 @@ const TrainerRegistration = () => {
           </motion.div>
         );
 
-      case 4:
+      case 5:
         return (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -1145,7 +1147,7 @@ const TrainerRegistration = () => {
           </motion.div>
         );
 
-      case 5:
+      case 6:
         return (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
@@ -1329,12 +1331,12 @@ const TrainerRegistration = () => {
                 Previous
               </Button>
 
-              {currentStep < 5 ? (
+              {currentStep < 6 ? (
                 <Button
                   onClick={nextStep}
                   disabled={
                     (currentStep === 1 && (!trainerData.firstName || !trainerData.lastName || !trainerData.email || !trainerData.password || !trainerData.confirmPassword)) ||
-                    (currentStep === 5 && (!trainerData.termsAccepted || !trainerData.privacyAccepted))
+                    (currentStep === 6 && (!trainerData.termsAccepted || !trainerData.privacyAccepted))
                   }
                   className="bg-green-600 hover:bg-green-700"
                 >

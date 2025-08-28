@@ -633,14 +633,26 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         </CardHeader>
         
         <CardContent className="pt-0">
+          {/* Responsive Table Info Banner */}
+          <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              <span className="font-medium">Responsive Table:</span> Some columns are hidden on smaller screens to ensure the table fits properly. 
+              <span className="hidden sm:inline"> Category hidden on mobile, </span>
+              <span className="hidden lg:inline"> Body Part & Rest hidden on small screens, </span>
+              <span className="hidden xl:inline"> Weight & Duration hidden on medium screens, </span>
+              <span className="hidden 2xl:inline"> Equipment & Video hidden on large screens.</span>
+            </p>
+          </div>
+          
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="workout-plan-table-container max-w-full overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-700">
                     <TableHead className="w-3">#</TableHead>
                     <TableHead className="w-3">Icon</TableHead>
-                    <TableHead className="w-8 sm:w-12">Exercise</TableHead>
+                    <TableHead className="w-10 sm:w-14">Exercise</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden sm:table-cell w-6 md:w-8' : 'w-10'}>Category</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden lg:table-cell w-6 md:w-8' : 'w-10'}>Body Part</TableHead>
                     <TableHead className="w-5 sm:w-6">Sets</TableHead>
                     <TableHead className="w-5 sm:w-6">Reps</TableHead>
@@ -648,8 +660,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-6 md:w-8' : 'w-10'}>Weight</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-5 sm:w-6' : 'w-6'}>Duration</TableHead>
                     <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-6 md:w-8' : 'w-10'}>Equipment</TableHead>
-                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-12 sm:w-16' : 'w-20'}>Video</TableHead>
-                    <TableHead className="w-8">Delete</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-8 sm:w-10' : 'w-14'}>Video</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -658,11 +669,28 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       <TableCell className="font-medium text-gray-600 dark:text-gray-400">{exIdx + 1}</TableCell>
                       <TableCell className="text-center">{getExerciseIcon(ex)}</TableCell>
                       <TableCell>
+                        <div className="exercise-cell">
+                          <EditableCell
+                            value={ex.exercise}
+                            onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
+                            placeholder="Exercise name"
+                            className="font-medium text-gray-900 dark:text-white flex-1 editable-cell"
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}
+                            className="delete-btn hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-3 w-3 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <EditableCell
-                          value={ex.exercise}
-                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
-                          placeholder="Exercise name"
-                          className="font-medium text-gray-900 dark:text-white"
+                          value={ex.category}
+                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'category', newValue)}
+                          placeholder="Category"
                         />
                       </TableCell>
                       <TableCell>
@@ -722,16 +750,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                           videoLink={ex.video_link}
                           onVideoChange={(newLink) => handlePlanChange(globalDayIdx, exIdx, 'video_link', newLink)}
                         />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}
-                          className="delete-btn hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
                       </TableCell>
 
                     </TableRow>

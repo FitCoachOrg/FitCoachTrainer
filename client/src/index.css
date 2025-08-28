@@ -106,8 +106,9 @@ select {
 
 /* Workout plan table responsive constraints */
 .workout-plan-table-container {
-  max-width: 100vw;
+  max-width: 100%;
   overflow-x: auto;
+  width: 100%;
 }
 
 .workout-plan-table-container table {
@@ -232,6 +233,14 @@ select {
   width: 100%;
   margin: 0;
   padding: 0;
+  table-layout: fixed;
+}
+
+/* Force table to respect container width */
+.workout-plan-table-container table {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: auto !important;
 }
 
 /* Compact table header */
@@ -258,6 +267,22 @@ select {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 0;
+}
+
+/* Ensure exercise cell with delete button is properly sized */
+.workout-plan-table-container .exercise-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.workout-plan-table-container .exercise-cell .editable-cell {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .workout-plan-table-container td:first-child,
@@ -271,6 +296,35 @@ select {
   white-space: normal;
   word-break: break-word;
   min-width: 0;
+}
+
+/* Critical: Ensure table never overflows container */
+.workout-plan-table-container {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.workout-plan-table-container table {
+  min-width: auto !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure all table cells respect their assigned widths */
+.workout-plan-table-container th,
+.workout-plan-table-container td {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ensure the card content wrapper is also constrained */
+.workout-plan-table-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .line-clamp-1 {
