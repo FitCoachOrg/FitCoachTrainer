@@ -3,6 +3,11 @@
  * 
  * This module provides comprehensive import functionality for workout plans,
  * including CSV, Excel, and JSON formats with validation and data processing.
+ * 
+ * NEW FEATURES:
+ * - No date validation required
+ * - Enhanced numeric conversion with range support
+ * - Start date mapping functionality
  */
 
 import * as XLSX from 'xlsx';
@@ -52,15 +57,92 @@ export interface ImportPreviewData {
   validationErrors: string[];
   validationWarnings: string[];
   conflictingDates: string[];
+  mappedDateRange?: { start: string; end: string }; // NEW: For mapped dates
+}
+
+/**
+ * Enhanced numeric field conversion with range support
+ * Handles formats like "3-8", "3 to 8", "3 sets", etc.
+ */
+export function convertNumericField(
+  value: any, 
+  fieldName: string, 
+  rowIndex: number
+): { value: number | string, error?: string } {
+  if (value === null || value === undefined || value === '') {
+    return { value: '' };
+  }
+
+  const strValue = String(value).trim();
+  
+  // Handle range format (e.g., "3-8", "3 to 8", "3-5 sets")
+  const rangeMatch = strValue.match(/(\d+)\s*[-–—to]\s*(\d+)/i);
+  if (rangeMatch) {
+    const min = parseInt(rangeMatch[1]);
+    const max = parseInt(rangeMatch[2]);
+    if (min <= max) {
+      return { value: `${min}-${max}` }; // Keep as range string
+    } else {
+      return { 
+        value: value, 
+        error: `Row ${rowIndex}, Column '${fieldName}' has invalid range: '${value}' (min > max)` 
+      };
+    }
+  }
+  
+  // Handle single number (e.g., "3", "3 sets", "5 minutes")
+  const numberMatch = strValue.match(/(\d+)/);
+  if (numberMatch) {
+    return { value: parseInt(numberMatch[1]) };
+  }
+  
+  // Conversion failed - return specific error
+  return { 
+    value: value, 
+    error: `Row ${rowIndex}, Column '${fieldName}' contains non-numeric value: '${value}'` 
+  };
 }
 
 /**
  * Parse CSV file content
  */
 export function parseCSVFile(fileContent: string): ImportableExercise[] {
-  const lines = fileContent.split('\n');
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  console.log('📄 [parseCSVFile] Starting CSV parsing...');
+  console.log('📄 [parseCSVFile] File content length:', fileContent.length);
+  
   const exercises: ImportableExercise[] = [];
+  
+  // Parse CSV with proper handling of quoted fields containing newlines
+  const lines: string[] = [];
+  let currentLine = '';
+  let inQuotes = false;
+  
+  // First, properly split the content handling quoted fields
+  for (let i = 0; i < fileContent.length; i++) {
+    const char = fileContent[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      currentLine += char;
+    } else if (char === '\n' && !inQuotes) {
+      lines.push(currentLine);
+      currentLine = '';
+    } else {
+      currentLine += char;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  console.log('📄 [parseCSVFile] Total lines after proper splitting:', lines.length);
+  
+  if (lines.length === 0) {
+    console.log('❌ [parseCSVFile] No lines found in file');
+    return exercises;
+  }
+  
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  console.log('📄 [parseCSVFile] Headers:', headers);
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -90,10 +172,13 @@ export function parseCSVFile(fileContent: string): ImportableExercise[] {
         exercise[header.toLowerCase().replace(/\s+/g, '_')] = values[index] || '';
       });
       
-      exercises.push(normalizeExerciseData(exercise));
+      exercises.push(normalizeExerciseData(exercise, i + 1)); // Pass row number for error reporting
+    } else {
+      console.log(`⚠️ [parseCSVFile] Line ${i + 1} has ${values.length} values but expected ${headers.length}:`, values);
     }
   }
 
+  console.log('📄 [parseCSVFile] Parsed exercises:', exercises.length);
   return exercises;
 }
 
@@ -128,7 +213,7 @@ export function parseExcelFile(fileContent: ArrayBuffer): ImportableExercise[] {
       exercise[header] = row[index] || '';
     });
 
-    exercises.push(normalizeExerciseData(exercise));
+    exercises.push(normalizeExerciseData(exercise, i + 1)); // Pass row number for error reporting
   }
 
   return exercises;
@@ -143,9 +228,13 @@ export function parseJSONFile(fileContent: string): ImportableExercise[] {
     
     // Handle different JSON structures
     if (data.exercises && Array.isArray(data.exercises)) {
-      return data.exercises.map(normalizeExerciseData);
+      return data.exercises.map((exercise: any, index: number) => 
+        normalizeExerciseData(exercise, index + 1)
+      );
     } else if (Array.isArray(data)) {
-      return data.map(normalizeExerciseData);
+      return data.map((exercise: any, index: number) => 
+        normalizeExerciseData(exercise, index + 1)
+      );
     } else {
       throw new Error('Invalid JSON structure');
     }
@@ -155,20 +244,25 @@ export function parseJSONFile(fileContent: string): ImportableExercise[] {
 }
 
 /**
- * Normalize exercise data to standard format
+ * Normalize exercise data to standard format with enhanced numeric conversion
  */
-function normalizeExerciseData(data: any): ImportableExercise {
+function normalizeExerciseData(data: any, rowIndex: number): ImportableExercise {
+  // Convert numeric fields with enhanced error reporting
+  const setsConversion = convertNumericField(data.sets || data.sets_count, 'Sets', rowIndex);
+  const durationConversion = convertNumericField(data.duration || data.time || data.duration_min, 'Duration', rowIndex);
+  const restConversion = convertNumericField(data.rest || data.rest_sec, 'Rest', rowIndex);
+
   return {
-    date: normalizeDateForStorage(String(data.date || data.for_date || '')),
+    date: String(data.date || data.for_date || ''), // No date validation required
     day_name: String(data.day_name || data.day || ''),
     focus: String(data.focus || data.workout_focus || 'Workout'),
     exercise: String(data.exercise || data.workout || data.name || ''),
     category: String(data.category || data.exercise_category || ''),
     body_part: String(data.body_part || data.bodypart || ''),
-    sets: data.sets || '',
+    sets: setsConversion.value,
     reps: String(data.reps || ''),
-    duration: data.duration || data.time || '',
-    rest: data.rest || '',
+    duration: durationConversion.value,
+    rest: restConversion.value,
     weight: String(data.weight || data.weights || ''),
     equipment: String(data.equipment || ''),
     coach_tip: String(data.coach_tip || data.tips || ''),
@@ -178,7 +272,7 @@ function normalizeExerciseData(data: any): ImportableExercise {
 }
 
 /**
- * Validate imported exercise data
+ * Validate imported exercise data (UPDATED - No date validation)
  */
 export function validateImportedData(exercises: ImportableExercise[]): ImportValidationResult {
   const errors: string[] = [];
@@ -195,31 +289,31 @@ export function validateImportedData(exercises: ImportableExercise[]): ImportVal
     const exerciseErrors: string[] = [];
     const exerciseWarnings: string[] = [];
 
-    // Required fields validation
+    // Required fields validation (exercise name only)
     if (!exercise.exercise || String(exercise.exercise).trim() === '') {
       exerciseErrors.push(`Exercise ${index + 1}: Missing exercise name`);
     }
 
-    if (!exercise.date || String(exercise.date).trim() === '') {
-      exerciseErrors.push(`Exercise ${index + 1}: Missing date`);
+    // Enhanced numeric field validation with specific error reporting
+    if (exercise.sets !== '' && exercise.sets !== null && exercise.sets !== undefined) {
+      const setsConversion = convertNumericField(exercise.sets, 'Sets', index + 1);
+      if (setsConversion.error) {
+        exerciseErrors.push(setsConversion.error);
+      }
     }
 
-    // Date format validation
-    if (exercise.date && !isValidDate(String(exercise.date))) {
-      exerciseErrors.push(`Exercise ${index + 1}: Invalid date format (${exercise.date})`);
+    if (exercise.duration !== '' && exercise.duration !== null && exercise.duration !== undefined) {
+      const durationConversion = convertNumericField(exercise.duration, 'Duration', index + 1);
+      if (durationConversion.error) {
+        exerciseErrors.push(durationConversion.error);
+      }
     }
 
-    // Numeric field validation
-    if (exercise.sets && isNaN(Number(exercise.sets))) {
-      exerciseWarnings.push(`Exercise ${index + 1}: Invalid sets value (${exercise.sets})`);
-    }
-
-    if (exercise.duration && isNaN(Number(exercise.duration))) {
-      exerciseWarnings.push(`Exercise ${index + 1}: Invalid duration value (${exercise.duration})`);
-    }
-
-    if (exercise.rest && isNaN(Number(exercise.rest))) {
-      exerciseWarnings.push(`Exercise ${index + 1}: Invalid rest value (${exercise.rest})`);
+    if (exercise.rest !== '' && exercise.rest !== null && exercise.rest !== undefined) {
+      const restConversion = convertNumericField(exercise.rest, 'Rest', index + 1);
+      if (restConversion.error) {
+        exerciseErrors.push(restConversion.error);
+      }
     }
 
     // Add exercise-specific errors to main errors
@@ -232,7 +326,7 @@ export function validateImportedData(exercises: ImportableExercise[]): ImportVal
     }
   });
 
-  // Check for duplicate exercises on same date
+  // Check for duplicate exercises on same date (warning only)
   const dateGroups = validExercises.reduce((acc, exercise) => {
     if (!acc[exercise.date]) acc[exercise.date] = [];
     acc[exercise.date].push(exercise);
@@ -264,6 +358,137 @@ export function validateImportedData(exercises: ImportableExercise[]): ImportVal
 }
 
 /**
+ * Map exercises to client's workout days starting from a specific date
+ * ENHANCED: Maps ALL exercises to consecutive workout days (not limited to one week)
+ */
+export function mapExercisesToWorkoutDays(
+  exercises: ImportableExercise[],
+  startDate: Date,
+  workoutDays: string[]
+): ImportableExercise[] {
+  if (!workoutDays || workoutDays.length === 0) {
+    throw new Error('No workout days configured for client');
+  }
+
+  console.log('🗓️ [mapExercisesToWorkoutDays] Starting mapping...');
+  console.log('🗓️ [mapExercisesToWorkoutDays] Start date:', startDate);
+  console.log('🗓️ [mapExercisesToWorkoutDays] Workout days:', workoutDays);
+  console.log('🗓️ [mapExercisesToWorkoutDays] Total exercises:', exercises.length);
+  console.log('🗓️ [mapExercisesToWorkoutDays] Sample exercise dates:', exercises.slice(0, 5).map(ex => ex.date));
+
+  // Group exercises by their original date (each unique date becomes a workout day)
+  const exercisesByDay: Record<string, ImportableExercise[]> = {};
+  exercises.forEach((exercise) => {
+    const dayKey = exercise.date || 'unknown_date';
+    if (!exercisesByDay[dayKey]) {
+      exercisesByDay[dayKey] = [];
+    }
+    exercisesByDay[dayKey].push(exercise);
+  });
+
+  const mappedExercises: ImportableExercise[] = [];
+  const dayKeys = Object.keys(exercisesByDay).sort(); // Sort dates chronologically
+  let currentDate = new Date(startDate); // Use a mutable date object
+
+  console.log('🗓️ [mapExercisesToWorkoutDays] Unique dates found:', dayKeys);
+  console.log('🗓️ [mapExercisesToWorkoutDays] Total unique workout days to map:', dayKeys.length);
+
+  dayKeys.forEach((dayKey, dayIndex) => {
+    // Find the next workout day
+    while (!workoutDays.includes(currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase())) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    const targetDateStr = currentDate.toISOString().slice(0, 10);
+    const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+    console.log(`🗓️ [mapExercisesToWorkoutDays] Mapping original date ${dayKey} (day ${dayIndex + 1}) to ${dayName} (${targetDateStr})`);
+
+    // Map exercises for this day
+    exercisesByDay[dayKey].forEach(exercise => {
+      mappedExercises.push({
+        ...exercise,
+        date: targetDateStr,
+        day_name: dayName
+      });
+    });
+
+    // Move to the next day for the next iteration, to find the next workout day
+    currentDate.setDate(currentDate.getDate() + 1);
+  });
+
+  console.log('🗓️ [mapExercisesToWorkoutDays] Mapping complete. Total mapped exercises:', mappedExercises.length);
+  console.log('🗓️ [mapExercisesToWorkoutDays] Final date range:', {
+    start: mappedExercises[0]?.date,
+    end: mappedExercises[mappedExercises.length - 1]?.date
+  });
+
+  return mappedExercises;
+}
+
+/**
+ * Check for existing exercises in the date range before import
+ * NEW FUNCTION: Detects conflicts with existing exercises
+ */
+export async function checkForExistingExercises(
+  clientId: number,
+  startDate: string,
+  endDate: string
+): Promise<{
+  hasConflicts: boolean;
+  conflictingDates: string[];
+  dateRange: { start: string; end: string };
+}> {
+  try {
+    console.log('🔍 [checkForExistingExercises] Checking for conflicts...');
+    console.log('🔍 [checkForExistingExercises] Client ID:', clientId);
+    console.log('🔍 [checkForExistingExercises] Date range:', startDate, 'to', endDate);
+
+    // Import supabase here to avoid circular dependencies
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      import.meta.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    // Query for existing exercises in the date range
+    const { data: existingExercises, error } = await supabase
+      .from('schedule_preview')
+      .select('for_date')
+      .eq('client_id', clientId)
+      .eq('type', 'workout')
+      .gte('for_date', startDate)
+      .lte('for_date', endDate);
+
+    if (error) {
+      console.error('🔍 [checkForExistingExercises] Database error:', error);
+      throw error;
+    }
+
+    // Extract unique dates that have conflicts
+    const conflictingDates = [...new Set(existingExercises?.map(ex => ex.for_date) || [])];
+    const hasConflicts = conflictingDates.length > 0;
+
+    console.log('🔍 [checkForExistingExercises] Conflicts found:', hasConflicts);
+    console.log('🔍 [checkForExistingExercises] Conflicting dates:', conflictingDates);
+
+    return {
+      hasConflicts,
+      conflictingDates,
+      dateRange: { start: startDate, end: endDate }
+    };
+  } catch (error) {
+    console.error('🔍 [checkForExistingExercises] Error checking conflicts:', error);
+    // Return no conflicts on error to allow import to proceed
+    return {
+      hasConflicts: false,
+      conflictingDates: [],
+      dateRange: { start: startDate, end: endDate }
+    };
+  }
+}
+
+/**
  * Prepare import data for database insertion
  */
 function prepareImportData(exercises: ImportableExercise[]): ImportableWorkoutPlan {
@@ -289,10 +514,14 @@ function prepareImportData(exercises: ImportableExercise[]): ImportableWorkoutPl
 }
 
 /**
- * Create import preview data
+ * Create import preview data (UPDATED for new mapping functionality)
  */
-export function createImportPreview(exercises: ImportableExercise[]): ImportPreviewData {
-  const exercisesByDay = exercises.reduce((acc, exercise) => {
+export function createImportPreview(
+  exercises: ImportableExercise[],
+  mappedExercises?: ImportableExercise[]
+): ImportPreviewData {
+  const exercisesToShow = mappedExercises || exercises;
+  const exercisesByDay = exercisesToShow.reduce((acc, exercise) => {
     if (!acc[exercise.date]) acc[exercise.date] = [];
     acc[exercise.date].push(exercise);
     return acc;
@@ -322,25 +551,23 @@ export function createImportPreview(exercises: ImportableExercise[]): ImportPrev
     exercisesByDay,
     validationErrors: validation.errors,
     validationWarnings: validation.warnings,
-    conflictingDates: [] // Will be populated by the import component
+    conflictingDates: [], // Will be populated by the import component
+    mappedDateRange: mappedExercises ? {
+      start: startDate || '',
+      end: endDate || ''
+    } : undefined
   };
 }
 
 /**
- * Validate date format
- */
-function isValidDate(dateString: string): boolean {
-  const date = new Date(dateString);
-  return date instanceof Date && !isNaN(date.getTime());
-}
-
-/**
- * Convert imported data to workout plan format using CSV dates
+ * Convert imported data to workout plan format with start date mapping
+ * UPDATED: Now supports start date mapping to workout days
  */
 export function convertToWorkoutPlanFormat(
   exercises: ImportableExercise[],
   clientId: number,
-  planStartDate: Date
+  planStartDate: Date,
+  workoutDays?: string[]
 ): {
   weekData: Array<{
     date: string;
@@ -352,8 +579,20 @@ export function convertToWorkoutPlanFormat(
     end: string;
   };
 } {
+  let processedExercises = exercises;
+
+  // If workout days are provided, map exercises to workout days
+  if (workoutDays && workoutDays.length > 0) {
+    try {
+      processedExercises = mapExercisesToWorkoutDays(exercises, planStartDate, workoutDays);
+    } catch (error) {
+      console.warn('Failed to map exercises to workout days:', error);
+      // Fall back to original exercises
+    }
+  }
+
   // Group exercises by date
-  const exercisesByDate = exercises.reduce((acc, exercise) => {
+  const exercisesByDate = processedExercises.reduce((acc, exercise) => {
     if (!acc[exercise.date]) {
       acc[exercise.date] = {
         date: exercise.date,
@@ -378,7 +617,7 @@ export function convertToWorkoutPlanFormat(
     return acc;
   }, {} as Record<string, any>);
 
-  // Get all unique dates from CSV and sort them
+  // Get all unique dates and sort them
   const csvDates = Object.keys(exercisesByDate).sort();
   const startDate = csvDates[0];
   const endDate = csvDates[csvDates.length - 1];

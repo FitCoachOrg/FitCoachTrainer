@@ -1164,6 +1164,38 @@ const WorkoutPlanSection = ({
     return date < today;
   };
 
+  // Helper function to parse workout days for import functionality
+  const parseWorkoutDaysForImport = (workoutDays: any): string[] => {
+    console.log('🔍 [parseWorkoutDaysForImport] Raw workout_days:', workoutDays);
+    
+    if (Array.isArray(workoutDays)) {
+      const result = workoutDays.map(day => day.toLowerCase());
+      console.log('🔍 [parseWorkoutDaysForImport] Array result:', result);
+      return result;
+    }
+    if (typeof workoutDays === 'string') {
+      try {
+        const parsed = JSON.parse(workoutDays);
+        if (Array.isArray(parsed)) {
+          const result = parsed.map(day => day.toLowerCase());
+          console.log('🔍 [parseWorkoutDaysForImport] JSON parsed result:', result);
+          return result;
+        }
+        // fallback: split by comma if not valid JSON array
+        const result = workoutDays.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        console.log('🔍 [parseWorkoutDaysForImport] Comma-split result:', result);
+        return result;
+      } catch {
+        // fallback: split by comma if JSON.parse fails
+        const result = workoutDays.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        console.log('🔍 [parseWorkoutDaysForImport] Fallback comma-split result:', result);
+        return result;
+      }
+    }
+    console.log('🔍 [parseWorkoutDaysForImport] No workout days found, returning empty array');
+    return [];
+  };
+
   const updateWorkoutPlanState = (updates: Partial<WorkoutPlanState>) => {
     setWorkoutPlanState(prev => ({ ...prev, ...updates }));
   };
@@ -2060,9 +2092,17 @@ const WorkoutPlanSection = ({
   }>, dateRange: { start: string; end: string }) => {
     // Save the imported plan to schedule_preview first
     try {
+      console.log('🔄 [Import] Starting import process...');
+      
       // Use proper timezone handling for the start date
       const normalizedStartDate = createDateFromString(dateRange.start);
       await savePlanToSchedulePreview(weekData, numericClientId, normalizedStartDate);
+      
+      console.log('✅ [Import] Data saved to schedule_preview, refreshing UI...');
+      
+      // FORCE UI REFRESH: Update planStartDate to trigger useEffect
+      const newStartDate = new Date(dateRange.start);
+      setPlanStartDate(newStartDate);
       
       // Update the workout plan with imported data immediately
       const hasAnyWorkouts = weekData.some(day => day.exercises && day.exercises.length > 0);
@@ -2084,12 +2124,13 @@ const WorkoutPlanSection = ({
       
       // Update the calendar to show the imported date range
       if (dateRange.start && dateRange.end) {
-        const newStartDate = new Date(dateRange.start);
         // Update the parent component's date state if available
         if (props.onDateChange) {
           props.onDateChange(newStartDate);
         }
       }
+      
+      console.log('✅ [Import] UI refresh triggered, import complete');
       
       toast({ 
         title: 'Import Successful', 
@@ -2706,6 +2747,7 @@ const WorkoutPlanSection = ({
                 onImportSuccess={handleImportSuccess}
                 disabled={isGenerating}
                 className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                clientWorkoutDays={parseWorkoutDaysForImport(client?.workout_days)}
               />
               
               {/* Export Button - Only show when there's workout data */}
