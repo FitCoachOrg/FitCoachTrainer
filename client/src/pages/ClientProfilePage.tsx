@@ -1382,6 +1382,38 @@ export default function ClientDashboard() {
     }
   }, [clientId, location.search]);
 
+  // Force layout containment when content loads
+  useEffect(() => {
+    const forceContainment = () => {
+      const container = document.querySelector('.client-profile-tab-content');
+      if (container) {
+        // Force all child elements to respect container width
+        const allChildren = container.querySelectorAll('*');
+        allChildren.forEach((child: any) => {
+          if (child.style) {
+            child.style.maxWidth = '100%';
+            child.style.boxSizing = 'border-box';
+            child.style.overflowX = 'hidden';
+          }
+        });
+      }
+    };
+
+    // Apply containment immediately
+    forceContainment();
+    
+    // Apply containment after a short delay to catch dynamically loaded content
+    const timer = setTimeout(forceContainment, 100);
+    
+    // Apply containment when client data changes
+    if (client) {
+      const clientTimer = setTimeout(forceContainment, 200);
+      return () => clearTimeout(clientTimer);
+    }
+
+    return () => clearTimeout(timer);
+  }, [client, activeTab]);
+
   // Handler for client selection from sidebar
   const handleClientSelect = (selectedClientId: number) => {
     navigate(`/client/${selectedClientId}`)
@@ -1953,9 +1985,9 @@ export default function ClientDashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex">
+    <div className="client-profile-container min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex overflow-hidden">
       {/* AllClientsSidebar - Left Sidebar */}
-      <div className="w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto">
+      <div className="client-profile-sidebar w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto flex-shrink-0">
         <div className="p-4">
           {/* All Clients List */}
           <div>
@@ -1973,10 +2005,10 @@ export default function ClientDashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Enhanced Header */}
-        <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="client-profile-content flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Enhanced Header */}
+      <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg flex-shrink-0">
+      <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-4">
@@ -2133,15 +2165,15 @@ export default function ClientDashboard() {
       </div>
 
       {/* Enhanced Content Area */}
-      <div className={`flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-6 py-6'}`}>
+      <div className={`client-profile-tab-content flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-4 py-4'}`}>
 
         {/* Overview tab content */}
         {activeTab === 'overview' && (
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col overflow-hidden">
             {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
             <ClientOverviewSection
               client={client}
-              aiCoachInsights={aiCoachInsights}
+              aiCoachInsights={aiCoachInsights || undefined}
               lastAIRecommendation={lastAIRecommendation}
               trainerNotes={trainerNotes}
               setTrainerNotes={setTrainerNotes}
@@ -2163,94 +2195,98 @@ export default function ClientDashboard() {
 
         {/* Tab Content Sections */}
         {activeTab === "metrics" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <MetricsSection 
-                clientId={clientId} 
-                isActive={activeTab === "metrics"}
-                client={client}
-                aiCoachInsights={aiCoachInsights}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-                setLastAIRecommendation={setLastAIRecommendation}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <MetricsSection 
+                  clientId={clientId} 
+                  isActive={activeTab === "metrics"}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                  setLastAIRecommendation={setLastAIRecommendation}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "workout" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <WorkoutPlanSection 
-                clientId={client?.client_id}
-                client={client}
-                aiCoachInsights={aiCoachInsights}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <WorkoutPlanSection 
+                  clientId={client?.client_id}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "nutrition" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <NutritionPlanSection 
-                clientId={clientId} 
-                isActive={activeTab === "nutrition"}
-                client={client}
-                aiCoachInsights={aiCoachInsights}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <NutritionPlanSection 
+                  clientId={clientId} 
+                  isActive={activeTab === "nutrition"}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "programs" && (
-          <ProgramsScreen 
-            clientId={clientId}
-            client={client}
-            onGoalsSaved={refreshClientData}
-            aiCoachInsights={aiCoachInsights}
-            lastAIRecommendation={lastAIRecommendation}
-          />
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <ProgramsScreen 
+              clientId={clientId}
+              client={client}
+              onGoalsSaved={refreshClientData}
+              lastAIRecommendation={lastAIRecommendation}
+            />
+          </div>
         )}
       </div>
    

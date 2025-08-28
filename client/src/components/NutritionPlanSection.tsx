@@ -59,6 +59,7 @@ interface Meal {
   carbs: number;
   fats: number;
   coach_tip?: string;
+  recipe?: string; // Recipe instructions
 }
 interface DayPlan {
     day: string;
@@ -76,6 +77,7 @@ interface ScheduleItem {
   task: string;
   summary: string;
   coach_tip?: string;
+  recipe?: string; // Recipe instructions
   details_json: object;
   for_time: string;
   icon?: string;
@@ -196,6 +198,8 @@ const NutritionPlanSection = ({
   const [isApproving, setIsApproving] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<'approved' | 'partial_approved' | 'not_approved' | 'pending'>('pending');
   const [isApprovalInProgress, setIsApprovalInProgress] = useState(false);
+  // State for managing meal description dropdowns
+  const [openMealDescriptions, setOpenMealDescriptions] = useState<Record<string, boolean>>({});
   // --- Client Target State and Fetch/Save Logic ---
   const defaultTargets: Record<string, number> = {
     calories: 2000,
@@ -428,12 +432,13 @@ const NutritionPlanSection = ({
             const mealTypeMatch = item.summary.match(/^([\w ]+):\s*/);
             if (mealTypeMatch && mealTypeMatch[1]) {
               const mealType = mealTypeMatch[1].toLowerCase();
-              const mealData = {
-                meal: item.summary.replace(/^[\w ]+:\s*/, ''),
-                ...item.details_json,
-                amount: item.details_json.amount,
-                coach_tip: item.coach_tip
-              };
+                             const mealData = {
+                 meal: item.summary.replace(/^[\w ]+:\s*/, ''),
+                 ...item.details_json,
+                 amount: item.details_json.amount,
+                 coach_tip: item.coach_tip,
+                 recipe: item.recipe
+               };
               if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
                 // Replace the first meal (or add if empty)
                 newMealItemsData[dayOfWeek][mealType][0] = mealData;
@@ -557,24 +562,25 @@ const NutritionPlanSection = ({
           const mealData = updatedMealItems[dayKey][mealType][0];
           if (mealData && mealData.meal) {
             const task = mealType.charAt(0).toUpperCase() + mealType.slice(1);
-            const newRecord: ScheduleItem = {
-              client_id: clientId,
-              for_date: forDate,
-              type: 'meal',
-              task: task,
-              summary: `${task}: ${mealData.meal}`,
-              coach_tip: mealData.coach_tip,
-              details_json: {
-                calories: mealData.calories || 0,
-                protein: mealData.protein || 0,
-                carbs: mealData.carbs || 0,
-                fats: mealData.fats || 0,
-                amount: mealData.amount,
-              },
-              for_time: mealTimes[mealType as keyof typeof mealTimes],
-              icon: '🍽️', // Fork and plate emoji
-              is_approved: false, // Set to false for new preview entries
-            };
+                         const newRecord: ScheduleItem = {
+               client_id: clientId,
+               for_date: forDate,
+               type: 'meal',
+               task: task,
+               summary: `${task}: ${mealData.meal}`,
+               coach_tip: mealData.coach_tip,
+               recipe: mealData.recipe,
+               details_json: {
+                 calories: mealData.calories || 0,
+                 protein: mealData.protein || 0,
+                 carbs: mealData.carbs || 0,
+                 fats: mealData.fats || 0,
+                 amount: mealData.amount,
+               },
+               for_time: mealTimes[mealType as keyof typeof mealTimes],
+               icon: '🍽️', // Fork and plate emoji
+               is_approved: false, // Set to false for new preview entries
+             };
 
             // Check if record already exists for this day and meal type
             const existingRecord = existingData?.find(record => 
@@ -720,24 +726,25 @@ const NutritionPlanSection = ({
         Object.keys(mealTimes).forEach(mealType => {
           const meal = dayPlan[mealType as keyof DayPlan] as Meal;
           if (meal && meal.name) {
-            recordsToInsert.push({
-              client_id: clientId,
-              for_date: forDate,
-              type: 'meal',
-              task: mealType.charAt(0).toUpperCase() + mealType.slice(1),
-              summary: `${mealType.charAt(0).toUpperCase() + mealType.slice(1)}: ${meal.name}`,
-              coach_tip: meal.coach_tip,
-              details_json: {
-                calories: meal.calories,
-                protein: meal.protein,
-                carbs: meal.carbs,
-                fats: meal.fats,
-                amount: meal.amount,
-              },
-              for_time: mealTimes[mealType as keyof typeof mealTimes],
-              icon: '🍽️', // Fork and plate emoji
-              is_approved: false, // Set to false for new preview entries
-            });
+                         recordsToInsert.push({
+               client_id: clientId,
+               for_date: forDate,
+               type: 'meal',
+               task: mealType.charAt(0).toUpperCase() + mealType.slice(1),
+               summary: `${mealType.charAt(0).toUpperCase() + mealType.slice(1)}: ${meal.name}`,
+               coach_tip: meal.coach_tip,
+               recipe: meal.recipe,
+               details_json: {
+                 calories: meal.calories,
+                 protein: meal.protein,
+                 carbs: meal.carbs,
+                 fats: meal.fats,
+                 amount: meal.amount,
+               },
+               for_time: mealTimes[mealType as keyof typeof mealTimes],
+               icon: '🍽️', // Fork and plate emoji
+               is_approved: false, // Set to false for new preview entries
+             });
           }
         });
       });
@@ -1143,23 +1150,78 @@ const NutritionPlanSection = ({
                   <td className="py-2 px-3 align-top">
                     {mealData ? (
                       <div className={`rounded-lg p-3 border-l-4 ${mealTypeColors[mealType as keyof typeof mealTypeColors]} shadow-sm hover:shadow-lg transition-all duration-200 min-h-[120px] group/card`}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <div className="font-semibold text-gray-900 dark:text-white text-sm flex-1 min-w-0 group/edit-title">
-                                {renderEditableCell(mealData.meal, dayKey, mealType, 'meal')}
+                        {/* Meal Title and Description Toggle */}
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <div className="font-semibold text-gray-900 dark:text-white text-sm flex-1 min-w-0 group/edit-title">
+                            {renderEditableCell(mealData.meal, dayKey, mealType, 'meal')}
+                          </div>
+                          {(mealData.coach_tip || mealData.recipe || mealData.amount) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const descriptionKey = `${dayKey}-${mealType}`;
+                                setOpenMealDescriptions(prev => ({
+                                  ...prev,
+                                  [descriptionKey]: !(prev[descriptionKey] || false)
+                                }));
+                              }}
+                              className="h-6 w-6 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors relative"
+                              aria-label="Toggle description"
+                            >
+                              <ChevronDown 
+                                className={`h-4 w-4 text-blue-500 transition-transform duration-200 ${
+                                  openMealDescriptions[`${dayKey}-${mealType}`] ? 'rotate-180' : ''
+                                }`} 
+                              />
+                              {/* Subtle indicator dot */}
+                              <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-400 rounded-full opacity-60"></div>
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Description Dropdown */}
+                        {openMealDescriptions[`${dayKey}-${mealType}`] && (mealData.coach_tip || mealData.recipe || mealData.amount) && (
+                          <div className="mb-3 space-y-3">
+                            {/* Amount Section */}
+                            {mealData.amount && (
+                              <div className="p-3 bg-gray-50 dark:bg-gray-800/20 rounded-lg border border-gray-200 dark:border-gray-700 animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <span className="text-lg">📏</span>
+                                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Amount</span>
+                                </div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">
+                                  {renderEditableCell(mealData.amount, dayKey, mealType, 'amount')}
+                                </div>
                               </div>
-                              {mealData.coach_tip && <Lightbulb className="h-4 w-4 text-blue-500 flex-shrink-0" />}
-                            </div>
-                          </TooltipTrigger>
-                          {mealData.coach_tip && <TooltipContent><p className="max-w-xs">{mealData.coach_tip}</p></TooltipContent>}
-                        </Tooltip>
-                        {mealData.amount && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-2 bg-white/50 dark:bg-gray-800/50 rounded px-2 py-1 group/amount">
-                            <span className="text-gray-500 dark:text-gray-400 mr-1">📏</span>
-                            <span className="group-hover:bg-gray-200 dark:group-hover:bg-gray-700 rounded px-1 transition-colors">
-                              {renderEditableCell(mealData.amount, dayKey, mealType, 'amount')}
-                            </span>
+                            )}
+
+                            {/* Coach Tip Section */}
+                            {mealData.coach_tip && (
+                              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700 animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <Lightbulb className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                  <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Coach Tip</span>
+                                </div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">
+                                  {renderEditableCell(mealData.coach_tip, dayKey, mealType, 'coach_tip')}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Recipe Section */}
+                            {mealData.recipe && (
+                              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700 animate-in slide-in-from-top-2 duration-200">
+                                <div className="flex items-start gap-2 mb-2">
+                                  <Utensils className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                                  <span className="text-xs font-medium text-green-700 dark:text-green-300">Recipe</span>
+                                </div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">
+                                  {renderEditableCell(mealData.recipe, dayKey, mealType, 'recipe')}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-1 text-xs">

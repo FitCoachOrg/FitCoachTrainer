@@ -353,6 +353,45 @@ export function TrainingPreferencesSection({ client, onPreferencesSaved }: Train
     )
   }
 
+  // Week day selector component for workout days
+  const WeekDaySelector = ({ value, onChange }: { value: string[], onChange: (value: string[]) => void }) => {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    
+    const toggleDay = (day: string) => {
+      const newValue = value.includes(day) 
+        ? value.filter(d => d !== day)
+        : [...value, day];
+      onChange(newValue);
+    };
+
+    return (
+      <div className="w-full">
+        <div className="grid grid-cols-7 gap-1 mb-3">
+          {days.map((day) => {
+            const isSelected = value.includes(day);
+            return (
+              <button
+                key={day}
+                onClick={() => toggleDay(day)}
+                className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
+                  isSelected 
+                    ? 'bg-blue-600 text-white shadow-lg' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                }`}
+                title={day}
+              >
+                {day.slice(0, 3)}
+              </button>
+            );
+          })}
+        </div>
+        <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
+          Selected: {value.length > 0 ? value.join(', ') : 'None'}
+        </div>
+      </div>
+    );
+  };
+
   // Group fields by category
   const groupedFields = editableFields.reduce((acc, field) => {
     if (!acc[field.category]) {
@@ -443,6 +482,13 @@ export function TrainingPreferencesSection({ client, onPreferencesSaved }: Train
                       className="border-blue-200 focus:border-blue-500 min-h-[100px] resize-y"
                       placeholder={`Enter ${field.label.toLowerCase()}...`}
                     />
+                  ) : field.key === 'workout_days' ? (
+                    <WeekDaySelector
+                      value={Array.isArray(field.value) ? field.value : []}
+                      onChange={(newDays) => {
+                        handleFieldChange(field.key, newDays);
+                      }}
+                    />
                   ) : (
                     <Input
                       ref={(el) => inputRefs.current[field.key] = el}
@@ -476,7 +522,23 @@ export function TrainingPreferencesSection({ client, onPreferencesSaved }: Train
                 </div>
               ) : (
                 <div className="text-gray-900 dark:text-white">
-                  {field.type === 'array' ? renderArrayValue(Array.isArray(field.value) || typeof field.value === 'string' ? field.value : (typeof field.value === 'number' ? '' : '')) : (field.value || "Not set")}
+                  {field.key === 'workout_days' ? (
+                    <div className="flex flex-wrap gap-1">
+                      {Array.isArray(field.value) && field.value.length > 0 ? (
+                        field.value.map((day: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            {day}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-gray-500 italic">Not set</span>
+                      )}
+                    </div>
+                  ) : field.type === 'array' ? (
+                    renderArrayValue(Array.isArray(field.value) || typeof field.value === 'string' ? field.value : (typeof field.value === 'number' ? '' : ''))
+                  ) : (
+                    field.value || "Not set"
+                  )}
                 </div>
               )}
             </div>
@@ -523,6 +585,13 @@ export function TrainingPreferencesSection({ client, onPreferencesSaved }: Train
                       className="border-green-200 focus:border-green-500"
                       placeholder={`Enter ${field.label.toLowerCase()}...`}
                     />
+                  ) : field.key === 'workout_days' ? (
+                    <WeekDaySelector
+                      value={Array.isArray(field.value) ? field.value : []}
+                      onChange={(newDays) => {
+                        handleFieldChange(field.key, newDays);
+                      }}
+                    />
                   ) : (
                     <Input
                       ref={(el) => inputRefs.current[field.key] = el}
@@ -556,7 +625,23 @@ export function TrainingPreferencesSection({ client, onPreferencesSaved }: Train
                 </div>
               ) : (
                 <div className="text-gray-900 dark:text-white">
-                  {field.key === 'workout_time' ? formatLocalTime(field.value as string) : (field.value || "Not set")}
+                  {field.key === 'workout_days' ? (
+                    <div className="flex flex-wrap gap-1">
+                      {Array.isArray(field.value) && field.value.length > 0 ? (
+                        field.value.map((day: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            {day}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-gray-500 italic">Not set</span>
+                      )}
+                    </div>
+                  ) : field.key === 'workout_time' ? (
+                    formatLocalTime(field.value as string)
+                  ) : (
+                    field.value || "Not set"
+                  )}
                 </div>
               )}
             </div>

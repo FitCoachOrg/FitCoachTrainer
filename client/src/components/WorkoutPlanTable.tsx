@@ -85,12 +85,12 @@ const getFocusIcon = (focus: string) => {
 // Helper to get an exercise icon (optional, fallback to focus icon)
 const getExerciseIcon = (ex: any) => {
   const cat = (ex.category || '').toLowerCase();
-  if (cat.includes('cardio')) return <HeartPulse className="h-5 w-5 text-red-500" />;
-  if (cat.includes('strength')) return <Dumbbell className="h-5 w-5 text-green-600" />;
-  if (cat.includes('core')) return <PersonStanding className="h-5 w-5 text-orange-500" />;
-  if (cat.includes('hiit')) return <Zap className="h-5 w-5 text-yellow-500" />;
-  if (cat.includes('cool') || cat.includes('stretch')) return <Snowflake className="h-5 w-5 text-cyan-500" />;
-  return <Dumbbell className="h-5 w-5 text-gray-400" />;
+  if (cat.includes('cardio')) return <HeartPulse className="h-4 w-4 text-red-500" />;
+  if (cat.includes('strength')) return <Dumbbell className="h-4 w-4 text-green-600" />;
+  if (cat.includes('core')) return <PersonStanding className="h-4 w-4 text-orange-500" />;
+  if (cat.includes('hiit')) return <Zap className="h-4 w-4 text-yellow-500" />;
+  if (cat.includes('cool') || cat.includes('stretch')) return <Snowflake className="h-4 w-4 text-cyan-500" />;
+  return <Dumbbell className="h-4 w-4 text-gray-400" />;
 };
 
 // Helper to extract YouTube video ID from URL
@@ -647,33 +647,42 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-700">
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead className="w-12">Icon</TableHead>
-                    <TableHead className="w-32">Exercise</TableHead>
-                    <TableHead className="w-20">Category</TableHead>
-                    <TableHead className="w-20">Body Part</TableHead>
-                    <TableHead className="w-16">Sets</TableHead>
-                    <TableHead className="w-16">Reps</TableHead>
-                    <TableHead className="w-16">Rest</TableHead>
-                    <TableHead className="w-20">Weight</TableHead>
-                    <TableHead className="w-16">Duration</TableHead>
-                                         <TableHead className="w-20">Equipment</TableHead>
-                     <TableHead className="w-24">Video</TableHead>
-                    <TableHead className="w-12">Actions</TableHead>
+                    <TableHead className="w-3">#</TableHead>
+                    <TableHead className="w-3">Icon</TableHead>
+                    <TableHead className="w-10 sm:w-14">Exercise</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden sm:table-cell w-6 md:w-8' : 'w-10'}>Category</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden lg:table-cell w-6 md:w-8' : 'w-10'}>Body Part</TableHead>
+                    <TableHead className="w-5 sm:w-6">Sets</TableHead>
+                    <TableHead className="w-5 sm:w-6">Reps</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden lg:table-cell w-5 sm:w-6' : 'w-6'}>Rest</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-6 md:w-8' : 'w-10'}>Weight</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden xl:table-cell w-5 sm:w-6' : 'w-6'}>Duration</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-6 md:w-8' : 'w-10'}>Equipment</TableHead>
+                    <TableHead className={(viewMode === 'weekly' || viewMode === 'monthly') ? 'hidden 2xl:table-cell w-8 sm:w-10' : 'w-14'}>Video</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {day.exercises.map((ex: any, exIdx: number) => (
                     <TableRow key={exIdx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
                       <TableCell className="font-medium text-gray-600 dark:text-gray-400">{exIdx + 1}</TableCell>
-                      <TableCell>{getExerciseIcon(ex)}</TableCell>
+                      <TableCell className="text-center">{getExerciseIcon(ex)}</TableCell>
                       <TableCell>
-                        <EditableCell
-                          value={ex.exercise}
-                          onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
-                          placeholder="Exercise name"
-                          className="font-medium text-gray-900 dark:text-white"
-                        />
+                        <div className="exercise-cell">
+                          <EditableCell
+                            value={ex.exercise}
+                            onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'exercise', newValue)}
+                            placeholder="Exercise name"
+                            className="font-medium text-gray-900 dark:text-white flex-1 editable-cell"
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}
+                            className="delete-btn hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-3 w-3 text-red-500" />
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <EditableCell
@@ -727,7 +736,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                           placeholder="Duration"
                         />
                       </TableCell>
-                                             <TableCell>
+                      <TableCell>
                          <EditableCell
                            value={ex.equipment || ''}
                            onSave={(newValue) => handlePlanChange(globalDayIdx, exIdx, 'equipment', newValue)}
@@ -740,11 +749,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                           onVideoChange={(newLink) => handlePlanChange(globalDayIdx, exIdx, 'video_link', newLink)}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteExercise(globalDayIdx, exIdx)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TableCell>
+
                     </TableRow>
                   ))}
                 </TableBody>
