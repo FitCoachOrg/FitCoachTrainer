@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { ProgressiveOverloadSystem } from './progressive-overload';
+import { CoachTipGenerator } from './coach-tip/coach-tip-generator';
+import { CoachTipUtils } from './coach-tip/utils';
 
 // Exercise history interface for variety tracking
 interface ExerciseHistory {
@@ -2245,45 +2247,31 @@ export class EnhancedWorkoutGenerator {
   }
 
   /**
-   * Generate trainer notes for each exercise
+   * Generate trainer notes for each exercise using the new Coach Tip system
    */
   private static generateTrainerNotes(
     exercise: any, 
     context: { 
       injuries: Array<{ injury: string; severity: string; affectedMuscles: string[] }>;
       progression?: any;
+      goal?: string;
+      phase?: number;
+      experience?: string;
     }
   ): string {
-    const notes = [];
+    // Normalize exercise object for the Coach Tip system
+    const normalizedExercise = CoachTipUtils.normalizeExercise(exercise);
     
-    // Injury avoidance notes
-    if (context.injuries.length > 0) {
-      const avoidedInjuries = context.injuries.map(injury => injury.injury).join(', ');
-      notes.push(`🚨 Selected to avoid: ${avoidedInjuries}`);
-    }
+    // Create coach tip context with proper typing
+    const coachTipContext = {
+      goal: (context.goal || 'fat_loss') as 'fat_loss' | 'hypertrophy' | 'strength' | 'endurance' | 'power',
+      phase: (context.phase || 1) as 1 | 2 | 3 | 4,
+      experience: (context.experience || 'Beginner') as 'Beginner' | 'Intermediate' | 'Advanced',
+      injuries: context.injuries || [],
+      progression: context.progression
+    };
     
-    // Form cues for beginners
-    const mappedLevel = this.DB_EXPERIENCE_MAPPING[exercise.expereince_level as keyof typeof this.DB_EXPERIENCE_MAPPING] || "Beginner";
-    if (mappedLevel === 'Beginner') {
-      notes.push(`💡 Focus on proper form and controlled movement`);
-    }
-    
-    // Equipment notes
-    if (exercise.equipment?.toLowerCase().includes('bodyweight')) {
-      notes.push(`🏃‍♂️ Bodyweight exercise - no equipment needed`);
-    }
-    
-    // Progression notes
-    if (context.progression?.progression_applied) {
-      const progression = context.progression.progression_applied;
-      notes.push(`📈 Progression applied: ${progression.sets} sets, ${progression.reps} reps`);
-      if (progression.reason) {
-        notes.push(`🎯 ${progression.reason}`);
-      }
-    } else {
-      notes.push(`📈 Progressive loading will be applied based on performance`);
-    }
-    
-    return notes.join(' | ');
+    // Generate coach tip using the new system
+    return CoachTipGenerator.generateCoachTip(normalizedExercise, coachTipContext);
   }
 }

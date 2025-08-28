@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { CoachTipGenerator } from './coach-tip/coach-tip-generator';
+import { CoachTipUtils } from './coach-tip/utils';
 
 // Performance optimization: Multi-tier exercise caching with compression
 let cachedExercises: any[] = [];
@@ -63,6 +65,29 @@ function decompressExerciseData(compressed: string): any[] {
     equipment: ex.eq,
     video_link: ex.v
   }));
+}
+
+// Generate coach tip for exercise using the new Coach Tip system
+function generateCoachTipForExercise(
+  exercise: any, 
+  clientGoal: string, 
+  clientExperience: string, 
+  clientInjuries: any[]
+): string {
+  // Normalize exercise object for the Coach Tip system
+  const normalizedExercise = CoachTipUtils.normalizeExercise(exercise);
+  
+  // Create coach tip context
+  const coachTipContext = {
+    goal: (clientGoal || 'fat_loss') as 'fat_loss' | 'hypertrophy' | 'strength' | 'endurance' | 'power',
+    phase: (exercise["Phase (1-3=build,4=deload)"] || 1) as 1 | 2 | 3 | 4,
+    experience: (clientExperience || 'Beginner') as 'Beginner' | 'Intermediate' | 'Advanced',
+    injuries: clientInjuries || [],
+    progression: null
+  };
+  
+  // Generate coach tip using the new system
+  return CoachTipGenerator.generateCoachTip(normalizedExercise, coachTipContext);
 }
 
 // Check if cache needs invalidation
@@ -1146,7 +1171,15 @@ function parseClientWorkoutDays(workoutDays: any): string[] {
 }
 
 // Function to convert search-based workout plan to AI-compatible format with workout day mapping
-function convertToAIFormatWithWorkoutDays(searchPlan: any[], clientId: number, planStartDate?: Date, clientWorkoutDays?: any): any {
+function convertToAIFormatWithWorkoutDays(
+  searchPlan: any[], 
+  clientId: number, 
+  planStartDate?: Date, 
+  clientWorkoutDays?: any,
+  clientGoal?: string,
+  clientExperience?: string,
+  clientInjuries?: any[]
+): any {
   console.log('🔄 Converting search-based plan to AI format with workout day mapping...');
   
   // Group exercises by week and day
@@ -1182,7 +1215,7 @@ function convertToAIFormatWithWorkoutDays(searchPlan: any[], clientId: number, p
       duration: duration.toString(),
       weights: weight,
       equipment: exercise.Equipment || "None", // Ensure equipment is mapped
-      coach_tip: `${exercise["RPE target (week)"]} (${exercise["RPE target (week)"].replace('RPE', '').trim()} RIR)`,
+      coach_tip: generateCoachTipForExercise(exercise, clientGoal, clientExperience, clientInjuries),
       video_link: exercise.Video || "",
       rest: exercise["Rest (s)"],
       experience: exercise.Experience,
@@ -1364,7 +1397,15 @@ export async function generateSearchBasedWorkoutPlanForReview(
     
     // Step 4: Convert to AI-compatible format with client workout days mapping
     const conversionStart = Date.now();
-    const convertedPlan = convertToAIFormatWithWorkoutDays(plan, clientId, planStartDate, clientData.workout_days);
+    const convertedPlan = convertToAIFormatWithWorkoutDays(
+      plan, 
+      clientId, 
+      planStartDate, 
+      clientData.workout_days,
+      cleanedData.goal,
+      cleanedData.experience,
+      cleanedData.injuries
+    );
     const conversionTime = Date.now() - conversionStart;
     console.log(`⏱️ Format conversion: ${conversionTime}ms`);
     
