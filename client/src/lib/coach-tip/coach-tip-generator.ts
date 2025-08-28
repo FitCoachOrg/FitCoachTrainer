@@ -36,36 +36,26 @@ export class CoachTipGenerator {
 
   /**
    * Format coach tip components into a readable string
+   * Only includes RPE info and proper form info as requested
    */
   private static formatCoachTip(components: CoachTipComponents): string {
     const parts = [];
-    
-    // RPE and Tempo
+
+    // RPE and Tempo (keep these)
     parts.push(`${components.rpe}`);
     if (components.tempo) {
       parts.push(`${components.tempo} tempo`);
     }
-    
-    // Form cues (top 2)
+
+    // Form cues (keep these - top 2 for proper form)
     if (components.formCues.length > 0) {
       parts.push(components.formCues.slice(0, 2).join(', '));
     }
-    
-    // Equipment notes
-    if (components.equipmentNotes) {
-      parts.push(components.equipmentNotes);
-    }
-    
-    // Progression notes (only if not empty)
-    if (components.progressionNotes && components.progressionNotes.trim() !== '') {
-      parts.push(components.progressionNotes);
-    }
-    
-    // Injury notes (only if not empty)
-    if (components.injuryNotes && components.injuryNotes.trim() !== '') {
-      parts.push(components.injuryNotes);
-    }
-    
+
+    // REMOVED: Equipment notes - not needed
+    // REMOVED: Progression notes - not needed
+    // REMOVED: Injury notes - not needed
+
     // Join all parts and clean up any newlines or extra spaces
     return parts.join(', ').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
   }
