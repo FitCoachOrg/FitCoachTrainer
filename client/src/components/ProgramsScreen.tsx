@@ -27,9 +27,7 @@ import {
   Brain,
   Utensils,
   Dumbbell,
-  Plus,
-  Eye,
-  EyeOff
+  Plus
 } from "lucide-react"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
 import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
@@ -61,7 +59,6 @@ interface ProgramsScreenProps {
 }
 
 type ViewMode = "daily" | "weekly" | "monthly"
-type CardDisplayMode = "compact" | "summary" | "full"
 
 export function ProgramsScreen({ 
   clientId, 
@@ -82,9 +79,6 @@ export function ProgramsScreen({
     coach_tip: "",
     for_time: ""
   })
-  
-  // Card display mode state
-  const [cardDisplayMode, setCardDisplayMode] = useState<CardDisplayMode>("compact")
   
   // Unified popup state
   const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
@@ -686,7 +680,7 @@ export function ProgramsScreen({
           key={item.id}
           className={`p-4 ${backgroundClasses} rounded-2xl shadow-lg mb-3 cursor-pointer border hover:scale-[1.02] hover:shadow-xl transition-all duration-200`}
           onClick={() => handleEditItem(item)}
-          style={{ minHeight: cardDisplayMode === "compact" ? 60 : 100 }}
+          style={{ minHeight: 100 }}
         >
           {/* Custom Task Type as Title */}
           <div className="flex items-center gap-2 mb-2">
@@ -702,30 +696,26 @@ export function ProgramsScreen({
               )}
             </span>
           </div>
+          <div className={`border-b border-dashed ${item.type === 'hydration' ? 'border-blue-300 dark:border-blue-500' : item.type === 'wakeup' ? 'border-orange-300 dark:border-orange-600' : item.type === 'progresspicture' ? 'border-gray-400 dark:border-gray-500' : item.type === 'bedtime' ? 'border-indigo-300 dark:border-indigo-600' : 'border-purple-200 dark:border-purple-700'} my-2`} />
           
-          {/* Time - always visible */}
-          {item.for_time && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">
-              ⏰ {convertToLocalTime(item.for_time)}
-            </div>
-          )}
-          
-          {/* Divider - only show if we have content below */}
-          {(cardDisplayMode !== "compact" && (item.summary || (cardDisplayMode === "full" && item.coach_tip))) && (
-            <div className={`border-b border-dashed ${item.type === 'hydration' ? 'border-blue-300 dark:border-blue-500' : item.type === 'wakeup' ? 'border-orange-300 dark:border-orange-600' : item.type === 'progresspicture' ? 'border-gray-400 dark:border-gray-500' : item.type === 'bedtime' ? 'border-indigo-300 dark:border-indigo-600' : 'border-purple-200 dark:border-purple-700'} my-2`} />
-          )}
-          
-          {/* Summary - show in summary and full modes */}
-          {item.summary && cardDisplayMode !== "compact" && (
+          {/* Summary */}
+          {item.summary && (
             <div className={`font-medium text-sm mb-2 break-words whitespace-normal leading-tight ${textColorClasses}`}>
               {item.summary}
             </div>
           )}
           
-          {/* Coach Tip - only show in full mode */}
-          {item.coach_tip && cardDisplayMode === "full" && (
+          {/* Coach Tip */}
+          {item.coach_tip && (
             <div className="text-xs text-gray-600 dark:text-gray-400 italic mb-2 break-words whitespace-normal leading-tight">
               💡 {item.coach_tip}
+            </div>
+          )}
+          
+          {/* Time */}
+          {item.for_time && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+              ⏰ {convertToLocalTime(item.for_time)}
             </div>
           )}
         </div>
@@ -739,59 +729,29 @@ export function ProgramsScreen({
             key={item.id}
             className="p-4 bg-gradient-to-br from-yellow-50 to-green-50 dark:from-yellow-900/20 dark:to-green-900/20 rounded-2xl shadow-lg mb-3 cursor-pointer border border-yellow-100 dark:border-yellow-900 hover:scale-[1.02] hover:shadow-xl transition-all duration-200"
             onClick={() => handleEditMeal(item)}
-            style={{ minHeight: cardDisplayMode === "compact" ? 60 : 120 }}
+            style={{ minHeight: 120 }}
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="text-lg">{getMealIcon(item.task)}</span>
               <span className="font-extrabold text-sm md:text-base text-yellow-700 dark:text-yellow-200 tracking-wide uppercase break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>{item.task}</span>
             </div>
-            
-            {/* Time - always visible */}
-            {item.for_time && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">
-                ⏰ {convertToLocalTime(item.for_time)}
-              </div>
-            )}
-            
-            {/* Divider - only show if we have content below */}
-            {cardDisplayMode !== "compact" && (
-              <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-1" />
-            )}
-            
-            {/* Meal name - show in summary and full modes */}
-            {cardDisplayMode !== "compact" && (
-              <div className="font-extrabold text-sm md:text-base text-green-900 dark:text-green-200 mb-1 break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
-                {item.summary?.split(':')[1]?.trim() || ''}
-              </div>
-            )}
-            
-            {/* Amount - show in summary and full modes */}
-            {cardDisplayMode !== "compact" && item.details_json?.amount && (
+            <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-1" />
+            {/* Meal name - now same as title */}
+            <div className="font-extrabold text-sm md:text-base text-green-900 dark:text-green-200 mb-1 break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
+              {item.summary?.split(':')[1]?.trim() || ''}
+            </div>
+            {item.details_json?.amount && (
               <div className="text-xs text-gray-700 dark:text-gray-300 mb-1 italic break-words whitespace-normal leading-tight" style={{ fontSize: '0.8em' }}>
                 {item.details_json.amount}
               </div>
             )}
-            
-            {/* Nutritional info - only show in full mode */}
-            {cardDisplayMode === "full" && (
-              <>
-                <div className="border-b border-dashed border-green-200 dark:border-green-700 my-1" />
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <span className="px-2 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-bold dark:bg-orange-900 dark:text-orange-200">Cal: {item.details_json?.calories || 0}</span>
-                  <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold dark:bg-blue-900 dark:text-blue-200">P: {item.details_json?.protein || 0}g</span>
-                  <span className="px-2 py-1 rounded-full bg-pink-100 text-pink-800 text-xs font-bold dark:bg-pink-900 dark:text-pink-200">F: {item.details_json?.fats || 0}g</span>
-                  <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold dark:bg-green-900 dark:text-green-200">C: {item.details_json?.carbs || 0}g</span>
-                </div>
-              </>
-            )}
-            
-            {/* Coach Tip - only show in full mode */}
-            {item.coach_tip && cardDisplayMode === "full" && (
-              <div className="text-xs text-gray-600 dark:text-gray-400 italic mt-2 break-words whitespace-normal leading-tight">
-                💡 {item.coach_tip}
-              </div>
-            )}
-            
+            <div className="border-b border-dashed border-green-200 dark:border-green-700 my-1" />
+            <div className="flex flex-wrap gap-2 mt-2">
+              <span className="px-2 py-1 rounded-full bg-orange-100 text-orange-800 text-xs font-bold dark:bg-orange-900 dark:text-orange-200">Cal: {item.details_json?.calories || 0}</span>
+              <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold dark:bg-blue-900 dark:text-blue-200">P: {item.details_json?.protein || 0}g</span>
+              <span className="px-2 py-1 rounded-full bg-pink-100 text-pink-800 text-xs font-bold dark:bg-pink-900 dark:text-pink-200">F: {item.details_json?.fats || 0}g</span>
+              <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold dark:bg-green-900 dark:text-green-200">C: {item.details_json?.carbs || 0}g</span>
+            </div>
             {/* Log button commented out for trainer dashboard - meal logging should only be available to clients */}
             {/* <Button size="sm" variant="outline" onClick={() => setLoggingMeal(item)}>Log</Button> */}
           </div>
@@ -803,7 +763,7 @@ export function ProgramsScreen({
             key={item.id}
             className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-lg mb-3 cursor-pointer border border-yellow-100 dark:border-yellow-900 hover:scale-[1.02] hover:shadow-xl transition-all duration-200"
             onClick={() => handleEditWorkout(item)}
-            style={{ minHeight: cardDisplayMode === "compact" ? 60 : 100 }}
+            style={{ minHeight: 100 }}
           >
             {/* Focus/Title - all caps, same as meal card */}
             <div className="flex items-center gap-2 mb-3">
@@ -812,49 +772,29 @@ export function ProgramsScreen({
                 {(item.details_json?.focus || item.summary || 'Workout').toUpperCase()}
               </span>
             </div>
-            
-            {/* Time - always visible */}
-            {item.for_time && (
-              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-2">
-                ⏰ {convertToLocalTime(item.for_time)}
-              </div>
-            )}
-            
-            {/* Divider - only show if we have content below */}
-            {cardDisplayMode !== "compact" && (
-              <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-2" />
-            )}
-            
-            {/* List of exercises - show in summary and full modes */}
-            {cardDisplayMode !== "compact" && (
-              <div className="space-y-1 text-blue-900 dark:text-blue-100 font-normal">
-                {item.details_json && item.details_json.exercises && item.details_json.exercises.length > 0 ? (
-                  item.details_json.exercises.map((ex: any, idx: number) => (
-                    <div key={idx} className="break-words whitespace-normal leading-tight">
-                      {/* Exercise name - now same as title */}
-                      <span className="font-extrabold text-sm md:text-base text-green-900 dark:text-green-200 break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
-                        {ex.exercise || ''}
+            {/* Divider */}
+            <div className="border-b border-dashed border-yellow-200 dark:border-yellow-700 my-2" />
+            {/* List of exercises (no numbers) */}
+            <div className="space-y-1 text-blue-900 dark:text-blue-100 font-normal">
+              {item.details_json && item.details_json.exercises && item.details_json.exercises.length > 0 ? (
+                item.details_json.exercises.map((ex: any, idx: number) => (
+                  <div key={idx} className="break-words whitespace-normal leading-tight">
+                    {/* Exercise name - now same as title */}
+                    <span className="font-extrabold text-sm md:text-base text-green-900 dark:text-green-200 break-words whitespace-normal leading-tight" style={{ fontSize: '0.7em' }}>
+                      {ex.exercise || ''}
+                    </span>
+                    {/* Body part - same as amount on meal card */}
+                    {ex.body_part && (
+                      <span className="text-xs text-gray-700 dark:text-gray-300 mb-1 italic ml-1" style={{ fontSize: '0.8em' }}>
+                        {ex.body_part}
                       </span>
-                      {/* Body part - same as amount on meal card */}
-                      {ex.body_part && (
-                        <span className="text-xs text-gray-700 dark:text-gray-300 mb-1 italic ml-1" style={{ fontSize: '0.8em' }}>
-                          {ex.body_part}
-                        </span>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-gray-500 italic">No exercises listed.</div>
-                )}
-              </div>
-            )}
-            
-            {/* Coach Tip - only show in full mode */}
-            {item.coach_tip && cardDisplayMode === "full" && (
-              <div className="text-xs text-gray-600 dark:text-gray-400 italic mt-2 break-words whitespace-normal leading-tight">
-                💡 {item.coach_tip}
-              </div>
-            )}
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500 italic">No exercises listed.</div>
+              )}
+            </div>
           </div>
         );
 
@@ -1042,17 +982,6 @@ export function ProgramsScreen({
                 </SelectContent>
               </Select>
 
-              {/* Card Display Mode Toggle */}
-              <Select value={cardDisplayMode} onValueChange={(value: CardDisplayMode) => setCardDisplayMode(value)}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Select Display Mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="compact">Compact</SelectItem>
-                  <SelectItem value="summary">Summary</SelectItem>
-                  <SelectItem value="full">Full</SelectItem>
-                </SelectContent>
-              </Select>
 
 
               {/* Navigation */}
