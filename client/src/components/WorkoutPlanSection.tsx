@@ -2098,256 +2098,111 @@ const WorkoutPlanSection = ({
       ];
     }, [client?.workout_days, client?.cl_primary_goal, client?.specific_outcome, client?.goal_timeline, client?.injuries_limitations, client?.training_time_per_session]);
 
+    // Helper function to get user-friendly text
+    const getUserFriendlyText = (key: string, value: string): string => {
+      if (value === 'Not set') return 'Not set';
+      
+      switch (key) {
+        case 'cl_primary_goal':
+          return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        case 'goal_timeline':
+          return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        case 'specific_outcome':
+          return value.length > 30 ? `${value.substring(0, 30)}...` : value;
+        case 'injuries_limitations':
+          return value.length > 40 ? `${value.substring(0, 40)}...` : value;
+        default:
+          return value;
+      }
+    };
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {targetMeta && targetMeta.length > 0 ? (
-          targetMeta.map(({ key, label, value, icon: Icon, color, type }) => (
-          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
-            <div className="absolute top-2 right-2">
-              {editingTarget === key ? (
-                <button
-                  className="text-white hover:text-gray-200"
-                  onClick={() => setEditingTarget(null)}
-                  title="Cancel Edit"
-                >
-                  ✖️
-                </button>
-              ) : (
-                <button
-                  className="text-white/80 hover:text-white"
-                  onClick={() => {
-                    console.log(`[WorkoutTargetEditGrid] Starting edit for ${key}`);
-                    setEditingTarget(key);
-                    if (key === 'workout_days') {
-                      const value = parseWorkoutDays(client?.workout_days);
-                      console.log(`[WorkoutTargetEditGrid] Setting workout_days value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'training_time_per_session') {
-                      const value = client?.training_time_per_session?.toString() || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting training_time_per_session value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'cl_primary_goal') {
-                      const value = client?.cl_primary_goal || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting cl_primary_goal value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'specific_outcome') {
-                      const value = client?.specific_outcome || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting specific_outcome value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'goal_timeline') {
-                      const value = client?.goal_timeline || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting goal_timeline value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'injuries_limitations') {
-                      const value = client?.injuries_limitations || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting injuries_limitations value: ${value}`);
-                      setTargetEditValue(value);
-                    } else {
-                      const value = client?.workout_time || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting workout_time value: ${value}`);
-                      setTargetEditValue(value);
-                    }
-                  }}
-                  title={`Edit ${label}`}
-                >
-                  ✏️
-                </button>
-              )}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        {/* Header Row - Primary Goal + Timeline */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+              <Target className="h-4 w-4 text-white" />
             </div>
-            {type !== 'days' && <Icon className="h-6 w-6 mb-2 text-white drop-shadow" />}
-            <div className="text-sm font-bold text-white mb-2">{label}</div>
-            {editingTarget === key ? (
-              <div className="flex items-center gap-2 w-full">
-                {type === 'time' ? (
-                  <input
-                    type="time"
-                    value={targetEditValue}
-                    onChange={e => setTargetEditValue(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                    autoFocus
-                    disabled={isSavingTarget}
-                  />
-                ) : type === 'number' ? (
-                  <div className="flex items-center gap-2 w-full">
-                    <input
-                      type="number"
-                      value={targetEditValue}
-                      onChange={e => {
-                        console.log(`[WorkoutTargetEditGrid] Number input changed for ${key}: ${e.target.value}`);
-                        setTargetEditValue(e.target.value);
-                      }}
-                                          onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                      onBlur={() => {
-                        if (targetEditValue) saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
-                        else setEditingTarget(null);
-                      }}
-                      className="w-20 px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                      autoFocus
-                      disabled={isSavingTarget}
-                      min="15"
-                      max="180"
-                      placeholder="45"
-                    />
-                    <span className="text-white text-sm font-semibold">min</span>
-                  </div>
-                ) : type === 'textarea' ? (
-                  <textarea
-                    value={targetEditValue}
-                    onChange={e => {
-                      console.log(`[WorkoutTargetEditGrid] Textarea changed for ${key}: ${e.target.value}`);
-                      setTargetEditValue(e.target.value);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && e.ctrlKey) {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow resize-none"
-                    autoFocus
-                    disabled={isSavingTarget}
-                    placeholder="Enter limitations and constraints..."
-                    rows={3}
-                  />
-                ) : type === 'days' ? (
-                  <div className="w-full">
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
-                        const isSelected = targetEditValue.toLowerCase().includes(day.toLowerCase());
-                        return (
-                          <button
-                            key={day}
-                            onClick={() => {
-                              const currentDays = targetEditValue.split(',').map(d => d.trim()).filter(d => d);
-                              if (isSelected) {
-                                const newDays = currentDays.filter(d => !d.toLowerCase().includes(day.toLowerCase()));
-                                setTargetEditValue(newDays.join(', '));
-                              } else {
-                                const newDays = [...currentDays, day];
-                                setTargetEditValue(newDays.join(', '));
-                              }
-                            }}
-                            className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
-                              isSelected 
-                                ? 'bg-white text-blue-600 shadow-lg' 
-                                : 'bg-white/20 text-white hover:bg-white/30'
-                            }`}
-                          >
-                            {day}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <input
-                      type="text"
-                      value={targetEditValue}
-                      onChange={e => {
-                        console.log(`[WorkoutTargetEditGrid] Days input changed for ${key}: ${e.target.value}`);
-                        setTargetEditValue(e.target.value);
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          saveWorkoutTarget(key, targetEditValue);
-                        } else if (e.key === 'Escape') {
-                          setEditingTarget(null);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                        else setEditingTarget(null);
-                      }}
-                      className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                      autoFocus
-                      disabled={isSavingTarget}
-                      placeholder="e.g., Monday, Wednesday, Friday"
-                    />
-                  </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Primary Goal</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('cl_primary_goal', targetMeta.find(t => t.key === 'cl_primary_goal')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
+              <Clock className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Timeline</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('goal_timeline', targetMeta.find(t => t.key === 'goal_timeline')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Middle Row - Workout Days + Duration */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg">
+              <CalendarDays className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Workout Days</div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {targetMeta.find(t => t.key === 'workout_days')?.value !== 'Not set' ? (
+                  targetMeta.find(t => t.key === 'workout_days')?.value.split(',').map((day: string, index: number) => (
+                    <span key={index} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-xs font-medium">
+                      {day.trim()}
+                    </span>
+                  ))
                 ) : (
-                  <input
-                    type="text"
-                    value={targetEditValue}
-                    onChange={e => {
-                      console.log(`[WorkoutTargetEditGrid] Text input changed for ${key}: ${e.target.value}`);
-                      setTargetEditValue(e.target.value);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                    autoFocus
-                    disabled={isSavingTarget}
-                    placeholder="e.g., Monday, Wednesday, Friday"
-                  />
-                )}
-                {isSavingTarget && editingTarget === key && (
-                  <div className="text-white text-sm">Saving...</div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Not set</span>
                 )}
               </div>
-            ) : (
-              <div className="text-lg font-bold text-white text-center">
-                {type === 'days' && value !== 'Not set' ? (
-                  <div className="flex flex-wrap justify-center gap-1">
-                    {value.split(',').map((day: string, index: number) => (
-                      <span key={index} className="px-2 py-1 bg-white/20 rounded-full text-sm">
-                        {day.trim()}
-                      </span>
-                    ))}
-                  </div>
-                ) : type === 'textarea' ? (
-                  <div className="text-sm text-white text-left max-h-20 overflow-y-auto">
-                    {value.length > 100 ? `${value.substring(0, 100)}...` : value}
-                  </div>
-                ) : (
-                  <div className="text-sm text-white text-center">
-                    {value.length > 50 ? `${value.substring(0, 50)}...` : value}
-                  </div>
-                )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg">
+              <Clock className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Duration</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {targetMeta.find(t => t.key === 'training_time_per_session')?.value || 'Not set'}
               </div>
-            )}
+            </div>
           </div>
-        ))) : (
-          <div className="col-span-full text-center py-8 text-gray-500">
-            No client data available
+        </div>
+
+        {/* Bottom Row - Specific Outcome + Constraints */}
+        <div className="flex justify-between items-start">
+          <div className="flex items-start gap-2 flex-1">
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg mt-1">
+              <Target className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Specific Outcome</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('specific_outcome', targetMeta.find(t => t.key === 'specific_outcome')?.value || 'Not set')}
+              </div>
+            </div>
           </div>
-        )}
+          <div className="flex items-start gap-2 flex-1">
+            <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-lg mt-1">
+              <FileText className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Constraints</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('injuries_limitations', targetMeta.find(t => t.key === 'injuries_limitations')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };

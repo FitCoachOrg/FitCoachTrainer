@@ -1316,69 +1316,228 @@ const NutritionPlanSection = ({
       { key: 'carbs', label: 'Carbs', unit: 'g', color: 'from-amber-500 to-yellow-500', icon: Wheat },
       { key: 'fats', label: 'Fats', unit: 'g', color: 'from-green-500 to-emerald-500', icon: Droplets },
     ];
+    
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {targetMeta.map(({ key, label, unit, color, icon: Icon }) => (
-          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-3 flex flex-col items-center relative`}>
-            <div className="absolute top-1.5 right-1.5">
-              {editingTarget === key ? (
-                <button
-                  className="text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
-                  onClick={() => setEditingTarget(null)}
-                  title="Cancel Edit"
-                >
-                  ✖️
-                </button>
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        {/* Header Row - Calories + Protein */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg">
+              <Flame className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Calories</div>
+              {editingTarget === 'calories' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('calories', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('calories', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">kcal</span>
+                  {isSavingTarget && editingTarget === 'calories' && <LoadingSpinner size="small" />}
+                </div>
               ) : (
-                <button
-                  className="text-gray-500 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-200"
-                  onClick={() => {
-                    setEditingTarget(key);
-                    setTargetEditValue(clientTargets[key]?.toString() || '');
-                  }}
-                  title={`Edit ${label}`}
-                >
-                  ✏️
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.calories}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">kcal</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('calories');
+                      setTargetEditValue(clientTargets.calories?.toString() || '');
+                    }}
+                    title="Edit Calories"
+                  >
+                    ✏️
+                  </button>
+                </div>
               )}
             </div>
-            <Icon className="h-5 w-5 mb-1.5 text-white drop-shadow" />
-            <div className="text-sm font-bold text-white mb-1">{label}</div>
-            {editingTarget === key ? (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  value={targetEditValue}
-                  onChange={e => setTargetEditValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      const val = parseInt(targetEditValue, 10);
-                      if (!isNaN(val)) saveClientTarget(key, val);
-                    } else if (e.key === 'Escape') {
-                      setEditingTarget(null);
-                    }
-                  }}
-                  onBlur={() => {
-                    const val = parseInt(targetEditValue, 10);
-                    if (!isNaN(val)) saveClientTarget(key, val);
-                    else setEditingTarget(null);
-                  }}
-                  className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
-                  autoFocus
-                  min={0}
-                  disabled={isSavingTarget}
-                />
-                <span className="text-white font-semibold text-sm">{unit}</span>
-                {isSavingTarget && editingTarget === key && <LoadingSpinner size="small" />}
-              </div>
-            ) : (
-              <div className="text-2xl font-extrabold text-white flex items-center gap-1.5">
-                {clientTargets[key]}
-                <span className="text-sm font-semibold">{unit}</span>
-              </div>
-            )}
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-sky-500 to-blue-500 rounded-lg">
+              <Beef className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Protein</div>
+              {editingTarget === 'protein' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('protein', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('protein', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'protein' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.protein}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('protein');
+                      setTargetEditValue(clientTargets.protein?.toString() || '');
+                    }}
+                    title="Edit Protein"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Row - Carbs + Fats */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-lg">
+              <Wheat className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Carbs</div>
+              {editingTarget === 'carbs' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('carbs', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('carbs', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'carbs' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.carbs}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('carbs');
+                      setTargetEditValue(clientTargets.carbs?.toString() || '');
+                    }}
+                    title="Edit Carbs"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+              <Droplets className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Fats</div>
+              {editingTarget === 'fats' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('fats', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('fats', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'fats' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.fats}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('fats');
+                      setTargetEditValue(clientTargets.fats?.toString() || '');
+                    }}
+                    title="Edit Fats"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
