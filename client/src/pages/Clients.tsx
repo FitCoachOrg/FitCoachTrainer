@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClientImageUrls } from "@/utils/image-utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -303,18 +304,8 @@ const Clients: React.FC = () => {
   useEffect(() => {
     async function fetchClientImageUrls() {
       if (!clients.length) return;
-      const urls: { [clientId: number]: string | null } = {};
-      await Promise.all(clients.map(async (client) => {
-        const filePath = `${client.client_id}.jpg`;
-        const { data, error } = await supabase.storage
-          .from('client-images')
-          .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
-        if (data && data.signedUrl) {
-          urls[client.client_id] = data.signedUrl;
-        } else {
-          urls[client.client_id] = null;
-        }
-      }));
+      const clientIds = clients.map(client => client.client_id);
+      const urls = await getClientImageUrls(clientIds);
       setClientImageUrls(urls);
     }
     fetchClientImageUrls();

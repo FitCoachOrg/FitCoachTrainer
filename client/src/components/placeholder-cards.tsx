@@ -89,12 +89,21 @@ export function NutritionalPreferencesPlaceholder({ onClick, client }: { onClick
 
 export function TrainingPreferencesPlaceholder({ onClick, client }: { onClick: () => void; client?: any }) {
   const clientName = client?.cl_prefer_name || client?.cl_name || 'Client';
+  console.log('🔍 TrainingPreferencesPlaceholder - Component rendered')
+  console.log('🔍 TrainingPreferencesPlaceholder - client:', client)
+  console.log('🔍 TrainingPreferencesPlaceholder - clientName:', clientName)
+  
+  const handleClick = () => {
+    console.log('🔍 TrainingPreferencesPlaceholder - Clicked!')
+    onClick()
+  }
+  
   return (
     <PlaceholderCard
       title={`${clientName} Training Preferences`}
       description="View client's training preferences"
       icon={<Dumbbell className="h-4 w-4 text-white" />}
-      onClick={onClick}
+      onClick={handleClick}
     />
   )
 } 

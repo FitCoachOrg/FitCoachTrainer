@@ -24,8 +24,8 @@ function Calendar({
         caption_label: "text-sm font-medium",
         nav: "space-x-1 flex items-center",
         nav_button: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md cursor-pointer flex items-center justify-center transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         ),
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",

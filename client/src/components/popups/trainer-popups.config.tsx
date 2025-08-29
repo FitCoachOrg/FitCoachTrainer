@@ -78,9 +78,11 @@ export const trainerPopups: Record<PopupKey, TrainerPopupConfigEntry> = {
     key: 'trainingPreferences',
     title: 'Training Preferences',
     icon: <Dumbbell className="h-5 w-5 text-white" />,
-    render: ({ client }: any) => (
-      <TrainingPreferencesSection client={client} />
-    )
+    render: ({ client }: any) => {
+      console.log('🔍 trainerPopups - trainingPreferences render called')
+      console.log('🔍 trainerPopups - client data:', client)
+      return <TrainingPreferencesSection client={client} />
+    }
   }
 }
 
