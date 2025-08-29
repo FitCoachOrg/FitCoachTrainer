@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -41,19 +42,23 @@ import {
   User, 
   Calendar,
   Grid3X3,
-  List
+  List,
+  X
 } from "lucide-react"
 import { ScheduleService, ScheduleUtils, type ScheduleEvent, type CreateScheduleEvent } from "@/lib/schedule-service"
+import { supabase } from "@/lib/supabase"
 
 interface CalendarEvent {
   id: string
   date: Date
   title: string
-  description: string
+  description?: string
   type: "consultation" | "check-in" | "meeting" | "fitness" | "nutrition" | "assessment" | "follow-up" | "group_session"
   time: string
   duration: number // in minutes
   clientName?: string
+  clientEmail?: string
+  meetingUrl?: string
   color?: string
 }
 
@@ -141,62 +146,246 @@ const EventForm: React.FC<{
   onSave: (event: CalendarEvent) => void
   onClose: () => void
 }> = ({ event, selectedDate, onSave, onClose }) => {
+  const [clients, setClients] = useState<{client_id: number, cl_name: string, cl_email: string}[]>([])
+  const [isLoadingClients, setIsLoadingClients] = useState(false)
   const [formData, setFormData] = useState({
     title: event?.title || "",
-    description: event?.description || "",
+    clientName: event?.clientName || "",
+    clientEmail: event?.clientEmail || "",
     type: event?.type || "consultation",
     time: event?.time || "09:00",
     duration: event?.duration || 60,
-    clientName: event?.clientName || "",
     date: event?.date || selectedDate || new Date(),
+    meetingUrl: event?.meetingUrl || "",
     color: event?.color || "#3B82F6"
   })
 
+  // Load trainer's clients on component mount
+  useEffect(() => {
+    const loadClients = async () => {
+      // Add a small delay to ensure component is fully mounted
+      await new Promise(resolve => setTimeout(resolve, 100))
+      try {
+        setIsLoadingClients(true)
+        console.log('🔄 Loading trainer clients...')
+        
+        // Check authentication status first
+        console.log('🔍 Checking authentication status...')
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        console.log('🔍 Session:', session)
+        console.log('🔍 Session error:', sessionError)
+        
+        if (!session) {
+          console.log('❌ No active session found - user not authenticated')
+          setClients([])
+          return
+        }
+        
+        console.log('✅ User authenticated:', session.user.email)
+        console.log('📊 Using direct database access...')
+        
+                // Get clients directly by trainer_email
+        console.log('🔍 Getting clients for trainer_email:', session.user.email)
+        console.log('🔍 Session user:', session.user)
+        console.log('🔍 Session access token length:', session.access_token?.length || 'undefined')
+        
+        const { data, error } = await supabase
+          .from('trainer_client_web')
+          .select(`
+            client_id,
+            cl_email,
+            trainer_name
+          `)
+          .eq('trainer_email', session.user.email)
+          .eq('status', 'active')
+          .order('client_id', { ascending: true })
+
+        if (error) {
+          console.error('❌ Error getting client relationships:', error)
+          setClients([])
+          return
+        }
+
+        console.log('✅ Found', data.length, 'client relationships')
+
+        if (data.length === 0) {
+          console.log('❌ No client relationships found')
+          setClients([])
+          return
+        }
+
+        // Get client details separately
+        const clientIds = data.map(item => item.client_id)
+        const { data: clientData, error: clientError } = await supabase
+          .from('client')
+          .select('client_id, cl_name, cl_email')
+          .in('client_id', clientIds)
+          .order('cl_name', { ascending: true })
+
+        if (clientError) {
+          console.error('❌ Error getting client details:', clientError)
+          setClients([])
+          return
+        }
+
+        console.log('✅ Found', clientData.length, 'client details')
+
+        // Merge the data
+        const trainerClients = data.map(item => {
+          const client = clientData.find(c => c.client_id === item.client_id)
+          return {
+            client_id: item.client_id,
+            cl_name: client?.cl_name || 'Unknown Client',
+            cl_email: item.cl_email || client?.cl_email || ''
+          }
+        })
+
+        console.log('✅ Final client list:', trainerClients)
+        setClients(trainerClients)
+        
+      } catch (error) {
+        console.error('❌ Error loading clients:', error)
+        setClients([])
+      } finally {
+        setIsLoadingClients(false)
+      }
+    }
+    loadClients()
+  }, [])
+
+  // Handle client selection - auto-populate email
+  const handleClientChange = (clientId: string) => {
+    if (clientId === 'custom') {
+      // Custom client - clear email for manual input
+      setFormData(prev => ({ ...prev, clientName: '', clientEmail: '' }))
+    } else {
+      // Selected client - auto-populate name and email
+      const selectedClient = clients.find(client => client.client_id.toString() === clientId)
+      if (selectedClient) {
+        setFormData(prev => ({ 
+          ...prev, 
+          clientName: selectedClient.cl_name,
+          clientEmail: selectedClient.cl_email || ''
+        }))
+      }
+    }
+  }
+
+  // Handle custom client name input
+  const handleCustomClientNameChange = (name: string) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      clientName: name,
+      // Clear email if it was auto-populated from a selected client
+      clientEmail: prev.clientEmail && clients.some(c => c.cl_email === prev.clientEmail) ? '' : prev.clientEmail
+    }))
+  }
+
+  // Get the current selected value for the dropdown
+  const getSelectedValue = () => {
+    if (!formData.clientName) return 'custom'
+    // Check if the current client name matches any client in the list
+    const matchingClient = clients.find(client => client.cl_name === formData.clientName)
+    return matchingClient ? matchingClient.client_id.toString() : 'custom'
+  }
+
+  // Check if we should show the custom input field
+  const shouldShowCustomInput = () => {
+    if (!formData.clientName) return true // Always show if no client name
+    // Show if it's a custom name (not matching any client in the list)
+    return !clients.some(client => client.cl_name === formData.clientName)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('📝 Form submitted with data:', formData)
+    
     const newEvent: CalendarEvent = {
       id: event?.id || Date.now().toString(),
       ...formData,
     }
+    console.log('📅 Created calendar event:', newEvent)
+    
     onSave(newEvent)
     onClose()
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="title">Event Title</Label>
-          <Input
-            id="title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="clientName">Client Name (Optional)</Label>
-          <Input
-            id="clientName"
-            value={formData.clientName}
-            onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-          />
-        </div>
-      </div>
-
+      {/* Event Name */}
       <div>
-        <Label htmlFor="description">Description</Label>
-        <Textarea
-          id="description"
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          rows={3}
+        <Label htmlFor="title">Event Name *</Label>
+        <Input
+          id="title"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          placeholder="Enter event name"
+          required
         />
       </div>
 
+      {/* Client Name */}
+      <div>
+        <Label htmlFor="clientName">Client Name</Label>
+        {isLoadingClients && <div className="text-sm text-gray-500 mb-2">Loading clients...</div>}
+        <Select 
+          value={getSelectedValue()} 
+          onValueChange={handleClientChange}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select existing client or add custom name" />
+          </SelectTrigger>
+          <SelectContent>
+            {clients.length === 0 ? (
+              <SelectItem value="custom">+ Add Custom Name</SelectItem>
+            ) : (
+              <>
+                <SelectItem value="custom">+ Add Custom Name</SelectItem>
+                {clients.map((client) => (
+                  <SelectItem key={client.client_id} value={client.client_id.toString()}>
+                    {client.cl_name} (ID: {client.client_id})
+                  </SelectItem>
+                ))}
+              </>
+            )}
+          </SelectContent>
+        </Select>
+        {shouldShowCustomInput() && (
+          <div className="mt-2">
+            <Input
+              value={formData.clientName}
+              onChange={(e) => handleCustomClientNameChange(e.target.value)}
+              placeholder="Enter custom client name"
+              className="border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+            <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+              <span>✏️</span>
+              <span>Custom client - not in your client list</span>
+            </div>
+          </div>
+        )}
+        <div className="text-xs text-gray-500 mt-1">
+          {isLoadingClients ? 'Loading clients...' : 
+           clients.length > 0 ? `${clients.length} existing clients available` : 'No existing clients found'}
+        </div>
+      </div>
+
+      {/* Email Address */}
+      <div>
+        <Label htmlFor="clientEmail">Email Address</Label>
+        <Input
+          id="clientEmail"
+          type="email"
+          value={formData.clientEmail}
+          onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
+          placeholder="Enter email address"
+        />
+      </div>
+
+      {/* Type, Time, Duration */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="type">Type</Label>
+          <Label htmlFor="type">Type *</Label>
           <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as any })}>
             <SelectTrigger>
               <SelectValue />
@@ -207,11 +396,14 @@ const EventForm: React.FC<{
               <SelectItem value="meeting">Meeting</SelectItem>
               <SelectItem value="fitness">Fitness</SelectItem>
               <SelectItem value="nutrition">Nutrition</SelectItem>
+              <SelectItem value="assessment">Assessment</SelectItem>
+              <SelectItem value="follow-up">Follow-up</SelectItem>
+              <SelectItem value="group_session">Group Session</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label htmlFor="time">Time</Label>
+          <Label htmlFor="time">Time *</Label>
           <Input
             id="time"
             type="time"
@@ -221,28 +413,42 @@ const EventForm: React.FC<{
           />
         </div>
         <div>
-          <Label htmlFor="duration">Duration (min)</Label>
+          <Label htmlFor="duration">Duration (min) *</Label>
           <Input
             id="duration"
             type="number"
-            min="15"
+            min="1"
             max="480"
-            step="15"
+            step="1"
             value={formData.duration}
-            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 1 })}
+            placeholder="Enter duration in minutes"
             required
           />
         </div>
       </div>
 
+      {/* Date */}
       <div>
-        <Label htmlFor="date">Date</Label>
+        <Label htmlFor="date">Date *</Label>
         <Input
           id="date"
           type="date"
           value={format(formData.date, "yyyy-MM-dd")}
           onChange={(e) => setFormData({ ...formData, date: new Date(e.target.value) })}
           required
+        />
+      </div>
+
+      {/* Zoom/Google Meet Link */}
+      <div>
+        <Label htmlFor="meetingUrl">Zoom/Google Meet Link</Label>
+        <Input
+          id="meetingUrl"
+          type="url"
+          value={formData.meetingUrl}
+          onChange={(e) => setFormData({ ...formData, meetingUrl: e.target.value })}
+          placeholder="https://zoom.us/j/... or https://meet.google.com/..."
         />
       </div>
 
@@ -258,63 +464,197 @@ const EventForm: React.FC<{
   )
 }
 
-// Event Card Component
+// Event Card Component - Enhanced with better contrast and type-specific colors
 const EventCard: React.FC<{
   event: CalendarEvent
   onEdit: (event: CalendarEvent) => void
   onDelete: (id: string) => void
   compact?: boolean
-}> = ({ event, onEdit, onDelete, compact = false }) => {
+  proportional?: boolean // New prop for proportional rendering
+}> = ({ event, onEdit, onDelete, compact = false, proportional = false }) => {
   const typeColor = eventTypeColors[event.type]
   
   return (
     <div 
-      className={`${typeColor.bg} ${typeColor.border} ${typeColor.text} ${typeColor.dark} rounded-lg p-2 border-l-4 cursor-pointer hover:shadow-md transition-all duration-200`}
-      style={{ borderLeftColor: event.color }}
+      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-40`}
+      style={{ 
+        borderLeftColor: event.color || typeColor.border,
+        borderLeftWidth: '4px'
+      }}
+      onClick={(e) => {
+        console.log('Event card clicked:', event.title)
+        e.stopPropagation()
+        onEdit(event)
+      }}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-3 w-3 flex-shrink-0" />
-            <span className="text-xs font-medium">{event.time}</span>
-            <span className="text-xs opacity-75">({event.duration}min)</span>
+      {compact ? (
+        // Multi-line layout for weekly view to accommodate more text
+        <div className="flex flex-col h-full p-1.5 relative">
+          {/* Title - First line, can wrap to multiple lines */}
+          <h4 className={`font-medium text-xs leading-tight ${typeColor.text} break-words flex-1 min-h-0`} style={{ 
+            lineHeight: '1.2',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}>
+            {event.title}
+          </h4>
+          
+          {/* Second line - Client name and time info */}
+          <div className="flex items-center gap-2 mt-0.5 flex-shrink-0">
+            {/* Client name */}
+            {event.clientName && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <User className="h-2 w-2 text-gray-500 dark:text-gray-400" />
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
+              </div>
+            )}
+            
+            {/* Time and duration */}
+            <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+              <Clock className="h-2 w-2" />
+              <span>{event.time}</span>
+              {event.duration > 0 && (
+                <span>• {event.duration}m</span>
+              )}
+            </div>
+            
+            {/* Meeting link indicator */}
+            {event.meetingUrl && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <span className="text-xs text-blue-600 dark:text-blue-400">🔗</span>
+              </div>
+            )}
           </div>
-          <h4 className="font-medium text-sm truncate">{event.title}</h4>
+          
+          {/* Action buttons for compact view */}
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-50">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(event)
+              }}
+            >
+              <Edit2 className="h-2 w-2 text-gray-600 dark:text-gray-300" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 p-0 text-red-600 hover:text-red-700 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <X className="h-2 w-2" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDelete(event.id)
+                    }}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      ) : (
+      <div className="flex items-center h-full p-2 justify-between">
+        {/* Main content in a single row */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Title */}
+          <h4 className={`font-medium text-sm leading-tight truncate flex-1 ${typeColor.text}`}>{event.title}</h4>
+          
+          {/* Client name */}
           {event.clientName && (
-            <div className="flex items-center gap-1 mt-1">
-              <User className="h-3 w-3" />
-              <span className="text-xs opacity-75">{event.clientName}</span>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <User className="h-3 w-3 text-gray-500 dark:text-gray-400" />
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
             </div>
           )}
-          {!compact && event.description && (
-            <p className="text-xs mt-1 opacity-75 line-clamp-2">{event.description}</p>
+          
+          {/* Time and duration */}
+          <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+            <Clock className="h-3 w-3" />
+            <span>{event.time}</span>
+            {event.duration > 0 && (
+              <span>• {event.duration}min</span>
+            )}
+          </div>
+          
+          {/* Meeting link indicator */}
+          {event.meetingUrl && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <span className={`text-xs ${typeColor.text} font-medium`}>🔗 Meeting</span>
+            </div>
           )}
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        
+                 {/* Action buttons - Enhanced with better contrast */}
+         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-1 right-1 pointer-events-auto z-50">
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 p-0"
+            className="h-6 w-6 p-0 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
             onClick={(e) => {
               e.stopPropagation()
               onEdit(event)
             }}
           >
-            <Edit2 className="h-3 w-3" />
+            <Edit2 className="h-3 w-3 text-gray-600 dark:text-gray-300" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-red-600"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(event.id)
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-red-600 hover:text-red-700 bg-white/95 dark:bg-gray-800/95 hover:bg-white dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-600"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Event</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{event.title}"? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(event.id)
+                  }}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
+      )}
     </div>
   )
 }
@@ -323,11 +663,12 @@ const EventCard: React.FC<{
 const ProfessionalCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<"daily" | "weekly" | "monthly">("weekly")
-  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
   const [isLoading, setIsLoading] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | undefined>()
   const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+  const [session, setSession] = useState<any>(null)
 
   // Navigation functions
   const handlePrev = () => {
@@ -393,16 +734,30 @@ const ProfessionalCalendar: React.FC = () => {
         time: ScheduleUtils.formatTime(event.start_time),
         duration: event.duration_minutes,
         clientName: event.client_name,
+        clientEmail: event.client_email,
+        meetingUrl: event.meeting_url,
         color: event.color
       }))
       
-      setEvents(calendarEvents)
+      console.log('📅 Loaded events:', calendarEvents.length, calendarEvents)
+      // Merge loaded events with initial events for testing
+      const allEvents = [...initialEvents, ...calendarEvents]
+      setEvents(allEvents)
     } catch (error) {
       console.error('Error loading events:', error)
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Get session on component mount
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setSession(session)
+    }
+    getSession()
+  }, [])
 
   // Load events when view or date changes
   useEffect(() => {
@@ -412,40 +767,69 @@ const ProfessionalCalendar: React.FC = () => {
   const handleSaveEvent = async (event: CalendarEvent) => {
     try {
       setIsLoading(true)
+      console.log('🔄 Saving event:', event)
       
       if (editingEvent) {
+        console.log('📝 Updating existing event...')
         // Update existing event
+        // Calculate start_time and end_time properly
+        const startTime = new Date(event.date)
+        const [hours, minutes] = event.time.split(':').map(Number)
+        startTime.setHours(hours, minutes, 0, 0)
+        
+        const endTime = new Date(startTime.getTime() + event.duration * 60000)
+        
         const updateData: any = {
           title: event.title,
           description: event.description,
           event_type: event.type,
-          start_time: event.date.toISOString(),
-          end_time: new Date(event.date.getTime() + event.duration * 60000).toISOString(),
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
           duration_minutes: event.duration,
           client_name: event.clientName,
+          client_email: event.clientEmail,
+          meeting_url: event.meetingUrl,
           color: event.color || ScheduleUtils.getEventTypeColor(event.type)
+          // Note: updated_by will be set by ScheduleService.updateEvent using trainer profile
         }
         
-        await ScheduleService.updateEvent({
+        console.log('📊 Update data:', updateData)
+        const updatedEvent = await ScheduleService.updateEvent({
           id: event.id,
           ...updateData
         })
+        console.log('✅ Event updated:', updatedEvent)
         
         setEvents(prev => prev.map(e => e.id === event.id ? event : e))
       } else {
+        console.log('➕ Creating new event...')
         // Create new event
+        // Calculate start_time and end_time properly
+        const startTime = new Date(event.date)
+        const [hours, minutes] = event.time.split(':').map(Number)
+        startTime.setHours(hours, minutes, 0, 0)
+        
+        const endTime = new Date(startTime.getTime() + event.duration * 60000)
+        
         const createData: CreateScheduleEvent = {
           title: event.title,
           description: event.description,
           event_type: event.type,
-          start_time: event.date.toISOString(),
-          end_time: new Date(event.date.getTime() + event.duration * 60000).toISOString(),
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
           duration_minutes: event.duration,
           client_name: event.clientName,
-          color: event.color || ScheduleUtils.getEventTypeColor(event.type)
+          client_email: event.clientEmail,
+          meeting_url: event.meetingUrl,
+          color: event.color || ScheduleUtils.getEventTypeColor(event.type),
+          // Add trainer information from session
+          trainer_id: session.user.id,
+          trainer_email: session.user.email
         }
         
+        console.log('📊 Create data:', createData)
         const newEvent = await ScheduleService.createEvent(createData)
+        console.log('✅ Event created:', newEvent)
         
         // Add to local state
         const calendarEvent = {
@@ -457,28 +841,54 @@ const ProfessionalCalendar: React.FC = () => {
           time: ScheduleUtils.formatTime(newEvent.start_time),
           duration: newEvent.duration_minutes,
           clientName: newEvent.client_name,
+          clientEmail: newEvent.client_email,
+          meetingUrl: newEvent.meeting_url,
           color: newEvent.color
         }
         
+        console.log('📅 Calendar event to add:', calendarEvent)
         setEvents(prev => [...prev, calendarEvent])
+        console.log('✅ Event added to local state')
       }
       
       setEditingEvent(undefined)
       setSelectedDate(undefined)
+      console.log('✅ Event save completed successfully')
     } catch (error) {
-      console.error('Error saving event:', error)
+      console.error('❌ Error saving event:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleEditEvent = (event: CalendarEvent) => {
+    console.log('handleEditEvent called with:', event.title)
     setEditingEvent(event)
     setIsDialogOpen(true)
   }
 
-  const handleDeleteEvent = (id: string) => {
-    setEvents(prev => prev.filter(e => e.id !== id))
+  const handleDeleteEvent = async (id: string) => {
+    try {
+      console.log('🗑️ Deleting event with ID:', id)
+      
+      // Convert string ID to number for database
+      const numericId = parseInt(id)
+      if (isNaN(numericId)) {
+        console.error('❌ Invalid event ID:', id)
+        return
+      }
+      
+      // Delete from database
+      await ScheduleService.deleteEvent(numericId)
+      console.log('✅ Event deleted from database')
+      
+      // Remove from local state
+      setEvents(prev => prev.filter(e => e.id !== id))
+      console.log('✅ Event removed from local state')
+    } catch (error) {
+      console.error('❌ Error deleting event:', error)
+      // You might want to show a toast notification here
+    }
   }
 
   const handleAddEvent = (date: Date) => {
@@ -493,7 +903,7 @@ const ProfessionalCalendar: React.FC = () => {
     setSelectedDate(undefined)
   }
 
-  // Time slots for daily view
+  // Time slots for daily view - Google Calendar style with better spacing
   const timeSlots = useMemo(() => {
     const slots = []
     for (let hour = 6; hour <= 22; hour++) {
@@ -503,35 +913,143 @@ const ProfessionalCalendar: React.FC = () => {
     return slots
   }, [])
 
+  // Hour slots for better time display
+  const hourSlots = useMemo(() => {
+    const slots = []
+    for (let hour = 6; hour <= 22; hour++) {
+      slots.push(`${hour.toString().padStart(2, '0')}:00`)
+    }
+    return slots
+  }, [])
+
   // Render different views
   const renderDailyView = () => {
     const dayEvents = getEventsForDay(currentDate, events)
+    console.log('📅 Daily view events for', currentDate, ':', dayEvents.length, dayEvents)
+    
+    // Google Calendar style - more zoomed in with better spacing
+    const startHour = 6
+    const endHour = 22
+    const totalMinutes = (endHour - startHour) * 60
+    const containerHeight = 1200 // Increased height for better zoom
+    const timeSlotHeight = 60 // 60px per 30-minute slot
+    
+    // Calculate pixels per minute for proportional display
+    const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-[600px] overflow-y-auto">
-        <div className="grid grid-cols-1 gap-0">
-          {timeSlots.map((time) => {
-            const timeEvents = getEventsForTimeSlot(currentDate, time, events)
+      <div className="h-[600px] overflow-y-auto relative bg-white dark:bg-gray-900">
+              {/* Time grid background - Google Calendar style */}
+      <div className="absolute inset-0 ml-20 z-0">
+          {hourSlots.map((time, index) => {
+            const [hours] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60
+            const top = minutesFromStart * pixelsPerMinute
+            
             return (
-              <div key={time} className="relative min-h-[60px] border-b border-gray-200 dark:border-gray-700">
-                <div className="absolute left-0 top-0 w-16 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{time}</span>
-                </div>
-                <div className="ml-16 p-2 min-h-[60px]">
-                  {timeEvents.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onEdit={handleEditEvent}
-                      onDelete={handleDeleteEvent}
-                    />
-                  ))}
+              <div 
+                key={time} 
+                className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700"
+                style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+              />
+            )
+          })}
+          
+          {/* Half-hour lines */}
+          {timeSlots.filter((_, index) => index % 2 === 1).map((time) => {
+            const [hours, minutes] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60 + minutes
+            const top = minutesFromStart * pixelsPerMinute
+            
+            return (
+              <div 
+                key={time} 
+                className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800"
+                style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+              />
+            )
+          })}
+        </div>
+        
+              {/* Time labels - Google Calendar style */}
+      <div className="absolute left-0 top-0 w-20 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10">
+          {hourSlots.map((time) => {
+            const [hours] = time.split(':').map(Number)
+            const minutesFromStart = (hours - startHour) * 60
+            const top = minutesFromStart * pixelsPerMinute
+            
+            return (
+              <div 
+                key={time} 
+                className="absolute flex items-start justify-end w-full pr-2 pt-1"
+                style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+              >
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  {hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        
+              {/* Events positioned absolutely with proportional sizing */}
+      <div className="ml-20 relative h-full z-20">
+          {dayEvents.map((event) => {
+            const eventDate = new Date(event.date)
+            const eventHours = eventDate.getHours()
+            const eventMinutes = eventDate.getMinutes()
+            
+            // Calculate position based on start time
+            const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
+            const top = minutesFromStart * pixelsPerMinute
+            
+            // Calculate height based on duration for proportional display
+            const height = Math.max(event.duration * pixelsPerMinute, 24) // Minimum 24px height
+            
+            return (
+              <div
+                key={event.id}
+                className="absolute left-2 right-2 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
+                style={{ 
+                  top: `${top}px`, 
+                  height: `${height}px`,
+                  minHeight: '24px' // Minimum height for visibility
+                }}
+                onClick={(e) => {
+                  console.log('Daily view event container clicked:', event.title)
+                  e.stopPropagation()
+                }}
+              >
+                <EventCard
+                  event={event}
+                  onEdit={handleEditEvent}
+                  onDelete={handleDeleteEvent}
+                  proportional={true}
+                />
+              </div>
+            )
+          })}
+        </div>
+        
+              {/* Add event button overlay - Google Calendar style */}
+      <div className="absolute inset-0 ml-20 pointer-events-none z-25">
+          <div className="relative h-full">
+            {timeSlots.map((time) => {
+              const [hours, minutes] = time.split(':').map(Number)
+              const minutesFromStart = (hours - startHour) * 60 + minutes
+              const top = minutesFromStart * pixelsPerMinute
+              
+              return (
+                <div 
+                  key={time}
+                  className="absolute left-0 right-0 flex justify-center pointer-events-auto"
+                  style={{ top: `${top}px`, height: '60px' }}
+                >
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity"
+                    className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-700/80 hover:bg-white dark:hover:bg-gray-700"
                     onClick={() => {
-                      const [hours, minutes] = time.split(':').map(Number)
                       const eventDate = new Date(currentDate)
                       eventDate.setHours(hours, minutes, 0, 0)
                       handleAddEvent(eventDate)
@@ -540,9 +1058,9 @@ const ProfessionalCalendar: React.FC = () => {
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
     )
@@ -552,30 +1070,59 @@ const ProfessionalCalendar: React.FC = () => {
     const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 })
     const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 })
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd })
+    console.log('📅 Weekly view events:', events.length, events)
+    
+    // Weekly view with consistent time span (same as Daily view)
+    const startHour = 6
+    const endHour = 22
+    const totalMinutes = (endHour - startHour) * 60
+    const containerHeight = 1200 // Same as Daily view for consistent spacing
+    const timeSlotHeight = 60 // Same as Daily view: 60px per 30-minute slot
+    const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-[600px] overflow-y-auto">
+      <div className="h-[600px] overflow-y-auto bg-white dark:bg-gray-900">
         <div className="grid grid-cols-8 gap-0">
-          {/* Time column */}
-          <div className="border-r border-gray-200 dark:border-gray-700">
-            {timeSlots.map((time) => (
-              <div key={time} className="h-[60px] border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{time}</span>
-              </div>
-            ))}
+                  {/* Time column - Enhanced with 30-minute ticks */}
+        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10">
+            {/* Time header */}
+            <div className="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
+              <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
+            </div>
+            
+            {/* Time labels - Hour only (like Daily view) */}
+            <div className="relative h-[552px]">
+              {hourSlots.map((time) => {
+                const [hours] = time.split(':').map(Number)
+                const minutesFromStart = (hours - startHour) * 60
+                const top = minutesFromStart * pixelsPerMinute
+                
+                return (
+                  <div 
+                    key={time} 
+                    className="absolute flex items-start justify-end w-full pr-2 pt-1"
+                    style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+                  >
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      {hours === 12 ? '12 PM' : hours > 12 ? `${hours - 12} PM` : `${hours} AM`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           
-          {/* Day columns */}
+          {/* Day columns with proportional event positioning */}
           {weekDays.map((day) => {
             const dayEvents = getEventsForDay(day, events)
             const isCurrentDay = isToday(day)
             
             return (
               <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700">
-                {/* Day header */}
-                <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center ${
-                  isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                }`}>
+                              {/* Day header - Google Calendar style */}
+              <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center z-10 ${
+                isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
+              }`}>
                   <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                     {format(day, 'EEE')}
                   </span>
@@ -586,23 +1133,106 @@ const ProfessionalCalendar: React.FC = () => {
                   </span>
                 </div>
                 
-                {/* Time slots */}
-                {timeSlots.map((time) => {
-                  const timeEvents = getEventsForTimeSlot(day, time, events)
-                  return (
-                    <div key={time} className="relative h-[60px] border-b border-gray-200 dark:border-gray-700 p-1">
-                      {timeEvents.map((event) => (
+                {/* Time grid background - Hour only (like Daily view) */}
+                <div className="relative h-[552px]">
+                  {/* Hour lines */}
+                  {hourSlots.map((time) => {
+                    const [hours] = time.split(':').map(Number)
+                    const minutesFromStart = (hours - startHour) * 60
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    return (
+                      <div 
+                        key={time} 
+                        className="absolute left-0 right-0 border-b-2 border-gray-100 dark:border-gray-700 z-0"
+                        style={{ top: `${top}px`, height: `${timeSlotHeight * 2}px` }}
+                      />
+                    )
+                  })}
+                  
+                  {/* Half-hour lines (lighter) */}
+                  {timeSlots.filter((_, index) => index % 2 === 1).map((time) => {
+                    const [hours, minutes] = time.split(':').map(Number)
+                    const minutesFromStart = (hours - startHour) * 60 + minutes
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    return (
+                      <div 
+                        key={time} 
+                        className="absolute left-0 right-0 border-b border-gray-50 dark:border-gray-800 z-0"
+                        style={{ top: `${top}px`, height: `${timeSlotHeight}px` }}
+                      />
+                    )
+                  })}
+                  
+                  {/* Events positioned absolutely with proportional sizing */}
+                  {dayEvents.map((event) => {
+                    const eventDate = new Date(event.date)
+                    const eventHours = eventDate.getHours()
+                    const eventMinutes = eventDate.getMinutes()
+                    
+                    // Calculate position based on start time
+                    const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
+                    const top = minutesFromStart * pixelsPerMinute
+                    
+                    // Calculate height based on duration for proportional display
+                    const height = Math.max(event.duration * pixelsPerMinute, 32) // Increased minimum height for multi-line layout
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
+                        style={{ 
+                          top: `${top}px`, 
+                          height: `${height}px`,
+                          minHeight: '32px' // Increased minimum height for multi-line layout
+                        }}
+                        onClick={(e) => {
+                          console.log('Weekly view event container clicked:', event.title)
+                          e.stopPropagation()
+                        }}
+                      >
                         <EventCard
-                          key={event.id}
                           event={event}
                           onEdit={handleEditEvent}
                           onDelete={handleDeleteEvent}
                           compact={true}
+                          proportional={true}
                         />
-                      ))}
-                    </div>
-                  )
-                })}
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Add event button overlay - Simplified timeline */}
+                  <div className="absolute inset-0 pointer-events-none z-25">
+                    {timeSlots.map((time) => {
+                      const [hours, minutes] = time.split(':').map(Number)
+                      const minutesFromStart = (hours - startHour) * 60 + minutes
+                      const top = minutesFromStart * pixelsPerMinute
+                      
+                      return (
+                        <div 
+                          key={time}
+                          className="absolute left-0 right-0 flex justify-center pointer-events-auto"
+                          style={{ top: `${top}px`, height: '60px' }}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 opacity-0 hover:opacity-100 transition-opacity bg-white/80 dark:bg-gray-700/80"
+                            onClick={() => {
+                              const eventDate = new Date(day)
+                              eventDate.setHours(hours, minutes, 0, 0)
+                              handleAddEvent(eventDate)
+                            }}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             )
           })}
@@ -700,33 +1330,45 @@ const ProfessionalCalendar: React.FC = () => {
           </CardTitle>
           
           <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
+            {/* View Toggle - Improved styling for better clickability */}
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm relative z-10">
               <Button
-                variant={view === "daily" ? "default" : "outline"}
+                variant={view === "daily" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("daily")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "daily" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <List className="h-4 w-4 mr-1" />
+                <List className="h-4 w-4 mr-2" />
                 Daily
               </Button>
               <Button
-                variant={view === "weekly" ? "default" : "outline"}
+                variant={view === "weekly" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("weekly")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "weekly" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <Grid3X3 className="h-4 w-4 mr-1" />
+                <Grid3X3 className="h-4 w-4 mr-2" />
                 Weekly
               </Button>
               <Button
-                variant={view === "monthly" ? "default" : "outline"}
+                variant={view === "monthly" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setView("monthly")}
-                className="rounded-none border-0"
+                className={`rounded-none border-0 px-4 py-2 transition-all duration-200 cursor-pointer ${
+                  view === "monthly" 
+                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm" 
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                }`}
               >
-                <Calendar className="h-4 w-4 mr-1" />
+                <Calendar className="h-4 w-4 mr-2" />
                 Monthly
               </Button>
             </div>

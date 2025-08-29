@@ -3,192 +3,251 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Utensils, AlertTriangle, Coffee, Sun, Moon, Apple } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Clock, Utensils, AlertTriangle, Coffee, Sun, Moon, Apple, Calendar } from "lucide-react"
+import { formatLocalTime } from "@/utils/datetime"
 
 interface NutritionalPreferencesSectionProps {
   client: any
 }
 
 export function NutritionalPreferencesSection({ client }: NutritionalPreferencesSectionProps) {
-  // Helper function to format time
-  const formatTime = (time: string | null) => {
-    if (!time) return "Not set"
-    try {
-      return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      })
-    } catch {
-      return time
-    }
-  }
-
-  // Helper function to render array of preferences
-  const renderPreferences = (preferences: string[] | null) => {
-    if (!preferences || preferences.length === 0) {
-      return <span className="text-gray-500 italic">None specified</span>
-    }
+  // Guard: if no client data is supplied just render a friendly empty state
+  if (!client) {
     return (
-      <div className="flex flex-wrap gap-2">
-        {preferences.map((pref, index) => (
-          <Badge key={index} variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-            {pref}
-          </Badge>
-        ))}
-      </div>
+      <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-gray-700 dark:text-gray-200">
+            <Utensils className="h-5 w-5 text-blue-500" />
+            Nutritional Preferences
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400">No client selected.</p>
+        </CardContent>
+      </Card>
     )
   }
 
+  // Helper function to format time consistently
+  const formatTime = (time: string | null) => formatLocalTime(time)
+
+  // Helper function to format preferences
+  const formatPreferences = (preferences: string[] | null): string[] => {
+    if (!preferences || preferences.length === 0) return []
+    return preferences.map(pref => 
+      pref.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+    )
+  }
+
+  // Helper function to format allergies
+  const formatAllergies = (allergies: string | null): string[] => {
+    if (!allergies) return []
+    return allergies.split(',').map(allergy => allergy.trim()).filter(Boolean)
+  }
+
+  // Get formatted values
+  const dietPreferences = formatPreferences(client.diet_preferences)
+  const foodAllergies = formatAllergies(client.food_allergies)
+  const preferredMealsPerDay = client.preferred_meals_per_day || 'Not set'
+  const eatingHabits = client.eating_habits || null
+
+  // Get meal times
+  const breakfastTime = formatTime(client.bf_time)
+  const lunchTime = formatTime(client.lunch_time)
+  const dinnerTime = formatTime(client.dinner_time)
+  const snackTime = formatTime(client.snack_time)
+  const wakeTime = formatTime(client.wake_time)
+  const bedTime = formatTime(client.bed_time)
+
+  // Get preference color
+  const getPreferenceColor = (preference: string) => {
+    const pref = preference.toLowerCase()
+    if (pref.includes('vegetarian') || pref.includes('vegan')) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+    if (pref.includes('keto') || pref.includes('low carb')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+    if (pref.includes('paleo') || pref.includes('whole30')) return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+    if (pref.includes('mediterranean')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+    if (pref.includes('gluten') || pref.includes('dairy')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Diet Preferences */}
-      <Card className="border-l-4 border-l-green-500">
+    <TooltipProvider>
+      <Card className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg text-green-600">
-            <Utensils className="h-5 w-5" />
-            Diet Preferences
+          <CardTitle className="flex items-center gap-2 text-lg text-gray-900 dark:text-white">
+            <Utensils className="h-5 w-5 text-blue-500" />
+            Nutritional Preferences & Meal Planning
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {renderPreferences(client?.diet_preferences)}
-        </CardContent>
-      </Card>
-
-      {/* Food Allergies */}
-      <Card className="border-l-4 border-l-red-500">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg text-red-600">
-            <AlertTriangle className="h-5 w-5" />
-            Food Allergies
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {client?.food_allergies ? (
-            <div className="flex flex-wrap gap-2">
-              {client.food_allergies.split(',').map((allergy: string, index: number) => (
-                <Badge key={index} variant="destructive" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                  {allergy.trim()}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <span className="text-gray-500 italic">No allergies specified</span>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Meal Schedule */}
-      <Card className="border-l-4 border-l-purple-500">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg text-purple-600">
-            <Clock className="h-5 w-5" />
-            Meal Schedule
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Diet Preferences & Allergies Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Breakfast Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.bf_time)}
-                </span>
+            {/* Diet Preferences */}
+            <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <div className="p-2 bg-green-100 dark:bg-green-800 rounded-lg">
+                <Utensils className="h-4 w-4 text-green-600" />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Lunch Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.lunch_time)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Dinner Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.dinner_time)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Snack Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.snack_time)}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Diet Preferences</div>
+                <div className="flex flex-wrap gap-1">
+                  {dietPreferences.length > 0 ? (
+                    dietPreferences.map((pref, index) => (
+                      <Badge key={index} className={`text-xs ${getPreferenceColor(pref)}`}>
+                        {pref}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">None specified</span>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Preferred Meals/Day:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {client?.preferred_meals_per_day || "Not set"}
-                </span>
+
+            {/* Food Allergies */}
+            <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <div className="p-2 bg-red-100 dark:bg-red-800 rounded-lg">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Wake Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.wake_time)}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Food Allergies</div>
+                <div className="flex flex-wrap gap-1">
+                  {foodAllergies.length > 0 ? (
+                    foodAllergies.map((allergy, index) => (
+                      <Badge key={index} variant="destructive" className="text-xs">
+                        {allergy}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">None specified</span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Bed Time:</span>
-                <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatTime(client?.bed_time)}
-                </span>
+            </div>
+          </div>
+
+          {/* Meal Schedule Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Meal Times */}
+            <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <div className="p-2 bg-purple-100 dark:bg-purple-800 rounded-lg">
+                <Clock className="h-4 w-4 text-purple-600" />
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Meal Times</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Breakfast:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{breakfastTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Lunch:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{lunchTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Dinner:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{dinnerTime}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Daily Schedule */}
+            <div className="flex items-center gap-3 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
+                <Calendar className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Daily Schedule</div>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Wake:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{wakeTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Bed:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{bedTime}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Meals/Day:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{preferredMealsPerDay}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Snack Time */}
+          <div className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+            <div className="p-2 bg-orange-100 dark:bg-orange-800 rounded-lg">
+              <Apple className="h-4 w-4 text-orange-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Snack Time</div>
+              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                {snackTime}
+              </div>
+            </div>
+          </div>
+
+          {/* Eating Habits */}
+          {eatingHabits && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg cursor-help">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-800 rounded-lg">
+                    <Coffee className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Eating Habits</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {eatingHabits.length > 50 
+                        ? `${eatingHabits.substring(0, 50)}...` 
+                        : eatingHabits}
+                    </div>
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-md">
+                <div className="space-y-2">
+                  <div className="font-medium">Eating Habits:</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300">
+                    {eatingHabits}
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Summary Stats */}
+          <div className="grid grid-cols-4 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-center">
+              <div className="text-lg font-bold text-green-600">
+                {dietPreferences.length > 0 ? '✓' : '○'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Preferences</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-red-600">
+                {foodAllergies.length > 0 ? '⚠' : '○'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Allergies</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-purple-600">
+                {[breakfastTime, lunchTime, dinnerTime, snackTime].filter(time => time !== 'Not set').length > 0 ? '✓' : '○'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Meal Times</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-orange-600">
+                {eatingHabits ? '✓' : '○'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Habits</div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Eating Habits */}
-      {client?.eating_habits && (
-        <Card className="border-l-4 border-l-orange-500">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg text-orange-600">
-              <Apple className="h-5 w-5" />
-              Eating Habits
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-              {client.eating_habits}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Summary Stats */}
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg text-blue-600">Nutritional Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-blue-600">
-                {client?.diet_preferences?.length || 0}
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Diet Preferences</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-red-600">
-                {client?.food_allergies ? client.food_allergies.split(',').length : 0}
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Allergies</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-purple-600">
-                {client?.preferred_meals_per_day || 0}
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Meals/Day</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-green-600">
-                {[client?.bf_time, client?.lunch_time, client?.dinner_time, client?.snack_time].filter(Boolean).length}
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">Times Set</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </TooltipProvider>
   )
 } 

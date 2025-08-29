@@ -66,10 +66,35 @@ export function useAuth() {
             .eq('trainer_email', userData.email)
             .single();
 
-          if (trainerError && trainerError.code !== 'PGRST116') {
-            // PGRST116 is "not found" error, which is expected for new users
-            console.error('Error fetching trainer data:', trainerError);
-            setError(trainerError.message);
+          if (trainerError) {
+            if (trainerError.code === 'PGRST116') {
+              // Not found: create trainer record on initial load
+              const { data: newTrainer, error: insertError } = await supabase
+                .from('trainer')
+                .insert([
+                  {
+                    trainer_email: userData.email,
+                    trainer_name: userData.full_name || 'New Trainer',
+                    avatar_url: userData.avatar_url,
+                    google_id: userData.google_id,
+                    full_name: userData.full_name,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  }
+                ])
+                .select()
+                .single();
+
+              if (!insertError && newTrainer) {
+                setTrainer(newTrainer);
+              } else if (insertError) {
+                console.error('Error creating trainer record on init:', insertError);
+                setError(insertError.message);
+              }
+            } else {
+              console.error('Error fetching trainer data:', trainerError);
+              setError(trainerError.message);
+            }
           } else if (trainerData) {
             setTrainer(trainerData);
           }

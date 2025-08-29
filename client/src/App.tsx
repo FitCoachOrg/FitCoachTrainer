@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { queryClient } from "./lib/queryClient"
 import { useState, useEffect } from "react"
 import { supabase } from "./lib/supabase"
+import { warmupExerciseCache } from "./lib/search-based-workout-plan"
 
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -27,13 +28,20 @@ import ClientProfilePage from "./pages/ClientProfilePage"
 import HomePage from "./pages/HomePage"
 import Navbar from "./components/layout/Navbar"
 import { cn } from "@/lib/utils"
-import ExerciseLibrary from "./pages/ExcerciseLibrary"
+import ExerciseLibrary from "./pages/ExerciseLibrary"
 import FitnessCalendar from "./pages/Calendar-excercise"
 import SignupPage from "./pages/Signup"
 import AllProgramsPage from './pages/programs'
 import TrainerProfilePage from "./pages/TrainerProfilePage"
+import TrainerSignup from "./pages/TrainerSignup"
+import TrainerRegistration from "./pages/TrainerRegistration"
+import TrainerWelcome from "./pages/TrainerWelcome"
 import AuthCallback from "@/components/auth/AuthCallback"
 import DatePickerTestPage from "./pages/DatePickerTestPage"
+import Admin from "./pages/Admin"
+import PrivacyPolicy from "./pages/PrivacyPolicy"
+import TermsOfService from "./pages/TermsOfService"
+import Footer from "./components/layout/Footer"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -42,12 +50,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
+    console.log('[ProtectedRoute] location:', location.pathname)
     // Check authentication status
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
+        console.log('[ProtectedRoute] getSession ->', !!session)
         if (session) {
           setIsAuthenticated(true)
+          // Warm up exercise cache when user is authenticated
+          warmupExerciseCache().catch(error => {
+            console.warn('Failed to warm up exercise cache:', error);
+          });
         } else {
           setIsAuthenticated(false)
         }
@@ -63,8 +77,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[ProtectedRoute] onAuthStateChange:', event, !!session)
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true)
+        // Warm up exercise cache when user signs in
+        warmupExerciseCache().catch(error => {
+          console.warn('Failed to warm up exercise cache:', error);
+        });
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false)
       }
@@ -74,6 +93,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }, [])
 
   if (isLoading) {
+    console.log('[ProtectedRoute] Loading gate active')
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -83,10 +103,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
+    console.log('[ProtectedRoute] Not authenticated, redirecting to /login')
     return <Navigate to="/login" replace />
   }
 
   // If authenticated, show the protected content
+  console.log('[ProtectedRoute] Authenticated, rendering protected content for', location.pathname)
   return <>{children}</>
 }
 
@@ -110,9 +132,10 @@ const ProtectedLayout = ({ children }: { children: React.ReactNode }) => {
 // Layout for public routes (no sidebar/topbar)
 const PublicLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      {children}
+      <main className="flex-1">{children}</main>
+      <Footer />
     </div>
   )
 }
@@ -123,7 +146,12 @@ function App() {
       <ThemeProvider>
         <SidebarProvider>
           <TooltipProvider>
-            <BrowserRouter>
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+              }}
+            >
               <Routes>
                 {/* Public routes - no authentication required */}
                 <Route
@@ -148,6 +176,51 @@ function App() {
                     <PublicLayout>
                       <SignupPage />
                     </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/trainer-signup"
+                  element={
+                    <PublicLayout>
+                      <TrainerSignup />
+                    </PublicLayout>
+                  }
+                />
+                <Route
+                  path="/trainer-signup/register"
+                  element={
+                    <PublicLayout>
+                      <TrainerRegistration />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/privacy-policy"
+                  element={
+                    <PublicLayout>
+                      <PrivacyPolicy />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/terms-of-service"
+                  element={
+                    <PublicLayout>
+                      <TermsOfService />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/trainer-welcome"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <TrainerWelcome />
+                      </ProtectedLayout>
+                    </ProtectedRoute>
                   }
                 />
                 <Route
@@ -198,7 +271,7 @@ function App() {
                   }
                 /> 
                 <Route
-                  path="/excercise-lib"
+                  path="/exercise-lib"
                   element={
                     <ProtectedRoute>
                       <ProtectedLayout>
@@ -282,6 +355,16 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <TrainerProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <ProtectedLayout>
+                        <Admin />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />

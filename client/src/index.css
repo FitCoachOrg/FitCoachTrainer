@@ -96,6 +96,258 @@ select {
   transition: all 0.2s ease-in-out;
 }
 
+/* Line clamp utilities for text truncation */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+/* Workout plan table responsive constraints */
+.workout-plan-table-container {
+  max-width: 100%;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.workout-plan-table-container table {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+/* Ensure table cells don't overflow on small screens */
+@media (max-width: 640px) {
+  .workout-plan-table-container th,
+  .workout-plan-table-container td {
+    padding: 0.25rem 0.125rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Compact table styles for workout plans */
+.workout-plan-table-container th,
+.workout-plan-table-container td {
+  padding: 0.5rem 0.375rem;
+  font-size: 0.875rem;
+}
+
+/* Even more compact on medium screens */
+@media (max-width: 768px) {
+  .workout-plan-table-container th,
+  .workout-plan-table-container td {
+    padding: 0.375rem 0.25rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Ultra-compact table styles for small screens */
+@media (max-width: 480px) {
+  .workout-plan-table-container th,
+  .workout-plan-table-container td {
+    padding: 0.25rem 0.125rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Compact delete button styles */
+.workout-plan-table-container .delete-btn {
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0.125rem;
+}
+
+.workout-plan-table-container .delete-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Additional compact table styles */
+.workout-plan-table-container .editable-cell {
+  min-height: 1.5rem;
+  padding: 0.125rem 0.25rem;
+}
+
+.workout-plan-table-container .exercise-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Reduce spacing in table rows */
+.workout-plan-table-container tr {
+  border-spacing: 0;
+}
+
+/* Compact icon sizes */
+.workout-plan-table-container .exercise-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Ultra-compact table layout */
+.workout-plan-table-container table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.workout-plan-table-container td,
+.workout-plan-table-container th {
+  border: none;
+  vertical-align: middle;
+}
+
+/* Reduce spacing between table elements */
+.workout-plan-table-container .table-row {
+  margin: 0;
+  padding: 0;
+}
+
+/* Compact input fields */
+.workout-plan-table-container input,
+.workout-plan-table-container textarea {
+  min-height: 1.5rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.875rem;
+}
+
+/* Ensure table fits within viewport */
+.workout-plan-table-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Compact button styles */
+.workout-plan-table-container button {
+  min-height: 1.5rem;
+  padding: 0.125rem 0.25rem;
+}
+
+/* Reduce margins and padding in table cells */
+.workout-plan-table-container .cell-content {
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure table fits perfectly within container */
+.workout-plan-table-container .table {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  table-layout: fixed;
+}
+
+/* Force table to respect container width */
+.workout-plan-table-container table {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: auto !important;
+}
+
+/* Compact table header */
+.workout-plan-table-container thead th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Ensure no overflow on small screens */
+@media (max-width: 480px) {
+  .workout-plan-table-container {
+    font-size: 0.75rem;
+  }
+  
+  .workout-plan-table-container .exercise-cell {
+    gap: 0.25rem;
+  }
+}
+
+/* Additional compact table optimizations */
+.workout-plan-table-container td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+/* Ensure exercise cell with delete button is properly sized */
+.workout-plan-table-container .exercise-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.workout-plan-table-container .exercise-cell .editable-cell {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workout-plan-table-container td:first-child,
+.workout-plan-table-container td:nth-child(2) {
+  text-align: center;
+  width: auto;
+}
+
+/* Ensure exercise name can wrap if needed */
+.workout-plan-table-container .exercise-cell .editable-cell {
+  white-space: normal;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/* Critical: Ensure table never overflows container */
+.workout-plan-table-container {
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.workout-plan-table-container table {
+  min-width: auto !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Ensure all table cells respect their assigned widths */
+.workout-plan-table-container th,
+.workout-plan-table-container td {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ensure the card content wrapper is also constrained */
+.workout-plan-table-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 /* Glow effect for neon green elements */
 .hover\:shadow-\[#39FF14\]\/25:hover {
   box-shadow: 0 0 20px rgba(57, 255, 20, 0.25);
@@ -134,4 +386,59 @@ select {
   .rotate-y-180 {
     transform: rotateY(180deg);
   }
+}
+
+/* Flip card animations */
+.transform.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Ensure proper 3D perspective for flip cards */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+/* Smooth transitions for flip cards */
+.transition-all.duration-500 {
+  transition: all 0.5s ease-in-out;
+}
+
+/* Hover effects for flip cards */
+.hover\:shadow-lg:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* 3D flip card styles */
+.flip-card {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  /* Ensure the inner container has visible height even with absolutely-positioned faces */
+  min-height: 260px;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.5s;
+  transform-style: preserve-3d;
+}
+
+.flip-card.flipped .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-front, .flip-card-back {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.flip-card-back {
+  transform: rotateY(180deg);
 }

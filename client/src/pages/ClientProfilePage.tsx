@@ -50,6 +50,7 @@ import {
   CalendarDays,
   Search as SearchIcon,
   Table,
+  FileText,
 } from "lucide-react"
 import {
   LineChart as Chart,
@@ -65,7 +66,7 @@ import {
   Cell,
 } from "recharts"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { DndContext, closestCenter, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -82,6 +83,12 @@ import { AICoachInsightsSection } from "@/components/overview/AICoachInsightsSec
 import { StructuredTrainerNotesSection } from "@/components/StructuredTrainerNotesSection"
 import { ProgramManagementSection } from "@/components/ProgramManagementSection"
 import { ProgramsScreen } from "@/components/ProgramsScreen"
+import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
+import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
+import { TrainingPreferencesSection } from "@/components/overview/TrainingPreferencesSection"
+import FitnessScoreVisualization from "@/components/fitness-score/FitnessScoreVisualization"
+import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
+import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -106,6 +113,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
+import { getClientImageUrl, getFallbackAvatarUrl } from '@/utils/image-utils'
 
 // Import the real AI workout plan generator (used in WorkoutPlanSection)
 // import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
@@ -114,6 +122,7 @@ import { supabase } from "@/lib/supabase"
 import { summarizeTrainerNotes } from "@/lib/ai-notes-summary"
 import { performComprehensiveCoachAnalysis } from "@/lib/ai-comprehensive-coach-analysis"
 import { Progress } from "@/components/ui/progress"
+import { AICoachInsightsState, createDefaultAICoachInsightsState } from "@/types/ai-coach-insights"
 
 // Helper functions to format and parse trainer notes with AI recommendations
 const formatNotesWithAI = (notes: string, aiAnalysis: any): string => {
@@ -130,6 +139,7 @@ ${JSON.stringify(aiAnalysis)}
 
 import { getOrCreateEngagementScore } from "@/lib/client-engagement"
 import { MetricsSection } from "@/components/metrics/MetricsSection"
+import ClientOverviewSection from "@/components/ClientOverviewSection"
 
 
 // Define types for AI response (matching the actual implementation)
@@ -642,7 +652,8 @@ const AINotesSummaryPopup = ({ isOpen, onClose, summaryResponse, clientName }: {
   useEffect(() => {
     if (summaryResponse?.aiResponse?.response) {
       try {
-        const jsonMatch = summaryResponse.aiResponse.response.match(/\{[\s\S]*\}/);
+        const responseStr = summaryResponse.aiResponse.response;
+        const jsonMatch = responseStr.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsedData = JSON.parse(jsonMatch[0]);
           setParsedSummary(parsedData);
@@ -1293,9 +1304,27 @@ const PageLoading = () => {
 // Enhanced Main Component
 export default function ClientDashboard() {
   const params = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const clientId = params.id && !isNaN(Number(params.id)) ? Number(params.id) : undefined;
   console.log("params:", params, "clientId:", clientId);
-  const [activeTab, setActiveTab] = useState("metrics")
+  
+  // Get initial tab from URL params or localStorage, default to "metrics"
+  const getInitialTab = () => {
+    // First check URL parameters
+    const urlParams = new URLSearchParams(location.search);
+    const tabFromUrl = urlParams.get('tab');
+    if (tabFromUrl) return tabFromUrl;
+    
+    // Then check localStorage
+    const savedTab = localStorage.getItem(`client-${clientId}-activeTab`);
+    if (savedTab) return savedTab;
+    
+    // Default to metrics
+    return "metrics";
+  };
+  
+  const [activeTab, setActiveTab] = useState(getInitialTab);
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [clientImageUrl, setClientImageUrl] = useState<string | null>(null);
@@ -1319,13 +1348,72 @@ export default function ClientDashboard() {
   const [isEditingNotes, setIsEditingNotes] = useState(false)
   const [isSavingNotes, setIsSavingNotes] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
+  
+  // Unified AI Coach Insights State
+  const [aiCoachInsights, setAiCoachInsights] = useState<AICoachInsightsState | null>(null)
   const [allClientGoals, setAllClientGoals] = useState<string[]>([])
+  
+  // Unified popup state for placeholder cards
+  const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
+  const [showFitnessScore, setShowFitnessScore] = useState(false)
   const [todoItems, setTodoItems] = useState(
     "1. Schedule nutrition consultation\n2. Update workout plan for next month\n3. Review progress photos\n4. Plan recovery week"
   )
   const [isEditingTodo, setIsEditingTodo] = useState(false)
-  const navigate = useNavigate()
   const [aiInsightsActiveTab, setAiInsightsActiveTab] = useState<'summary' | 'action_plan' | 'recommendations' | 'insights'>('summary')
+
+  // Save active tab to localStorage and update URL when tab changes
+  useEffect(() => {
+    if (clientId && activeTab) {
+      // Save to localStorage
+      localStorage.setItem(`client-${clientId}-activeTab`, activeTab);
+      
+      // Update URL without causing a page reload
+      const urlParams = new URLSearchParams(location.search);
+      urlParams.set('tab', activeTab);
+      navigate(`${location.pathname}?${urlParams.toString()}`, { replace: true });
+    }
+  }, [activeTab, clientId, location.pathname, location.search, navigate]);
+
+  // Reset tab state when clientId changes
+  useEffect(() => {
+    if (clientId) {
+      const newInitialTab = getInitialTab();
+      setActiveTab(newInitialTab);
+    }
+  }, [clientId, location.search]);
+
+  // Force layout containment when content loads
+  useEffect(() => {
+    const forceContainment = () => {
+      const container = document.querySelector('.client-profile-tab-content');
+      if (container) {
+        // Force all child elements to respect container width
+        const allChildren = container.querySelectorAll('*');
+        allChildren.forEach((child: any) => {
+          if (child.style) {
+            child.style.maxWidth = '100%';
+            child.style.boxSizing = 'border-box';
+            child.style.overflowX = 'hidden';
+          }
+        });
+      }
+    };
+
+    // Apply containment immediately
+    forceContainment();
+    
+    // Apply containment after a short delay to catch dynamically loaded content
+    const timer = setTimeout(forceContainment, 100);
+    
+    // Apply containment when client data changes
+    if (client) {
+      const clientTimer = setTimeout(forceContainment, 200);
+      return () => clearTimeout(clientTimer);
+    }
+
+    return () => clearTimeout(timer);
+  }, [client, activeTab]);
 
   // Handler for client selection from sidebar
   const handleClientSelect = (selectedClientId: number) => {
@@ -1410,6 +1498,36 @@ export default function ClientDashboard() {
     console.log("Todo saved:", todoItems)
   }
 
+  // Unified AI Coach Insights Management
+  const handleGenerateAIAnalysis = async () => {
+    if (!client?.client_id || !trainerNotes) {
+      console.log("Cannot generate AI analysis: missing client or trainer notes");
+      return;
+    }
+
+    try {
+      setIsGeneratingAnalysis(true);
+      console.log('🤖 Generating AI analysis from trainer notes...');
+      
+      const result = await performComprehensiveCoachAnalysis(
+        client.client_id,
+        trainerNotes,
+        '' // No todo items for now
+      );
+
+      if (result.success && result.analysis) {
+        setLastAIRecommendation(result.analysis);
+        console.log('✅ AI analysis generated successfully:', result.analysis);
+      } else {
+        console.error('❌ AI analysis failed:', result.message);
+      }
+    } catch (error: any) {
+      console.error('❌ Error generating AI analysis:', error);
+    } finally {
+      setIsGeneratingAnalysis(false);
+    }
+  };
+
   const handleSummarizeNotes = async () => {
     if (!trainerNotes || trainerNotes.trim().length === 0) {
       console.log("No trainer notes to summarize");
@@ -1447,12 +1565,8 @@ export default function ClientDashboard() {
         let analysisData;
         try {
           if (result.aiResponse?.response) {
-            const jsonMatch = result.aiResponse.response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              analysisData = JSON.parse(jsonMatch[0]);
-            } else {
-              analysisData = JSON.parse(result.aiResponse.response);
-            }
+            // The response is already an object, so we can use it directly
+            analysisData = result.aiResponse.response;
           }
         } catch (parseError) {
           console.error('❌ Failed to parse AI response:', parseError);
@@ -1495,6 +1609,47 @@ export default function ClientDashboard() {
     }
   };
 
+  // Initialize unified AI Coach Insights state
+  useEffect(() => {
+    if (client && clientId) {
+      const unifiedState = createDefaultAICoachInsightsState(
+        setLastAIRecommendation,
+        setTrainerNotes,
+        setNotesDraft,
+        setIsEditingNotes,
+        setIsSavingNotes,
+        setNotesError,
+        handleSaveTrainerNotes,
+        handleGenerateAIAnalysis,
+        isSummarizingNotes,
+        handleSummarizeNotes
+      );
+      
+      // Update with current values
+      unifiedState.lastAIRecommendation = lastAIRecommendation;
+      unifiedState.isGeneratingAnalysis = isGeneratingAnalysis;
+      unifiedState.trainerNotes = trainerNotes;
+      unifiedState.notesDraft = notesDraft;
+      unifiedState.isEditingNotes = isEditingNotes;
+      unifiedState.isSavingNotes = isSavingNotes;
+      unifiedState.notesError = notesError;
+      unifiedState.isSummarizingNotes = isSummarizingNotes;
+      
+      setAiCoachInsights(unifiedState);
+    }
+  }, [
+    client, 
+    clientId, 
+    lastAIRecommendation, 
+    isGeneratingAnalysis, 
+    trainerNotes, 
+    notesDraft, 
+    isEditingNotes, 
+    isSavingNotes, 
+    notesError, 
+    isSummarizingNotes
+  ]);
+
 
 
   // Function to refresh client data after goals are saved
@@ -1528,52 +1683,83 @@ export default function ClientDashboard() {
 
   // Fetch trainer id and clients for dropdown
   useEffect(() => {
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
-      setClientsLoading(true);
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.email) {
+      try {
+        console.log('🔄 Loading trainer clients...');
+        setClientsLoading(true);
+        
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData?.session?.user?.email) {
+          if (isMounted) {
+            setClientsLoading(false);
+          }
+          return;
+        }
+        const trainerEmail = sessionData.session.user.email;
+        
+        // Fetch trainer id
+        const { data: trainerData, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", trainerEmail)
+          .single();
+        if (trainerError || !trainerData?.id) {
+          if (isMounted) {
+            setClientsLoading(false);
+          }
+          return;
+        }
+        
+        // Fetch all client_ids for this trainer from the linking table
+        const { data: linkRows, error: linkError } = await supabase
+          .from("trainer_client_web")
+          .select("client_id")
+          .eq("trainer_id", trainerData.id);
+        if (linkError || !linkRows || linkRows.length === 0) {
+          if (isMounted) {
+            setTrainerClients([]);
+            setClientsLoading(false);
+          }
+          return;
+        }
+        const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
+        if (clientIds.length === 0) {
+          if (isMounted) {
+            setTrainerClients([]);
+            setClientsLoading(false);
+          }
+          return;
+        }
+        
+        // Fetch complete client data for these client_ids
+        const { data: clientsData, error: clientsError } = await supabase
+          .from("client")
+          .select("client_id, cl_name, cl_email, last_active, created_at")
+          .in("client_id", clientIds);
+        
+        if (!isMounted) return; // Don't update state if component unmounted
+        
+        if (!clientsError && clientsData) {
+          setTrainerClients(clientsData);
+        } else {
+          setTrainerClients([]);
+        }
         setClientsLoading(false);
-        return;
+      } catch (error) {
+        console.error('❌ Error loading trainer clients:', error);
+        if (isMounted) {
+          setTrainerClients([]);
+          setClientsLoading(false);
+        }
       }
-      const trainerEmail = sessionData.session.user.email;
-      // Fetch trainer id
-      const { data: trainerData, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", trainerEmail)
-        .single();
-      if (trainerError || !trainerData?.id) {
-        setClientsLoading(false);
-        return;
-      }
-      // Fetch all client_ids for this trainer from the linking table
-      const { data: linkRows, error: linkError } = await supabase
-        .from("trainer_client_web")
-        .select("client_id")
-        .eq("trainer_id", trainerData.id);
-      if (linkError || !linkRows || linkRows.length === 0) {
-        setTrainerClients([]);
-        setClientsLoading(false);
-        return;
-      }
-      const clientIds = linkRows.map((row: any) => row.client_id).filter(Boolean);
-      if (clientIds.length === 0) {
-        setTrainerClients([]);
-        setClientsLoading(false);
-        return;
-      }
-      // Fetch complete client data for these client_ids
-      const { data: clientsData, error: clientsError } = await supabase
-        .from("client")
-        .select("client_id, cl_name, cl_email, last_active, created_at")
-        .in("client_id", clientIds);
-      if (!clientsError && clientsData) {
-        setTrainerClients(clientsData);
-      } else {
-        setTrainerClients([]);
-      }
-      setClientsLoading(false);
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1589,65 +1775,90 @@ export default function ClientDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!clientId) return; // Don't run if no clientId
+    
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
-      // 1. Get the current session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData?.session?.user?.email) {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
-        return;
-      }
-      const trainerEmail = sessionData.session.user.email;
-      console.log(trainerEmail,"himanshu");
-      
-      // 2. Fetch trainer ID
-      const { data: trainerData, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", trainerEmail)
-        .single();
-      
-      if (trainerError || !trainerData?.id || !clientId) {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
-        return;
-      }
-      
-      // 3. Fetch client-specific trainer notes from trainer_client_web table
-      const { data, error } = await supabase
-        .from("trainer_client_web")
-        .select("trainer_notes, ai_summary")
-        .eq("trainer_id", trainerData.id)
-        .eq("client_id", clientId)
-        .single();
-      
-      if (!error && data) {
-        // Set trainer notes
-        const notes = data.trainer_notes || "";
-        setTrainerNotes(notes);
-        setNotesDraft(notes);
+      try {
+        console.log(`🔄 Loading trainer notes for client: ${clientId}`);
         
-        // Set AI analysis from ai_summary column
-        if (data.ai_summary) {
-          let parsedSummary: any = null;
-          try {
-            parsedSummary = typeof data.ai_summary === 'string' ? JSON.parse(data.ai_summary) : data.ai_summary;
-          } catch (jsonErr) {
-            console.error('❌ Failed to parse ai_summary JSON from DB:', jsonErr);
+        // 1. Get the current session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !sessionData?.session?.user?.email) {
+          if (isMounted) {
+            setTrainerNotes("");
+            setNotesDraft("");
+            setLastAIRecommendation(null);
           }
-          setLastAIRecommendation(parsedSummary);
-          console.log('📊 Loaded previous AI analysis:', parsedSummary);
+          return;
+        }
+        const trainerEmail = sessionData.session.user.email;
+        
+        // 2. Fetch trainer ID
+        const { data: trainerData, error: trainerError } = await supabase
+          .from("trainer")
+          .select("id")
+          .eq("trainer_email", trainerEmail)
+          .single();
+        
+        if (trainerError || !trainerData?.id || !clientId) {
+          if (isMounted) {
+            setTrainerNotes("");
+            setNotesDraft("");
+            setLastAIRecommendation(null);
+          }
+          return;
+        }
+        
+        // 3. Fetch client-specific trainer notes from trainer_client_web table
+        const { data, error } = await supabase
+          .from("trainer_client_web")
+          .select("trainer_notes, ai_summary")
+          .eq("trainer_id", trainerData.id)
+          .eq("client_id", clientId)
+          .single();
+        
+        if (!isMounted) return; // Don't update state if component unmounted
+        
+        if (!error && data) {
+          // Set trainer notes
+          const notes = data.trainer_notes || "";
+          setTrainerNotes(notes);
+          setNotesDraft(notes);
+          
+          // Set AI analysis from ai_summary column
+          if (data.ai_summary) {
+            let parsedSummary: any = null;
+            try {
+              parsedSummary = typeof data.ai_summary === 'string' ? JSON.parse(data.ai_summary) : data.ai_summary;
+            } catch (jsonErr) {
+              console.error('❌ Failed to parse ai_summary JSON from DB:', jsonErr);
+            }
+            setLastAIRecommendation(parsedSummary);
+            console.log('📊 Loaded previous AI analysis:', parsedSummary);
+          } else {
+            setLastAIRecommendation(null);
+          }
         } else {
+          setTrainerNotes("");
+          setNotesDraft("");
           setLastAIRecommendation(null);
         }
-      } else {
-        setTrainerNotes("");
-        setNotesDraft("");
-        setLastAIRecommendation(null);
+      } catch (error) {
+        console.error('❌ Error loading trainer notes:', error);
+        if (isMounted) {
+          setTrainerNotes("");
+          setNotesDraft("");
+          setLastAIRecommendation(null);
+        }
       }
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [clientId]);
 
   useEffect(() => {
@@ -1659,36 +1870,48 @@ export default function ClientDashboard() {
 
     setLoading(true);
     setError(null);
+    
+    let isMounted = true; // Track if component is still mounted
+    
     (async () => {
       try {
-        // Fetch client data
-        const { data, error } = await supabase
+        console.log(`🔄 Fetching client data for ID: ${clientId}`);
+        
+        // Fetch client data with timeout
+        const clientDataPromise = supabase
           .from("client")
           .select("*")
           .eq("client_id", clientId)
           .single();
+        
+        const { data, error } = await Promise.race([
+          clientDataPromise,
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Client data fetch timeout')), 30000)
+          )
+        ]);
+
+        if (!isMounted) return; // Don't update state if component unmounted
 
         if (error) {
           console.error("Error fetching client:", error);
-          setError("Failed to fetch client data");
+          if (error.message?.includes('timeout')) {
+            setError("Client data fetch timed out. Please refresh the page.");
+          } else {
+            setError("Failed to fetch client data");
+          }
           setClient(null);
         } else if (data) {
-          console.log("Fetched client:", data);
+          console.log("✅ Fetched client:", data);
           setClient(data);
           setError(null);
 
-          // Fetch client image URL
-          const filePath = `${data.client_id}.jpg`;
-          const { data: imageData, error: imageError } = await supabase.storage
-            .from('client-images')
-            .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+          // Fetch client image URL using the new utility
+          const imageUrl = await getClientImageUrl(data.client_id);
 
-          if (imageData && imageData.signedUrl) {
-            setClientImageUrl(imageData.signedUrl);
-          } else {
-            console.warn(`No image found or error fetching signed URL for client ${data.client_id}:`, imageError);
-            setClientImageUrl(null);
-          }
+          if (!isMounted) return; // Don't update state if component unmounted
+
+          setClientImageUrl(imageUrl);
 
         } else {
           setError("Client not found");
@@ -1697,13 +1920,22 @@ export default function ClientDashboard() {
         }
       } catch (err) {
         console.error("Unexpected error:", err);
-        setError("An unexpected error occurred");
-        setClient(null);
-        setClientImageUrl(null);
+        if (isMounted) {
+          setError("An unexpected error occurred");
+          setClient(null);
+          setClientImageUrl(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     })();
+
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [clientId]);
 
   if (loading) {
@@ -1746,9 +1978,9 @@ export default function ClientDashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex">
+    <div className="client-profile-container min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex overflow-hidden">
       {/* AllClientsSidebar - Left Sidebar */}
-      <div className="w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto">
+      <div className="client-profile-sidebar w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto flex-shrink-0">
         <div className="p-4">
           {/* All Clients List */}
           <div>
@@ -1766,10 +1998,10 @@ export default function ClientDashboard() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-screen">
-        {/* Enhanced Header */}
-        <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+      <div className="client-profile-content flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Enhanced Header */}
+      <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg flex-shrink-0">
+      <div className="w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-4">
@@ -1925,340 +2157,17 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Permanent Card Sections - Only on Overview tab */}
-      {activeTab === 'overview' && (
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="grid grid-cols-1 xl:grid-cols-3 lg:grid-cols-2 gap-4 mb-8">
-            {/* Fitness Goals Section */}
-            <FitnessGoalsSection client={client} onGoalsSaved={refreshClientData} />
-
-            {/* AI Coach Insights Section */}
-            <div className="xl:col-span-2">
-              <Card className="bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 dark:from-purple-900/20 dark:via-indigo-900/20 dark:to-blue-900/20 border-purple-200 dark:border-purple-800 shadow-xl h-full overflow-hidden">
-                <CardHeader className="pb-4 bg-gradient-to-r from-purple-600/5 to-indigo-600/5 dark:from-purple-600/10 dark:to-indigo-600/10">
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
-                      <Brain className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">AI Coach Insights</span>
-                  </CardTitle>
-                  
-                  {/* Tab Navigation with Icons */}
-                  <div className="flex space-x-1 bg-white/80 dark:bg-gray-800/80 p-1 rounded-lg mt-4 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">
-                    {[
-                      { id: 'summary', label: 'Summary', icon: BarChart3 },
-                      { id: 'action_plan', label: 'Action Plan', icon: Target },
-                      { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
-                      { id: 'insights', label: 'Insights', icon: Brain }
-                    ].map((tab) => {
-                      const Icon = tab.icon;
-                      return (
-                        <button
-                          key={tab.id}
-                          onClick={() => setAiInsightsActiveTab(tab.id as any)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                            aiInsightsActiveTab === tab.id
-                              ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-md'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                          {tab.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  {lastAIRecommendation ? (
-                    <div className="space-y-6">
-                      {/* Summary Tab */}
-                      {aiInsightsActiveTab === 'summary' && lastAIRecommendation.summary && (
-                        <div className="space-y-4">
-                          <Card className="border-l-4 border-l-blue-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
-                                <User className="h-5 w-5" />
-                                Client Status Overview
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {typeof lastAIRecommendation.summary.client_progress === 'string' 
-                                  ? lastAIRecommendation.summary.client_progress 
-                                  : 'No client status available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="border-l-4 border-l-green-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-green-600 flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5" />
-                                Progress Assessment
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {typeof lastAIRecommendation.summary.progress_assessment === 'string' 
-                                  ? lastAIRecommendation.summary.progress_assessment 
-                                  : 'No progress assessment available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          {lastAIRecommendation.summary.key_points && lastAIRecommendation.summary.key_points.length > 0 && (
-                            <Card className="border-l-4 border-l-purple-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg text-purple-600 flex items-center gap-2">
-                                  <Star className="h-5 w-5" />
-                                  Key Insights
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {lastAIRecommendation.summary.key_points.map((insight: any, index: number) => (
-                                    <li key={index} className="flex items-start gap-2">
-                                      <Star className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                                      <span className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                        {String(insight)}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          )}
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {lastAIRecommendation.summary.challenges_identified && lastAIRecommendation.summary.challenges_identified.length > 0 && (
-                              <Card className="border-l-4 border-l-red-500 shadow-md">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-lg text-red-600 flex items-center gap-2">
-                                    <AlertTriangle className="h-5 w-5" />
-                                    Immediate Concerns
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <ul className="space-y-1">
-                                    {lastAIRecommendation.summary.challenges_identified.map((concern: any, index: number) => (
-                                      <li key={index} className="text-gray-700 dark:text-gray-300">
-                                        • {String(concern)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </CardContent>
-                              </Card>
-                            )}
-
-                            {lastAIRecommendation.summary.successes_highlighted && lastAIRecommendation.summary.successes_highlighted.length > 0 && (
-                              <Card className="border-l-4 border-l-green-500 shadow-md">
-                                <CardHeader className="pb-3">
-                                  <CardTitle className="text-lg text-green-600 flex items-center gap-2">
-                                    <CheckCircle className="h-5 w-5" />
-                                    Positive Developments
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <ul className="space-y-1">
-                                    {lastAIRecommendation.summary.successes_highlighted.map((development: any, index: number) => (
-                                      <li key={index} className="text-gray-700 dark:text-gray-300">
-                                        • {String(development)}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </CardContent>
-                              </Card>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action Plan Tab */}
-                      {aiInsightsActiveTab === 'action_plan' && lastAIRecommendation.action_items && (
-                        <div className="space-y-6">
-                          <Card className="border-l-4 border-l-blue-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-blue-600 flex items-center gap-2">
-                                <Zap className="h-5 w-5" />
-                                Immediate Actions
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-3">
-                                {lastAIRecommendation.action_items.immediate_actions?.map((action: any, index: number) => (
-                                  <div key={index} className="flex items-start gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200/50 dark:border-blue-800/50">
-                                    <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                                      {index + 1}
-                                    </div>
-                                    <div className="flex-1">
-                                      <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                                        {typeof action === 'string' ? action : action.action}
-                                      </p>
-                                      {typeof action === 'object' && (
-                                        <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                                          {action.priority && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs">
-                                              Priority: {action.priority}
-                                            </span>
-                                          )}
-                                          {action.timeframe && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
-                                              {action.timeframe}
-                                            </span>
-                                          )}
-                                          {action.category && (
-                                            <span className="inline-block bg-blue-200 dark:bg-blue-800 px-2 py-1 rounded text-xs ml-2">
-                                              {action.category}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          {lastAIRecommendation.action_items.follow_up_items && lastAIRecommendation.action_items.follow_up_items.length > 0 && (
-                            <Card className="border-l-4 border-l-indigo-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg text-indigo-600 flex items-center gap-2">
-                                  <Calendar className="h-5 w-5" />
-                                  Follow Up Items
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="space-y-3">
-                                  {lastAIRecommendation.action_items.follow_up_items.map((action: any, index: number) => (
-                                    <div key={index} className="flex items-start gap-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200/50 dark:border-indigo-800/50">
-                                      <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-sm">
-                                        {index + 1}
-                                      </div>
-                                      <div className="flex-1">
-                                        <p className="font-medium text-indigo-900 dark:text-indigo-100 mb-1">
-                                          {typeof action === 'string' ? action : action.action}
-                                        </p>
-                                        {typeof action === 'object' && (
-                                          <div className="text-sm text-indigo-700 dark:text-indigo-300 space-y-1">
-                                            {action.priority && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs">
-                                                Priority: {action.priority}
-                                              </span>
-                                            )}
-                                            {action.timeframe && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs ml-2">
-                                                {action.timeframe}
-                                              </span>
-                                            )}
-                                            {action.category && (
-                                              <span className="inline-block bg-indigo-200 dark:bg-indigo-800 px-2 py-1 rounded text-xs ml-2">
-                                                {action.category}
-                                              </span>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Recommendations Tab */}
-                      {aiInsightsActiveTab === 'recommendations' && lastAIRecommendation.recommendations && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {Object.entries(lastAIRecommendation.recommendations).map(([key, recommendations]: [string, any]) => (
-                            <Card key={key} className="border-l-4 border-l-yellow-500 shadow-md">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-lg capitalize flex items-center gap-2">
-                                  <Lightbulb className="h-5 w-5 text-yellow-500" />
-                                  {key.replace('_', ' ')}
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <ul className="space-y-2">
-                                  {recommendations?.map((rec: string, index: number) => (
-                                    <li key={index} className="flex items-start gap-2">
-                                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                      <span className="text-gray-700 dark:text-gray-300 leading-relaxed">{rec}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Insights Tab */}
-                      {aiInsightsActiveTab === 'insights' && lastAIRecommendation.insights && (
-                        <div className="space-y-4">
-                          <Card className="border-l-4 border-l-purple-500 shadow-md">
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-lg text-purple-600 flex items-center gap-2">
-                                <Activity className="h-5 w-5" />
-                                Engagement Level
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                {lastAIRecommendation.insights.engagement_level || 'No engagement data available'}
-                              </p>
-                            </CardContent>
-                          </Card>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {Object.entries(lastAIRecommendation.insights)
-                              .filter(([key]) => key !== 'engagement_level')
-                              .map(([key, items]: [string, any]) => (
-                                <Card key={key} className="border-l-4 border-l-blue-500 shadow-md">
-                                  <CardHeader className="pb-3">
-                                    <CardTitle className="text-lg capitalize flex items-center gap-2">
-                                      <BarChart3 className="h-5 w-5 text-blue-500" />
-                                      {key.replace('_', ' ')}
-                                    </CardTitle>
-                                  </CardHeader>
-                                  <CardContent>
-                                    <ul className="space-y-1">
-                                      {items?.map((item: string, index: number) => (
-                                        <li key={index} className="text-gray-700 dark:text-gray-300">• {item}</li>
-                                      ))}
-                                    </ul>
-                                  </CardContent>
-                                </Card>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                        <Brain className="w-8 h-8 text-purple-500" />
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No AI Analysis Available</h3>
-                      <p className="text-gray-600 dark:text-gray-400">Generate AI analysis from your trainer notes to see insights</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Enhanced Content Area */}
-      <div className="space-y-8">
-        {activeTab === "overview" && (
-            <div className="space-y-8">
-              {/* Trainer Notes & To-Do Section */}
-            <StructuredTrainerNotesSection
+      <div className={`client-profile-tab-content flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-4 py-4'}`}>
+
+        {/* Overview tab content */}
+        {activeTab === 'overview' && (
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* Moved Overview logic/UI to ClientOverviewSection for modularity */}
+            <ClientOverviewSection
               client={client}
+              aiCoachInsights={aiCoachInsights || undefined}
+              lastAIRecommendation={lastAIRecommendation}
               trainerNotes={trainerNotes}
               setTrainerNotes={setTrainerNotes}
               handleSaveTrainerNotes={handleSaveTrainerNotes}
@@ -2269,102 +2178,108 @@ export default function ClientDashboard() {
               setNotesDraft={setNotesDraft}
               notesError={notesError}
               setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-
-                
-                lastAIRecommendation={lastAIRecommendation}
-              />
+              isGeneratingAnalysis={isGeneratingAnalysis}
+              handleSummarizeNotes={handleSummarizeNotes}
+              isSummarizingNotes={isSummarizingNotes}
+              refreshClientData={refreshClientData}
+            />
           </div>
         )}
 
         {/* Tab Content Sections */}
         {activeTab === "metrics" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <MetricsSection 
-                clientId={clientId} 
-                isActive={activeTab === "metrics"}
-                client={client}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <MetricsSection 
+                  clientId={clientId} 
+                  isActive={activeTab === "metrics"}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                  setLastAIRecommendation={setLastAIRecommendation}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "workout" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <WorkoutPlanSection 
-                clientId={client?.client_id}
-                client={client}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <WorkoutPlanSection 
+                  clientId={client?.client_id}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "nutrition" && (
-          <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-            <CardHeader className="pb-0">
-              <NutritionPlanSection 
-                clientId={clientId} 
-                isActive={activeTab === "nutrition"}
-                client={client}
-                lastAIRecommendation={lastAIRecommendation}
-                trainerNotes={trainerNotes}
-                setTrainerNotes={setTrainerNotes}
-                handleSaveTrainerNotes={handleSaveTrainerNotes}
-                isSavingNotes={isSavingNotes}
-                isEditingNotes={isEditingNotes}
-                setIsEditingNotes={setIsEditingNotes}
-                notesDraft={notesDraft}
-                setNotesDraft={setNotesDraft}
-                notesError={notesError}
-                setNotesError={setNotesError}
-                isGeneratingAnalysis={isGeneratingAnalysis}
-                handleSummarizeNotes={handleSummarizeNotes}
-                isSummarizingNotes={isSummarizingNotes}
-              />
-            </CardHeader>
-          </Card>
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+              <CardHeader className="pb-0 flex-shrink-0">
+                <NutritionPlanSection 
+                  clientId={clientId} 
+                  isActive={activeTab === "nutrition"}
+                  client={client}
+                  lastAIRecommendation={lastAIRecommendation}
+                  trainerNotes={trainerNotes}
+                  setTrainerNotes={setTrainerNotes}
+                  handleSaveTrainerNotes={handleSaveTrainerNotes}
+                  isSavingNotes={isSavingNotes}
+                  isEditingNotes={isEditingNotes}
+                  setIsEditingNotes={setIsEditingNotes}
+                  notesDraft={notesDraft}
+                  setNotesDraft={setNotesDraft}
+                  notesError={notesError}
+                  setNotesError={setNotesError}
+                  isGeneratingAnalysis={isGeneratingAnalysis}
+                  handleSummarizeNotes={handleSummarizeNotes}
+                  isSummarizingNotes={isSummarizingNotes}
+                />
+              </CardHeader>
+            </Card>
+          </div>
         )}
 
         {activeTab === "programs" && (
-          <ProgramsScreen 
-            clientId={clientId}
-            client={client}
-            onGoalsSaved={refreshClientData}
-            lastAIRecommendation={lastAIRecommendation}
-
-          />
+          <div className="client-profile-scrollable h-full overflow-hidden">
+            <ProgramsScreen 
+              clientId={clientId}
+              client={client}
+              onGoalsSaved={refreshClientData}
+              lastAIRecommendation={lastAIRecommendation}
+            />
+          </div>
         )}
       </div>
    
@@ -2375,6 +2290,43 @@ export default function ClientDashboard() {
           onClose={() => setShowNotesSummaryPopup(false)}
           summaryResponse={notesSummaryResponse}
           clientName={client?.name || client?.preferredName}
+        />
+
+        {/* Unified Popup Host */}
+        <TrainerPopupHost
+          openKey={openPopup}
+          onClose={() => setOpenPopup(null)}
+          context={{
+            client,
+            onGoalsSaved: refreshClientData,
+            aiCoachInsights,
+            onViewFullAnalysis: () => {},
+            // Legacy props for backward compatibility
+            lastAIRecommendation,
+            trainerNotes,
+            setTrainerNotes,
+            handleSaveTrainerNotes,
+            isSavingNotes,
+            isEditingNotes,
+            setIsEditingNotes,
+            notesDraft,
+            setNotesDraft,
+            notesError,
+            setNotesError,
+            isGeneratingAnalysis,
+            handleSummarizeNotes,
+            isSummarizingNotes,
+            setLastAIRecommendation
+          }}
+        />
+
+        <TrainerPopupHost
+          openKey={showFitnessScore ? 'fitnessGoals' : null}
+          onClose={() => setShowFitnessScore(false)}
+          context={{
+            client,
+            onGoalsSaved: () => {},
+          }}
         />
       </div>
     </div>

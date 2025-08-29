@@ -1,0 +1,2 @@
+// Simple one-liner test - copy and paste this into browser console
+(async()=>{try{const{data:{session}}=await supabase.auth.getSession();if(!session)return console.error('No session');const r=await fetch('https://zyozeuihjptarceuipwu.supabase.co/functions/v1/send_client_invitation',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify({clientEmail:'test@example.com'})});const t=await r.text();console.log('Status:',r.status,'Response:',t)}catch(e){console.error('Error:',e)}})() 

@@ -1,6 +1,8 @@
-// AI Fitness Plan Generation with OpenRouter Integration
+// AI Fitness Plan Generation with Unified LLM Service
 import { supabase } from './supabase'
-import { askOpenRouter } from './open-router-service'
+// import { askOpenRouter } from './open-router-service'
+// import { askCerebras } from './cerebras-service'
+import { askLLM } from './llm-service'
 
 /**
  * Helper function to get the next occurrence of a specific day of the week
@@ -47,175 +49,445 @@ function formatDateToYYYYMMDD(date: Date): string {
 }
 
 /**
+ * Function to assign workouts to specific days based on client's workout_days
+ * @param workoutDays - Array of workout days from LLM
+ * @param clientWorkoutDays - Client's preferred workout days
+ * @param planStartDate - Start date of the plan
+ * @returns 7-day array with workouts assigned to correct days
+ */
+function assignWorkoutsToDays(workoutDays: any[], clientWorkoutDays: any, planStartDate: Date) {
+  console.log('📅 Assigning workouts to specific days...');
+  console.log('🏋️ Workout days from LLM:', workoutDays.length);
+  console.log('📅 Client workout days:', clientWorkoutDays);
+  
+  // Create a 7-day array starting from planStartDate
+  const weekDays: Array<{
+    date: string;
+    dayName: string;
+    isWorkoutDay: boolean;
+    workout: any | null;
+  }> = [];
+  
+  console.log('📅 Plan start date for week generation:', planStartDate);
+  
+  for (let i = 0; i < 7; i++) {
+    const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+    const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    weekDays.push({
+      date: currentDate.toISOString().split('T')[0],
+      dayName: dayName,
+      isWorkoutDay: false,
+      workout: null
+    });
+  }
+  
+  console.log('📅 Generated week days:', weekDays.map(day => `${day.dayName} (${day.date})`));
+  
+  // Parse client workout days
+  let clientDays: string[] = [];
+  if (Array.isArray(clientWorkoutDays)) {
+    clientDays = clientWorkoutDays.map((day: any) => day.toLowerCase());
+  } else if (typeof clientWorkoutDays === 'string') {
+    // Handle both comma-separated and object format
+    if (clientWorkoutDays.includes('{') && clientWorkoutDays.includes('}')) {
+      // Extract from object format like {Mon,Fri,Sat}
+      const match = clientWorkoutDays.match(/\{([^}]+)\}/);
+      if (match) {
+        clientDays = match[1].split(',').map(day => day.trim().toLowerCase());
+      }
+    } else {
+      // Handle comma-separated format like "Monday, Wednesday, Friday"
+      clientDays = clientWorkoutDays.toLowerCase().split(',').map(day => day.trim());
+    }
+  }
+  
+  console.log('📅 Raw client workout days:', clientWorkoutDays);
+  console.log('📅 Parsed client workout days:', clientDays);
+  
+  // Create a mapping from short day names to full day names
+  const dayNameMapping: { [key: string]: string } = {
+    'mon': 'monday',
+    'tue': 'tuesday', 
+    'wed': 'wednesday',
+    'thu': 'thursday',
+    'fri': 'friday',
+    'sat': 'saturday',
+    'sun': 'sunday'
+  };
+  
+  // Convert short day names to full day names
+  const fullClientDays = clientDays.map(day => dayNameMapping[day] || day);
+  console.log('📅 Full client workout days:', fullClientDays);
+  
+  // Also handle full day names that might be passed
+  const fullDayNameMapping: { [key: string]: string } = {
+    'monday': 'monday',
+    'tuesday': 'tuesday', 
+    'wednesday': 'wednesday',
+    'thursday': 'thursday',
+    'friday': 'friday',
+    'saturday': 'saturday',
+    'sunday': 'sunday'
+  };
+  
+  // Convert any day names to lowercase for comparison
+  const normalizedClientDays = fullClientDays.map(day => {
+    const normalized = day.toLowerCase().trim();
+    return fullDayNameMapping[normalized] || normalized;
+  });
+  console.log('📅 Normalized client workout days:', normalizedClientDays);
+  
+  // Find which days of the week match client's workout days
+  const workoutDayIndices: number[] = [];
+  weekDays.forEach((day, index) => {
+    if (normalizedClientDays.includes(day.dayName)) {
+      workoutDayIndices.push(index);
+      day.isWorkoutDay = true;
+      console.log(`✅ Found workout day: ${day.dayName} at index ${index}`);
+    } else {
+      console.log(`❌ Day ${day.dayName} not in client preferences: ${normalizedClientDays.join(', ')}`);
+    }
+  });
+  
+  console.log('📅 Workout day indices:', workoutDayIndices);
+  
+  // Assign workouts to the correct days
+  // First, let's log what we're working with
+  console.log('📅 Available workouts to assign:', workoutDays.length);
+  console.log('📅 Client workout day indices:', workoutDayIndices);
+  
+  // Create a mapping of workout index to the actual day index
+  const workoutAssignment = workoutDayIndices.slice(0, workoutDays.length).map((dayIndex, workoutIndex) => ({
+    workoutIndex,
+    dayIndex,
+    dayName: weekDays[dayIndex].dayName
+  }));
+  
+  console.log('📅 Workout assignment mapping:', workoutAssignment);
+  
+  // Assign workouts to the correct days
+  workoutAssignment.forEach(({ workoutIndex, dayIndex, dayName }) => {
+    if (workoutDays[workoutIndex]) {
+      weekDays[dayIndex].workout = workoutDays[workoutIndex];
+      console.log(`✅ Assigned workout ${workoutIndex + 1} to ${dayName} (day index ${dayIndex})`);
+    }
+  });
+  
+  // Convert to the expected format
+  const result = weekDays.map(day => ({
+    date: day.date,
+    focus: day.workout ? day.workout.focus : 'Rest Day',
+    exercises: day.workout ? day.workout.exercises : []
+  }));
+  
+  console.log('📅 Final 7-day plan:', result);
+  return result;
+}
+
+/**
  * Function to process AI response and update workout plan dates
  * @param aiResponseText - Raw AI response text
  * @param clientId - Client ID for the workout plan
+ * @param clientWorkoutDays - Client's preferred workout days
+ * @param planStartDate - Start date of the plan
  * @returns Processed workout plan with updated dates
  */
-function processWorkoutPlanDates(aiResponseText: string, clientId: number) {
+function processWorkoutPlanDates(aiResponseText: string, clientId: number, clientWorkoutDays?: any, planStartDate?: Date) {
   try {
-    console.log('📅 === PROCESSING WORKOUT PLAN DATES ===');
-    console.log('📅 Processing workout plan dates...');
-    if (typeof aiResponseText !== 'string') {
-      console.error('❌ processWorkoutPlanDates received a non-string input:', aiResponseText);
-      throw new Error('Invalid input: Expected a string response from AI.');
-    }
-    console.log('📅 AI Response Text Length:', aiResponseText.length);
-    console.log('📅 AI Response Preview (first 500 chars):', aiResponseText.substring(0, 500));
+    let cleanText = aiResponseText.trim();
+    console.log('🔍 Processing AI response text length:', cleanText.length);
+    console.log('🔍 First 500 characters:', cleanText.substring(0, 500));
+    console.log('🔍 Last 500 characters:', cleanText.substring(Math.max(0, cleanText.length - 500)));
     
-    // Try to extract JSON from response using a robust regex
-    console.log('🔍 Attempting to extract JSON from AI response...');
-    let jsonText = aiResponseText;
-    // Find the first {...} block (greedy, but stops at the last closing brace)
-    const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
+    // Remove Markdown code block markers if present
+    if (cleanText.startsWith('```')) {
+      cleanText = cleanText.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+    }
+    
+    // Try to extract JSON from response that might contain explanatory text
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      jsonText = jsonMatch[0];
-      console.log('🔍 Found JSON match in response');
-      console.log('🔍 Extracted JSON length:', jsonText.length);
-    } else {
-      console.log('🔍 No JSON brackets found, using full response');
+      cleanText = jsonMatch[0];
+      console.log('🔍 Extracted JSON from response with explanatory text');
     }
-    // Try parsing, and if it fails, show a user-friendly error and log the raw response
-    let aiData;
+    
+    // Check if the JSON appears to be incomplete
+    const lastChar = cleanText.charAt(cleanText.length - 1);
+    const openBraces = (cleanText.match(/\{/g) || []).length;
+    const closeBraces = (cleanText.match(/\}/g) || []).length;
+    const openBrackets = (cleanText.match(/\[/g) || []).length;
+    const closeBrackets = (cleanText.match(/\]/g) || []).length;
+    
+    console.log('🔍 JSON structure check:');
+    console.log('  - Open braces:', openBraces, 'Close braces:', closeBraces);
+    console.log('  - Open brackets:', openBrackets, 'Close brackets:', closeBrackets);
+    console.log('  - Last character:', lastChar);
+    
+    // Check for common JSON malformation issues
+    const hasUnclosedQuotes = (cleanText.match(/"/g) || []).length % 2 !== 0;
+    const hasUnclosedBraces = openBraces !== closeBraces;
+    const hasUnclosedBrackets = openBrackets !== closeBrackets;
+    
+    if (hasUnclosedQuotes) {
+      console.warn('⚠️ JSON has unclosed quotes');
+      throw new Error('AI response contains malformed JSON with unclosed quotes. Please try again.');
+    }
+    
+    if (hasUnclosedBraces || hasUnclosedBrackets) {
+      console.warn('⚠️ JSON appears to be incomplete - missing closing brackets/braces');
+      throw new Error('AI response appears to be incomplete. The JSON was cut off mid-response. Please try again.');
+    }
+    
+    let parsed;
     try {
-      aiData = JSON.parse(jsonText);
+      parsed = JSON.parse(cleanText);
     } catch (parseError) {
-      console.error('❌ Failed to parse AI response as JSON:', parseError);
-      console.error('❌ Raw AI response:', aiResponseText);
-      throw new Error('The AI returned invalid JSON. Please try again or check the raw response in the console.');
-    }
-    
-    console.log('✅ JSON parsing successful');
-    console.log('📊 Parsed AI Data Keys:', Object.keys(aiData));
-    
-    console.log('🔍 Validating workout plan structure...');
-    console.log('🔍 Has workout_plan property:', !!aiData.workout_plan);
-    console.log('🔍 workout_plan type:', typeof aiData.workout_plan);
-    console.log('🔍 workout_plan is array:', Array.isArray(aiData.workout_plan));
-    
-    if (!aiData.workout_plan || !Array.isArray(aiData.workout_plan)) {
-      console.error('❌ Invalid workout plan format: missing workout_plan array');
-      console.error('❌ AI Data structure:', aiData);
-      throw new Error('Invalid workout plan format: missing workout_plan array');
-    }
-    
-    console.log('✅ Workout plan structure is valid');
-    console.log('📋 Found workout plan with', aiData.workout_plan.length, 'exercises');
-    console.log('📋 Sample exercise:', aiData.workout_plan[0]);
-    
-    // Helper function to validate and clean workout data
-    const cleanWorkoutData = (workout: any) => {
-      console.log('🧹 Cleaning workout data:', workout);
+      console.error('❌ Initial JSON parse failed:', parseError);
+      console.log('🔍 Error position:', (parseError as Error).message.match(/position (\d+)/)?.[1] || 'unknown');
       
-      // Helper function to extract numbers from strings
-      const extractNumber = (value: any, defaultValue: number = 0): number => {
-        if (typeof value === 'number') return value;
-        if (typeof value === 'string') {
-          // Extract first number from string (e.g., "30 minutes" -> 30)
-          const match = value.match(/(\d+)/);
-          return match ? parseInt(match[1]) : defaultValue;
+      // Try to fix common JSON issues
+      let fixedText = cleanText;
+      
+      console.log('🔧 Attempting JSON fixes...');
+      
+      // Remove trailing commas before closing braces/brackets
+      const beforeTrailingComma = fixedText;
+      fixedText = fixedText.replace(/,(\s*[}\]])/g, '$1');
+      if (beforeTrailingComma !== fixedText) {
+        console.log('🔧 Fixed trailing commas');
+      }
+      
+      // Fix common malformed values
+      const beforeValueFixes = fixedText;
+      fixedText = fixedText.replace(/(\d+)_([a-zA-Z]+)/g, '"$1 $2"'); // Fix 30_min -> "30 min"
+      fixedText = fixedText.replace(/(\d+)min/g, '"$1 min"'); // Fix 30min -> "30 min"
+      fixedText = fixedText.replace(/(\d+)sec/g, '"$1 sec"'); // Fix 60sec -> "60 sec"
+      fixedText = fixedText.replace(/(\d+)kg/g, '"$1 kg"'); // Fix 50kg -> "50 kg"
+      fixedText = fixedText.replace(/(\d+)lb/g, '"$1 lb"'); // Fix 100lb -> "100 lb"
+      
+      // Fix specific patterns that cause JSON errors
+      fixedText = fixedText.replace(/"reps":\s*(\d+)_([a-zA-Z]+)/g, '"reps": "$1 $2"'); // Fix reps: 30_min
+      fixedText = fixedText.replace(/"duration":\s*(\d+)_([a-zA-Z]+)/g, '"duration": "$1 $2"'); // Fix duration: 30_min
+      fixedText = fixedText.replace(/"weights":\s*(\d+)_([a-zA-Z]+)/g, '"weights": "$1 $2"'); // Fix weights: 50_kg
+      
+      // Fix missing quotes around string values
+      fixedText = fixedText.replace(/"coach_tip":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"coach_tip": "$1"');
+      fixedText = fixedText.replace(/"equipment":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"equipment": "$1"');
+      fixedText = fixedText.replace(/"body_part":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"body_part": "$1"');
+      fixedText = fixedText.replace(/"category":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"category": "$1"');
+      fixedText = fixedText.replace(/"weights":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"weights": "$1"');
+      
+      // Fix missing quotes around exercise names
+      fixedText = fixedText.replace(/"exercise_name":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"exercise_name": "$1"');
+      
+      // Fix missing quotes around focus
+      fixedText = fixedText.replace(/"focus":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"focus": "$1"');
+      
+      // Fix missing quotes around any string value that should be quoted
+      fixedText = fixedText.replace(/"([^"]+)":\s*([^",}\]]+)(?=\s*[,}\]])/g, '"$1": "$2"');
+      
+      // Fix specific issue with unquoted values after colons
+      fixedText = fixedText.replace(/:\s*([^",}\]]+)(?=\s*[,}\]])/g, (match, value) => {
+        // Don't quote numbers, booleans, or already quoted values
+        if (/^\d+$/.test(value) || /^(true|false|null)$/.test(value) || value.startsWith('"')) {
+          return match;
         }
-        return defaultValue;
-      };
+        return `: "${value}"`;
+      });
       
-      // Helper function to ensure string values
-      const ensureString = (value: any, defaultValue: string = ''): string => {
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number') return value.toString();
-        return defaultValue;
-      };
+      // Fix any remaining unquoted string values in the JSON structure
+      fixedText = fixedText.replace(/"([^"]+)":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"$1": "$2"');
       
-      // Clean and validate reps - should be numeric or numeric string
-      let cleanReps = workout.reps;
-      if (typeof cleanReps === 'string' && cleanReps.includes('minute')) {
-        // If reps contains "minute", it's probably duration that got mixed up
-        console.warn('⚠️ Found duration value in reps field, moving to duration:', cleanReps);
-        if (!workout.duration || workout.duration === 0) {
-          workout.duration = extractNumber(cleanReps, 15);
+      // More aggressive fix for unquoted values - handle spaces in values
+      fixedText = fixedText.replace(/"([^"]+)":\s*([^",}\]]+?)(?=\s*[,}\]])/g, (match, key, value) => {
+        // Don't quote numbers, booleans, or already quoted values
+        if (/^\d+$/.test(value) || /^(true|false|null)$/.test(value) || value.startsWith('"')) {
+          return match;
         }
-        cleanReps = '10'; // Default reps
+        return `"${key}": "${value}"`;
+      });
+      
+      // Fix unquoted property names (this is the main issue we're seeing)
+      fixedText = fixedText.replace(/([a-zA-Z_][a-zA-Z0-9_]*):\s*([^",}\]]+?)(?=\s*[,}\]])/g, (match, key, value) => {
+        // Don't quote numbers, booleans, or already quoted values
+        if (/^\d+$/.test(value) || /^(true|false|null)$/.test(value) || value.startsWith('"')) {
+          return `"${key}": ${value}`;
+        }
+        return `"${key}": "${value}"`;
+      });
+      
+      // Additional fix for the specific pattern we're seeing
+      fixedText = fixedText.replace(/"focus":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"focus": "$1"');
+      fixedText = fixedText.replace(/"exercise_name":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"exercise_name": "$1"');
+      fixedText = fixedText.replace(/"category":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"category": "$1"');
+      fixedText = fixedText.replace(/"weights":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"weights": "$1"');
+      fixedText = fixedText.replace(/"equipment":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"equipment": "$1"');
+      fixedText = fixedText.replace(/"coach_tip":\s*([^",}\]]+?)(?=\s*[,}\]])/g, '"coach_tip": "$1"');
+      
+      // Fix the specific issue with body_part having multiple unquoted values
+      fixedText = fixedText.replace(/"body_part":\s*([^",}\]]+?)(?=\s*[,}\]])/g, (match, value) => {
+        // Handle the case where value contains multiple unquoted parts
+        if (value.includes(',')) {
+          const parts = value.split(',').map((part: string) => part.trim());
+          return `"body_part": "${parts.join(', ')}"`;
+        }
+        return `"body_part": "${value}"`;
+      });
+      
+      // Fix any remaining unquoted values that might have spaces and commas
+      fixedText = fixedText.replace(/"([^"]+)":\s*([^",}\]]+?)(?=\s*[,}\]])/g, (match, key, value) => {
+        // Don't quote numbers, booleans, or already quoted values
+        if (/^\d+$/.test(value) || /^(true|false|null)$/.test(value) || value.startsWith('"')) {
+          return match;
+        }
+                 // Handle values with commas
+         if (value.includes(',')) {
+           const parts = value.split(',').map((part: string) => part.trim());
+           return `"${key}": "${parts.join(', ')}"`;
+         }
+        return `"${key}": "${value}"`;
+      });
+      
+      // Debug: Show what the text looks like after fixes
+      console.log('🔍 Fixed text preview:', fixedText.substring(0, 300));
+      
+      // More aggressive fix for unquoted property names with spaces
+      fixedText = fixedText.replace(/([a-zA-Z_][a-zA-Z0-9_\s]*):\s*([^",}\]]+?)(?=\s*[,}\]])/g, (match, key, value) => {
+        // Don't quote numbers, booleans, or already quoted values
+        if (/^\d+$/.test(value) || /^(true|false|null)$/.test(value) || value.startsWith('"')) {
+          return `"${key.trim()}": ${value}`;
+        }
+        return `"${key.trim()}": "${value}"`;
+      });
+      
+      if (beforeValueFixes !== fixedText) {
+        console.log('🔧 Fixed malformed values (units)');
       }
       
-      // Ensure reps is a string representation of a number
-      const repsNumber = extractNumber(cleanReps, 10);
-      cleanReps = repsNumber.toString();
-      
-      // Clean duration - should be numeric
-      let cleanDuration = extractNumber(workout.duration, 15);
-      
-      // If duration is unreasonably large (like if it got confused with reps), fix it
-      if (cleanDuration > 180) { // More than 3 hours seems wrong for a single exercise
-        console.warn('⚠️ Duration seems too large, capping at 60 minutes:', cleanDuration);
-        cleanDuration = 60;
-      }
-      
-      const cleanedWorkout = {
-        ...workout,
-        sets: extractNumber(workout.sets, 3),
-        reps: cleanReps,
-        duration: cleanDuration,
-        weights: ensureString(workout.weights, 'bodyweight'),
-        equipment: ensureString(workout.equipment, 'bodyweight'),
-        body_part: ensureString(workout.body_part, 'Full Body'),
-        category: ensureString(workout.category, 'Strength'),
-        coach_tip: ensureString(workout.coach_tip, 'Focus on proper form'),
-        icon: ensureString(workout.icon, '💪'),
-        workout_yt_link: ensureString(workout.workout_yt_link, '')
-      };
-      
-      console.log('✅ Cleaned workout data:', cleanedWorkout);
-      return cleanedWorkout;
-    };
-
-    // Process each workout and update dates
-    const processedWorkoutPlan = aiData.workout_plan.map((workout: any) => {
-      // First clean the workout data
-      const cleanedWorkout = cleanWorkoutData(workout);
-      
-      const dayName = cleanedWorkout.day;
-      
-      if (!dayName) {
-        console.warn('⚠️ Workout missing day information:', cleanedWorkout);
-        return {
-          ...cleanedWorkout,
-          for_date: new Date().toISOString().split('T')[0], // Default to today
-          client_id: clientId
-        };
-      }
-      
+      // Try to parse the fixed text
       try {
-        // Get the next occurrence of this day
-        const workoutDate = getNextDayOfWeek(dayName);
-        const formattedDate = formatDateToYYYYMMDD(workoutDate);
+        parsed = JSON.parse(fixedText);
+        console.log('✅ JSON parse successful after fixes');
+      } catch (fixError) {
+        console.error('❌ JSON parse still failed after fixes:', fixError);
         
-        console.log(`📅 ${dayName} workout scheduled for: ${formattedDate}`);
+        // Try to find the last complete object
+        const lastCompleteMatch = fixedText.match(/\{[^{}]*\}/g);
+        if (lastCompleteMatch) {
+          const lastComplete = lastCompleteMatch[lastCompleteMatch.length - 1];
+          const lastCompleteIndex = fixedText.lastIndexOf(lastComplete);
+          if (lastCompleteIndex > 0) {
+            // Try to reconstruct a valid JSON
+            const beforeLast = fixedText.substring(0, lastCompleteIndex);
+            const reconstructed = beforeLast + lastComplete + ']}';
+            console.log('🔧 Attempting to reconstruct JSON from:', reconstructed.substring(0, 200) + '...');
+            
+            try {
+              parsed = JSON.parse(reconstructed);
+              console.log('✅ JSON reconstruction successful');
+            } catch (reconstructError) {
+              console.error('❌ JSON reconstruction failed:', reconstructError);
+              
+              // Last resort: try to extract just the first few days
+              console.log('🔧 Attempting to extract partial workout plan...');
+              const daysMatch = cleanText.match(/"days":\s*\[([\s\S]*?)\]/);
+              if (daysMatch) {
+                const daysContent = daysMatch[1];
+                const dayMatches = daysContent.match(/\{[^{}]*\}/g);
+                if (dayMatches && dayMatches.length > 0) {
+                  const partialDays = dayMatches.map(day => {
+                    try {
+                      return JSON.parse(day);
+                    } catch {
+                      return null;
+                    }
+                  }).filter(day => day !== null);
+                  
+                  if (partialDays.length > 0) {
+                    console.log('✅ Successfully extracted partial workout plan with', partialDays.length, 'days');
+                    return {
+                      days: partialDays,
+                      workout_plan: partialDays.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
+                    };
+                  }
+                }
+              }
+              
+              // If all else fails, try to extract any valid JSON objects
+              console.log('🔧 Last resort: extracting any valid JSON objects...');
+              const jsonObjects = fixedText.match(/\{[^{}]*\}/g);
+              if (jsonObjects && jsonObjects.length > 0) {
+                const validObjects = jsonObjects.map(obj => {
+                  try {
+                    return JSON.parse(obj);
+                  } catch {
+                    return null;
+                  }
+                }).filter(obj => obj !== null);
+                
+                if (validObjects.length > 0) {
+                  console.log('✅ Extracted', validObjects.length, 'valid JSON objects');
+                  // Try to construct a minimal valid response
+                  const exercises = validObjects.filter(obj => obj.exercise_name);
+                  if (exercises.length > 0) {
+                    return {
+                      days: [{ focus: 'Workout', exercises }],
+                      workout_plan: exercises.map((ex: any, i: number) => ({ ...ex, dayIndex: 0 }))
+                    };
+                  }
+                }
+              }
+              
+              throw parseError; // Throw original error
+            }
+          } else {
+            throw parseError;
+          }
+        } else {
+          throw parseError;
+        }
+      }
+    }
+    
+    if (parsed.days && Array.isArray(parsed.days)) {
+      // If we have client workout days and plan start date, assign workouts to specific days
+      if (clientWorkoutDays && planStartDate) {
+        console.log('📅 Using day assignment logic...');
+        console.log('📅 Client workout days:', clientWorkoutDays);
+        console.log('📅 Plan start date:', planStartDate);
+        console.log('📅 Parsed days from AI:', parsed.days.length);
+        console.log('📅 First parsed day:', parsed.days[0]);
         
-        // Update the workout with the calculated date and client ID
+        const assignedDays = assignWorkoutsToDays(parsed.days, clientWorkoutDays, planStartDate);
+        console.log('📅 Assigned days result:', assignedDays);
+        
         return {
-          ...cleanedWorkout,
-          for_date: formattedDate,
-          client_id: clientId
+          days: assignedDays,
+          workout_plan: assignedDays.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
         };
-      } catch (error) {
-        console.error(`❌ Error processing date for ${dayName}:`, error);
+      } else {
+        // Fallback to original logic
+        console.log('📅 Using fallback day assignment...');
+        console.log('📅 Client workout days:', clientWorkoutDays);
+        console.log('📅 Plan start date:', planStartDate);
         return {
-          ...cleanedWorkout,
-          for_date: new Date().toISOString().split('T')[0], // Default to today
-          client_id: clientId
+          days: parsed.days,
+          workout_plan: parsed.days.flatMap((day: any, i: number) => (day.exercises || []).map((ex: any) => ({ ...ex, dayIndex: i })))
         };
       }
-    });
+    }
+    // fallback for legacy
+    return parsed;
+  } catch (e) {
+    console.error('Failed to parse AI response as new days schema:', e);
+    console.error('Raw response length:', aiResponseText.length);
+    console.error('Raw response preview:', aiResponseText.substring(0, 1000));
     
-    console.log('✅ Successfully processed workout plan dates');
+    if (e instanceof SyntaxError) {
+      throw new Error(`AI response contains invalid JSON. The response may have been cut off. Please try again. Original error: ${e.message}`);
+    }
     
-    return {
-      ...aiData,
-      workout_plan: processedWorkoutPlan
-    };
-    
-  } catch (error) {
-    console.error('❌ Error processing workout plan dates:', error);
-    throw new Error(`Failed to process workout plan dates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return { workout_plan: [] };
   }
 }
 
@@ -282,7 +554,7 @@ async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
       const dbRecord = {
         client_id: clientId,
         workout: ensureString(workout.workout || workout.name, 'Unknown Exercise'),
-        sets: ensureNumber(workout.sets, 3),
+        sets: String(workout.sets ?? '3'), // sets is always a string
         reps: ensureString(workout.reps, '10'), // reps can be "10-12" or "10", so keep as string
         duration: ensureNumber(workout.duration, 15),
         weights: ensureString(workout.weights, 'bodyweight'),
@@ -352,10 +624,10 @@ async function saveWorkoutPlanToDatabase(workoutPlan: any[], clientId: number) {
 }
 
 /**
- * Function to generate AI response using OpenRouter
+ * Function to generate AI response using OpenRouter with enhanced error handling
  * @param clientInfo - Organized client information
  */
-async function generateAIResponse(clientInfo: any) {
+async function generateAIResponse(clientInfo: any, model?: string): Promise<{ response: string, model: string, timestamp: string, fallbackModelUsed?: boolean }> {
   console.log('🔑 Checking for OpenRouter API key...');
   
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
@@ -366,129 +638,304 @@ async function generateAIResponse(clientInfo: any) {
   console.log('✅ OpenRouter API key found');
   console.log('📋 Preparing comprehensive fitness coach prompt...');
   
-  // Use the comprehensive world-class fitness coach prompt template
-  // Helper to format client's preferred workout days
+  // Enhanced client data processing
   const formatWorkoutDays = (workoutDays: any) => {
     if (!workoutDays) return 'N/A';
     if (typeof workoutDays === 'string') return workoutDays;
     if (Array.isArray(workoutDays)) return workoutDays.join(', ');
     if (typeof workoutDays === 'object') {
-      // If it's an object like {"Monday": true, "Wednesday": true, "Friday": true}
       return Object.keys(workoutDays).filter(day => workoutDays[day]).join(', ');
     }
     return 'N/A';
   };
 
-  const fitnessCoachPrompt = `You are a world-class fitness coach. Based on the inputs below, create a personalized, evidence-based training program tailored to the client's goals, preferences, and constraints.
+  // Helper function to format training time duration
+  const formatTrainingTime = (trainingTime: any): string => {
+    if (!trainingTime) return '45';
+    
+    // Handle underscore format (e.g., "45_60" -> "45-60 minutes")
+    if (typeof trainingTime === 'string' && trainingTime.includes('_')) {
+      const [min, max] = trainingTime.split('_');
+      return `${min}-${max} minutes`;
+    }
+    
+    // Handle single number
+    if (typeof trainingTime === 'string' || typeof trainingTime === 'number') {
+      return `${trainingTime} minutes`;
+    }
+    
+    return '45 minutes';
+  };
 
-Inputs:
-Goal: ${clientInfo.primaryGoal || 'N/A'}
-Specific Outcome: ${clientInfo.specificOutcome || 'N/A'}
-Goal Deadline: ${clientInfo.goalTimeline || 'N/A'}
-Confidence Rating (1–10): ${clientInfo.confidenceLevel || 'N/A'}
-Challenges/Obstacles: ${clientInfo.obstacles || 'N/A'}
-Training Experience: ${clientInfo.trainingExperience || 'Beginner'}
-Training History (Last 6 Months): ${clientInfo.previousTraining || 'Unknown'}
-Training Frequency: ${clientInfo.trainingDaysPerWeek || '3'}x/week
-Session Duration: ${clientInfo.trainingTimePerSession || '30-45 min'}
-Training Location: ${clientInfo.trainingLocation || 'Home'}
-Available Equipment: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
-Preferred Workout Days: ${formatWorkoutDays(clientInfo.workoutDays)}
-Limitations/Injuries: ${clientInfo.injuriesLimitations || 'None'}
-Body Area Focus: ${Array.isArray(clientInfo.focusAreas) ? clientInfo.focusAreas.join(', ') : clientInfo.focusAreas || 'None'}
-Workout Style Preferences: ${clientInfo.activityLevel || 'General'}
+  // Calculate BMI for exercise intensity guidance
+  const calculateBMI = (height: number, weight: number) => {
+    if (!height || !weight) return null;
+    const heightInMeters = height / 100;
+    return (weight / (heightInMeters * heightInMeters)).toFixed(1);
+  };
 
-Additional Client Information:
-Name: ${clientInfo.name || clientInfo.preferredName || 'N/A'}
-Age: ${clientInfo.age || 'N/A'}
-Sex: ${clientInfo.sex || 'N/A'}
-Height: ${clientInfo.height || 'N/A'} cm
-Current Weight: ${clientInfo.weight || 'N/A'} kg
-Target Weight: ${clientInfo.targetWeight || 'N/A'} kg
-Sleep Hours: ${clientInfo.sleepHours || 'N/A'}
-Stress Level: ${clientInfo.stress || 'N/A'}
-Motivation Style: ${clientInfo.motivationStyle || 'N/A'}
+  const bmi = calculateBMI(clientInfo.height, clientInfo.weight);
+  const isOverweight = bmi && parseFloat(bmi) > 25;
+  const isUnderweight = bmi && parseFloat(bmi) < 18.5;
 
-Guidelines:
-Use the correct training philosophy based on the goal and training age
-Choose appropriate progression models (linear, undulating, or block periodization) based on experience and timeline.
-CRITICAL: Respect the exact number of training days per week specified in "Training Frequency" (${clientInfo.trainingDaysPerWeek || '3'} days)
-CRITICAL: If "Preferred Workout Days" are specified, prioritize scheduling workouts on those specific days of the week
-Respect equipment limitations and substitute intelligently. Only use exercises that can be performed with the available equipment.
-Adjust exercises based on injury/limitation info.
-Emphasize specified body areas without neglecting full-body balance.
-Include progression triggers.
-Insert deload every 4–6 weeks with 40% volume reduction if program spans 8+ weeks.
-If timeline is <6 weeks, consider a short cycle without deload.
+  // Enhanced injury processing
+  const processInjuries = (injuries: string): { adaptations: string; forbidden: string } => {
+    if (!injuries || injuries.toLowerCase().includes('none')) {
+      return { adaptations: 'None', forbidden: 'None' };
+    }
+    
+    const injuryList = injuries.toLowerCase().split('\n').filter(i => i.trim());
+    const adaptations: string[] = [];
+    const forbidden: string[] = [];
+    
+    injuryList.forEach(injury => {
+      if (injury.includes('knee')) {
+        adaptations.push('Low-impact alternatives for knee exercises');
+        forbidden.push('heavy squats, lunges, jumping, deep knee bends');
+      }
+      if (injury.includes('back') || injury.includes('spine')) {
+        adaptations.push('Core-focused, avoid heavy deadlifts initially');
+        forbidden.push('heavy deadlifts, overhead press, bent-over rows');
+      }
+      if (injury.includes('shoulder')) {
+        adaptations.push('Focus on rotator cuff, avoid overhead movements');
+        forbidden.push('overhead press, pull-ups, heavy bench press');
+      }
+      if (injury.includes('ankle')) {
+        adaptations.push('Stability exercises, avoid high-impact cardio');
+        forbidden.push('running, jumping, plyometrics');
+      }
+    });
+    
+    return {
+      adaptations: adaptations.length > 0 ? adaptations.join('; ') : 'None',
+      forbidden: forbidden.length > 0 ? forbidden.join(', ') : 'None'
+    };
+  };
 
-IMPORTANT: Create a complete weekly plan that includes every day of the week (Monday through Sunday). If a day is dedicated for rest, clearly indicate it as a rest day in the weekly_breakdown and include it in the workout_plan array with appropriate rest day information.
+  const injuryAnalysis = processInjuries(clientInfo.injuriesLimitations);
 
-ICONS: Provide thoughtful, exercise-appropriate emojis that match the exercise type:
-- Strength training: 🏋️‍♂️, 💪, 🔥
-- Cardio: 🏃‍♂️, 🚴‍♂️, ❤️, 🫀
-- Flexibility/Stretching: 🧘‍♂️, 🤸‍♂️, 🌟
-- Core: 🔥, 💪, ⚡
-- Upper body: 💪, 🏋️‍♂️, 🔥
-- Lower body: 🦵, 🏃‍♂️, 💪
-- Full body: 🔥, ⚡, 🎯
-- Warm-up: 🌟, ⚡, 🔥
-- Cool-down: 🧘‍♂️, 😌, 🌟
+  // Goal-specific training parameters
+  const getTrainingParams = (goal: string, experience: string) => {
+    const params = {
+      reps: '8-12',
+      sets: '3-4',
+      rest: '60-90s',
+      intensity: 'moderate',
+      focus: 'hypertrophy'
+    };
+    
+    if (goal?.includes('strength')) {
+      params.reps = '1-5';
+      params.sets = '4-6';
+      params.rest = '90-180s';
+      params.intensity = 'high';
+      params.focus = 'strength';
+    } else if (goal?.includes('endurance') || goal?.includes('marathon')) {
+      params.reps = '12-20';
+      params.sets = '2-3';
+      params.rest = '30-60s';
+      params.intensity = 'low';
+      params.focus = 'endurance';
+    } else if (goal?.includes('weight_loss')) {
+      params.reps = '10-15';
+      params.sets = '3-4';
+      params.rest = '45-90s';
+      params.intensity = 'moderate';
+      params.focus = 'metabolic';
+    }
+    
+    if (experience?.includes('beginner')) {
+      params.sets = Math.max(2, parseInt(params.sets.split('-')[0]) - 1) + '-' + Math.max(3, parseInt(params.sets.split('-')[1]) - 1);
+      params.rest = '90-120s';
+    }
+    
+    return params;
+  };
 
-Respond with ONLY valid JSON. Do not include any text, comments, or explanations before or after the JSON.
+  const trainingParams = getTrainingParams(clientInfo.primaryGoal, clientInfo.trainingExperience);
 
-IMPORTANT: Use clean, simple exercise names in the "workout" field (e.g., "Push-ups", "Squats", "Deadlifts"). Do not include category or body part in the exercise name itself.
+  // Enhanced prompt with token optimization
+  const numDays = clientInfo.trainingDaysPerWeek || 3;
+  const fitnessCoachPrompt = `Create a ${numDays}-day workout plan for:
 
-Output Format (in JSON):
+CLIENT PROFILE:
+Name: ${clientInfo.name || 'Unknown'}
+Age: ${clientInfo.age || 'N/A'} years | Gender: ${clientInfo.sex || 'N/A'}
+Height: ${clientInfo.height || 'N/A'}cm | Weight: ${clientInfo.weight || 'N/A'}kg${bmi ? ` | BMI: ${bmi}` : ''}
+${isOverweight ? '⚠️ Overweight - focus on compound movements, longer rest' : ''}${isUnderweight ? '⚠️ Underweight - emphasize progressive overload' : ''}
+
+GOALS & TIMELINE:
+Primary: ${clientInfo.primaryGoal || 'General fitness'}
+Specific: ${clientInfo.specificOutcome || 'Improve health'}
+Timeline: ${clientInfo.goalTimeline || 'Not specified'}
+Obstacles: ${clientInfo.obstacles || 'None'}
+
+CRITICAL TRAINING CONSTRAINTS (MUST FOLLOW EXACTLY):
+Training Frequency: ${clientInfo.trainingDaysPerWeek || '3'} days per week
+Session Duration: ${formatTrainingTime(clientInfo.trainingTimePerSession)}
+Schedule: ${formatWorkoutDays(clientInfo.workoutDays)}
+Workout Time: ${clientInfo.workoutTime || 'Not specified'}
+
+TRAINING PARAMETERS:
+Experience: ${clientInfo.trainingExperience || 'Beginner'}
+Focus: ${trainingParams.focus} | Intensity: ${trainingParams.intensity}
+Reps: ${trainingParams.reps} | Sets: ${trainingParams.sets} | Rest: ${trainingParams.rest}
+
+EQUIPMENT & LIMITATIONS:
+Available: ${Array.isArray(clientInfo.availableEquipment) ? clientInfo.availableEquipment.join(', ') : clientInfo.availableEquipment || 'Bodyweight only'}
+Focus Areas: ${Array.isArray(clientInfo.focusAreas) ? clientInfo.focusAreas.join(', ') : clientInfo.focusAreas || 'Full body'}
+Injuries: ${injuryAnalysis.adaptations}
+Avoid: ${injuryAnalysis.forbidden}
+
+LIFESTYLE FACTORS:
+Sleep: ${clientInfo.sleepHours || 'N/A'} hours | Stress: ${clientInfo.stress || 'N/A'}
+Motivation: ${clientInfo.motivationStyle || 'N/A'}
+Activity Level: ${clientInfo.activityLevel || 'General'}
+
+CRITICAL REQUIREMENTS (PRIORITY 1):
+1. Create EXACTLY ${clientInfo.trainingDaysPerWeek || '3'} training days with exercises
+2. TOTAL duration of ALL exercises per session MUST equal ${formatTrainingTime(clientInfo.trainingTimePerSession)}
+3. Calculate: sum of all exercise durations = ${formatTrainingTime(clientInfo.trainingTimePerSession)}
+4. Use available equipment only
+5. Respect injury limitations strictly
+
+TRAINING GUIDELINES:
+- Include compound movements first
+- Balance push/pull, upper/lower body
+- Include specific coach tips: tempo, RPE, form cues
+- Ensure proper warm-up and cool-down within session time
+- Each exercise should have realistic duration (5-20 minutes per exercise)
+
+IMPORTANT: Return ONLY valid JSON. Do not include any explanatory text, comments, or additional information before or after the JSON object.
+
+OUTPUT FORMAT - Valid JSON only:
 {
-  "overview": "...",
-  "split": "...",
-  "progression_model": "...",
-  "weekly_breakdown": {
-    "Monday": "...",
-    "Tuesday": "...",
-    "Wednesday": "...",
-    "Thursday": "...",
-    "Friday": "...",
-    "Saturday": "...",
-    "Sunday": "..."
-  },
-  "workout_plan": [
+  "days": [
     {
-      "workout": "Glute Bridges",
-      "day": "Monday",
-      "sets": 3,
-      "reps": 15,
-      "duration": 30,
-      "weights": "bodyweight",
-      "equipment": "None - bodyweight only",
-      "for_time": "08:00:00",
-      "body_part": "Glutes",
-      "category": "Strength",
-      "coach_tip": "Provide a unique, actionable coaching tip for this exercise (e.g., 'Push through the heels to engage glutes fully. Maintain a neutral spine.')",
-      "icon": "🔥",
-      "progression_notes": "Add 2 reps when RPE ≤ 8"
+      "focus": "Upper Body Strength",
+      "exercises": [
+        {
+          "exercise_name": "Bench Press",
+          "category": "Strength",
+          "body_part": "Chest, Shoulders, Triceps",
+          "sets": 4,
+          "reps": 6,
+          "duration": 15,
+          "weights": "barbell",
+          "equipment": "Barbell, Bench",
+          "coach_tip": "3-1-3 tempo, RPE 7-8, retract scapula, feet flat",
+          "rest": 90
+        },
+        {
+          "exercise_name": "Bent Over Row",
+          "category": "Strength",
+          "body_part": "Back, Biceps",
+          "sets": 3,
+          "reps": 8,
+          "duration": 12,
+          "weights": "barbell",
+          "equipment": "Barbell",
+          "coach_tip": "2-1-2 tempo, RPE 7-8, keep back straight",
+          "rest": 90
+        },
+        {
+          "exercise_name": "Overhead Press",
+          "category": "Strength",
+          "body_part": "Shoulders, Triceps",
+          "sets": 3,
+          "reps": 8,
+          "duration": 10,
+          "weights": "dumbbells",
+          "equipment": "Dumbbells",
+          "coach_tip": "2-1-2 tempo, RPE 7-8, core tight",
+          "rest": 75
+        }
+      ]
     }
   ]
 }`;
   
-  console.log('📝 Fitness coach prompt prepared with client data');
+  console.log('📝 Enhanced fitness coach prompt prepared');
+  console.log('📊 Prompt length:', fitnessCoachPrompt.length, 'characters');
+  console.log('📊 Token estimate:', Math.ceil(fitnessCoachPrompt.length / 4), 'tokens');
   
-  console.log('🚀 Sending request to OpenRouter...');
+  // ===== COMPLETE PROMPT LOGGING =====
+  console.log('🔍 ===== EXACT PROMPT BEING SENT TO LLM =====');
+  console.log('📋 PROMPT START:');
+  console.log('='.repeat(80));
+  console.log(fitnessCoachPrompt);
+  console.log('='.repeat(80));
+  console.log('📋 PROMPT END');
+  console.log('🔍 ===== END OF PROMPT =====');
+  
+  console.log('🚀 Sending request to LLM service...');
+  console.log('🎯 Using model:', model || 'default');
   
   try {
-    const aiResponse = await askOpenRouter(fitnessCoachPrompt);
-    console.log('📊 OpenRouter Response received');
+    // Try with the specified model first
+    const aiResult = await askLLM(fitnessCoachPrompt, model || undefined);
+    console.log('📊 LLM Response received');
     console.log('✅ AI Response extracted');
     
+    // ===== COMPLETE LLM RESPONSE LOGGING =====
+    console.log('🔍 ===== COMPLETE LLM RESPONSE =====');
+    console.log('📋 RESPONSE START:');
+    console.log('='.repeat(80));
+    console.log('Response length:', aiResult.response?.length || 0, 'characters');
+    console.log('Response model:', aiResult.model || 'unknown');
+    console.log('Fallback used:', aiResult.fallbackModelUsed || false);
+    console.log('📋 RESPONSE CONTENT:');
+    console.log(aiResult.response || 'NO RESPONSE');
+    console.log('='.repeat(80));
+    console.log('📋 RESPONSE END');
+    console.log('🔍 ===== END OF LLM RESPONSE =====');
+    
     return {
-      response: aiResponse.response, // Correctly unpack the response string
-      model: 'qwen/qwen3-8b:free',
-      timestamp: new Date().toISOString()
+      response: aiResult.response,
+      model: aiResult.model || 'unknown',
+      timestamp: new Date().toISOString(),
+      fallbackModelUsed: aiResult.fallbackModelUsed,
     };
     
-  } catch (error) {
-    console.error('❌ OpenRouter API Error:', error);
-    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } catch (error) {
+      console.error('❌ Primary LLM request failed:', error);
+      console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
+      
+      // Fallback: Try with a different model if available
+      try {
+        console.log('🔄 Attempting fallback with different model...');
+        const fallbackModel = model?.includes('qwen') ? 'meta-llama/llama-3.1-8b-instruct:free' : 'qwen/qwen-32b:free';
+        console.log('🔄 Using fallback model:', fallbackModel);
+        
+        const fallbackResult = await askLLM(fitnessCoachPrompt, fallbackModel);
+        
+        console.log('✅ Fallback LLM request successful');
+        
+        // ===== FALLBACK LLM RESPONSE LOGGING =====
+        console.log('🔍 ===== FALLBACK LLM RESPONSE =====');
+        console.log('📋 FALLBACK RESPONSE START:');
+        console.log('='.repeat(80));
+        console.log('Fallback response length:', fallbackResult.response?.length || 0, 'characters');
+        console.log('Fallback response model:', fallbackResult.model || fallbackModel);
+        console.log('Fallback used: true');
+        console.log('📋 FALLBACK RESPONSE CONTENT:');
+        console.log(fallbackResult.response || 'NO FALLBACK RESPONSE');
+        console.log('='.repeat(80));
+        console.log('📋 FALLBACK RESPONSE END');
+        console.log('🔍 ===== END OF FALLBACK LLM RESPONSE =====');
+        
+        return {
+          response: fallbackResult.response,
+          model: fallbackResult.model || fallbackModel,
+          timestamp: new Date().toISOString(),
+          fallbackModelUsed: true,
+        };
+      
+    } catch (fallbackError) {
+      console.error('❌ Fallback LLM request also failed:', fallbackError);
+      throw new Error(`All LLM providers failed. Primary error: ${error instanceof Error ? error.message : 'Unknown error'}. Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+    }
   }
 }
 
@@ -818,7 +1265,7 @@ export async function generateAIWorkoutPlan(clientId: number) {
  * This version does NOT automatically save to Supabase - allows for review and editing first
  * @param clientId - The ID of the client to fetch data for
  */
-export async function generateAIWorkoutPlanForReview(clientId: number) {
+export async function generateAIWorkoutPlanForReview(clientId: number, model?: string, planStartDate?: Date) {
   console.log('🤖 Starting AI workout plan generation for REVIEW for client:', clientId);
   console.log('📊 Target Table: client');
   console.log('🔍 Query Parameters:', { client_id: clientId });
@@ -945,10 +1392,35 @@ export async function generateAIWorkoutPlanForReview(clientId: number) {
     
     try {
       const startTime = Date.now();
-      const aiResponse = await generateAIResponse(clientInfo);
+      console.log('🚀 ===== STARTING AI RESPONSE GENERATION =====');
+      console.log('📋 Client Info Summary:');
+      console.log('  - Name:', clientInfo.name);
+      console.log('  - Age:', clientInfo.age);
+      console.log('  - Primary Goal:', clientInfo.primaryGoal);
+      console.log('  - Training Days:', clientInfo.trainingDaysPerWeek);
+      console.log('  - Available Equipment:', clientInfo.availableEquipment);
+      console.log('  - Injuries:', clientInfo.injuriesLimitations);
+      console.log('🚀 ===== END CLIENT INFO SUMMARY =====');
+      
+      const aiResponse = await generateAIResponse(clientInfo, model);
       const endTime = Date.now();
       console.log('✅ AI Response generated successfully');
       console.log('⏱️ AI Generation took:', endTime - startTime, 'ms');
+      
+      // ===== COMPLETE AI RESPONSE VALIDATION =====
+      console.log('🔍 ===== AI RESPONSE VALIDATION =====');
+      console.log('📊 Response object type:', typeof aiResponse);
+      console.log('📊 Response object keys:', Object.keys(aiResponse || {}));
+      console.log('📊 Response.response type:', typeof aiResponse?.response);
+      console.log('📊 Response.response length:', aiResponse?.response?.length || 0);
+      console.log('📊 Response.response preview:', aiResponse?.response?.substring(0, 200) || 'NO RESPONSE');
+      console.log('🔍 ===== END AI RESPONSE VALIDATION =====');
+      
+      // Improved error handling: Check for missing/invalid response
+      if (!aiResponse || typeof aiResponse.response !== 'string' || !aiResponse.response.trim()) {
+        console.error('❌ AI Response missing or empty:', aiResponse);
+        throw new Error('Failed to generate AI response: The AI service returned an error or no data. Please try again later.');
+      }
       
       // After receiving the OpenRouter response:
       // Assume 'aiResponse' is the parsed response from OpenRouter
@@ -959,41 +1431,78 @@ export async function generateAIWorkoutPlanForReview(clientId: number) {
       }
       
       console.log('🔄 Processing workout plan dates...');
-      const processedWorkoutPlan = processWorkoutPlanDates(aiResponse.response, clientId);
-      console.log('✅ Date processing completed');
-      console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
-      console.log('📊 Workout Plan Array Length:', processedWorkoutPlan?.workout_plan?.length || 0);
+      console.log('📋 Raw AI Response being processed:');
+      console.log('='.repeat(60));
+      console.log(aiResponse.response);
+      console.log('='.repeat(60));
       
-      if (processedWorkoutPlan?.workout_plan?.length > 0) {
-        console.log('📋 First Workout Sample:', processedWorkoutPlan.workout_plan[0]);
-      }
-      
-      // Check if workout plan exists
-      if (!processedWorkoutPlan.workout_plan || processedWorkoutPlan.workout_plan.length === 0) {
-        console.warn('⚠️ No workout exercises found in AI response');
+      try {
+        console.log('📅 About to process workout plan dates...');
+        console.log('📅 Client workout days being passed:', clientInfo.workoutDays);
+        console.log('📅 Plan start date being passed:', planStartDate || new Date());
+        
+        const processedWorkoutPlan = processWorkoutPlanDates(
+          aiResponse.response, 
+          clientId, 
+          clientInfo.workoutDays, 
+          planStartDate || new Date() // Use passed plan start date or current date
+        );
+        console.log('✅ Date processing completed');
+        console.log('📊 Processed Workout Plan Keys:', Object.keys(processedWorkoutPlan || {}));
+        console.log('📊 Workout Plan Array Length:', processedWorkoutPlan?.workout_plan?.length || 0);
+        
+        // ===== COMPLETE PROCESSED WORKOUT PLAN LOGGING =====
+        console.log('🔍 ===== FINAL PROCESSED WORKOUT PLAN =====');
+        console.log('📋 PROCESSED PLAN START:');
+        console.log('='.repeat(80));
+        console.log('📊 Complete processed workout plan:');
+        console.log(JSON.stringify(processedWorkoutPlan, null, 2));
+        console.log('='.repeat(80));
+        console.log('📋 PROCESSED PLAN END');
+        console.log('🔍 ===== END OF PROCESSED WORKOUT PLAN =====');
+        
+        if (processedWorkoutPlan?.workout_plan?.length > 0) {
+          console.log('📋 First Workout Sample:', processedWorkoutPlan.workout_plan[0]);
+        }
+        
+        // Check if workout plan exists
+        if (!processedWorkoutPlan.workout_plan || processedWorkoutPlan.workout_plan.length === 0) {
+          console.warn('⚠️ No workout exercises found in AI response');
+          return {
+            success: false,
+            message: 'No workout exercises found in AI response. The AI response may have been incomplete or cut off.',
+            clientData: clientData,
+            clientInfo: clientInfo,
+            aiResponse: aiResponse
+          };
+        }
+        
+        console.log('✅ AI Workout Plan generated successfully for REVIEW');
+        console.log('🔒 REVIEW MODE: Plan returned for review, NOT saved to database');
+        console.log('📊 Number of exercises generated:', processedWorkoutPlan.workout_plan.length);
+        
+        return {
+          success: true,
+          message: `Successfully generated AI workout plan for review: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
+          clientData: clientData,
+          clientInfo: clientInfo,
+          aiResponse: aiResponse,
+          workoutPlan: processedWorkoutPlan,
+          generatedAt: new Date().toISOString(),
+          autoSaved: false,
+          fallbackModelUsed: aiResponse.fallbackModelUsed,
+          aiModel: aiResponse.model,
+        };
+      } catch (parseError) {
+        console.error('❌ Error parsing AI response:', parseError);
         return {
           success: false,
-          message: 'No workout exercises found in AI response',
+          message: parseError instanceof Error ? parseError.message : 'Failed to parse AI response. The response may have been incomplete.',
           clientData: clientData,
           clientInfo: clientInfo,
           aiResponse: aiResponse
         };
       }
-      
-      console.log('✅ AI Workout Plan generated successfully for REVIEW');
-      console.log('🔒 REVIEW MODE: Plan returned for review, NOT saved to database');
-      console.log('📊 Number of exercises generated:', processedWorkoutPlan.workout_plan.length);
-      
-      return {
-        success: true,
-        message: `Successfully generated AI workout plan for review: ${clientInfo.name || clientInfo.preferredName || 'Unknown'}`,
-        clientData: clientData,
-        clientInfo: clientInfo,
-        aiResponse: aiResponse,
-        workoutPlan: processedWorkoutPlan,
-        generatedAt: new Date().toISOString(),
-        autoSaved: false 
-      };
         
     } catch (aiError) {
       console.error('❌ Error generating AI response:', aiError);

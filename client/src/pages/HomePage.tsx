@@ -94,7 +94,7 @@ function HomeSection() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.6 }}
         >
-          <Link to="/signup">
+          <Link to="/trainer-signup">
             <Button className="bg-green-700 hover:bg-green-800 text-white cursor-pointer px-6 py-3">
               Get Started
             </Button>

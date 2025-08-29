@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { supabase } from '@/lib/supabase'
+import { supabase, getOAuthRedirectUrl } from '@/lib/supabase'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 
@@ -29,7 +29,7 @@ const GoogleSignIn: React.FC<GoogleSignInProps> = ({
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: getOAuthRedirectUrl(),
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

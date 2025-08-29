@@ -3,7 +3,7 @@ import {
   Users, 
   ClipboardList, 
   CreditCard, 
-  PaintbrushVertical, 
+  Paintbrush, 
   Bell, 
   LogOut,
   Moon,
@@ -42,6 +42,7 @@ import {
   AlertTriangle,
   Table,
   Grid3X3,
+  Settings,
   Loader2 as Loader,
   PaperclipIcon as Paperclip,
   CheckIcon as CheckMark,
@@ -53,7 +54,7 @@ export const HomeIcon = Home;
 export const UsersIcon = Users;
 export const ClipboardIcon = ClipboardList;
 export const CreditCardIcon = CreditCard;
-export const PaintbrushIcon = PaintbrushVertical;
+export const PaintbrushIcon = Paintbrush;
 export const BellIcon = Bell;
 export const LogOutIcon = LogOut;
 export const MoonIcon = Moon;
@@ -94,4 +95,5 @@ export const ChevronRightIcon = ChevronRight;
 export const AlertTriangleIcon = AlertTriangle;
 export const TableIcon = Table;
 export const Grid3X3Icon = Grid3X3;
+export const SettingsIcon = Settings;
 export const LoaderIcon = Loader;

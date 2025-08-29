@@ -1,0 +1,1076 @@
+/* onboardingStyles.css */
+/* Styles for trainer-side onboarding components */
+
+/* Reset and base styles */
+.onboarding-container * {
+  box-sizing: border-box;
+}
+
+.onboarding-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: transparent;
+  margin: 0;
+  padding: 0;
+}
+
+/* Main container */
+.onboarding-container {
+  width: 100%;
+  margin: 0;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dark mode support for main container */
+@media (prefers-color-scheme: dark) {
+  .onboarding-container {
+    background-color: #1f2937;
+    color: #f9fafb;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Header */
+.onboarding-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #fff;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 20px 0;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Dark mode support for header */
+@media (prefers-color-scheme: dark) {
+  .onboarding-header {
+    background-color: #1f2937;
+    border-bottom-color: #374151;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Modal overlay styles to ensure proper layering */
+[data-radix-dialog-overlay] {
+  z-index: 50 !important;
+}
+
+[data-radix-dialog-content] {
+  z-index: 51 !important;
+}
+
+/* Ensure onboarding container doesn't interfere with modals */
+.onboarding-container:has([data-radix-dialog-overlay]) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Alternative approach for browsers that don't support :has() */
+.onboarding-container [data-radix-dialog-overlay] {
+  position: fixed !important;
+  z-index: 50 !important;
+}
+
+.onboarding-container [data-radix-dialog-content] {
+  position: fixed !important;
+  z-index: 51 !important;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.onboarding-btn {
+  background-color: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.onboarding-btn:hover {
+  background-color: #059669;
+  border-color: #059669;
+}
+
+.onboarding-header h1 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* Dark mode support for header title */
+@media (prefers-color-scheme: dark) {
+  .onboarding-header h1 {
+    color: #f9fafb;
+  }
+}
+
+.filter-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.filter-badge {
+  background-color: #e74c3c;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Progress section */
+.progress-section {
+  margin-bottom: 20px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+/* Dark mode support for progress bar */
+@media (prefers-color-scheme: dark) {
+  .progress-bar {
+    background-color: #374151;
+  }
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Dark mode support for progress text */
+@media (prefers-color-scheme: dark) {
+  .progress-text {
+    color: #9ca3af;
+  }
+}
+
+/* Header actions */
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.btn-secondary {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #7f8c8d;
+}
+
+.btn-large {
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+/* Content area */
+.onboarding-content {
+  margin-bottom: 30px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Question sections */
+.question-section {
+  margin-bottom: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Dark mode support for question sections */
+@media (prefers-color-scheme: dark) {
+  .question-section {
+    border-color: #374151;
+  }
+}
+
+/* Special styling for Client Settings section (first section) */
+.question-section:first-child {
+  border: 2px solid #3b82f6;
+  background-color: #f8fafc;
+  margin-bottom: 30px;
+}
+
+/* Dark mode support for first section */
+@media (prefers-color-scheme: dark) {
+  .question-section:first-child {
+    background-color: #1e3a8a;
+  }
+}
+
+.question-section:first-child .section-header {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.question-section:first-child .section-header .section-name {
+  color: white;
+}
+
+.question-section:first-child .section-header .section-progress {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.question-section:first-child .section-header:hover {
+  background-color: #2563eb;
+}
+
+.section-header {
+  background-color: #f8f9fa;
+  padding: 15px 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+/* Dark mode support for section headers */
+@media (prefers-color-scheme: dark) {
+  .section-header {
+    background-color: #374151;
+  }
+}
+
+.section-header:hover {
+  background-color: #e9ecef;
+}
+
+/* Dark mode support for section header hover */
+@media (prefers-color-scheme: dark) {
+  .section-header:hover {
+    background-color: #4b5563;
+  }
+}
+
+.section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.section-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+/* Dark mode support for section names */
+@media (prefers-color-scheme: dark) {
+  .section-name {
+    color: #f9fafb;
+  }
+}
+
+.section-progress {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Dark mode support for section progress */
+@media (prefers-color-scheme: dark) {
+  .section-progress {
+    color: #9ca3af;
+  }
+}
+
+.section-incomplete-count {
+  font-size: 11px;
+  color: #e74c3c;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.section-toggle {
+  font-size: 20px;
+  font-weight: bold;
+  color: #666;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dark mode support for section toggle */
+@media (prefers-color-scheme: dark) {
+  .section-toggle {
+    color: #9ca3af;
+  }
+}
+
+/* Section content */
+.section-content {
+  padding: 20px;
+  background-color: #fff;
+}
+
+/* Dark mode support for section content */
+@media (prefers-color-scheme: dark) {
+  .section-content {
+    background-color: #1f2937;
+  }
+}
+
+/* Question items */
+.question-item {
+  margin-bottom: 25px;
+}
+
+.question-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Input groups */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+/* Dark mode support for question labels */
+@media (prefers-color-scheme: dark) {
+  .question-label {
+    color: #f9fafb;
+  }
+}
+
+.required {
+  color: #e74c3c;
+  margin-left: 4px;
+}
+
+/* Input fields */
+.input-field {
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+  resize: vertical;
+  min-height: 44px;
+  background-color: #fff;
+  color: #333;
+}
+
+/* Dark mode support for input fields */
+@media (prefers-color-scheme: dark) {
+  .input-field {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Dark mode support for input field focus */
+@media (prefers-color-scheme: dark) {
+  .input-field:focus {
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  }
+}
+
+.input-field.error {
+  border-color: #e74c3c;
+}
+
+.input-field.error:focus {
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+/* Dark mode support for input field error focus */
+@media (prefers-color-scheme: dark) {
+  .input-field.error:focus {
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+  }
+}
+
+/* Select fields */
+.select-field {
+  background-color: #fff;
+  cursor: pointer;
+}
+
+/* Dark mode support for select fields */
+@media (prefers-color-scheme: dark) {
+  .select-field {
+    background-color: #374151;
+    color: #f9fafb;
+  }
+}
+
+/* Multi-select container */
+.multi-select-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  background-color: #fff;
+}
+
+/* Dark mode support for checkbox items */
+@media (prefers-color-scheme: dark) {
+  .checkbox-item {
+    background-color: #374151;
+    border-color: #4b5563;
+  }
+}
+
+.checkbox-item:hover {
+  background-color: #f8f9fa;
+}
+
+/* Dark mode support for checkbox item hover */
+@media (prefers-color-scheme: dark) {
+  .checkbox-item:hover {
+    background-color: #4b5563;
+  }
+}
+
+.checkbox-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+/* Dark mode support for disabled checkbox items */
+@media (prefers-color-scheme: dark) {
+  .checkbox-item.disabled {
+    background-color: #1f2937;
+  }
+}
+
+.checkbox-item.disabled:hover {
+  background-color: #f5f5f5;
+}
+
+/* Dark mode support for disabled checkbox item hover */
+@media (prefers-color-scheme: dark) {
+  .checkbox-item.disabled:hover {
+    background-color: #1f2937;
+  }
+}
+
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-label {
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+/* Dark mode support for checkbox labels */
+@media (prefers-color-scheme: dark) {
+  .checkbox-label {
+    color: #f9fafb;
+  }
+}
+
+/* Time input container */
+.time-input-container {
+  display: flex;
+  gap: 15px;
+  align-items: end;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.time-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* Dark mode support for time labels */
+@media (prefers-color-scheme: dark) {
+  .time-label {
+    color: #9ca3af;
+  }
+}
+
+.time-input {
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  transition: border-color 0.2s ease;
+  background-color: #fff;
+  color: #333;
+}
+
+/* Dark mode support for time inputs */
+@media (prefers-color-scheme: dark) {
+  .time-input {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Dark mode support for time input focus */
+@media (prefers-color-scheme: dark) {
+  .time-input:focus {
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  }
+}
+
+.time-input.error {
+  border-color: #e74c3c;
+}
+
+.time-select {
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  color: #333;
+}
+
+/* Dark mode support for time selects */
+@media (prefers-color-scheme: dark) {
+  .time-select {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+.time-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Dark mode support for time select focus */
+@media (prefers-color-scheme: dark) {
+  .time-select:focus {
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  }
+}
+
+/* Error messages */
+.error-message {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+/* Footer */
+.onboarding-footer {
+  border-top: 2px solid #e0e0e0;
+  padding-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+/* Dark mode support for footer */
+@media (prefers-color-scheme: dark) {
+  .onboarding-footer {
+    border-top-color: #374151;
+  }
+}
+
+.footer-info p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Dark mode support for footer info */
+@media (prefers-color-scheme: dark) {
+  .footer-info p {
+    color: #9ca3af;
+  }
+}
+
+.footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Error summary */
+.error-summary {
+  background-color: #fdf2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 20px;
+}
+
+/* Dark mode support for error summary */
+@media (prefers-color-scheme: dark) {
+  .error-summary {
+    background-color: #7f1d1d;
+    border-color: #dc2626;
+  }
+}
+
+.error-summary h3 {
+  margin: 0 0 10px 0;
+  color: #dc2626;
+  font-size: 16px;
+}
+
+/* Dark mode support for error summary heading */
+@media (prefers-color-scheme: dark) {
+  .error-summary h3 {
+    color: #fca5a5;
+  }
+}
+
+.error-summary ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.error-summary li {
+  margin-bottom: 5px;
+}
+
+.error-summary a {
+  color: #dc2626;
+  text-decoration: none;
+}
+
+/* Dark mode support for error summary links */
+@media (prefers-color-scheme: dark) {
+  .error-summary a {
+    color: #fca5a5;
+  }
+}
+
+.error-summary a:hover {
+  text-decoration: underline;
+}
+
+/* Loading spinner */
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+/* Dark mode support for spinner */
+@media (prefers-color-scheme: dark) {
+  .spinner {
+    border-color: #374151;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner p {
+  color: #666;
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Dark mode support for loading spinner text */
+@media (prefers-color-scheme: dark) {
+  .loading-spinner p {
+    color: #9ca3af;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .onboarding-container {
+    padding: 0 15px 15px 15px;
+    margin: 0;
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .onboarding-header h1 {
+    font-size: 24px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .time-input-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .multi-select-container {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footer-actions {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .onboarding-container {
+    padding: 0 10px 10px 10px;
+    margin: 0;
+  }
+
+  .section-header {
+    padding: 12px 15px;
+  }
+
+  .section-content {
+    padding: 15px;
+  }
+
+  .input-field {
+    padding: 10px 12px;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill,
+  .btn,
+  .input-field,
+  .section-header {
+    transition: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
+}
+
+/* Focus styles for keyboard navigation */
+.btn:focus,
+.input-field:focus,
+.select-field:focus,
+.time-input:focus,
+.time-select:focus {
+  outline: 2px solid #3498db;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .input-field,
+  .select-field,
+  .time-input,
+  .time-select {
+    border-width: 3px;
+  }
+
+  .btn {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Question Component Styles */
+.question-component {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+/* Dark mode support for question components */
+@media (prefers-color-scheme: dark) {
+  .question-component {
+    background-color: #374151;
+    border-color: #4b5563;
+  }
+}
+
+.question-component:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+}
+
+/* Dark mode support for question component hover */
+@media (prefers-color-scheme: dark) {
+  .question-component:hover {
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+  }
+}
+
+.question-component .question-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+/* Dark mode support for question component labels */
+@media (prefers-color-scheme: dark) {
+  .question-component .question-label {
+    color: #f9fafb;
+  }
+}
+
+.question-component .required {
+  color: #dc3545;
+  margin-left: 4px;
+}
+
+.question-component .form-input,
+.question-component .form-select,
+.question-component .form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: #fff;
+  color: #333;
+}
+
+/* Dark mode support for question component form inputs */
+@media (prefers-color-scheme: dark) {
+  .question-component .form-input,
+  .question-component .form-select,
+  .question-component .form-textarea {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+.question-component .form-input:focus,
+.question-component .form-select:focus,
+.question-component .form-textarea:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Dark mode support for question component form input focus */
+@media (prefers-color-scheme: dark) {
+  .question-component .form-input:focus,
+  .question-component .form-select:focus,
+  .question-component .form-textarea:focus {
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+  }
+}
+
+.question-component .multiselect-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background-color: #fff;
+}
+
+/* Dark mode support for multiselect container */
+@media (prefers-color-scheme: dark) {
+  .question-component .multiselect-container {
+    background-color: #374151;
+    border-color: #4b5563;
+  }
+}
+
+.question-component .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+/* Dark mode support for checkbox labels */
+@media (prefers-color-scheme: dark) {
+  .question-component .checkbox-label {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+.question-component .checkbox-label:hover {
+  background-color: #e9ecef;
+  border-color: #007bff;
+}
+
+/* Dark mode support for checkbox label hover */
+@media (prefers-color-scheme: dark) {
+  .question-component .checkbox-label:hover {
+    background-color: #4b5563;
+  }
+}
+
+.question-component .checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.question-component .error {
+  color: #dc3545;
+  font-size: 12px;
+  margin-top: 5px;
+  display: block;
+}
+
+/* Dark mode support for question component errors */
+@media (prefers-color-scheme: dark) {
+  .question-component .error {
+    color: #fca5a5;
+  }
+}

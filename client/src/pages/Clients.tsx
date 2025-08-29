@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClientImageUrls } from "@/utils/image-utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -38,7 +39,7 @@ const Clients: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [engagementFilter, setEngagementFilter] = useState("all");
-  const [outcomeFilter, setOutcomeFilter] = useState("all");
+
   const [activityFilter, setActivityFilter] = useState("all");
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -98,10 +99,10 @@ const Clients: React.FC = () => {
         }
         const trainerId = trainerRows[0].id;
 
-        // Get client ids and status from trainer_client_web
+        // Get client ids, status, and cl_email from trainer_client_web
         const { data: relationshipData, error: relationshipError } = await supabase
           .from("trainer_client_web")
-          .select("client_id, status")
+          .select("client_id, status, cl_email")
           .eq("trainer_id", trainerId);
           
         
@@ -122,26 +123,45 @@ const Clients: React.FC = () => {
         });
         setClientStatuses(statusMap);
         
-        // Only proceed if we have valid client IDs
-        if (clientIds.length === 0) {
-          setClients([]);
-          setLoading(false);
-          return;
+        // Fetch client rows if we have any concrete client IDs
+        let clientData: any[] = [];
+        if (clientIds.length > 0) {
+          const { data, error: clientError } = await supabase
+            .from("client")
+            .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
+            .in("client_id", clientIds);
+          if (clientError) throw clientError;
+          clientData = data || [];
         }
-        
-        // Get client names and merge with status
-        const { data: clientData, error: clientError } = await supabase
-          .from("client")
-          .select("client_id, cl_name, last_checkIn, last_active, current_streak, longest_streak, active_session")
-          .in("client_id", clientIds);
-        if (clientError) throw clientError;
-        
+
         // Merge client data with status
         const clientsWithStatus = (clientData || []).map(client => ({
           ...client,
           status: statusMap[client.client_id] || 'pending'
         }));
-        setClients(clientsWithStatus);
+
+        // Build a set of client_ids that we already have concrete rows for
+        const presentClientIds = new Set((clientData || []).map((c: any) => c.client_id));
+
+        // Include pending relationships that do not yet have a client row (either missing client_id or no matching client row)
+        const pendingInvites = (relationshipData || [])
+          .filter((rel: any) => (rel.status || '').toLowerCase() === 'pending')
+          .filter((rel: any) => !rel.client_id || !presentClientIds.has(rel.client_id))
+          .map((rel: any, idx: number) => ({
+            client_id: rel.client_id && typeof rel.client_id === 'number' ? rel.client_id : (-1000 - idx),
+            cl_name: rel.cl_email || 'Pending Invite',
+            last_checkIn: undefined,
+            last_active: undefined,
+            current_streak: null,
+            longest_streak: null,
+            active_session: null,
+            status: 'pending' as const
+          }));
+
+        setClients([...
+          clientsWithStatus,
+          ...pendingInvites
+        ]);
         
         // --- DEBUG: Log clientIds and all rows in activity_info and meal_info ---
         const { data: allActivity, error: allActivityError } = await supabase
@@ -164,10 +184,12 @@ const Clients: React.FC = () => {
         try {
           const { data: activityInfo, error: activityError } = await supabase
             .from("activity_info")
-            .select("client_id, last_weight_time, last_excercise_input, last_sleep_info")
+            .select("client_id, activity, unit, qty, created_at")
             .in("client_id", clientIds);
           if (activityError) {
             console.error("[DEBUG] Error fetching activity info:", activityError);
+          } else {
+            console.log("[DEBUG] Activity info fetched:", activityInfo?.length || 0, "records");
           }
         } catch (activityErr) {
           console.log("[DEBUG] activity_info table might not exist or have different structure");
@@ -282,18 +304,8 @@ const Clients: React.FC = () => {
   useEffect(() => {
     async function fetchClientImageUrls() {
       if (!clients.length) return;
-      const urls: { [clientId: number]: string | null } = {};
-      await Promise.all(clients.map(async (client) => {
-        const filePath = `${client.client_id}.jpg`;
-        const { data, error } = await supabase.storage
-          .from('client-images')
-          .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
-        if (data && data.signedUrl) {
-          urls[client.client_id] = data.signedUrl;
-        } else {
-          urls[client.client_id] = null;
-        }
-      }));
+      const clientIds = clients.map(client => client.client_id);
+      const urls = await getClientImageUrls(clientIds);
       setClientImageUrls(urls);
     }
     fetchClientImageUrls();
@@ -347,8 +359,7 @@ const Clients: React.FC = () => {
 
     // Engagement score filter (mocked for now)
     const matchesEngagement = true;
-    // Outcome score filter (mocked for now)
-    const matchesOutcome = true;
+
     // Activity filter
     const matchesActivity = 
       activityFilter === "all" ||
@@ -356,7 +367,7 @@ const Clients: React.FC = () => {
       (activityFilter === "moderate" && daysSinceActivity !== null && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
       (activityFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
-    return matchesSearch && matchesStatus && matchesEngagement && matchesOutcome && matchesActivity;
+    return matchesSearch && matchesStatus && matchesEngagement && matchesActivity;
   });
 
   const sortedClients = [...filteredClients].sort((a, b) => {
@@ -444,9 +455,7 @@ const Clients: React.FC = () => {
       const bValue = bSession ? 1 : 0;
       
       comparisonResult = aValue - bValue;
-    } else if (sortColumn === 'outcome_score') {
-      // Currently showing 100% for all - treat as equal
-      comparisonResult = 0;
+
     } else if (sortColumn === 'status') {
       const aStatus = a.status || 'pending';
       const bStatus = b.status || 'pending';
@@ -576,17 +585,7 @@ const Clients: React.FC = () => {
                     <option value="medium">Medium (50-79)</option>
                     <option value="low">Low (0-49)</option>
                   </select>
-                  <select
-                    value={outcomeFilter}
-                    onChange={(e) => setOutcomeFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Outcome Score"
-                  >
-                    <option value="all">Outcome: All</option>
-                    <option value="high">High (80-100)</option>
-                    <option value="medium">Medium (50-79)</option>
-                    <option value="low">Low (0-49)</option>
-                  </select>
+
                   <select
                     value={activityFilter}
                     onChange={(e) => setActivityFilter(e.target.value)}
@@ -601,7 +600,6 @@ const Clients: React.FC = () => {
                   <button 
                     onClick={() => {
                       setEngagementFilter("all");
-                      setOutcomeFilter("all");
                       setActivityFilter("all");
                       setStatusFilter("all");
                       setSearchQuery("");
@@ -663,9 +661,7 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
                       Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('outcome_score')}>
-                      Outcome Score {sortColumn === 'outcome_score' && (sortDirection === 'asc' ? '▲' : '▼')}
-                    </th>
+
                   </tr>
                 </thead>
                 <tbody>
@@ -678,7 +674,11 @@ const Clients: React.FC = () => {
                           className={`$${
                             index % 2 === 0 ? "bg-gray-50/40 dark:bg-slate-800/20" : "bg-white/40 dark:bg-slate-900/20"
                           } hover:bg-blue-50/70 dark:hover:bg-blue-900/20 transition-all duration-200 cursor-pointer border-b border-gray-100/50 dark:border-gray-800/50 group`}
-                          onClick={() => navigate(`/client/${client.client_id}`)}
+                          onClick={() => {
+                            if (client.client_id && client.client_id > 0) {
+                              navigate(`/client/${client.client_id}`)
+                            }
+                          }}
                         >
                           <td className="flex items-center gap-4 px-6 py-5 whitespace-nowrap">
                             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center shadow-lg border-2 border-white dark:border-gray-700 group-hover:shadow-xl transition-shadow duration-200">
@@ -811,22 +811,13 @@ const Clients: React.FC = () => {
                               {client.status === 'active' ? 'Active' : 'Pending'}
                             </span>
                           </td>
-                          <td className="px-6 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-600" style={{ width: '100%' }}></div>
-                              </div>
-                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[3rem]">
-                                100%
-                              </span>
-                            </div>
-                          </td>
+
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={10} className="text-center py-16">
+                      <td colSpan={9} className="text-center py-16">
                         <div className="flex flex-col items-center">
                           <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                             <Icons.SearchIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />

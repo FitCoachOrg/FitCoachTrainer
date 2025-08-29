@@ -28,19 +28,22 @@ import { MetricChart } from "./MetricChart"
 interface MetricsGridProps {
   selectedKeys: string[]
   onDragEnd: (event: DragEndEvent) => void
+  chartType: "line" | "bar"
 }
 
-export const MetricsGrid: React.FC<MetricsGridProps> = ({ selectedKeys, onDragEnd }) => {
+export const MetricsGrid: React.FC<MetricsGridProps> = ({ selectedKeys, onDragEnd, chartType }) => {
   const selectedMetrics = METRIC_LIBRARY.filter((metric) =>
     selectedKeys.includes(metric.key)
   )
+
+
 
   return (
     <DndContext collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={selectedMetrics.map((m: any) => m.key)} strategy={verticalListSortingStrategy}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           {selectedMetrics.map((metric: any) => (
-            <MetricChart key={metric.key} metric={metric} />
+            <MetricChart key={metric.key} metric={metric} chartType={chartType} />
           ))}
         </div>
       </SortableContext>

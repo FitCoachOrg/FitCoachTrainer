@@ -1,13 +1,7 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -16,351 +10,306 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Card, CardContent } from "@/components/ui/card"
-import {
-  Search,
-  Filter,
-  Plus,
-  Share2,
-  ChevronDown,
-  HelpCircle,
-} from "lucide-react"
+import { Search, RefreshCw, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
-const dummyOptions = {
-  modality: ["Strength", "Conditioning", "Mobility"],
-  muscleGroup: ["Chest", "Back", "Shoulders", "Biceps", "Quads", "Core"],
-  movementPattern: [
-    "Upper Body Horizontal Push",
-    "Upper Body Horizontal Pull",
-    "Core Flexion / Extension",
-    "Static Stretch",
-    "Locomotion",
-  ],
-  category: ["Strength", "Bodyweight", "Timed"],
+type ExerciseRaw = {
+  id: number
+  exercise_name: string
+  video_link: string | null
+  video_explanation: string | null
+  expereince_level: string | null
+  target_muscle: string | null
+  primary_muscle: string | null
+  equipment: string | null
+  category: string | null
 }
-
-const initialExercises = [
-  {
-    id: 1,
-    name: "Dumbbell Floor Press",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "",
-    modality: "Strength",
-    muscleGroup: "Chest",
-    movementPattern: "Upper Body Horizontal Push",
-    category: "Strength",
-    time: "3d",
-    primaryFocus: {
-      modality: "Strength",
-      muscleGroup: "Chest, Triceps",
-      movementPattern: "Upper Body Horizontal Push",
-    },
-    trackingFields: ["Weight", "Reps"],
-    instructions: [
-      "Lay on the floor holding dumbbells in your hands.",
-      "Your knees can be bent.",
-      "Begin with the weights fully extended above you.",
-      "Lower the weights until your upper arms touch the floor.",
-      "Press the weights back up to the starting position.",
-    ],
-  },
-  {
-    id: 2,
-    name: "Jumping Jacks",
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "",
-    modality: "Conditioning",
-    muscleGroup: "Quads",
-    movementPattern: "Locomotion",
-    category: "Bodyweight",
-    time: "3d",
-    primaryFocus: {
-      modality: "Conditioning",
-      muscleGroup: "Full Body",
-      movementPattern: "Locomotion",
-    },
-    trackingFields: ["Time", "Reps"],
-    instructions: [
-      "Stand with feet together and arms at your sides.",
-      "Jump while spreading legs shoulder-width apart.",
-      "Simultaneously raise arms overhead.",
-      "Jump back to starting position.",
-      "Maintain a steady rhythm throughout.",
-    ],
-  },
-]
 
 export default function ExerciseLibrary() {
-  const [exercises, setExercises] = useState(initialExercises)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [selectedExercise, setSelectedExercise] = useState<typeof exercises[0] | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [newModality, setNewModality] = useState("")
-const [newMuscleGroup, setNewMuscleGroup] = useState("")
-const [newMovementPattern, setNewMovementPattern] = useState("")
-const [newCategory, setNewCategory] = useState("")
-const [newTime, setNewTime] = useState("")
+  // Filters (multi-select arrays)
+  const [nameFilter, setNameFilter] = useState("")
+  const [experienceFilter, setExperienceFilter] = useState<string[]>([])
+  const [targetFilter, setTargetFilter] = useState<string[]>([])
+  const [primaryFilter, setPrimaryFilter] = useState<string[]>([])
+  const [equipmentFilter, setEquipmentFilter] = useState<string[]>([])
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
 
-  const [newExerciseName, setNewExerciseName] = useState("")
+  const [rows, setRows] = useState<ExerciseRaw[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-    )
+  // Dynamic options
+  const [optionsLoading, setOptionsLoading] = useState(false)
+  const [experienceOptions, setExperienceOptions] = useState<string[]>([])
+  const [targetOptions, setTargetOptions] = useState<string[]>([])
+  const [primaryOptions, setPrimaryOptions] = useState<string[]>([])
+  const [equipmentOptions, setEquipmentOptions] = useState<string[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
+
+  const pageSize = 50
+  const [page, setPage] = useState(0)
+
+  const uniq = (arr: (string | null | undefined)[]) =>
+    Array.from(new Set(arr.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b))
+
+  // Apply all filters helper
+  const applyAllFilters = (q: any) => {
+    if (nameFilter) q = q.ilike("exercise_name", `%${nameFilter}%`)
+    if (experienceFilter.length) q = q.in("expereince_level", experienceFilter)
+    if (targetFilter.length) q = q.in("target_muscle", targetFilter)
+    if (primaryFilter.length) q = q.in("primary_muscle", primaryFilter)
+    if (equipmentFilter.length) q = q.in("equipment", equipmentFilter)
+    if (categoryFilter.length) q = q.in("category", categoryFilter)
+    return q
   }
 
-  const filteredExercises = exercises.filter((exercise) => {
-    const matchName = exercise.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-    const matchTags =
-      selectedTags.length === 0 ||
-      selectedTags.every((tag) =>
-        exercise.muscleGroup.toLowerCase().includes(tag.toLowerCase())
-      )
-    return matchName && matchTags
-  })
+  const fetchExercises = async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-  const handleExerciseClick = (exercise: typeof exercises[0]) => {
-    setSelectedExercise(exercise)
-    setIsModalOpen(true)
-  }
-const handleAddExercise = () => {
-  const newExercise = {
-    id: exercises.length + 1,
-    name: newExerciseName,
-    image: "/placeholder.svg?height=60&width=60",
-    tags: "",
-    modality: newModality,
-    muscleGroup: newMuscleGroup,
-    movementPattern: newMovementPattern,
-    category: newCategory,
-    time: newTime,
-    primaryFocus: {
-      modality: newModality,
-      muscleGroup: newMuscleGroup,
-      movementPattern: newMovementPattern,
-    },
-    trackingFields: ["Reps"],
-    instructions: ["Do your reps!"],
-  }
-  setExercises((prev) => [...prev, newExercise])
-  setIsAddModalOpen(false)
-  setNewExerciseName("")
-  setNewModality("")
-  setNewMuscleGroup("")
-  setNewMovementPattern("")
-  setNewCategory("")
-  setNewTime("")
-}
+      let query = supabase
+        .from("exercises_raw")
+        .select("id, exercise_name, video_link, video_explanation, expereince_level, target_muscle, primary_muscle, equipment, category")
+        .order("exercise_name", { ascending: true })
+        .range(page * pageSize, page * pageSize + pageSize - 1)
 
+      query = applyAllFilters(query)
+
+      const { data, error } = await query
+      if (error) throw error
+      setRows((data || []) as ExerciseRaw[])
+    } catch (err: any) {
+      setError(err.message || "Failed to load exercises")
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Dynamic options loader with spinner (single query, applies current filters)
+  const optionsReqId = useRef(0)
+  const fetchDynamicOptions = async () => {
+    optionsReqId.current += 1
+    const rid = optionsReqId.current
+    setOptionsLoading(true)
+    try {
+      let q = supabase
+        .from("exercises_raw")
+        .select("expereince_level, target_muscle, primary_muscle, equipment, category")
+        .limit(10000)
+      q = applyAllFilters(q)
+      const { data, error } = await q
+      if (error) throw error
+      if (rid !== optionsReqId.current) return
+      const list = (data || []) as any[]
+      setExperienceOptions(uniq(list.map(r => r.expereince_level)))
+      setTargetOptions(uniq(list.map(r => r.target_muscle)))
+      setPrimaryOptions(uniq(list.map(r => r.primary_muscle)))
+      setEquipmentOptions(uniq(list.map(r => r.equipment)))
+      setCategoryOptions(uniq(list.map(r => r.category)))
+    } finally {
+      if (rid === optionsReqId.current) setOptionsLoading(false)
+    }
+  }
+
+  // Initial + reactive loads
+  useEffect(() => {
+    fetchDynamicOptions()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchExercises()
+      fetchDynamicOptions()
+    }, 250)
+    return () => clearTimeout(t)
+  }, [nameFilter, experienceFilter, targetFilter, primaryFilter, equipmentFilter, categoryFilter, page])
+
+  const clearFilters = () => {
+    setNameFilter("")
+    setExperienceFilter([])
+    setTargetFilter([])
+    setPrimaryFilter([])
+    setEquipmentFilter([])
+    setCategoryFilter([])
+    setPage(0)
+    fetchDynamicOptions()
+  }
+
+  const clearOne = (setter: (v: string[]) => void) => {
+    setter([])
+    setPage(0)
+    fetchDynamicOptions()
+  }
+
+  const canPrev = page > 0
+  const canNext = rows.length === pageSize
+
+  const MultiSelect = ({ label, value, setValue, options }: { label: string, value: string[], setValue: (v: string[]) => void, options: string[] }) => (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-foreground">{label}</label>
+        {value.length > 0 && (
+          <button type="button" onClick={() => clearOne(setValue)} className="text-xs text-primary hover:text-primary/80 inline-flex items-center gap-1 transition-colors">
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
+      </div>
+      <select
+        multiple
+        value={value}
+        onChange={(e) => {
+          const selected = Array.from(e.target.selectedOptions).map(o => o.value)
+          setPage(0)
+          setValue(selected)
+        }}
+        className="w-full border border-input bg-background text-foreground p-3 rounded-md min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+      {value.length > 0 && (
+        <div className="mt-2 text-xs text-muted-foreground">{value.length} selected</div>
+      )}
+    </div>
+  )
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search exercise name"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Button variant="outline" className="flex items-center gap-2">
-          <Filter className="h-4 w-4" />
-          Filter
-        </Button>
-        <div className="flex items-center gap-2 flex-wrap">
-          {dummyOptions.muscleGroup.map((tag) => (
-            <Badge
-              key={tag}
-              variant={selectedTags.includes(tag) ? "default" : "secondary"}
-              onClick={() => toggleTag(tag)}
-              className="flex items-center gap-1 cursor-pointer"
-            >
-              {tag}
-            </Badge>
-          ))}
-          <Button
-            className="flex items-center gap-2"
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Add New Exercise
-          </Button>
-        </div>
+    <div className="p-6 w-full max-w-none">
+      {/* Header with consistent screen title */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight mb-2">Exercise Library</h1>
+        <p className="text-muted-foreground">Browse and filter exercises to build workout plans</p>
       </div>
 
+      {/* Search and Actions */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search exercise name"
+            value={nameFilter}
+            onChange={(e) => { setPage(0); setNameFilter(e.target.value) }}
+            className="pl-9"
+          />
+        </div>
+        <Button variant="outline" className="gap-2" onClick={clearFilters}>
+          <RefreshCw className="h-4 w-4" /> Reset All
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-medium text-foreground">Filters</div>
+            {optionsLoading && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <RefreshCw className="h-4 w-4 animate-spin" /> Updating filters…
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <MultiSelect label="Experience Level" value={experienceFilter} setValue={setExperienceFilter} options={experienceOptions} />
+            <MultiSelect label="Target Muscle" value={targetFilter} setValue={setTargetFilter} options={targetOptions} />
+            <MultiSelect label="Primary Muscle" value={primaryFilter} setValue={setPrimaryFilter} options={primaryOptions} />
+            <MultiSelect label="Equipment" value={equipmentFilter} setValue={setEquipmentFilter} options={equipmentOptions} />
+            <MultiSelect label="Category" value={categoryFilter} setValue={setCategoryFilter} options={categoryOptions} />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Table */}
-      <div className="border rounded-lg">
+      <div className="border border-border rounded-lg overflow-x-auto w-full">
         <Table>
           <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead className="w-12"></TableHead>
-              <TableHead>Exercise Name</TableHead>
-              <TableHead>Modality</TableHead>
-              <TableHead>Muscle Group</TableHead>
-              <TableHead>Movement Pattern</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Time</TableHead>
+            <TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">Exercise Name</TableHead>
+              <TableHead className="font-semibold">Video</TableHead>
+              <TableHead className="font-semibold">Experience</TableHead>
+              <TableHead className="font-semibold">Target</TableHead>
+              <TableHead className="font-semibold">Primary</TableHead>
+              <TableHead className="font-semibold">Equipment</TableHead>
+              <TableHead className="font-semibold">Category</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredExercises.map((exercise) => (
-              <TableRow
-                key={exercise.id}
-                className="cursor-pointer hover:bg-gray-50"
-                onClick={() => handleExerciseClick(exercise)}
-              >
-                <TableCell>
-                  <img
-                    src={exercise.image}
-                    className="object-cover rounded w-12 h-12"
-                  />
+            {error && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-destructive text-center py-8">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="text-lg">⚠️</div>
+                    <div className="font-medium">Error loading exercises</div>
+                    <div className="text-sm text-muted-foreground">{error}</div>
+                  </div>
                 </TableCell>
-                <TableCell className="font-medium">{exercise.name}</TableCell>
-                <TableCell>{exercise.modality}</TableCell>
-                <TableCell>{exercise.muscleGroup}</TableCell>
-                <TableCell>{exercise.movementPattern}</TableCell>
-                <TableCell>{exercise.category}</TableCell>
-                <TableCell>{exercise.time}</TableCell>
+              </TableRow>
+            )}
+            {(!error && loading) && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8">
+                  <div className="flex items-center justify-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Loading exercises...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {(!error && !loading && rows.length === 0) && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="text-lg">🔍</div>
+                    <div className="font-medium">No exercises found</div>
+                    <div className="text-sm text-muted-foreground">Try adjusting your filters or search terms</div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.map((r) => (
+              <TableRow key={r.id} className="hover:bg-muted/50 transition-colors">
+                <TableCell className="font-medium">{r.exercise_name}</TableCell>
+                <TableCell>{r.video_link ? (
+                  <a href={r.video_link} target="_blank" rel="noreferrer" className="text-primary hover:text-primary/80 underline transition-colors">Link</a>
+                ) : "-"}</TableCell>
+                <TableCell>{r.expereince_level || "-"}</TableCell>
+                <TableCell>{r.target_muscle || "-"}</TableCell>
+                <TableCell>{r.primary_muscle || "-"}</TableCell>
+                <TableCell>{r.equipment || "-"}</TableCell>
+                <TableCell>{r.category || "-"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination Placeholder */}
-      <div className="flex items-center justify-center gap-4 mt-6 text-sm text-gray-500">
-        <Button variant="ghost" size="sm">
-          {"<"}
+      {/* Pagination */}
+      <div className="flex items-center justify-center gap-4 mt-6">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={!canPrev || loading} 
+          onClick={() => setPage(p => Math.max(0, p - 1))}
+          className="gap-2"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
         </Button>
-        <span>1 - {filteredExercises.length} of {exercises.length}</span>
-        <Button variant="ghost" size="sm">
-          {">"}
+        <span className="text-sm font-medium text-foreground">Page {page + 1}</span>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          disabled={!canNext || loading} 
+          onClick={() => setPage(p => p + 1)}
+          className="gap-2"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
-
-      {/* View Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          {selectedExercise && (
-            <>
-              <DialogHeader className="flex flex-row items-center justify-between">
-                <DialogTitle className="text-2xl font-bold text-gray-800">
-                  {selectedExercise.name}
-                </DialogTitle>
-                <Button variant="ghost" size="icon">
-                  <Share2 className="h-5 w-5" />
-                </Button>
-              </DialogHeader>
-
-              <div className="space-y-6">
-                {/* Primary Focus Dropdowns */}
-                {(["modality", "muscleGroup", "movementPattern"] as const).map(
-                  (key) => (
-                    <div key={key}>
-                      <h3 className="text-sm font-medium text-gray-500 mb-1 capitalize">
-                        {key}
-                      </h3>
-                      <select className="w-full border p-2 rounded-lg">
-                        {dummyOptions[key].map((option) => (
-                          <option key={option}>{option}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )
-                )}
-                {/* Instructions */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-4">
-                    INSTRUCTIONS
-                  </h3>
-                  <Card>
-                    <CardContent className="p-4">
-                      {selectedExercise.instructions.map((ins, i) => (
-                        <div key={i} className="flex gap-2 text-sm">
-                          <span className="text-gray-400">{i + 1}.</span>
-                          <span>{ins}</span>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>Add New Exercise</DialogTitle>
-    </DialogHeader>
-    <div className="space-y-4">
-      <Input
-        placeholder="Exercise name"
-        value={newExerciseName}
-        onChange={(e) => setNewExerciseName(e.target.value)}
-      />
-      <select
-        value={newModality}
-        onChange={(e) => setNewModality(e.target.value)}
-        className="w-full border p-2 rounded-lg"
-      >
-        <option value="">Select Modality</option>
-        {dummyOptions.modality.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-      <select
-        value={newMuscleGroup}
-        onChange={(e) => setNewMuscleGroup(e.target.value)}
-        className="w-full border p-2 rounded-lg"
-      >
-        <option value="">Select Muscle Group</option>
-        {dummyOptions.muscleGroup.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-      <select
-        value={newMovementPattern}
-        onChange={(e) => setNewMovementPattern(e.target.value)}
-        className="w-full border p-2 rounded-lg"
-      >
-        <option value="">Select Movement Pattern</option>
-        {dummyOptions.movementPattern.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-      <select
-        value={newCategory}
-        onChange={(e) => setNewCategory(e.target.value)}
-        className="w-full border p-2 rounded-lg"
-      >
-        <option value="">Select Category</option>
-        {dummyOptions.category.map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-      <Input
-        placeholder="Time (e.g. 3d)"
-        value={newTime}
-        onChange={(e) => setNewTime(e.target.value)}
-      />
-      <Button onClick={handleAddExercise} disabled={!newExerciseName || !newModality || !newMuscleGroup || !newMovementPattern || !newCategory || !newTime}>
-        Save Exercise
-      </Button>
-    </div>
-  </DialogContent>
-</Dialog>
-
     </div>
   )
 }

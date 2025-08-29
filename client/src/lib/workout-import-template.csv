@@ -1,0 +1,11 @@
+Date,Day,Focus,Exercise,Category,Body Part,Sets,Reps,Duration (min),Rest (sec),Weight,Equipment,Coach Tip,Video Link,Other Details
+2024-01-15,Monday,Upper Body Strength,Push-ups,Strength,Chest,3,10-12,5,60,Bodyweight,None,Keep your core tight and maintain proper form,https://example.com/pushups,
+2024-01-15,Monday,Upper Body Strength,Pull-ups,Strength,Back,3,8-10,5,90,Bodyweight,Pull-up bar,Focus on controlled movement and full range of motion,https://example.com/pullups,
+2024-01-16,Tuesday,Lower Body Strength,Squats,Strength,Legs,4,12-15,8,120,Bodyweight,None,Keep your knees behind your toes and chest up,https://example.com/squats,
+2024-01-16,Tuesday,Lower Body Strength,Lunges,Strength,Legs,3,10 each leg,6,90,Bodyweight,None,Step forward and lower until both knees are at 90 degrees,https://example.com/lunges,
+2024-01-17,Wednesday,Cardio,Running,Cardio,Full Body,1,30 minutes,30,0,Bodyweight,None,Maintain steady pace throughout the run,,
+2024-01-18,Thursday,Core,Plank,Core,Core,3,45 seconds,3,60,Bodyweight,None,Keep your body in a straight line from head to heels,https://example.com/plank,
+2024-01-18,Thursday,Core,Crunches,Core,Core,3,15-20,3,45,Bodyweight,None,Lift your shoulders off the ground using your abs,https://example.com/crunches,
+2024-01-19,Friday,Rest Day,Rest,Recovery,Full Body,0,0,0,0,None,None,Enjoy your recovery day!,
+2024-01-20,Saturday,Full Body,Deadlifts,Strength,Full Body,3,8-10,10,180,135 lbs,Barbell,Keep your back straight and lift with your legs,https://example.com/deadlifts,
+2024-01-21,Sunday,Rest Day,Rest,Recovery,Full Body,0,0,0,0,None,None,Rest and recover for the next week, 

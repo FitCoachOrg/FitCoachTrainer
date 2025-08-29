@@ -31,9 +31,9 @@ const navigationItems: NavItem[] = [
     icon: <Icons.ClipboardIcon className="h-5 w-5" />,
     children: [
       {
-        name: "Excercise Library",
-        href: "/excercise-lib",
-        icon: <Icons.UtensilsIcon className="h-4 w-4" />,
+        name: "Exercise Library",
+        href: "/exercise-lib",
+        icon: <Icons.DumbbellIcon className="h-4 w-4" />,
       },
       {
         name: "Fitness Plans",
@@ -62,6 +62,11 @@ const navigationItems: NavItem[] = [
     href: "/payments",
     icon: <Icons.CreditCardIcon className="h-5 w-5" />,
   },
+  {
+    name: "Admin",
+    href: "/admin",
+    icon: <Icons.SettingsIcon className="h-5 w-5" />,
+  },
 ]
 
 const secondaryNavItems: NavItem[] = [
@@ -87,14 +92,16 @@ const Sidebar: React.FC = () => {
       if (session && session.user.email) {
         const { data: trainerData, error } = await supabase
           .from("trainer")
-          .select("avatar_url, trainer_email, trainer_name")
+          .select("avatar_url, profile_picture_url, trainer_email, trainer_name")
           .eq("trainer_email", session.user.email)
           .single()
 
         if (error) {
           console.error("Error fetching trainer data:", error)
         } else if (trainerData) {
-          setAvatarUrl(trainerData.avatar_url)
+          // Use profile_picture_url if available, otherwise fall back to avatar_url
+          const profileUrl = trainerData.profile_picture_url || trainerData.avatar_url;
+          setAvatarUrl(profileUrl)
           setTrainerEmail(trainerData.trainer_email)
           setTrainerName(trainerData.trainer_name)
         }

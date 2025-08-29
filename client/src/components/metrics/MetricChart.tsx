@@ -27,9 +27,22 @@ import { type Metric } from "@/lib/metrics-library"
 
 interface MetricChartProps {
   metric: Metric
+  chartType?: "line" | "bar"
 }
 
-export const MetricChart: React.FC<MetricChartProps> = ({ metric }) => {
+export const MetricChart: React.FC<MetricChartProps> = ({ metric, chartType }) => {
+
+  // Helper function to format tooltip
+  const formatTooltip = (value: any, name: string, props: any) => {
+    // Check if payload and payload.isFallback exist
+    const isDummyData = props.payload && (props.payload.isFallback === true || props.payload.is_dummy_data === true);
+    const sourceText = isDummyData ? 'Demo Data' : 'Daily Average';
+    if (value === null || value === undefined) {
+      return ['No data', 'No data available'];
+    }
+    return [`${value} ${metric.yLabel}`, sourceText];
+  };
+
   return (
     <Card className="group bg-white/90 backdrop-blur-sm border-0 shadow-xl transition-all duration-300 dark:bg-gray-900/90 cursor-grab">
       <CardHeader className="pb-2">
@@ -50,7 +63,7 @@ export const MetricChart: React.FC<MetricChartProps> = ({ metric }) => {
       <CardContent>
         <div className="h-[260px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            {metric.type === "line" ? (
+            {(chartType || metric.type) === "line" ? (
               <LineChart data={metric.data} margin={{ top: 10, right: 0, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis 
@@ -72,12 +85,7 @@ export const MetricChart: React.FC<MetricChartProps> = ({ metric }) => {
                     borderRadius: "12px",
                     boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
                   }}
-                  formatter={(value: any, name: string, props: any) => {
-                    // Check if payload and payload.isFallback exist
-                    const isDummyData = props.payload && (props.payload.isFallback === true || props.payload.is_dummy_data === true);
-                    const sourceText = isDummyData ? 'Demo Data' : 'Daily Average';
-                    return [`${value} ${metric.yLabel}`, sourceText];
-                  }}
+                  formatter={formatTooltip}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
                 <Line
@@ -87,6 +95,7 @@ export const MetricChart: React.FC<MetricChartProps> = ({ metric }) => {
                   strokeWidth={3}
                   dot={{ r: 4, strokeWidth: 2, stroke: metric.color, fill: "white" }}
                   activeDot={{ r: 6, strokeWidth: 0, fill: metric.color }}
+                  connectNulls={false}
                 />
               </LineChart>
             ) : (
@@ -111,12 +120,7 @@ export const MetricChart: React.FC<MetricChartProps> = ({ metric }) => {
                     borderRadius: "12px",
                     boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
                   }}
-                  formatter={(value: any, name: string, props: any) => {
-                    // Check if payload and payload.isFallback exist
-                    const isDummyData = props.payload && (props.payload.isFallback === true || props.payload.is_dummy_data === true);
-                    const sourceText = isDummyData ? 'Demo Data' : 'Daily Average';
-                    return [`${value} ${metric.yLabel}`, sourceText];
-                  }}
+                  formatter={formatTooltip}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
                 <Bar dataKey="qty" fill={metric.color} radius={[8, 8, 0, 0]} barSize={12} />

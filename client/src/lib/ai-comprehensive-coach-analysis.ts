@@ -1,6 +1,7 @@
 // AI Comprehensive Coach Analysis - Automatic Analysis When Trainer Notes Are Saved
 import { supabase } from './supabase'
-import { askOpenRouter } from './open-router-service'
+// import { askOpenRouter } from './open-router-service'
+import { askCerebras } from './cerebras-service'
 
 /**
  * Interface for the comprehensive analysis response
@@ -9,49 +10,37 @@ interface CoachAnalysisResponse {
   success: boolean
   message: string
   analysis?: {
-    summary: {
-      key_insights: string[]
-      client_status: string
-      progress_assessment: string
-      immediate_concerns: string[]
-      positive_developments: string[]
+    snapshot: {
+      momentum: 'Up' | 'Flat' | 'Down'
+      adherence_pct: number | null
+      readiness: 'Low' | 'Medium' | 'High' | null
+      one_liner: string
     }
-    action_plan: {
-      immediate_actions: Array<{
-        action: string
-        priority: 'High' | 'Medium' | 'Low'
-        timeframe: string
-        category: 'Training' | 'Nutrition' | 'Motivation' | 'Communication' | 'Assessment' | 'Other'
-        rationale: string
-      }>
-      weekly_focus: Array<{
-        focus_area: string
-        specific_actions: string[]
-        success_metrics: string[]
-      }>
-      long_term_adjustments: Array<{
-        adjustment: string
-        timeline: string
-        expected_outcome: string
-      }>
-    }
-    coaching_recommendations: {
-      training_modifications: string[]
-      communication_strategy: string[]
-      motivation_techniques: string[]
-      goal_adjustments: string[]
-    }
-    next_session_plan: {
-      primary_objectives: string[]
-      specific_exercises: string[]
-      discussion_topics: string[]
-      assessments_needed: string[]
-    }
-    client_insights: {
-      behavioral_patterns: string[]
-      engagement_level: string
-      potential_barriers: string[]
-      success_factors: string[]
+    actions: Array<{
+      text: string
+      reason_tag: 'consistency' | 'recovery' | 'technique' | 'nutrition' | 'adherence'
+      impact?: string
+      add_to_todo_hint?: boolean
+    }>
+    risks: Array<{
+      text: string
+      mitigation: string
+    }>
+    next_session: Array<{
+      text: string
+    }>
+    weekly_focus: Array<{
+      text: string
+      metric?: string
+      target?: string
+    }>
+    positives: Array<{
+      text: string
+    }>
+    metadata: {
+      version: string
+      generated_at: string
+      data_sources: string[]
     }
   }
   usage?: any
@@ -73,149 +62,97 @@ async function generateComprehensiveAnalysis(
   previousAnalysis?: any
 ): Promise<any> {
   console.log('🔑 Checking for OpenRouter API key...');
-  
+
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error('OpenRouter API key not found. Please add VITE_OPENROUTER_API_KEY to your .env file');
   }
-  
+
   console.log('✅ OpenRouter API key found');
-  console.log('📋 Preparing comprehensive coach analysis prompt...');
-  
-  // Create detailed client context
+  console.log('📋 Preparing concise coach analysis prompt...');
+
+  // Filter trainer notes to last 2 weeks only
+  const recentNotes = filterRecentNotes(trainerNotes);
+
+  // Create concise client context
   const clientContext = `
-CLIENT PROFILE:
-- Name: ${clientInfo.cl_name || 'N/A'}
-- Age: ${clientInfo.cl_age || 'N/A'}
-- Sex: ${clientInfo.cl_sex || 'N/A'}
-- Height: ${clientInfo.cl_height || 'N/A'} cm
-- Current Weight: ${clientInfo.cl_weight || 'N/A'} kg
-- Target Weight: ${clientInfo.cl_target_weight || 'N/A'} kg
-- Primary Goal: ${clientInfo.cl_primary_goal || 'N/A'}
-- Activity Level: ${clientInfo.cl_activity_level || 'N/A'}
-- Training Experience: ${clientInfo.training_experience || 'N/A'}
-- Injuries/Limitations: ${clientInfo.injuries_limitations || 'None'}
-- Equipment Available: ${clientInfo.available_equipment || 'N/A'}
-- Training Location: ${clientInfo.training_location || 'N/A'}
-- Session Frequency: ${clientInfo.training_days_per_week || 'N/A'} days/week
-- Session Duration: ${clientInfo.training_time_per_session || 'N/A'}
-- Confidence Level: ${clientInfo.confidence_level || 'N/A'}/10
-- Specific Outcome Desired: ${clientInfo.specific_outcome || 'N/A'}
-- Goal Timeline: ${clientInfo.goal_timeline || 'N/A'}
-- Sleep Hours: ${clientInfo.sleep_hours || 'N/A'}
-- Stress Level: ${clientInfo.stress_level || 'N/A'}
-- Member Since: ${clientInfo.created_at ? new Date(clientInfo.created_at).toLocaleDateString() : 'N/A'}
-- Last Active: ${clientInfo.last_active ? new Date(clientInfo.last_active).toLocaleDateString() : 'N/A'}`;
+CLIENT: ${clientInfo.cl_name || 'Client'}
+GOAL: ${clientInfo.cl_primary_goal || 'General fitness'}
+EXPERIENCE: ${clientInfo.training_experience || 'Beginner'}
+SESSIONS: ${clientInfo.training_days_per_week || '3'}x/week
+GOAL TIMELINE: ${clientInfo.goal_timeline || '3 months'}`;
 
-  const previousAnalysisContext = previousAnalysis ? `
-PREVIOUS ANALYSIS SUMMARY:
-${JSON.stringify(previousAnalysis, null, 2)}
-` : '';
+  const concisePrompt = `You are an elite fitness coach providing a concise, actionable analysis.
 
-  const comprehensivePrompt = `You are an elite fitness coach with 20+ years of experience in personal training, sports psychology, and behavior change. You have just received updated trainer notes about a client, and you need to provide a comprehensive analysis with actionable insights and next steps.
-
+CLIENT CONTEXT:
 ${clientContext}
 
-CURRENT TRAINER NOTES:
-${trainerNotes}
+TRAINER NOTES (Last 2 weeks only):
+${recentNotes}
 
-CURRENT TO-DO ITEMS:
-${todoItems}
-
-${previousAnalysisContext}
-
-TASK: Provide a comprehensive coaching analysis that includes:
-1. Deep insights into the client's current state and progress
-2. Immediate and long-term action plans
-3. Specific coaching recommendations
-4. Next session planning
-5. Behavioral and psychological insights
-
-Please provide your analysis in the following JSON format:
+TASK: Provide concise analysis in this exact JSON format:
 
 {
-  "summary": {
-    "key_insights": ["Insight 1", "Insight 2", "..."],
-    "client_status": "Overall assessment of where the client stands",
-    "progress_assessment": "Detailed progress evaluation",
-    "immediate_concerns": ["Concern 1", "Concern 2", "..."],
-    "positive_developments": ["Development 1", "Development 2", "..."]
+  "snapshot": {
+    "momentum": "Up|Flat|Down",
+    "adherence_pct": number or null,
+    "readiness": "Low|Medium|High|null",
+    "one_liner": "≤120 char summary"
   },
-  "action_plan": {
-    "immediate_actions": [
-      {
-        "action": "Specific action to take immediately",
-        "priority": "High|Medium|Low",
-        "timeframe": "This week|Next session|Within 2 weeks",
-        "category": "Training|Nutrition|Motivation|Communication|Assessment|Other",
-        "rationale": "Why this action is needed"
-      }
-    ],
-    "weekly_focus": [
-      {
-        "focus_area": "Primary area of focus",
-        "specific_actions": ["Action 1", "Action 2", "..."],
-        "success_metrics": ["Metric 1", "Metric 2", "..."]
-      }
-    ],
-    "long_term_adjustments": [
-      {
-        "adjustment": "Program or approach adjustment",
-        "timeline": "When to implement",
-        "expected_outcome": "What to expect"
-      }
-    ]
-  },
-  "coaching_recommendations": {
-    "training_modifications": ["Modification 1", "Modification 2", "..."],
-    "communication_strategy": ["Strategy 1", "Strategy 2", "..."],
-    "motivation_techniques": ["Technique 1", "Technique 2", "..."],
-    "goal_adjustments": ["Adjustment 1", "Adjustment 2", "..."]
-  },
-  "next_session_plan": {
-    "primary_objectives": ["Objective 1", "Objective 2", "..."],
-    "specific_exercises": ["Exercise 1", "Exercise 2", "..."],
-    "discussion_topics": ["Topic 1", "Topic 2", "..."],
-    "assessments_needed": ["Assessment 1", "Assessment 2", "..."]
-  },
-  "client_insights": {
-    "behavioral_patterns": ["Pattern 1", "Pattern 2", "..."],
-    "engagement_level": "High|Medium|Low with explanation",
-    "potential_barriers": ["Barrier 1", "Barrier 2", "..."],
-    "success_factors": ["Factor 1", "Factor 2", "..."]
+  "actions": [
+    {
+      "text": "≤120 char action",
+      "reason_tag": "consistency|recovery|technique|nutrition|adherence",
+      "impact": "optional brief impact",
+      "add_to_todo_hint": true|false
+    }
+  ],
+  "risks": [
+    {
+      "text": "≤120 char risk",
+      "mitigation": "≤100 char mitigation"
+    }
+  ],
+  "next_session": [
+    {
+      "text": "≤100 char focus"
+    }
+  ],
+  "weekly_focus": [
+    {
+      "text": "≤100 char focus",
+      "metric": "optional metric",
+      "target": "optional target"
+    }
+  ],
+  "positives": [
+    {
+      "text": "≤80 char positive"
+    }
+  ],
+  "metadata": {
+    "version": "v1",
+    "generated_at": "ISO timestamp",
+    "data_sources": ["trainer_notes", "client_profile"]
   }
 }
 
 GUIDELINES:
-- Be specific and actionable in all recommendations
-- Consider both physical and psychological aspects
-- Prioritize actions based on impact and urgency
-- Include evidence-based coaching strategies
-- Address any red flags or concerns immediately
-- Build on positive developments and successes
-- Consider the client's individual circumstances and limitations
-- Provide practical, implementable suggestions
-- Focus on sustainable long-term progress
-- Include motivational and engagement strategies
-- Consider the client's goal timeline and current progress toward goals`;
+- Max 3 actions, 2 risks, 3 next_session, 2 weekly_focus, 2 positives
+- Use reason tags: consistency, recovery, technique, nutrition, adherence
+- Focus on last 2 weeks only
+- Keep all text short and actionable
+- Be specific about what trainer should do next`;
 
-  console.log('📝 Comprehensive analysis prompt prepared');
-  console.log('🚀 Sending request to OpenRouter...');
-  
+  console.log('📝 Concise analysis prompt prepared');
+
   try {
-    const aiResponse = await askOpenRouter(comprehensivePrompt);
-    console.log('📊 OpenRouter Response received');
-    console.log('✅ AI Response extracted');
-    
-    return {
-      response: aiResponse,
-      model: 'qwen/qwen3-8b:free',
-      timestamp: new Date().toISOString()
-    };
-    
+    const response = await askCerebras(concisePrompt);
+    console.log('✅ AI response received');
+    return response;
   } catch (error) {
-    console.error('❌ OpenRouter API Error:', error);
-    throw new Error(`OpenRouter API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ Error in AI analysis:', error);
+    throw new Error(`AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -228,34 +165,221 @@ async function saveAnalysisToDatabase(clientId: number, analysisData: any) {
   console.log('💾 Saving analysis to database...');
   
   try {
-    const { data, error } = await supabase
-      .from('coach_analysis')
-      .insert({
-        client_id: clientId,
-        analysis_data: analysisData,
-        created_at: new Date().toISOString()
-      })
-      .select()
+    // Get current session to get trainer ID
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData?.session?.user?.email) {
+      throw new Error("Not logged in");
+    }
+    const trainerEmail = sessionData.session.user.email;
+    
+    // Get trainer ID
+    const { data: trainerData, error: trainerError } = await supabase
+      .from("trainer")
+      .select("id")
+      .eq("trainer_email", trainerEmail)
       .single();
-
-    if (error) {
-      console.error('❌ Database save error:', error);
-      // If table doesn't exist, create it
-      if (error.code === '42P01') {
-        console.log('📋 Creating coach_analysis table...');
-        // Note: In a real app, you'd run this migration properly
-        console.log('ℹ️ Table creation should be done via database migration');
-      }
-      throw error;
+    
+    if (trainerError || !trainerData?.id) {
+      throw new Error("Failed to get trainer information");
     }
 
-    console.log('✅ Analysis saved to database');
-    return data;
+    console.log('🔍 Trainer ID:', trainerData.id, 'Client ID:', clientId);
+
+    // First, check if a record exists
+    const { data: existingRecord, error: checkError } = await supabase
+      .from('trainer_client_web')
+      .select('id')
+      .eq('trainer_id', trainerData.id)
+      .eq('client_id', clientId)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
+      console.error('❌ Error checking existing record:', checkError);
+      throw checkError;
+    }
+
+    let result;
+    if (existingRecord) {
+      // Record exists, update it
+      console.log('📝 Updating existing record...');
+      const { data, error } = await supabase
+        .from('trainer_client_web')
+        .update({ 
+          ai_summary: analysisData
+          // Note: updated_at column doesn't exist, using created_at for timestamp
+        })
+        .eq('trainer_id', trainerData.id)
+        .eq('client_id', clientId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Database update error:', error);
+        throw error;
+      }
+      result = data;
+    } else {
+      // Record doesn't exist, insert it
+      console.log('📝 Creating new record...');
+      const { data, error } = await supabase
+        .from('trainer_client_web')
+        .insert({ 
+          trainer_id: trainerData.id,
+          client_id: clientId,
+          ai_summary: analysisData
+          // Note: created_at will be automatically set by Supabase
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Database insert error:', error);
+        throw error;
+      }
+      result = data;
+    }
+
+    console.log('✅ Analysis saved to trainer_client_web.ai_summary');
+    return result;
   } catch (error) {
     console.error('❌ Failed to save analysis:', error);
     // Don't throw here - analysis can still be returned even if save fails
     return null;
   }
+}
+
+/**
+ * Filter trainer notes to only include entries from the last 2 weeks
+ * @param notesString - Raw trainer notes (JSON string or plain text)
+ * @returns Filtered notes from last 2 weeks only
+ */
+function filterRecentNotes(notesString: string): string {
+  if (!notesString || notesString.trim().length === 0) {
+    return "No trainer notes available.";
+  }
+
+  try {
+    // Try to parse as JSON first (structured notes format)
+    const parsedNotes = JSON.parse(notesString);
+    if (Array.isArray(parsedNotes)) {
+      // Filter to last 2 weeks
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+      const recentNotes = parsedNotes.filter((note: any) => {
+        if (note.date) {
+          const noteDate = new Date(note.date);
+          return noteDate >= twoWeeksAgo;
+        }
+        return false; // Skip notes without dates
+      });
+
+      if (recentNotes.length === 0) {
+        return "No trainer notes from the last 2 weeks.";
+      }
+
+      // Convert back to readable format
+      return recentNotes.map((note: any) =>
+        `Date: ${note.date}\nNotes: ${note.notes}`
+      ).join('\n\n');
+    }
+  } catch (error) {
+    // If not JSON, treat as plain text
+    console.log('📝 Notes are plain text, returning as-is (LLM will focus on recent context)');
+  }
+
+  // For plain text, return as-is but add instruction for LLM
+  return notesString;
+}
+
+/**
+ * Post-process LLM analysis to enforce concise schema and caps
+ * @param analysis - Raw LLM analysis output
+ * @returns Processed analysis matching our schema
+ */
+function postProcessAnalysis(analysis: any): any {
+  if (!analysis || typeof analysis !== 'object') {
+    // Return minimal valid structure if LLM gave us garbage
+    return {
+      snapshot: { momentum: 'Flat', adherence_pct: null, readiness: null, one_liner: 'Analysis unavailable' },
+      actions: [],
+      risks: [],
+      next_session: [],
+      weekly_focus: [],
+      positives: [],
+      metadata: { version: 'v1', generated_at: new Date().toISOString(), data_sources: ['error_fallback'] }
+    };
+  }
+
+  // Truncate function
+  const truncate = (text: string, max: number) => text && text.length > max ? text.slice(0, max).trim() : text;
+
+  // Process snapshot
+  const snapshot = analysis.snapshot || {};
+  const processedSnapshot = {
+    momentum: ['Up', 'Flat', 'Down'].includes(snapshot.momentum) ? snapshot.momentum : 'Flat',
+    adherence_pct: (typeof snapshot.adherence_pct === 'number' && snapshot.adherence_pct >= 0 && snapshot.adherence_pct <= 100)
+      ? snapshot.adherence_pct : null,
+    readiness: ['Low', 'Medium', 'High', null].includes(snapshot.readiness) ? snapshot.readiness : null,
+    one_liner: truncate(snapshot.one_liner || 'Analysis generated', 120)
+  };
+
+  // Process actions (max 3)
+  const actions = (Array.isArray(analysis.actions) ? analysis.actions : []).slice(0, 3)
+    .filter((a: any) => a && a.text)
+    .map((a: any) => ({
+      text: truncate(a.text, 120),
+      reason_tag: ['consistency', 'recovery', 'technique', 'nutrition', 'adherence'].includes(a.reason_tag)
+        ? a.reason_tag : 'consistency',
+      impact: a.impact ? truncate(a.impact, 60) : undefined,
+      add_to_todo_hint: Boolean(a.add_to_todo_hint)
+    }));
+
+  // Process risks (max 2)
+  const risks = (Array.isArray(analysis.risks) ? analysis.risks : []).slice(0, 2)
+    .filter((r: any) => r && r.text && r.mitigation)
+    .map((r: any) => ({
+      text: truncate(r.text, 120),
+      mitigation: truncate(r.mitigation, 100)
+    }));
+
+  // Process next_session (max 3)
+  const next_session = (Array.isArray(analysis.next_session) ? analysis.next_session : []).slice(0, 3)
+    .filter((n: any) => n && n.text)
+    .map((n: any) => ({ text: truncate(n.text, 100) }));
+
+  // Process weekly_focus (max 2)
+  const weekly_focus = (Array.isArray(analysis.weekly_focus) ? analysis.weekly_focus : []).slice(0, 2)
+    .filter((w: any) => w && w.text)
+    .map((w: any) => ({
+      text: truncate(w.text, 100),
+      metric: w.metric ? truncate(w.metric, 50) : undefined,
+      target: w.target ? truncate(w.target, 50) : undefined
+    }));
+
+  // Process positives (max 2)
+  const positives = (Array.isArray(analysis.positives) ? analysis.positives : []).slice(0, 2)
+    .filter((p: any) => p && p.text)
+    .map((p: any) => ({ text: truncate(p.text, 80) }));
+
+  // Add metadata
+  const metadata = {
+    version: analysis.metadata?.version || 'v1',
+    generated_at: analysis.metadata?.generated_at || new Date().toISOString(),
+    data_sources: Array.isArray(analysis.metadata?.data_sources)
+      ? analysis.metadata.data_sources
+      : ['trainer_notes', 'client_profile']
+  };
+
+  return {
+    snapshot: processedSnapshot,
+    actions,
+    risks,
+    next_session,
+    weekly_focus,
+    positives,
+    metadata
+  };
 }
 
 /**
@@ -318,13 +442,33 @@ export async function performComprehensiveCoachAnalysis(
 
     // Fetch previous analysis for comparison (optional)
     console.log('🔍 Fetching previous analysis...');
-    const { data: previousAnalysis } = await supabase
-      .from('coach_analysis')
-      .select('analysis_data')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    let previousAnalysis = null;
+    
+    if (!sessionError && sessionData?.session?.user?.email) {
+      const trainerEmail = sessionData.session.user.email;
+      
+      // Get trainer ID
+      const { data: trainerData, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", trainerEmail)
+        .single();
+      
+      if (!trainerError && trainerData?.id) {
+        // Fetch previous analysis from trainer_client_web table
+        const { data: previousAnalysisData, error: previousAnalysisError } = await supabase
+          .from('trainer_client_web')
+          .select('ai_summary')
+          .eq('trainer_id', trainerData.id)
+          .eq('client_id', clientId)
+          .single();
+          
+        if (!previousAnalysisError && previousAnalysisData?.ai_summary) {
+          previousAnalysis = previousAnalysisData.ai_summary;
+        }
+      }
+    }
 
     console.log('📊 Previous analysis:', previousAnalysis ? 'Found' : 'Not found');
 
@@ -334,7 +478,7 @@ export async function performComprehensiveCoachAnalysis(
       trainerNotes,
       clientData,
       todoItems,
-      previousAnalysis?.analysis_data
+      previousAnalysis
     );
 
     console.log('✅ AI analysis generated');
@@ -342,14 +486,27 @@ export async function performComprehensiveCoachAnalysis(
     // Parse the AI response
     let analysisData;
     try {
+      console.log('🔍 Raw AI response:', aiResponse.response);
+      console.log('🔍 Response type:', typeof aiResponse.response);
+
       const jsonMatch = aiResponse.response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
+        console.log('🔍 Found JSON match, parsing...');
         analysisData = JSON.parse(jsonMatch[0]);
       } else {
+        console.log('🔍 No JSON match found, trying to parse entire response...');
         analysisData = JSON.parse(aiResponse.response);
       }
+
+      // Post-process to enforce concise schema and caps
+      analysisData = postProcessAnalysis(analysisData);
+
+      console.log('✅ Parsed and post-processed analysis data:', analysisData);
+      console.log('✅ Analysis data type:', typeof analysisData);
+      console.log('✅ Analysis data keys:', Object.keys(analysisData || {}));
     } catch (parseError) {
       console.error('❌ Failed to parse AI response:', parseError);
+      console.error('❌ Raw response that failed to parse:', aiResponse.response);
       return {
         success: false,
         message: 'Failed to parse AI analysis response'
@@ -357,7 +514,14 @@ export async function performComprehensiveCoachAnalysis(
     }
 
     // Save analysis to database
-    await saveAnalysisToDatabase(clientId, analysisData);
+    console.log('💾 Attempting to save analysis to database...');
+    const saveResult = await saveAnalysisToDatabase(clientId, analysisData);
+    
+    if (saveResult) {
+      console.log('✅ Analysis successfully saved to database');
+    } else {
+      console.warn('⚠️ Analysis was generated but failed to save to database');
+    }
 
     console.log('🎉 Comprehensive analysis completed successfully');
 
@@ -387,12 +551,36 @@ export async function getLatestCoachAnalysis(clientId: number) {
   console.log('🔍 Fetching latest coach analysis for client:', clientId);
   
   try {
+    // Get current session to get trainer ID
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData?.session?.user?.email) {
+      return {
+        success: false,
+        message: "Not logged in"
+      };
+    }
+    const trainerEmail = sessionData.session.user.email;
+    
+    // Get trainer ID
+    const { data: trainerData, error: trainerError } = await supabase
+      .from("trainer")
+      .select("id")
+      .eq("trainer_email", trainerEmail)
+      .single();
+    
+    if (trainerError || !trainerData?.id) {
+      return {
+        success: false,
+        message: "Failed to get trainer information"
+      };
+    }
+
+    // Fetch latest analysis from trainer_client_web table
     const { data, error } = await supabase
-      .from('coach_analysis')
-      .select('*')
+      .from('trainer_client_web')
+      .select('ai_summary, created_at')
+      .eq('trainer_id', trainerData.id)
       .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
       .single();
 
     if (error) {
@@ -403,7 +591,7 @@ export async function getLatestCoachAnalysis(clientId: number) {
       };
     }
 
-    if (!data) {
+    if (!data || !data.ai_summary) {
       return {
         success: false,
         message: 'No previous analysis found for this client'
@@ -412,7 +600,10 @@ export async function getLatestCoachAnalysis(clientId: number) {
 
     return {
       success: true,
-      analysis: data,
+      analysis: {
+        analysis_data: data.ai_summary,
+        created_at: data.created_at
+      },
       message: 'Latest analysis retrieved successfully'
     };
 
@@ -431,15 +622,41 @@ export async function getLatestCoachAnalysis(clientId: number) {
  * @param limit - Number of analyses to retrieve (default: 10)
  */
 export async function getCoachAnalysisHistory(clientId: number, limit: number = 10) {
-  console.log('📚 Fetching coach analysis history for client:', clientId);
+  console.log('🔍 Fetching coach analysis history for client:', clientId);
   
   try {
+    // Get current session to get trainer ID
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData?.session?.user?.email) {
+      return {
+        success: false,
+        message: "Not logged in"
+      };
+    }
+    const trainerEmail = sessionData.session.user.email;
+    
+    // Get trainer ID
+    const { data: trainerData, error: trainerError } = await supabase
+      .from("trainer")
+      .select("id")
+      .eq("trainer_email", trainerEmail)
+      .single();
+    
+    if (trainerError || !trainerData?.id) {
+      return {
+        success: false,
+        message: "Failed to get trainer information"
+      };
+    }
+
+    // Since trainer_client_web table doesn't store multiple analyses per client,
+    // we'll return the single analysis as a history entry
     const { data, error } = await supabase
-      .from('coach_analysis')
-      .select('*')
+      .from('trainer_client_web')
+      .select('ai_summary, created_at')
+      .eq('trainer_id', trainerData.id)
       .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+      .single();
 
     if (error) {
       console.error('❌ Failed to fetch analysis history:', error);
@@ -449,10 +666,22 @@ export async function getCoachAnalysisHistory(clientId: number, limit: number = 
       };
     }
 
+    if (!data || !data.ai_summary) {
+      return {
+        success: true,
+        history: [],
+        message: 'No analysis history found for this client'
+      };
+    }
+
     return {
       success: true,
-      analyses: data || [],
-      message: `Retrieved ${data?.length || 0} analyses`
+      history: [{
+        id: 'latest',
+        analysis_data: data.ai_summary,
+        created_at: data.created_at
+      }],
+      message: 'Analysis history retrieved successfully'
     };
 
   } catch (error) {

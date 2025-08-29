@@ -1,6 +1,8 @@
-// AI Nutrition Plan Generation with OpenAI Integration
+// AI Nutrition Plan Generation with Cerebras AI Integration
 import { supabase } from './supabase';
-import { askOpenRouter, OpenRouterResponse } from './open-router-service';
+// import { askOpenRouter, OpenRouterResponse } from './open-router-service';
+// import { askCerebras } from './cerebras-service';
+import { askLLM } from './llm-service';
 
 export interface NutritionPlanResult {
   success: boolean;
@@ -19,7 +21,9 @@ export interface NutritionPlanResult {
 
 // Function to generate nutrition plan using OpenRouter
 export async function generateNutritionPlan(clientId: number): Promise<NutritionPlanResult> {
-  console.log(`🍽️ Generating nutrition plan for client: ${clientId}`);
+  console.log('🥗 === NUTRITION PLAN GENERATION START ===');
+  console.log('👤 Client ID:', clientId);
+  console.log('📅 Generation started at:', new Date().toISOString());
 
   try {
     // 1. Fetch client data from Supabase
@@ -51,41 +55,35 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
       gastric_issues: clientData.cl_gastric_issues
     });
 
-    // 2. Calculate Nutritional Targets (BMR, TDEE, Macros)
-    const age = clientData.cl_age || 30;
-    const weight = clientData.cl_weight; // in kg
-    const height = clientData.cl_height; // in cm
-    const gender = clientData.cl_sex; // Use cl_sex instead of cl_gender
-    const activityLevel = clientData.cl_activity_level || 'sedentary';
+    // 2. Fetch Nutritional Targets from client_target table
+    const { data: targetData, error: targetError } = await supabase
+      .from('client_target')
+      .select('goal, target')
+      .eq('client_id', clientId)
+      .in('goal', ['calories', 'protein', 'carbs', 'fats']);
 
-    // Mifflin-St Jeor Equation for BMR
-    let bmr = (10 * weight) + (6.25 * height) - (5 * age) + (gender === 'male' ? 5 : -161);
-
-    // TDEE Calculation
-    const activityMultipliers = {
-      sedentary: 1.2,
-      light: 1.375,
-      moderate: 1.55,
-      active: 1.725,
-      very_active: 1.9
-    };
-    const tdee = bmr * (activityMultipliers[activityLevel as keyof typeof activityMultipliers] || 1.2);
-
-    // Adjust calories for goal (e.g., -500 for weight loss, +500 for muscle gain)
-    let targetCalories = tdee;
-    if (clientData.cl_primary_goal?.includes('loss')) {
-      targetCalories -= 500;
-    } else if (clientData.cl_primary_goal?.includes('gain')) {
-      targetCalories += 500;
+    if (targetError) {
+      console.error('Error fetching client targets:', targetError);
+      throw new Error(`Failed to fetch client targets: ${targetError.message}`);
     }
-    targetCalories = Math.round(targetCalories);
 
-    // Macronutrient Split (example: 40% carbs, 30% protein, 30% fat)
-    const targetProtein = Math.round((targetCalories * 0.30) / 4);
-    const targetCarbs = Math.round((targetCalories * 0.40) / 4);
-    const targetFats = Math.round((targetCalories * 0.30) / 9);
+    // Extract targets from the fetched data
+    const targetMap = new Map();
+    if (targetData && targetData.length > 0) {
+      targetData.forEach((row: any) => {
+        if (row.goal && row.target !== null) {
+          targetMap.set(row.goal, row.target);
+        }
+      });
+    }
 
-    console.log('📊 Nutritional Targets:', {
+    // Set default values if targets are not found
+    const targetCalories = targetMap.get('calories') || 2000;
+    const targetProtein = targetMap.get('protein') || 150;
+    const targetCarbs = targetMap.get('carbs') || 200;
+    const targetFats = targetMap.get('fats') || 67;
+
+    console.log('📊 Nutritional Targets from client_target table:', {
       calories: targetCalories,
       protein: targetProtein,
       carbs: targetCarbs,
@@ -156,28 +154,40 @@ export async function generateNutritionPlan(clientId: number): Promise<Nutrition
     console.log('🚫 Final Forbidden Ingredients:', forbiddenIngredients);
     console.log('📋 Final Dietary Restrictions:', dietaryRestrictions);
 
-    // 4. Construct optimized prompt
-    const prompt = `You are a world-class nutritionist and chef. Create a personalized 7-day nutrition plan for a client.
-      
-Client Profile:
-- Name: ${clientData.cl_name}
-- Age: ${age} years
-- Weight: ${weight} kg
-- Height: ${height} cm
-- Gender: ${gender}
-- Target Weight: ${clientData.cl_target_weight || 'Not specified'} kg
-- Primary Goal: ${clientData.cl_primary_goal || 'Not specified'}
-- Specific Outcome: ${clientData.specific_outcome || 'Not specified'}
-- Goal Timeline: ${clientData.goal_timeline || 'Not specified'}
-- Obstacles: ${clientData.obstacles || 'Not specified'}
-- Activity Level: ${activityLevel}
-- Preferred Meals Per Day: ${clientData.preferred_meals_per_day || 'Not specified'}
-- Dietary Preferences: ${Array.isArray(dietaryPreferences) ? dietaryPreferences.join(', ') : 'None'}
-- Known Allergies: ${typeof allergies === 'string' ? allergies : 'None'}
-- Supplements: ${clientData.cl_supplements || 'None'}
-- Gastric Issues: ${clientData.cl_gastric_issues || 'None'}
+    // 4. Construct optimized prompt with cleaner format
+    const clientName = clientData.cl_name || 'Client';
+    const targetWeight = clientData.cl_target_weight ? `${clientData.cl_target_weight} kg` : 'Not specified';
+    const primaryGoal = clientData.cl_primary_goal || 'General fitness';
+    const specificOutcome = clientData.specific_outcome || 'Improve overall health';
+    const goalTimeline = clientData.goal_timeline || 'Not specified';
+    const obstacles = clientData.obstacles || 'None';
+    const preferredMeals = clientData.preferred_meals_per_day || '3';
+    const dietaryPrefs = Array.isArray(dietaryPreferences) ? dietaryPreferences.join(', ') : 'None';
+    const knownAllergies = typeof allergies === 'string' && allergies.trim() ? allergies : 'None';
+    const supplements = clientData.cl_supplements || 'None';
+    const gastricIssues = clientData.cl_gastric_issues || 'None';
 
-Daily Nutritional Targets:
+    const prompt = `You are a world-class nutritionist and chef. Create a personalized 7-day nutrition plan for a client.
+
+Client Profile:
+- Name: ${clientName}
+- Age: ${clientData.cl_age || 30} years
+- Weight: ${clientData.cl_weight} kg
+- Height: ${clientData.cl_height} cm
+- Gender: ${clientData.cl_sex}
+- Target Weight: ${targetWeight}
+- Primary Goal: ${primaryGoal}
+- Specific Outcome: ${specificOutcome}
+- Goal Timeline: ${goalTimeline}
+- Obstacles: ${obstacles}
+- Activity Level: ${clientData.cl_activity_level || 'sedentary'}
+- Preferred Meals Per Day: ${preferredMeals}
+- Dietary Preferences: ${dietaryPrefs}
+- Known Allergies: ${knownAllergies}
+- Supplements: ${supplements}
+- Gastric Issues: ${gastricIssues}
+
+Daily Nutritional Targets (CRITICAL - MUST MATCH EXACTLY):
 - Calories: ${targetCalories} kcal
 - Protein: ${targetProtein} g
 - Carbohydrates: ${targetCarbs} g
@@ -190,8 +200,8 @@ Instructions:
    - Meal name
    - Specific amounts/quantities for each ingredient (e.g., "1 cup brown rice", "150g chicken breast", "2 tbsp olive oil")
    - Nutritional values (calories, protein, carbs, fats) for the specified amounts
-4. CRITICAL: Ensure the total nutritional values for each day EXACTLY match the daily targets provided above. The sum of all meals for a day MUST equal the day's total.
-5. If the initial meal plan doesn't meet the calorific target, ADJUST the quantities/amounts of ingredients to ensure the total calories match the target.
+4. CRITICAL ACCURACY REQUIREMENT: The total nutritional values for each day MUST EXACTLY match the daily targets provided above. The sum of all meals for a day MUST equal the day's total. If the initial meal plan doesn't meet the targets, ADJUST the quantities/amounts of ingredients to ensure the total calories and macros match the targets exactly.
+5. Select nutritional plan to achieve goals while respecting dietary restrictions.
 6. Provide a brief, actionable "Coach Tip" for each meal (e.g., "Drink a full glass of water before this meal to aid digestion.").
 7. The plan must respect the client's dietary preferences and allergies.
 8. Consider the client's specific goals, obstacles, and timeline when designing meals.
@@ -224,19 +234,23 @@ The JSON structure should be:
     console.log('📤 Sending prompt to LLM:');
     console.log('='.repeat(80));
     console.log('Prompt length:', prompt.length, 'characters');
-    console.log('Prompt preview (first 500 chars):', prompt.substring(0, 500));
+    console.log('📝 COMPLETE PROMPT FOR TESTING:');
+    console.log('='.repeat(80));
+    console.log(prompt);
+    console.log('='.repeat(80));
+    console.log('📝 END OF PROMPT');
     console.log('='.repeat(80));
 
-    // 5. Call the OpenRouter API
+    // 5. Call the unified LLM service
     const startTime = Date.now();
-    const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
+    const aiResult = await askLLM(prompt);
     const endTime = Date.now();
     const generationTime = endTime - startTime;
     
-    console.log('📥 Received response from LLM:');
-    console.log('='.repeat(80));
-    console.log('Response:', aiResult.response);
-    console.log('='.repeat(80));
+    console.log('📥 === LLM RESPONSE RECEIVED ===');
+    console.log('📋 Nutrition plan received from LLM:');
+    console.log('📄 Raw LLM response:');
+    console.log(aiResult.response);
     console.log(`⏱️ Generation time: ${generationTime}ms`);
     if (aiResult.model) {
       console.log('🤖 Model used:', aiResult.model);
@@ -244,6 +258,17 @@ The JSON structure should be:
     if (aiResult.usage) {
       console.log('🔢 Token usage:', aiResult.usage);
     }
+    
+    // Simple text format for easy copying
+    console.log('\n📋 === NUTRITION PLAN (COPY-PASTE FORMAT) ===');
+    console.log('NUTRITION_PLAN:');
+    console.log(aiResult.response);
+    console.log('END_NUTRITION_PLAN');
+
+    /* Previous implementations (commented for easy reversion)
+    // const aiResult: OpenRouterResponse = await askOpenRouter(prompt);
+    // const aiResult = await askCerebras(prompt);
+    */
 
     // 6. Validate response for forbidden ingredients
     if (forbiddenIngredients && aiResult.response) {
@@ -265,8 +290,14 @@ The JSON structure should be:
       }
     }
       
-      return {
-        success: true,
+    console.log('✅ === NUTRITION PLAN GENERATED ===');
+    console.log('📊 Nutrition plan generation completed successfully');
+    console.log('🔢 Response length:', aiResult.response.length, 'characters');
+    console.log('⏱️ Total generation time:', generationTime, 'ms');
+    console.log('🏁 === NUTRITION PLAN GENERATION COMPLETE ===');
+    
+    return {
+      success: true,
       response: aiResult.response,
       raw_prompt: prompt,
       model: aiResult.model,
@@ -275,7 +306,7 @@ The JSON structure should be:
     };
 
   } catch (error: any) {
-    console.error("❌ Error generating nutrition plan with OpenRouter:", error);
+    console.error("❌ Error generating nutrition plan:", error);
     return {
       success: false,
       response: '',

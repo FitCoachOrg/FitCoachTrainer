@@ -50,7 +50,7 @@ function Navbar() {
             className="flex-shrink-0"
           >
             <Link to="/" className="text-white text-2xl font-bold">
-              Fit<span className="text-green-500">Pro</span>
+              Coach<span className="text-green-500">EZ</span>
             </Link>
           </motion.div>
 
@@ -111,13 +111,15 @@ function Navbar() {
               <LogIn className="h-4 w-4" />
               Login
             </Link>
-            <Link
-              to="/signup"
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2"
-            >
-              <User className="h-4 w-4" />
-              Sign Up
-            </Link>
+            {!location.pathname.includes('/trainer-signup') && (
+              <Link
+                to="/trainer-signup"
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+              >
+                <User className="h-4 w-4" />
+                Sign Up
+              </Link>
+            )}
           </motion.div>
 
           {/* Mobile menu button */}
@@ -166,14 +168,16 @@ function Navbar() {
                 <LogIn className="h-4 w-4" />
                 Login
               </Link>
-              <Link
-                to="/signup"
-                className="bg-green-600 hover:bg-green-700 text-white  px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2"
-                onClick={() => setIsOpen(false)}
-              >
-                <User className="h-4 w-4" />
-                Sign Up
-              </Link>
+              {!location.pathname.includes('/trainer-signup') && (
+                <Link
+                  to="/trainer-signup"
+                  className="bg-green-600 hover:bg-green-700 text-white  px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2"
+                  onClick={() => setIsOpen(false)}
+                >
+                  <User className="h-4 w-4" />
+                  Sign Up
+                </Link>
+              )}
             </div>
           </div>
         </motion.div>

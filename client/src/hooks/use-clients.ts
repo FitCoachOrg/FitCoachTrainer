@@ -95,24 +95,46 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
   const [schedule, setSchedule] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isDraftPlan, setIsDraftPlan] = useState(false)
 
   useEffect(() => {
     async function fetchSchedule() {
       try {
         setLoading(true)
-        const { data, error } = await supabase
-          .from('schedule')
+        // ALWAYS fetch from schedule_preview first (primary source)
+        let { data, error } = await supabase
+          .from('schedule_preview')
           .select('*')
           .eq('client_id', clientId)
           .gte('for_date', startDate)
           .lte('for_date', endDate)
           .order('for_date', { ascending: true })
-
+        if (error) {
+          console.warn('Error fetching from schedule_preview:', error)
+        }
+        
+        let isFromPreview = true;
+        
+        // FALLBACK LOGIC COMMENTED OUT - UI should ONLY get data from schedule_preview table
+        // if (!data || data.length === 0) {
+        //   // Only fallback to schedule if no preview data exists
+        //   console.log('No preview data found, checking schedule table as fallback');
+        //   ({ data, error } = await supabase
+        //     .from('schedule')
+        //     .select('*')
+        //     .eq('client_id', clientId)
+        //     .gte('for_date', startDate)
+        //     .lte('for_date', endDate)
+        //     .order('for_date', { ascending: true }))
+        //   isFromPreview = false;
+        // }
+        
+        // Set draft status based on data source
+        setIsDraftPlan(isFromPreview);
         if (error) {
           setError(error.message)
           return
         }
-
         // Transform the data for the schedule component
         const transformedSchedule = (data || []).map((item: any) => ({
           date: item.for_date,
@@ -122,7 +144,6 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
           type: item.type,
           icon: item.icon
         }))
-
         setSchedule(transformedSchedule)
       } catch (err) {
         setError('Failed to fetch schedule')
@@ -131,11 +152,10 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
         setLoading(false)
       }
     }
-
     if (clientId && startDate && endDate) {
       fetchSchedule()
     }
   }, [clientId, startDate, endDate])
 
-  return { data: schedule, isLoading: loading, error }
+  return { data: schedule, isLoading: loading, error, isDraftPlan }
 }

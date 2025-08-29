@@ -52,6 +52,8 @@ export interface CreateScheduleEvent {
   is_virtual?: boolean;
   meeting_url?: string;
   meeting_platform?: string;
+  trainer_id?: string; // UUID
+  trainer_email?: string;
   client_id?: number;
   client_name?: string;
   client_email?: string;
@@ -127,6 +129,8 @@ export const ScheduleUtils = {
       is_virtual: event.is_virtual,
       meeting_url: event.meeting_url,
       meeting_platform: event.meeting_platform,
+      trainer_id: event.trainer_id,
+      trainer_email: event.trainer_email,
       client_id: event.client_id,
       client_name: event.client_name,
       client_email: event.client_email,
@@ -174,10 +178,12 @@ export const ScheduleUtils = {
   },
 
   /**
-   * Format time for display
+   * Format time for display in local timezone
    */
   formatTime(time: string): string {
-    return format(parseISO(time), 'HH:mm')
+    // Parse ISO string and format in local timezone
+    const date = parseISO(time)
+    return format(date, 'HH:mm')
   },
 
   /**
@@ -207,6 +213,56 @@ export const ScheduleUtils = {
 
 // Schedule Service Class
 export class ScheduleService {
+  // Ensure a trainer profile row exists for the authenticated user (required by FK on schedule_events)
+  static async ensureTrainerProfile(userId: string, userEmail: string): Promise<{ id: string, trainer_email: string } | null> {
+    try {
+      // Check if trainer record exists by email (more reliable than by id)
+      const { data: existingTrainer, error: checkError } = await supabase
+        .from('trainer')
+        .select('id, trainer_email')
+        .eq('trainer_email', userEmail)
+        .single()
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means "not found"
+        console.error('Error checking existing trainer profile:', checkError)
+        throw checkError
+      }
+
+      if (existingTrainer) {
+        console.log('✅ Found existing trainer profile:', existingTrainer)
+        return existingTrainer
+      }
+
+      // If not found, create a minimal trainer record
+      console.log(`Trainer profile for ${userEmail} not found, creating minimal record...`)
+      const { data: newTrainer, error: insertError } = await supabase
+        .from('trainer')
+        .insert([
+          {
+            id: userId,
+            trainer_email: userEmail,
+            trainer_name: userEmail.split('@')[0], // Default name from email
+            is_active: true,
+            terms_accepted: true,
+            privacy_accepted: true,
+            profile_completion_percentage: 20 // Basic profile
+          }
+        ])
+        .select('id, trainer_email')
+        .single()
+
+      if (insertError) {
+        console.error('Error creating minimal trainer profile:', insertError)
+        throw insertError
+      }
+
+      console.log('Minimal trainer profile created successfully.')
+      return newTrainer
+    } catch (error) {
+      console.error('Failed to ensure trainer profile:', error)
+      return null
+    }
+  }
   // Get events for a date range
   static async getEvents(trainerId: string, startDate: string, endDate: string): Promise<ScheduleEvent[]> {
     try {
@@ -251,7 +307,7 @@ export class ScheduleService {
       const { data, error } = await supabase
         .from('schedule_events')
         .select('*')
-        .eq('trainer_id', user.id)
+        .eq('trainer_email', user.email!)
         .gte('start_time', startDate.toISOString())
         .lte('start_time', endDate.toISOString())
         .order('start_time', { ascending: true })
@@ -270,12 +326,24 @@ export class ScheduleService {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('User not authenticated')
 
+      // Look up trainer UUID from trainer table by email (FK requires trainer.id)
+      const { data: trainerRow, error: trainerLookupError } = await supabase
+        .from('trainer')
+        .select('id')
+        .eq('trainer_email', user.email!)
+        .single()
+
+      if (trainerLookupError || !trainerRow?.id) {
+        console.error('Unable to resolve trainer.id from trainer_email; check trainer RLS/policy:', trainerLookupError)
+        throw new Error('Trainer profile not accessible. Ensure trainer RLS allows self-select.')
+      }
+
       const eventData: Partial<ScheduleEvent> = {
         ...event,
-        trainer_id: user.id,
+        trainer_id: trainerRow.id,
         trainer_email: user.email!,
-        created_by: user.id,
-        updated_by: user.id,
+        created_by: trainerRow.id,
+        updated_by: trainerRow.id,
         status: event.status || 'scheduled',
         priority: event.priority || 'medium',
         is_virtual: event.is_virtual || false,
@@ -305,15 +373,19 @@ export class ScheduleService {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('User not authenticated')
 
+      // Get trainer profile to ensure we have the correct trainer_id
+      const trainerProfile = await ScheduleService.ensureTrainerProfile(user.id, user.email!)
+      if (!trainerProfile) throw new Error('Trainer profile could not be ensured.')
+
       const { data, error } = await supabase
         .from('schedule_events')
         .update({
           ...eventData,
-          updated_by: user.id,
+          updated_by: trainerProfile.id, // Use the resolved trainer_id
           updated_at: new Date().toISOString()
         })
         .eq('id', eventData.id)
-        .eq('trainer_id', user.id) // Ensure trainer owns the event
+        .eq('trainer_email', user.email!) // Ensure trainer owns the event
         .select()
         .single()
 
@@ -335,7 +407,7 @@ export class ScheduleService {
         .from('schedule_events')
         .delete()
         .eq('id', id)
-        .eq('trainer_id', user.id) // Ensure trainer owns the event
+        .eq('trainer_email', user.email!) // Ensure trainer owns the event
 
       if (error) throw error
     } catch (error) {
@@ -588,6 +660,54 @@ export class ScheduleService {
     } catch (error) {
       console.error('Error checking time slot availability:', error);
       throw error;
+    }
+  }
+
+    // Get trainer's clients for dropdown
+  static async getTrainerClients(): Promise<{client_id: number, cl_name: string, cl_email: string}[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('User not authenticated')
+
+      // Get clients directly by trainer_email
+      const { data, error } = await supabase
+        .from('trainer_client_web')
+        .select(`
+          client_id,
+          cl_email
+        `)
+        .eq('trainer_email', user.email)
+        .eq('status', 'active')
+        .order('client_id', { ascending: true })
+
+      if (error) throw error
+
+      // Get client details separately
+      if (data && data.length > 0) {
+        const clientIds = data.map(item => item.client_id)
+        const { data: clientData, error: clientError } = await supabase
+          .from('client')
+          .select('client_id, cl_name, cl_email')
+          .in('client_id', clientIds)
+          .order('cl_name', { ascending: true })
+
+        if (clientError) throw clientError
+
+        // Merge the data
+        return data.map(item => {
+          const client = clientData?.find(c => c.client_id === item.client_id)
+          return {
+            client_id: item.client_id,
+            cl_name: client?.cl_name || 'Unknown Client',
+            cl_email: item.cl_email || client?.cl_email || ''
+          }
+        })
+      }
+
+      return []
+    } catch (error) {
+      console.error('Error fetching trainer clients:', error)
+      throw error
     }
   }
 

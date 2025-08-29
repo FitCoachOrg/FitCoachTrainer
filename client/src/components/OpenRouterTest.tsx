@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { askOpenRouter } from '@/lib/open-router-service';
+// import { askOpenRouter } from '@/lib/open-router-service';
+// import { askCerebras } from '@/lib/cerebras-service';
+import { askLLM } from '@/lib/llm-service';
 import { Bot } from 'lucide-react';
 
 const LoadingSpinner = () => (
@@ -25,8 +27,8 @@ const OpenRouterTest = () => {
     setResponse('');
 
     try {
-      const result = await askOpenRouter(prompt);
-      setResponse(result);
+      const result = await askLLM(prompt);
+      setResponse(result.response);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -39,7 +41,7 @@ const OpenRouterTest = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-3 text-lg font-semibold">
           <Bot className="h-6 w-6 text-cyan-500" />
-          OpenRouter AI Test
+          AI Model Test
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -63,7 +65,7 @@ const OpenRouterTest = () => {
               <span className="ml-2">Asking AI...</span>
             </>
           ) : (
-            'Send to OpenRouter'
+            'Send to AI Model'
           )}
         </Button>
         {error && (
@@ -73,9 +75,9 @@ const OpenRouterTest = () => {
           </div>
         )}
         {response && (
-          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+          <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md select-text cursor-text">
             <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">AI Response:</h4>
-            <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">
+            <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans select-text cursor-text">
               {response}
             </pre>
           </div>

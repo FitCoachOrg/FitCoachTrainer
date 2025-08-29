@@ -1,0 +1,8 @@
+# Cerebras API Configuration
+# Copy this content to a file named .env and add your actual API key
+
+# Get your API key from: https://platform.cerebras.com/
+CEREBRAS_API_KEY=csk-tkky48mnnpf83y69hcwynnkdcv6mnfwkt69vhm5tv3mmr29t
+
+# Optional: OpenAI API key (for the original OpenAI version)
+# OPENAI_API_KEY=your-openai-api-key-here

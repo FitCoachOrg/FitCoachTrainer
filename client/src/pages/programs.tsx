@@ -25,8 +25,10 @@ import { ViewTabs } from "@/components/view-tabs"
 import { ProgramCardsContainer } from "@/components/program-cards-container"
 import { SaveButton } from "@/components/save-button"
 import { AddTaskDropdown } from "@/components/add-task-dropdown"
+import { AddCustomTaskModal } from "@/components/add-custom-task-modal"
 import { saveProgramToFile } from "@/utils/program-utils"
 import { useToast } from "@/components/ui/use-toast"
+import type { ViewMode, Difficulty, StartDay, Task, ProgramData } from "@/types/program"
 
 // Add these utility functions after the imports
 const getStartDate = (startDay: StartDay): Date => {
@@ -52,28 +54,6 @@ const getDayName = (date: Date): string => {
 
 const getShortDayName = (date: Date): string => {
   return date.toLocaleDateString("en-US", { weekday: "short" })
-}
-
-export type ViewMode = "day" | "week" | "month"
-export type Difficulty = "easy" | "medium" | "hard"
-export type StartDay = "Sunday" | "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday"
-export type TaskType = "checkin" | "picture" | "metric" | "workout" | "nutrition" | "note" | "hydration"
-
-export interface Task {
-  type: TaskType
-  content: string
-}
-
-export interface ProgramData {
-  title: string
-  tag: string
-  description: string
-  difficulty: Difficulty
-  startDay: StartDay
-  assignedColor: string
-  assignedClient: string
-  isEditable: boolean
-  tasks: Record<number, Task[]> // day number -> tasks
 }
 
 // Mock data for programs
@@ -169,29 +149,35 @@ export default function AllProgramsPage() {
     title: "New Program",
     tag: "",
     description: "",
-    difficulty: "medium",
+    difficulty: "Medium",
     startDay: "Monday",
     assignedColor: "#39FF14",
     assignedClient: "",
     isEditable: true,
     tasks: {},
+    viewMode: "day",
   })
 
   const [viewMode, setViewMode] = useState<ViewMode>("day")
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [isCustomTaskModalOpen, setIsCustomTaskModalOpen] = useState(false)
 
   const updateProgramData = (updates: Partial<ProgramData>) => {
     setProgramData((prev) => ({ ...prev, ...updates }))
   }
 
-  const addTask = (day: number, task: Task) => {
+  const addTask = (day: number, task: Omit<Task, "id">) => {
+    const taskWithId: Task = {
+      ...task,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    }
     setProgramData((prev) => ({
       ...prev,
       tasks: {
         ...prev.tasks,
-        [day]: [...(prev.tasks[day] || []), task],
+        [day]: [...(prev.tasks[day] || []), taskWithId],
       },
     }))
   }
@@ -221,7 +207,7 @@ export default function AllProgramsPage() {
         id: Math.max(...programs.map((p) => p.id)) + 1,
         title: programData.title,
         tag: programData.tag,
-        difficulty: programData.difficulty.charAt(0).toUpperCase() + programData.difficulty.slice(1),
+        difficulty: programData.difficulty,
         startDay: programData.startDay,
         color: programData.assignedColor,
         lastEdited: "Just now",
@@ -236,12 +222,13 @@ export default function AllProgramsPage() {
         title: "New Program",
         tag: "",
         description: "",
-        difficulty: "medium",
+        difficulty: "Medium",
         startDay: "Monday",
         assignedColor: "#39FF14",
         assignedClient: "",
         isEditable: true,
         tasks: {},
+        viewMode: "day",
       })
 
       toast({
@@ -312,13 +299,23 @@ export default function AllProgramsPage() {
                 <h1 className="text-3xl font-bold mb-2">All Programs</h1>
                 <p className="text-gray-400">Manage and organize your training programs</p>
               </div>
-              <Button 
-                className="bg-[#39FF14] hover:bg-[#32E012] text-black font-semibold"
-                onClick={() => setIsCreating(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create New Program
-              </Button>
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline"
+                  className="border-gray-600 text-gray-300 hover:text-white hover:border-gray-500"
+                  onClick={() => setIsCustomTaskModalOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Custom Tasks
+                </Button>
+                <Button 
+                  className="bg-[#39FF14] hover:bg-[#32E012] text-black font-semibold"
+                  onClick={() => setIsCreating(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create New Program
+                </Button>
+              </div>
             </div>
 
             {/* Filters and Search */}
@@ -519,6 +516,21 @@ export default function AllProgramsPage() {
             </div>
           </div>
         )}
+
+        {/* Custom Task Modal */}
+        <AddCustomTaskModal
+          clientId={1} // This should be passed from parent component or context
+          clientName="Client"
+          isOpen={isCustomTaskModalOpen}
+          onClose={() => setIsCustomTaskModalOpen(false)}
+          onTaskAdded={() => {
+            // Refresh programs or show success message
+            toast({
+              title: "Custom Task Added",
+              description: "Your custom task has been successfully added to the schedule.",
+            })
+          }}
+        />
       </div>
     </div>
   )

@@ -1,239 +1,655 @@
-import React, { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useEffect, useMemo, useState } from "react"
+import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useClients } from "@/hooks/use-clients"
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { Calendar as CalendarIcon, Loader2 } from "lucide-react"
-import { format } from "date-fns"
-import { supabase } from "@/lib/supabase" // Assuming supabase client is here
+import { Badge } from "@/components/ui/badge"
+import { Loader2 } from "lucide-react"
+import { addDays, format } from "date-fns"
 import { WorkoutPlanTable } from "@/components/WorkoutPlanTable"
-import DatePickerTest from "@/components/DatePickerTest"
+import { useClients } from "@/hooks/use-clients"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-// NOTE FOR THE DEVELOPER:
-// This component is being significantly refactored to align its functionality
-// with the Nutrition Plan screen. It will now fetch existing workout plans
-// for a selected client and date, display them in an editable table, and allow
-// for AI generation as a secondary action.
+type WorkoutTemplateRow = {
+  id: string
+  trainer_id: number
+  name: string
+  tags: string[] | null
+  created_at: string
+  template_json: any
+}
 
-// The placeholder component is now removed, as we are importing the real one.
+type WeekDay = { date: string; focus: string; exercises: any[] }
 
-// TODO: Move this to a library file (e.g., lib/workout-plans.ts)
-async function fetchWorkoutPlan(clientId: number, date: Date) {
-  console.log(`Fetching workout plan for client ${clientId} on ${format(date, "yyyy-MM-dd")}`)
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+const weekdayOrder: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
-  // In a real implementation, you would query your Supabase 'schedule' table
-  // For now, we return a mock plan for demonstration purposes.
-  // Replace this with a real Supabase query.
-  const { data, error } = await supabase
-    .from('schedule')
-    .select('*')
-    .eq('client_id', clientId)
-    .eq('type', 'workout')
-    .gte('for_date', format(date, 'yyyy-MM-dd'))
-    .lte('for_date', format(new Date(date.getTime() + 6 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd')) // for the next 7 days
-    .order('for_date', { ascending: true });
+function toWeekdayKey(dateStr: string): WeekdayKey {
+  const d = new Date(dateStr)
+  // getDay(): 0=Sun ... 6=Sat
+  const idx = d.getDay()
+  return ['sun','mon','tue','wed','thu','fri','sat'][idx] as WeekdayKey
+}
 
-  if (error) {
-    console.error("Error fetching workout plan:", error);
-    return null;
+function startOfWeekMonday(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay() // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1) - day // move to Monday
+  const res = new Date(d)
+  res.setDate(d.getDate() + diff)
+  res.setHours(0,0,0,0)
+  return res
+}
+
+function mapTemplateToWeek(templateJson: any, selectedDate: Date): WeekDay[] {
+  // Compute Monday of the selected week
+  const weekStart = startOfWeekMonday(selectedDate)
+  
+  // Check if this is a 30-day template
+  if (templateJson?.duration === '30day' && templateJson?.weeks) {
+    // For 30-day templates, we need to determine which week to use
+    // For now, we'll use the first week (week 1)
+    const firstWeek = templateJson.weeks[0];
+    const byWeekday = firstWeek?.days_by_weekday;
+    
+    const result: WeekDay[] = []
+    weekdayOrder.forEach((wk, idx) => {
+      const dateStr = format(addDays(weekStart, idx), 'yyyy-MM-dd')
+      const src = byWeekday?.[wk];
+      const focus = String(src?.focus ?? 'Workout')
+      const srcExercises = Array.isArray(src?.exercises) ? src.exercises : []
+      const exercises = srcExercises.map((ex: any) => ({
+        exercise: String(ex.exercise ?? ''),
+        category: String(ex.category ?? ''),
+        body_part: String(ex.body_part ?? ''),
+        sets: String(ex.sets ?? ''),
+        reps: String(ex.reps ?? ''),
+        duration: String(ex.duration ?? ''),
+        weight: String(ex.weight ?? ''),
+        equipment: String(ex.equipment ?? ''),
+        coach_tip: String(ex.coach_tip ?? ''),
+        rest: String(ex.rest ?? ''),
+        video_link: String(ex.video_link ?? ''),
+        date: dateStr,
+      }))
+      result.push({ date: dateStr, focus, exercises })
+    })
+    return result;
+  } else {
+    // For 7-day templates, use the traditional days_by_weekday structure
+    const byWeekday = templateJson?.days_by_weekday
+    const hasByWeekday = byWeekday && typeof byWeekday === 'object'
+
+    const result: WeekDay[] = []
+    weekdayOrder.forEach((wk, idx) => {
+      const dateStr = format(addDays(weekStart, idx), 'yyyy-MM-dd')
+      const src = hasByWeekday ? byWeekday[wk] : (Array.isArray(templateJson?.days) ? templateJson.days[idx] : null)
+      const focus = String(src?.focus ?? 'Workout')
+      const srcExercises = Array.isArray(src?.exercises) ? src.exercises : []
+      const exercises = srcExercises.map((ex: any) => ({
+        exercise: String(ex.exercise ?? ''),
+        category: String(ex.category ?? ''),
+        body_part: String(ex.body_part ?? ''),
+        sets: String(ex.sets ?? ''),
+        reps: String(ex.reps ?? ''),
+        duration: String(ex.duration ?? ''),
+        weight: String(ex.weight ?? ''),
+        equipment: String(ex.equipment ?? ''),
+        coach_tip: String(ex.coach_tip ?? ''),
+        rest: String(ex.rest ?? ''),
+        video_link: String(ex.video_link ?? ''),
+        date: dateStr,
+      }))
+      result.push({ date: dateStr, focus, exercises })
+    })
+    return result
   }
+}
 
-  // Return some mock data if nothing is found for demonstration
-  if (!data || data.length === 0) {
-    return null;
+function buildTemplateFromWeek(week: WeekDay[], tags: string[] = [], duration: '7day' | '30day' = '7day') {
+  if (duration === '7day') {
+    // Build a days_by_weekday structure; dates are ignored in storage
+    const days_by_weekday: Record<WeekdayKey, { focus: string; exercises: any[] }> = {
+      mon: { focus: 'Workout', exercises: [] },
+      tue: { focus: 'Workout', exercises: [] },
+      wed: { focus: 'Workout', exercises: [] },
+      thu: { focus: 'Workout', exercises: [] },
+      fri: { focus: 'Workout', exercises: [] },
+      sat: { focus: 'Workout', exercises: [] },
+      sun: { focus: 'Workout', exercises: [] },
+    }
+    week.forEach(day => {
+      const key = toWeekdayKey(day.date)
+      days_by_weekday[key] = {
+        focus: String(day.focus ?? 'Workout'),
+        exercises: (day.exercises || []).map((ex: any) => ({
+          exercise: String(ex.exercise ?? ''),
+          category: String(ex.category ?? ''),
+          body_part: String(ex.body_part ?? ''),
+          sets: String(ex.sets ?? ''),
+          reps: String(ex.reps ?? ''),
+          duration: String(ex.duration ?? ''),
+          weight: String(ex.weight ?? ''),
+          equipment: String(ex.equipment ?? ''),
+          coach_tip: String(ex.coach_tip ?? ''),
+          rest: String(ex.rest ?? ''),
+          video_link: String(ex.video_link ?? ''),
+        }))
+      }
+    })
+    return { tags, duration: '7day', days_by_weekday }
+  } else {
+    // For 30-day templates, we need to group into weeks
+    const weeks: any[] = [];
+    
+    // Group the week data into 4 weeks (assuming week contains 28 days)
+    for (let weekIndex = 0; weekIndex < 4; weekIndex++) {
+      const weekStart = weekIndex * 7;
+      const weekEnd = weekStart + 7;
+      const weekData = week.slice(weekStart, weekEnd);
+      
+      const days_by_weekday: Record<WeekdayKey, { focus: string; exercises: any[] }> = {
+        mon: { focus: 'Workout', exercises: [] },
+        tue: { focus: 'Workout', exercises: [] },
+        wed: { focus: 'Workout', exercises: [] },
+        thu: { focus: 'Workout', exercises: [] },
+        fri: { focus: 'Workout', exercises: [] },
+        sat: { focus: 'Workout', exercises: [] },
+        sun: { focus: 'Workout', exercises: [] },
+      }
+      
+      weekData.forEach(day => {
+        const key = toWeekdayKey(day.date)
+        days_by_weekday[key] = {
+          focus: String(day.focus ?? 'Workout'),
+          exercises: (day.exercises || []).map((ex: any) => ({
+            exercise: String(ex.exercise ?? ''),
+            category: String(ex.category ?? ''),
+            body_part: String(ex.body_part ?? ''),
+            sets: String(ex.sets ?? ''),
+            reps: String(ex.reps ?? ''),
+            duration: String(ex.duration ?? ''),
+            weight: String(ex.weight ?? ''),
+            equipment: String(ex.equipment ?? ''),
+            coach_tip: String(ex.coach_tip ?? ''),
+            rest: String(ex.rest ?? ''),
+            video_link: String(ex.video_link ?? ''),
+          }))
+        }
+      })
+      
+      weeks.push({
+        week_number: weekIndex + 1,
+        days_by_weekday
+      });
+    }
+    
+    return { tags, duration: '30day', weeks }
   }
-
-  return data;
 }
 
 const FitnessPlansPage = () => {
   const { toast } = useToast()
+
+  // Templates state
+  const [loading, setLoading] = useState(true)
+  const [templates, setTemplates] = useState<WorkoutTemplateRow[]>([])
+  const [filtered, setFiltered] = useState<WorkoutTemplateRow[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<WorkoutTemplateRow | null>(null)
+
+  // Filters
+  const [nameFilter, setNameFilter] = useState('')
+  const [tagFilter, setTagFilter] = useState('') // comma-separated
+
+  // Editing fields for selected template
+  const [editName, setEditName] = useState('')
+  const [editTags, setEditTags] = useState<string[]>([])
+  const [startDate, setStartDate] = useState<Date>(new Date())
+  const [week, setWeek] = useState<WeekDay[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
+
+  // Clients for applying a template to a specific week
   const { clients, loading: clientsLoading } = useClients()
-
-  // State for client and date selection
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined)
-  const [planStartDate, setPlanStartDate] = useState<Date>(new Date())
 
-  // State for data loading and plan storage
-  const [isFetchingPlan, setIsFetchingPlan] = useState(false)
-  const [workoutPlan, setWorkoutPlan] = useState<any | null>(null)
-  
-  // State for AI generation
-  const [isGenerating, setIsGenerating] = useState(false)
-
-  // Effect to fetch the workout plan when client or date changes
   useEffect(() => {
-    if (selectedClientId) {
-      const loadPlan = async () => {
-        setIsFetchingPlan(true)
-        setWorkoutPlan(null) // Clear previous plan
-        const plan = await fetchWorkoutPlan(selectedClientId, planStartDate)
-        setWorkoutPlan(plan)
-        setIsFetchingPlan(false)
+    const load = async () => {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('workout_plan_templates')
+        .select('id, trainer_id, name, tags, created_at, template_json')
+        .order('created_at', { ascending: false })
+      if (error) {
+        console.error('Error loading templates:', error)
+        toast({ title: 'Load Failed', description: error.message, variant: 'destructive' })
+      } else {
+        setTemplates(data as WorkoutTemplateRow[])
+        setFiltered(data as WorkoutTemplateRow[])
       }
-      loadPlan()
+      setLoading(false)
     }
-  }, [selectedClientId, planStartDate])
+    load()
+  }, [])
 
-  const handleGeneratePlan = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedClientId) {
-      toast({
-        title: "No Client Selected",
-        description: "Please select a client before generating a plan.",
-        variant: "destructive",
+  // Apply filters
+  useEffect(() => {
+    const tags = tagFilter
+      .split(',')
+      .map(t => t.trim().toLowerCase())
+      .filter(Boolean)
+    const filteredList = templates.filter(t => {
+      const nameOk = t.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+      const tagsOk = tags.length === 0 || (Array.isArray(t.tags) && tags.every(tag => t.tags!.map(x => x.toLowerCase()).includes(tag)))
+      return nameOk && tagsOk
+    })
+    setFiltered(filteredList)
+  }, [nameFilter, tagFilter, templates])
+
+  // Helpers to summarize template JSON
+  function getExerciseCount(templateJson: any): number {
+    if (templateJson?.duration === '30day' && templateJson?.weeks) {
+      // For 30-day templates, sum exercises across all weeks
+      return templateJson.weeks.reduce((sum: number, week: any) => {
+        const byWeekday = week?.days_by_weekday;
+        if (!byWeekday || typeof byWeekday !== 'object') return sum;
+        return sum + Object.values(byWeekday).reduce((weekSum: number, day: any) => 
+          weekSum + (Array.isArray(day?.exercises) ? day.exercises.length : 0), 0);
+      }, 0);
+    } else {
+      // For 7-day templates, use the traditional structure
+      const byWeekday = templateJson?.days_by_weekday
+      if (!byWeekday || typeof byWeekday !== 'object') return 0
+      return Object.values(byWeekday).reduce((sum: number, day: any) => sum + (Array.isArray(day?.exercises) ? day.exercises.length : 0), 0)
+    }
+  }
+  
+  function getFocusSummary(templateJson: any): string {
+    if (templateJson?.duration === '30day' && templateJson?.weeks) {
+      // For 30-day templates, get focuses from all weeks
+      const focuses: string[] = [];
+      templateJson.weeks.forEach((week: any) => {
+        const byWeekday = week?.days_by_weekday;
+        if (byWeekday && typeof byWeekday === 'object') {
+          Object.values(byWeekday).forEach((d: any) => {
+            const focus = String(d?.focus || '');
+            if (focus && focus !== 'Workout') focuses.push(focus);
+          });
+        }
+      });
+      const unique = Array.from(new Set(focuses));
+      return unique.length ? unique.join(' / ') : '-';
+    } else {
+      // For 7-day templates, use the traditional structure
+      const byWeekday = templateJson?.days_by_weekday
+      if (!byWeekday || typeof byWeekday !== 'object') return '-'
+      const focuses = Object.values(byWeekday)
+        .map((d: any) => String(d?.focus || ''))
+        .filter(Boolean)
+      const unique = Array.from(new Set(focuses))
+      return unique.length ? unique.join(' / ') : '-'
+    }
+  }
+  
+  function getTemplateDuration(templateJson: any): string {
+    return templateJson?.duration === '30day' ? '30-Day' : '7-Day';
+  }
+
+  // When selecting a template, set edit fields and week mapping
+  const handleSelectTemplate = (t: WorkoutTemplateRow) => {
+    setSelectedTemplate(t)
+    setEditName(t.name)
+    setEditTags(Array.isArray(t.tags) ? t.tags : [])
+    const mapped = mapTemplateToWeek(t.template_json, startDate)
+    setWeek(mapped)
+  }
+
+  // Re-map week when start date changes
+  useEffect(() => {
+    if (selectedTemplate) {
+      setWeek(mapTemplateToWeek(selectedTemplate.template_json, startDate))
+    }
+  }, [startDate])
+
+  const handleSaveTemplate = async () => {
+    if (!selectedTemplate) return
+    try {
+      setIsSaving(true)
+      const sourceWeek = editorDraft.current && editorDraft.current.length === 7 ? editorDraft.current : week
+      
+      // Get the duration from the selected template
+      const duration = selectedTemplate.template_json?.duration || '7day';
+      const newJson = buildTemplateFromWeek(sourceWeek, editTags, duration)
+      
+      const { error } = await supabase
+        .from('workout_plan_templates')
+        .update({ name: editName.trim(), tags: editTags, template_json: newJson })
+        .eq('id', selectedTemplate.id)
+      if (error) throw error
+      toast({ title: 'Template Saved', description: 'Template updated successfully.' })
+      // reflect in memory list
+      const updated = templates.map(t => t.id === selectedTemplate.id ? { ...t, name: editName.trim(), tags: editTags, template_json: newJson } : t)
+      setTemplates(updated)
+      // re-apply filters
+      const tags = tagFilter
+        .split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+      const filteredList = updated.filter(t => {
+        const nameOk = t.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+        const tagsOk = tags.length === 0 || (Array.isArray(t.tags) && tags.every(tag => t.tags!.map(x => x.toLowerCase()).includes(tag)))
+        return nameOk && tagsOk
       })
+      setFiltered(filteredList)
+      // update selectedTemplate ref
+      setSelectedTemplate(prev => prev ? { ...prev, name: editName.trim(), tags: editTags, template_json: newJson } as WorkoutTemplateRow : prev)
+    } catch (err: any) {
+      console.error('Save template error:', err)
+      toast({ title: 'Save Failed', description: err.message || 'Unexpected error', variant: 'destructive' })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const applyTemplateToClientWeek = async () => {
+    if (!selectedTemplate) {
+      toast({ title: 'No Template Selected', description: 'Please select a template first.', variant: 'destructive' })
       return
     }
-
-    setIsGenerating(true)
-    try {
-      // The result of this function should now be handled differently.
-      // It should either replace the current view with an editable AI-generated plan,
-      // or be merged into the existing plan.
-      const result = await generateAIWorkoutPlanForReview(selectedClientId)
-      console.log("AI Plan Generated:", result)
-      // For now, we will just toast a success message.
-      // The new table component will handle the result.
-      if(result.success) {
-        toast({
-          title: "AI Plan Generated",
-          description: "The new plan is ready for review.",
-        })
-        // We can temporarily set it as the current workout plan
-        // to see it in the placeholder
-        setWorkoutPlan(result.workoutPlan)
-      } else {
-        throw new Error(result.message || "Unknown error")
-      }
-    } catch (error: any) {
-      toast({
-        title: "AI Generation Failed",
-        description: error.message || "Could not generate workout plan.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsGenerating(false)
+    if (!selectedClientId) {
+      toast({ title: 'No Client Selected', description: 'Please select a client to apply the plan to.', variant: 'destructive' })
+      return
     }
+    try {
+      setIsApplying(true)
+      // For each day, upsert into schedule_preview
+      for (const day of week) {
+        const dateStr = day.date
+        const { data: existing, error: fetchErr } = await supabase
+          .from('schedule_preview')
+          .select('id, summary, details_json')
+          .eq('client_id', selectedClientId)
+          .eq('for_date', dateStr)
+          .eq('type', 'workout')
+        if (fetchErr) throw fetchErr
+        const summary = day.focus || 'Workout'
+        const details_json = { exercises: day.exercises || [] }
+        if (existing && existing.length > 0) {
+          const rowId = existing[0].id
+          const { error: updErr } = await supabase
+            .from('schedule_preview')
+            .update({ summary, details_json })
+            .eq('id', rowId)
+          if (updErr) throw updErr
+        } else {
+          const { error: insErr } = await supabase
+            .from('schedule_preview')
+            .insert({
+              client_id: selectedClientId,
+              type: 'workout',
+              for_date: dateStr,
+              summary,
+              details_json,
+            })
+          if (insErr) throw insErr
+        }
+      }
+      toast({ title: 'Applied', description: 'Template applied to the selected week for the client.' })
+    } catch (err: any) {
+      console.error('Apply template error:', err)
+      toast({ title: 'Apply Failed', description: err.message || 'Unexpected error', variant: 'destructive' })
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
+  // Simple standalone template week editor (date-agnostic)
+  const editorDraft = React.useRef<WeekDay[] | null>(null)
+
+  const TemplateWeekEditor = ({ weekData, onDraftChange }: { weekData: WeekDay[]; onDraftChange: (next: WeekDay[]) => void }) => {
+    const [draft, setDraft] = useState<WeekDay[]>(weekData)
+    useEffect(() => { setDraft(weekData) }, [weekData])
+    useEffect(() => { editorDraft.current = draft; onDraftChange(draft) }, [draft])
+
+    const updateExercise = (dayIdx: number, exIdx: number, field: string, value: any) => {
+      setDraft(prev => {
+        const next = prev.map(d => ({ ...d, exercises: d.exercises.map((e: any) => ({ ...e })) }))
+        const ex = { ...next[dayIdx].exercises[exIdx], [field]: value }
+        next[dayIdx].exercises[exIdx] = ex
+        return next
+      })
+    }
+    const removeExercise = (dayIdx: number, exIdx: number) => {
+      setDraft(prev => {
+        const next = prev.map(d => ({ ...d, exercises: d.exercises.map((e: any) => ({ ...e })) }))
+        next[dayIdx].exercises.splice(exIdx, 1)
+        return next
+      })
+    }
+    const addExercise = (dayIdx: number) => {
+      setDraft(prev => {
+        const next = prev.map(d => ({ ...d, exercises: d.exercises.map((e: any) => ({ ...e })) }))
+        next[dayIdx].exercises.push({
+          exercise: '', category: '', body_part: '', sets: '', reps: '', duration: '', weight: '', equipment: '', coach_tip: '', rest: '', video_link: '', date: prev[dayIdx].date
+        })
+        return next
+      })
+    }
+    const updateFocus = (dayIdx: number, value: string) => {
+      setDraft(prev => {
+        const next = prev.map(d => ({ ...d }))
+        next[dayIdx].focus = value
+        return next
+      })
+    }
+    return (
+      <div className="space-y-3">
+        {weekData.map((day, dayIdx) => (
+          <Card key={dayIdx}>
+            <CardHeader className="py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-gray-500">Day {dayIdx + 1}</div>
+                  <Input value={draft[dayIdx].focus} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateFocus(dayIdx, e.target.value)} className="w-[260px]" />
+                </div>
+                <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={() => addExercise(dayIdx)}>Add Exercise</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-800 border-b">
+                    <th className="text-left p-2">Exercise</th>
+                    <th className="text-left p-2">Category</th>
+                    <th className="text-left p-2">Body Part</th>
+                    <th className="text-left p-2">Sets</th>
+                    <th className="text-left p-2">Reps</th>
+                    <th className="text-left p-2">Rest</th>
+                    <th className="text-left p-2">Weight</th>
+                    <th className="text-left p-2">Duration</th>
+                    <th className="text-left p-2">Equipment</th>
+                    <th className="text-left p-2">Coach Tip</th>
+                    <th className="text-left p-2">Video Link</th>
+                    <th className="text-right p-2 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draft[dayIdx].exercises.map((ex: any, exIdx: number) => (
+                    <tr key={exIdx} className="border-b">
+                      <td className="p-2"><Input value={ex.exercise} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'exercise', e.target.value)} /></td>
+                      <td className="p-2"><Input value={ex.category} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'category', e.target.value)} /></td>
+                      <td className="p-2"><Input value={ex.body_part} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'body_part', e.target.value)} /></td>
+                      <td className="p-2 w-20"><Input value={ex.sets} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'sets', e.target.value)} /></td>
+                      <td className="p-2 w-20"><Input value={ex.reps} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'reps', e.target.value)} /></td>
+                      <td className="p-2 w-24"><Input value={ex.rest} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'rest', e.target.value)} /></td>
+                      <td className="p-2 w-24"><Input value={ex.weight} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'weight', e.target.value)} /></td>
+                      <td className="p-2 w-24"><Input value={ex.duration} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'duration', e.target.value)} /></td>
+                      <td className="p-2"><Input value={ex.equipment} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'equipment', e.target.value)} /></td>
+                      <td className="p-2"><Input value={ex.coach_tip} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'coach_tip', e.target.value)} /></td>
+                      <td className="p-2"><Input value={ex.video_link} onKeyDown={(e)=>e.stopPropagation()} onChange={e => updateExercise(dayIdx, exIdx, 'video_link', e.target.value)} /></td>
+                      <td className="p-2 text-right"><button type="button" className="text-red-600" onMouseDown={(e)=>e.preventDefault()} onClick={() => removeExercise(dayIdx, exIdx)}>✕</button></td>
+                    </tr>
+                  ))}
+                  {day.exercises.length === 0 && (
+                    <tr><td className="p-3 text-muted-foreground" colSpan={12}>Rest Day</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
   }
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Top: Filters and Templates Grid */}
       <div className="space-y-4">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Workout Plans</h1>
-            <p className="text-muted-foreground">
-              View, edit, and create workout plans for your clients.
-            </p>
-          </div>
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight">Plan Library</h1>
+          <p className="text-muted-foreground">Filter and select a saved plan template. Edit below and save updates.</p>
         </header>
 
-        {/* TEST: Date Picker Test Component */}
         <Card>
-          <CardHeader>
-            <CardTitle>Date Picker Test</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DatePickerTest />
+          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label>Filter by Name</Label>
+              <Input value={nameFilter} onChange={e => setNameFilter(e.target.value)} placeholder="e.g., Strength" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Filter by Tags (comma separated)</Label>
+              <Input value={tagFilter} onChange={e => setTagFilter(e.target.value)} placeholder="e.g., strength, beginner" />
+            </div>
           </CardContent>
         </Card>
 
-        {/* Control Bar: Client and Date Selection */}
         <Card>
-          <CardContent className="p-4 flex flex-col sm:flex-row items-center gap-4">
-            <div className="grid gap-2 w-full sm:w-auto">
-              <Label htmlFor="client-select">Select Client</Label>
+          <CardHeader>
+            <CardTitle>Templates</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="text-muted-foreground">No templates match your filters.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[25%]">Template Name</TableHead>
+                      <TableHead className="w-[25%]">Tags</TableHead>
+                      <TableHead className="w-[10%]">Duration</TableHead>
+                      <TableHead className="w-[15%]"># Exercises</TableHead>
+                      <TableHead className="w-[25%]">Focus</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map(t => (
+                      <TableRow
+                        key={t.id}
+                        className={`cursor-pointer ${selectedTemplate?.id === t.id ? 'bg-gray-50 dark:bg-gray-900' : ''}`}
+                        onClick={() => handleSelectTemplate(t)}
+                      >
+                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(t.tags || []).map(tag => (
+                              <Badge key={tag} variant="secondary">{tag}</Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getTemplateDuration(t.template_json) === '30-Day' ? 'default' : 'secondary'}>
+                            {getTemplateDuration(t.template_json)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getExerciseCount(t.template_json)}</TableCell>
+                        <TableCell className="truncate max-w-[360px]">{getFocusSummary(t.template_json)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bottom: Selected Template Editor and Week Table */}
+      <div className="mt-6 space-y-4">
+        {selectedTemplate ? (
+          <>
+        <Card>
+              <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                  <Label>Template Name</Label>
+                  <Input value={editName} onChange={e => setEditName(e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Tags (comma to add)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Add a tag and press Enter"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const value = (e.target as HTMLInputElement).value.trim()
+                          if (value && !editTags.includes(value)) setEditTags(prev => [...prev, value])
+                          ;(e.target as HTMLInputElement).value = ''
+                }
+              }}
+            />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {editTags.map(tag => (
+                      <Badge key={tag} variant="secondary" className="flex items-center gap-1">
+                        {tag}
+                        <button type="button" className="text-xs" onMouseDown={(e)=>e.preventDefault()} onClick={() => setEditTags(prev => prev.filter(t => t !== tag))}>✕</button>
+                      </Badge>
+                    ))}
+                    {editTags.length === 0 && (
+                      <span className="text-xs text-muted-foreground">No tags</span>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Apply To Client</Label>
               {clientsLoading ? (
-                <p>Loading clients...</p>
-              ) : (
-                <Select
-                  value={selectedClientId?.toString() ?? ""}
-                  onValueChange={(value) => setSelectedClientId(Number(value))}
-                >
-                  <SelectTrigger className="w-full sm:w-[280px]">
-                    <SelectValue placeholder="Select a client" />
+                    <div className="text-sm text-muted-foreground">Loading clients…</div>
+                  ) : (
+                    <Select value={selectedClientId?.toString() ?? ''} onValueChange={(v) => setSelectedClientId(Number(v))}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select client" />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
-                      </SelectItem>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
-            </div>
-            <div className="grid gap-2 w-full sm:w-auto">
-              <Label htmlFor="date-select">Plan Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className="w-full sm:w-[280px] justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(planStartDate, "PPP")}
+                  <div className="flex items-center gap-2 justify-end mt-2">
+                    <Button type="button" variant="outline" onClick={handleSaveTemplate} disabled={isSaving}>
+                      {isSaving ? 'Saving…' : 'Save Template'}
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={planStartDate}
-                    onSelect={(date) => date && setPlanStartDate(date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="ml-auto pt-4 sm:pt-0">
-              <Button onClick={handleGeneratePlan} disabled={isGenerating || !selectedClientId}>
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  "Generate with AI"
-                )}
+                    <Button type="button" onClick={applyTemplateToClientWeek} disabled={isApplying || !selectedClientId}>
+                      {isApplying ? 'Applying…' : 'Apply to Week'}
               </Button>
+                  </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Plan Display Area */}
-        <div className="mt-6">
-          {!selectedClientId ? (
-            <Card className="flex items-center justify-center h-64">
-              <p className="text-muted-foreground">Please select a client to view their workout plan.</p>
-            </Card>
-          ) : isFetchingPlan ? (
-            <Card className="flex items-center justify-center h-64">
-              <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
-              <p>Loading workout plan...</p>
-            </Card>
-          ) : workoutPlan ? (
-            // Replace the placeholder with the real component
-            <WorkoutPlanTable initialPlanData={workoutPlan} clientId={selectedClientId} />
-          ) : (
-            <Card className="flex flex-col items-center justify-center h-64 text-center">
-               <h3 className="text-lg font-semibold">No Workout Plan Found</h3>
-              <p className="text-muted-foreground mt-2">
-                No plan found for the selected week.
-              </p>
-              <Button onClick={handleGeneratePlan} disabled={isGenerating} className="mt-4">
-                 {isGenerating ? 'Generating...' : 'Generate a new plan with AI'}
-              </Button>
+            <TemplateWeekEditor weekData={week} onDraftChange={setWeek} />
+          </>
+        ) : (
+          <Card className="flex items-center justify-center h-48">
+            <div className="text-muted-foreground">Select a template above to view and edit its workouts.</div>
             </Card>
           )}
-        </div>
       </div>
     </div>
   )
