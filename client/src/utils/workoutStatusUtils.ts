@@ -275,13 +275,13 @@ export function getStatusDisplay(status: WorkoutStatus, isMonthly = false) {
   switch (status) {
     case 'approved':
       return {
-        text: isMonthly ? 'All Weeks Approved' : 'Approved Plan',
+        text: isMonthly ? 'All Weeks Approved' : 'Current Plan Approved',
         className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
         icon: '✅'
       };
     case 'draft':
       return {
-        text: isMonthly ? 'Some Weeks Need Approval' : 'Draft Plan',
+        text: isMonthly ? 'Some Weeks Need Approval' : 'Current Plan Draft',
         className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700',
         icon: '📝'
       };
@@ -294,7 +294,7 @@ export function getStatusDisplay(status: WorkoutStatus, isMonthly = false) {
     case 'no_plan':
     default:
       return {
-        text: isMonthly ? 'No Plans This Month' : 'No Plan',
+        text: isMonthly ? 'No Plans This Month' : 'No Current Plan',
         className: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700',
         icon: '⚪'
       };

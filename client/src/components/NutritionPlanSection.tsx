@@ -77,7 +77,6 @@ interface ScheduleItem {
   task: string;
   summary: string;
   coach_tip?: string;
-  recipe?: string; // Recipe instructions
   details_json: object;
   for_time: string;
   icon?: string;
@@ -409,7 +408,7 @@ const NutritionPlanSection = ({
       // Fetch from schedule_preview ONLY
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
-        .select('*')
+        .select('id, client_id, for_date, type, task, summary, coach_tip, details_json, for_time, icon, is_approved')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
@@ -437,7 +436,7 @@ const NutritionPlanSection = ({
                  ...item.details_json,
                  amount: item.details_json.amount,
                  coach_tip: item.coach_tip,
-                 recipe: item.recipe
+                 recipe: item.details_json.recipe
                };
               if (newMealItemsData[dayOfWeek] && newMealItemsData[dayOfWeek][mealType]) {
                 // Replace the first meal (or add if empty)
@@ -545,7 +544,7 @@ const NutritionPlanSection = ({
 
       const { data: existingData, error: fetchError } = await supabase
         .from('schedule_preview')
-        .select('*')
+        .select('id, client_id, for_date, type, task, summary, coach_tip, details_json, for_time, icon, is_approved')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
@@ -569,13 +568,13 @@ const NutritionPlanSection = ({
                task: task,
                summary: `${task}: ${mealData.meal}`,
                coach_tip: mealData.coach_tip,
-               recipe: mealData.recipe,
                details_json: {
                  calories: mealData.calories || 0,
                  protein: mealData.protein || 0,
                  carbs: mealData.carbs || 0,
                  fats: mealData.fats || 0,
                  amount: mealData.amount,
+                 recipe: mealData.recipe || null, // Store recipe in details_json, null if not provided
                },
                for_time: mealTimes[mealType as keyof typeof mealTimes],
                icon: '🍽️', // Fork and plate emoji
@@ -733,13 +732,13 @@ const NutritionPlanSection = ({
                task: mealType.charAt(0).toUpperCase() + mealType.slice(1),
                summary: `${mealType.charAt(0).toUpperCase() + mealType.slice(1)}: ${meal.name}`,
                coach_tip: meal.coach_tip,
-               recipe: meal.recipe,
                details_json: {
                  calories: meal.calories,
                  protein: meal.protein,
                  carbs: meal.carbs,
                  fats: meal.fats,
                  amount: meal.amount,
+                 recipe: meal.recipe || null, // Store recipe in details_json, null if not provided by LLM
                },
                for_time: mealTimes[mealType as keyof typeof mealTimes],
                icon: '🍽️', // Fork and plate emoji
@@ -837,12 +836,56 @@ const NutritionPlanSection = ({
     return 'partial_approved';
   };
 
+  // --- Utility function for individual meal upsert (fallback) ---
+  const upsertMeal = async (mealData: any) => {
+    // Check if a meal already exists for this client, date, type, and task
+    const { data: existingMeal, error: checkError } = await supabase
+      .from('schedule')
+      .select('id')
+      .eq('client_id', mealData.client_id)
+      .eq('for_date', mealData.for_date)
+      .eq('type', mealData.type)
+      .eq('task', mealData.task)
+      .single();
+    
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw checkError;
+    }
+    
+    if (existingMeal) {
+      // Update existing meal
+      const { error: updateError } = await supabase
+        .from('schedule')
+        .update({
+          summary: mealData.summary,
+          coach_tip: mealData.coach_tip,
+          details_json: mealData.details_json,
+          for_time: mealData.for_time,
+          icon: mealData.icon
+        })
+        .eq('id', existingMeal.id);
+      
+      if (updateError) throw updateError;
+      return { action: 'updated', id: existingMeal.id };
+    } else {
+      // Insert new meal
+      const { error: insertError } = await supabase
+        .from('schedule')
+        .insert([mealData]);
+      
+      if (insertError) throw insertError;
+      return { action: 'inserted', id: null };
+    }
+  };
+
   // --- Enhanced Approval Status Check ---
   const checkApprovalStatus = async () => {
     if (!clientId) return;
     try {
+      console.log('📋 Status Check Debug - Starting approval status check...');
       const startDateString = normalizeDateForStorage(format(planStartDate, 'yyyy-MM-dd'));
       const endDateString = normalizeDateForStorage(format(addDays(planStartDate, 6), 'yyyy-MM-dd'));
+      
       // Get all preview rows for the week
       const { data: previewData, error: previewError } = await supabase
         .from('schedule_preview')
@@ -852,6 +895,10 @@ const NutritionPlanSection = ({
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
       if (previewError) console.error('Preview check error:', previewError);
+      
+      console.log('📋 Status Check Debug - Preview data found:', previewData?.length || 0, 'records');
+      console.log('📋 Status Check Debug - Sample preview records:', previewData?.slice(0, 3).map(r => ({ id: r.id, for_date: r.for_date, is_approved: r.is_approved })));
+      
       // Get all schedule rows for the week
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('schedule')
@@ -861,9 +908,14 @@ const NutritionPlanSection = ({
         .gte('for_date', startDateString)
         .lte('for_date', endDateString);
       if (scheduleError) console.error('Schedule check error:', scheduleError);
+      
+      console.log('📋 Status Check Debug - Schedule data found:', scheduleData?.length || 0, 'records');
+      
       setHasExistingSchedule(!!(scheduleData && scheduleData.length > 0));
+      
       // Use previewData for status
       const status = getApprovalStatusFromPreview(previewData || [], planStartDate);
+      console.log('📋 Status Check Debug - Calculated status:', status);
       setApprovalStatus(status);
     } catch (error) {
       setApprovalStatus('pending');
@@ -891,7 +943,7 @@ const NutritionPlanSection = ({
       // Fetch preview data
       const { data: previewData, error: fetchError } = await supabase
         .from('schedule_preview')
-        .select('*')
+        .select('id, client_id, for_date, type, task, summary, coach_tip, details_json, for_time, icon, is_approved')
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
@@ -901,42 +953,307 @@ const NutritionPlanSection = ({
         toast({ title: "No Plan to Approve", description: "No nutrition plan found in preview to approve.", variant: "destructive" });
         return;
       }
-      // Delete existing schedule data for the week
-      const { error: deleteError } = await supabase
+      console.log('📋 Approval Debug - Date range:', { startDateString, endDateString });
+      console.log('📋 Approval Debug - Preview data found:', previewData.length, 'records');
+      console.log('📋 Approval Debug - Sample preview record:', previewData[0]);
+      // Copy preview data to schedule
+      // Note: The schedule table has a unique constraint on (client_id, for_date, type)
+      // So we need to handle multiple meals per day differently
+      const scheduleRows = previewData.map(({ is_approved, ...rest }) => rest);
+      
+      // Remove any potential duplicates based on client_id, for_date, type, and task
+      const uniqueRows = scheduleRows.filter((row, index, self) => 
+        index === self.findIndex(r => 
+          r.client_id === row.client_id && 
+          r.for_date === row.for_date && 
+          r.type === row.type && 
+          r.task === row.task
+        )
+      );
+      
+      console.log('📋 Approval Debug - Original rows:', scheduleRows.length);
+      console.log('📋 Approval Debug - Unique rows after deduplication:', uniqueRows.length);
+      console.log('📋 Approval Debug - Sample schedule row:', uniqueRows[0]);
+      
+      // Check if there are multiple meals per day that would violate the unique constraint
+      const mealsPerDay = new Map();
+      uniqueRows.forEach(row => {
+        const key = `${row.client_id}-${row.for_date}-${row.type}`;
+        if (!mealsPerDay.has(key)) {
+          mealsPerDay.set(key, []);
+        }
+        mealsPerDay.get(key).push(row);
+      });
+      
+      // Debug: Check for duplicate constraint violations
+      console.log('📋 Approval Debug - Checking for constraint violations...');
+      mealsPerDay.forEach((meals, key) => {
+        if (meals.length > 1) {
+          console.log(`📋 Approval Debug - Multiple meals for key "${key}":`, meals.map((m: any) => ({ task: m.task, summary: m.summary })));
+        }
+      });
+      
+      // The unique constraint is on (client_id, for_date, type), but we have multiple meals per day
+      // Since we can't change the type field, we need to insert meals one by one to avoid the constraint violation
+      console.log('📋 Approval Debug - Will insert meals one by one to avoid constraint violation');
+      
+      // Check what exists in schedule table before deleting
+      console.log('📋 Approval Debug - Checking schedule table before delete...');
+      const { data: beforeDeleteData, error: beforeDeleteError } = await supabase
+        .from('schedule')
+        .select('id, client_id, for_date, type, task')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      
+      if (beforeDeleteError) {
+        console.error('📋 Approval Debug - Before delete check error:', beforeDeleteError);
+      } else {
+        console.log('📋 Approval Debug - Schedule table before delete:', {
+          count: beforeDeleteData?.length || 0,
+          data: beforeDeleteData?.map(r => ({ id: r.id, for_date: r.for_date, task: r.task }))
+        });
+      }
+      
+      // Delete any existing meal records for this client and date range first
+      // This avoids the unique constraint violation
+      console.log('📋 Approval Debug - About to delete from schedule table...');
+      const { data: deleteResult, error: scheduleDeleteError } = await supabase
         .from('schedule')
         .delete()
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
-        .lte('for_date', endDateString);
-      if (deleteError) throw deleteError;
-      // Copy preview data to schedule
-      const scheduleRows = previewData.map(({ is_approved, ...rest }) => rest);
-      const { error: insertError } = await supabase
+        .lte('for_date', endDateString)
+        .select('id'); // Add select to see what was deleted
+      
+      if (scheduleDeleteError) {
+        console.error('📋 Approval Debug - Schedule delete error:', scheduleDeleteError);
+        throw scheduleDeleteError;
+      }
+      
+      console.log('📋 Approval Debug - Delete result:', {
+        rowsDeleted: deleteResult?.length || 0,
+        deletedIds: deleteResult?.map(r => r.id)
+      });
+      
+      // Verify that the records were actually deleted
+      console.log('📋 Approval Debug - Verifying deletion...');
+      const { data: afterDeleteData, error: afterDeleteError } = await supabase
         .from('schedule')
-        .insert(scheduleRows);
-      if (insertError) throw insertError;
+        .select('id, client_id, for_date, type, task')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      
+      if (afterDeleteError) {
+        console.error('📋 Approval Debug - After delete check error:', afterDeleteError);
+      } else {
+        console.log('📋 Approval Debug - Schedule table after delete:', {
+          count: afterDeleteData?.length || 0,
+          data: afterDeleteData?.map(r => ({ id: r.id, for_date: r.for_date, task: r.task }))
+        });
+      }
+      
+      console.log('📋 Approval Debug - Schedule rows to insert:', uniqueRows.length);
+      console.log('📋 Approval Debug - Sample schedule row:', uniqueRows[0]);
+      
+      // Debug: Log all rows being inserted to check for duplicates
+      console.log('📋 Approval Debug - All rows being inserted:');
+      uniqueRows.forEach((row: any, index: number) => {
+        console.log(`Row ${index + 1}:`, {
+          client_id: row.client_id,
+          for_date: row.for_date,
+          type: row.type,
+          task: row.task,
+          summary: row.summary
+        });
+      });
+      
+      // Batch upsert meals using Supabase's upsert functionality
+      console.log('📋 Approval Debug - Batch upserting meals...');
+      
+      // Use Supabase's upsert with onConflict option
+      const { data: upsertData, error: upsertError } = await supabase
+        .from('schedule')
+        .upsert(uniqueRows, {
+          onConflict: 'client_id,for_date,type,task', // This requires the constraint to include task
+          ignoreDuplicates: false
+        });
+      
+      if (upsertError) {
+        console.error('📋 Approval Debug - Batch upsert error:', upsertError);
+        console.log('📋 Approval Debug - Error details:', {
+          message: upsertError.message,
+          details: upsertError.details,
+          hint: upsertError.hint,
+          code: upsertError.code
+        });
+        
+        // If batch upsert fails due to constraint, fallback to individual upserts
+        if (upsertError.code === '23505') { // Unique constraint violation
+          console.log('📋 Approval Debug - Constraint violation, falling back to individual upserts...');
+          let upsertResults: any[] = [];
+          
+          for (let i = 0; i < uniqueRows.length; i++) {
+            const row = uniqueRows[i];
+            
+            try {
+              const result = await upsertMeal(row);
+              console.log(`📋 Approval Debug - Meal ${i + 1}: ${row.task} for ${row.for_date} - ${result.action}`);
+              upsertResults.push({ row: i + 1, result });
+            } catch (error: any) {
+              console.error(`📋 Approval Debug - Error upserting meal ${i + 1}:`, error);
+              throw error;
+            }
+          }
+          
+          console.log('📋 Approval Debug - Individual upsert summary:', {
+            total: upsertResults.length,
+            updated: upsertResults.filter(r => r.result.action === 'updated').length,
+            inserted: upsertResults.filter(r => r.result.action === 'inserted').length
+          });
+        } else {
+          throw upsertError;
+        }
+      } else {
+        console.log('📋 Approval Debug - Batch upsert successful for', uniqueRows.length, 'meals');
+      }
+      // Check what data exists in schedule_preview before updating
+      console.log('📋 Approval Debug - Checking schedule_preview data before update...');
+      const { data: beforeUpdateData, error: beforeUpdateError } = await supabase
+        .from('schedule_preview')
+        .select('*') // Select all columns to see the actual table structure
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString)
+        .limit(1); // Just get one row to see the structure
+      
+      if (beforeUpdateError) {
+        console.error('📋 Approval Debug - Before update check error:', beforeUpdateError);
+      } else {
+        console.log('📋 Approval Debug - Table structure sample:', beforeUpdateData?.[0]);
+        console.log('📋 Approval Debug - Available columns:', beforeUpdateData?.[0] ? Object.keys(beforeUpdateData[0]) : 'No data');
+      }
+      
+      // Now get all the data for the update
+      const { data: allBeforeUpdateData, error: allBeforeUpdateError } = await supabase
+        .from('schedule_preview')
+        .select('id, is_approved, for_date, type, client_id')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
+        .lte('for_date', endDateString);
+      
+      if (allBeforeUpdateError) {
+        console.error('📋 Approval Debug - All before update check error:', allBeforeUpdateError);
+      } else {
+        console.log('📋 Approval Debug - Before update data:', {
+          count: allBeforeUpdateData?.length || 0,
+          data: allBeforeUpdateData?.map(r => ({ id: r.id, for_date: r.for_date, is_approved: r.is_approved, type: r.type, client_id: r.client_id }))
+        });
+      }
+      
       // Set is_approved=true for all days in preview
-      const { error: updateError } = await supabase
+      console.log('📋 Approval Debug - About to update is_approved in schedule_preview...');
+      console.log('📋 Approval Debug - Update criteria:', {
+        client_id: clientId,
+        type: 'meal',
+        for_date_gte: startDateString,
+        for_date_lte: endDateString
+      });
+      
+      const { data: updateData, error: updateError } = await supabase
         .from('schedule_preview')
         .update({ is_approved: true })
         .eq('client_id', clientId)
         .eq('type', 'meal')
         .gte('for_date', startDateString)
+        .lte('for_date', endDateString)
+        .select('id, is_approved, for_date'); // Add select to see what was updated
+      
+      if (updateError) {
+        console.error('📋 Approval Debug - Update error:', updateError);
+        throw updateError;
+      }
+      
+      console.log('📋 Approval Debug - Update result:', {
+        rowsUpdated: updateData?.length || 0,
+        updateData: updateData
+      });
+      
+      // If no rows were updated, try a different approach
+      if (!updateData || updateData.length === 0) {
+        console.log('📋 Approval Debug - No rows updated, trying alternative approach...');
+        
+        // Try updating by individual IDs
+        if (beforeUpdateData && beforeUpdateData.length > 0) {
+          const idsToUpdate = beforeUpdateData.map(row => row.id);
+          console.log('📋 Approval Debug - Trying to update by IDs:', idsToUpdate);
+          
+          const { data: individualUpdateData, error: individualUpdateError } = await supabase
+            .from('schedule_preview')
+            .update({ is_approved: true })
+            .in('id', idsToUpdate)
+            .select('id, is_approved, for_date');
+          
+          if (individualUpdateError) {
+            console.error('📋 Approval Debug - Individual update error:', individualUpdateError);
+          } else {
+            console.log('📋 Approval Debug - Individual update result:', {
+              rowsUpdated: individualUpdateData?.length || 0,
+              updateData: individualUpdateData
+            });
+          }
+        }
+      }
+      
+      // Verify that is_approved was set correctly
+      const { data: verificationData, error: verificationError } = await supabase
+        .from('schedule_preview')
+        .select('id, is_approved, for_date')
+        .eq('client_id', clientId)
+        .eq('type', 'meal')
+        .gte('for_date', startDateString)
         .lte('for_date', endDateString);
-      if (updateError) throw updateError;
-      toast({ title: "Plan Approved", description: "The nutrition plan has been approved and saved to the main schedule." });
+      
+      if (verificationError) {
+        console.error('📋 Approval Debug - Verification error:', verificationError);
+      } else {
+        console.log('📋 Approval Debug - Verification data:', verificationData?.length || 0, 'records');
+        console.log('📋 Approval Debug - is_approved values:', verificationData?.map(r => ({ id: r.id, for_date: r.for_date, is_approved: r.is_approved })));
+        
+        // Check if any rows have is_approved = true
+        const approvedRows = verificationData?.filter(r => r.is_approved === true) || [];
+        console.log('📋 Approval Debug - Rows with is_approved = true:', approvedRows.length);
+        console.log('📋 Approval Debug - All rows should be approved:', verificationData?.every(r => r.is_approved === true));
+      }
+      
+      toast({ title: "Current Plan Approved", description: "The current nutrition plan has been approved and saved to the main schedule." });
+      
       // Update status immediately after approval
       setApprovalStatus('approved');
-      // Force refresh after approval with a small delay to ensure database consistency
+      
+      // Force refresh after approval with a longer delay to ensure database consistency
+      // The database update needs time to be committed before we check the status
       setTimeout(async () => {
+        console.log('📋 Approval Debug - Refreshing status after approval...');
         await checkApprovalStatus();
         await fetchNutritionPlanFromSupabase(clientId, planStartDate);
         setIsApprovalInProgress(false);
-      }, 100);
+      }, 500); // Increased delay to ensure database consistency
     } catch (error: any) {
       console.error("Error approving nutrition plan:", error);
-      toast({ title: "Approval Error", description: "Could not approve the nutrition plan. Please try again.", variant: "destructive" });
+      console.error("Error details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      toast({ title: "Approval Error", description: `Could not approve the nutrition plan: ${error.message || 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsApproving(false);
       setIsApprovalInProgress(false);
@@ -1316,69 +1633,228 @@ const NutritionPlanSection = ({
       { key: 'carbs', label: 'Carbs', unit: 'g', color: 'from-amber-500 to-yellow-500', icon: Wheat },
       { key: 'fats', label: 'Fats', unit: 'g', color: 'from-green-500 to-emerald-500', icon: Droplets },
     ];
+    
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {targetMeta.map(({ key, label, unit, color, icon: Icon }) => (
-          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-3 flex flex-col items-center relative`}>
-            <div className="absolute top-1.5 right-1.5">
-              {editingTarget === key ? (
-                <button
-                  className="text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
-                  onClick={() => setEditingTarget(null)}
-                  title="Cancel Edit"
-                >
-                  ✖️
-                </button>
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        {/* Header Row - Calories + Protein */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg">
+              <Flame className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Calories</div>
+              {editingTarget === 'calories' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('calories', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('calories', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">kcal</span>
+                  {isSavingTarget && editingTarget === 'calories' && <LoadingSpinner size="small" />}
+                </div>
               ) : (
-                <button
-                  className="text-gray-500 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-200"
-                  onClick={() => {
-                    setEditingTarget(key);
-                    setTargetEditValue(clientTargets[key]?.toString() || '');
-                  }}
-                  title={`Edit ${label}`}
-                >
-                  ✏️
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.calories}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">kcal</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('calories');
+                      setTargetEditValue(clientTargets.calories?.toString() || '');
+                    }}
+                    title="Edit Calories"
+                  >
+                    ✏️
+                  </button>
+                </div>
               )}
             </div>
-            <Icon className="h-5 w-5 mb-1.5 text-white drop-shadow" />
-            <div className="text-sm font-bold text-white mb-1">{label}</div>
-            {editingTarget === key ? (
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  value={targetEditValue}
-                  onChange={e => setTargetEditValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      const val = parseInt(targetEditValue, 10);
-                      if (!isNaN(val)) saveClientTarget(key, val);
-                    } else if (e.key === 'Escape') {
-                      setEditingTarget(null);
-                    }
-                  }}
-                  onBlur={() => {
-                    const val = parseInt(targetEditValue, 10);
-                    if (!isNaN(val)) saveClientTarget(key, val);
-                    else setEditingTarget(null);
-                  }}
-                  className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
-                  autoFocus
-                  min={0}
-                  disabled={isSavingTarget}
-                />
-                <span className="text-white font-semibold text-sm">{unit}</span>
-                {isSavingTarget && editingTarget === key && <LoadingSpinner size="small" />}
-              </div>
-            ) : (
-              <div className="text-2xl font-extrabold text-white flex items-center gap-1.5">
-                {clientTargets[key]}
-                <span className="text-sm font-semibold">{unit}</span>
-              </div>
-            )}
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-sky-500 to-blue-500 rounded-lg">
+              <Beef className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Protein</div>
+              {editingTarget === 'protein' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('protein', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('protein', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'protein' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.protein}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('protein');
+                      setTargetEditValue(clientTargets.protein?.toString() || '');
+                    }}
+                    title="Edit Protein"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Row - Carbs + Fats */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-amber-500 to-yellow-500 rounded-lg">
+              <Wheat className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Carbs</div>
+              {editingTarget === 'carbs' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('carbs', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('carbs', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'carbs' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.carbs}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('carbs');
+                      setTargetEditValue(clientTargets.carbs?.toString() || '');
+                    }}
+                    title="Edit Carbs"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+              <Droplets className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Fats</div>
+              {editingTarget === 'fats' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={targetEditValue}
+                    onChange={e => setTargetEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(targetEditValue, 10);
+                        if (!isNaN(val)) saveClientTarget('fats', val);
+                      } else if (e.key === 'Escape') {
+                        setEditingTarget(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(targetEditValue, 10);
+                      if (!isNaN(val)) saveClientTarget('fats', val);
+                      else setEditingTarget(null);
+                    }}
+                    className="w-16 px-1.5 py-0.5 rounded border-2 border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold text-blue-900 dark:text-blue-100 bg-white dark:bg-gray-900 shadow"
+                    autoFocus
+                    min={0}
+                    disabled={isSavingTarget}
+                  />
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">g</span>
+                  {isSavingTarget && editingTarget === 'fats' && <LoadingSpinner size="small" />}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-bold text-gray-900 dark:text-white">
+                    {clientTargets.fats}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">g</span>
+                  <button
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 ml-1"
+                    onClick={() => {
+                      setEditingTarget('fats');
+                      setTargetEditValue(clientTargets.fats?.toString() || '');
+                    }}
+                    title="Edit Fats"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -1609,7 +2085,7 @@ const NutritionPlanSection = ({
             </Button>
           </div>
 
-          {/* Step 3: Approve Plan */}
+          {/* Step 3: Approve Current Plan */}
           {(approvalStatus === 'not_approved' || approvalStatus === 'partial_approved') && (
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
@@ -1629,7 +2105,7 @@ const NutritionPlanSection = ({
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
+                    ✅ Approve Current Plan
                   </>
                 )}
               </Button>

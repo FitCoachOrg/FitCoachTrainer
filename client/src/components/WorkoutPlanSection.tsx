@@ -10,13 +10,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Clock, Dumbbell, Target, Bug, Sparkles, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2 } from "lucide-react"
+import { Clock, Dumbbell, Target, Bug, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 
-// Import the real AI workout plan generator
-import { generateAIWorkoutPlanForReview } from "@/lib/ai-fitness-plan"
+// AI generation removed - using search-based generation as default
 import { checkProviderHealth, getCurrentProvider } from "@/lib/llm-service"
 import AIDebugPopup from "@/components/AIDebugPopup"
 import FitnessPlanOverview from "@/components/FitnessPlanOverview"
@@ -36,6 +35,7 @@ import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor,
 import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
 import WeeklyPlanHeader from './WeeklyPlanHeader';
+import MonthlyPlanGenerator from './MonthlyPlanGenerator';
 import { debounce } from 'lodash';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
 import WorkoutExportButton from './WorkoutExportButton';
@@ -197,7 +197,7 @@ const AIResponsePopup = ({
   onShowMetrics?: () => void
 }) => {
   const [activeTab, setActiveTab] = useState<"table" | "raw">("table")
-  const [workoutPlan, setWorkoutPlan] = useState<any[]>([])
+  const [aiWorkoutPlan, setAiWorkoutPlan] = useState<any[]>([])
   const [isEditing, setIsEditing] = useState(false)
 
   // Parse workout plan from AI response
@@ -252,7 +252,7 @@ const AIResponsePopup = ({
             });
             
             console.log('✅ Cleaned workout plan for popup:', cleanedWorkoutPlan);
-            setWorkoutPlan(cleanedWorkoutPlan)
+            setAiWorkoutPlan(cleanedWorkoutPlan)
           }
         }
       } catch (error) {
@@ -262,7 +262,7 @@ const AIResponsePopup = ({
   }, [aiResponse])
 
   const handleWorkoutChange = (index: number, field: string, value: any) => {
-    const updatedPlan = [...workoutPlan]
+    const updatedPlan = [...aiWorkoutPlan]
     
     // Type validation and conversion
     let processedValue = value;
@@ -284,7 +284,7 @@ const AIResponsePopup = ({
     }
     
     updatedPlan[index] = { ...updatedPlan[index], [field]: processedValue }
-    setWorkoutPlan(updatedPlan)
+    setAiWorkoutPlan(updatedPlan)
   }
 
   const addNewWorkout = () => {
@@ -304,17 +304,17 @@ const AIResponsePopup = ({
       progression_notes: "Increase intensity when RPE ≤ 8",
     }
     console.log('➕ Adding new workout with correct types:', newWorkout)
-    setWorkoutPlan([...workoutPlan, newWorkout])
+    setAiWorkoutPlan([...aiWorkoutPlan, newWorkout])
   }
 
   const removeWorkout = (index: number) => {
-    const updatedPlan = workoutPlan.filter((_, i) => i !== index)
-    setWorkoutPlan(updatedPlan)
+    const updatedPlan = aiWorkoutPlan.filter((_, i) => i !== index)
+    setAiWorkoutPlan(updatedPlan)
   }
 
   const saveChanges = () => {
     setIsEditing(false)
-    console.log("Saved workout plan:", workoutPlan)
+    console.log("Saved workout plan:", aiWorkoutPlan)
   }
 
   if (!isOpen || !aiResponse) return null
@@ -325,7 +325,7 @@ const AIResponsePopup = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-2xl">
             <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-              <Sparkles className="h-6 w-6 text-white" />
+              <Brain className="h-6 w-6 text-white" />
             </div>
             <div>
               <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-bold">
@@ -376,7 +376,7 @@ const AIResponsePopup = ({
                   <div>
                     <h4 className="font-bold text-xl text-gray-900 dark:text-white">Workout Plan</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {workoutPlan.length} exercises • Personalized for your goals
+                      {aiWorkoutPlan.length} exercises • Personalized for your goals
                     </p>
                   </div>
                 </div>
@@ -403,7 +403,7 @@ const AIResponsePopup = ({
                   )}
                 </div>
               </div>
-              {workoutPlan.length > 0 ? (
+              {aiWorkoutPlan.length > 0 ? (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -422,7 +422,7 @@ const AIResponsePopup = ({
                         </tr>
                       </thead>
                       <tbody>
-                        {workoutPlan.map((workout, index) => (
+                        {aiWorkoutPlan.map((workout, index) => (
                           <tr key={index} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                             <td className="p-4">
                               <div className="flex items-center gap-3">
@@ -853,14 +853,17 @@ function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_tim
 }
 
 // Add approvePlan implementation to copy from schedule_preview to schedule
-async function approvePlan(clientId: number, planStartDate: Date) {
+async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'weekly' | 'monthly' = 'weekly') {
   const startTime = performance.now();
   
   try {
-    // 1. Get the week range
+    // 1. Get the date range based on view mode
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
-    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const daysToAdd = viewMode === 'monthly' ? 27 : 6; // 28 days for monthly (0-27), 7 days for weekly (0-6)
+    const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log(`[approvePlan] Approving ${viewMode} plan: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
 
     // 2. Fetch all rows from schedule_preview for this client/week/type
     let previewRows: any[] = [];
@@ -1292,6 +1295,9 @@ const WorkoutPlanSection = ({
   // Week-level approval statuses for monthly view
   const [weekStatuses, setWeekStatuses] = useState<WeekApprovalStatus[]>([]);
 
+  // Monthly Plan Generator state
+  const [isMonthlyGeneratorOpen, setIsMonthlyGeneratorOpen] = useState(false);
+
   // Save Plan for Future (template) state
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [templateTags, setTemplateTags] = useState<string[]>([]);
@@ -1361,9 +1367,23 @@ const WorkoutPlanSection = ({
   }, [client?.workout_days]);
   const { trainer } = useAuth();
   
-  // Monthly view state
-  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  // Monthly view state with localStorage persistence
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>(() => {
+    // Try to get viewMode from localStorage, default to 'weekly'
+    if (clientId) {
+      const savedViewMode = localStorage.getItem(`workoutPlanViewMode_${clientId}`);
+      return (savedViewMode as 'weekly' | 'monthly') || 'weekly';
+    }
+    return 'weekly';
+  });
   const [monthlyData, setMonthlyData] = useState<any[][]>([]);
+  
+  // Persist viewMode changes to localStorage
+  useEffect(() => {
+    if (clientId && viewMode) {
+      localStorage.setItem(`workoutPlanViewMode_${clientId}`, viewMode);
+    }
+  }, [viewMode, clientId]);
   
   // Enhanced UX functions
   const setLoading = (type: LoadingState['type'], message: string) => {
@@ -2078,256 +2098,111 @@ const WorkoutPlanSection = ({
       ];
     }, [client?.workout_days, client?.cl_primary_goal, client?.specific_outcome, client?.goal_timeline, client?.injuries_limitations, client?.training_time_per_session]);
 
+    // Helper function to get user-friendly text
+    const getUserFriendlyText = (key: string, value: string): string => {
+      if (value === 'Not set') return 'Not set';
+      
+      switch (key) {
+        case 'cl_primary_goal':
+          return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        case 'goal_timeline':
+          return value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        case 'specific_outcome':
+          return value.length > 30 ? `${value.substring(0, 30)}...` : value;
+        case 'injuries_limitations':
+          return value.length > 40 ? `${value.substring(0, 40)}...` : value;
+        default:
+          return value;
+      }
+    };
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {targetMeta && targetMeta.length > 0 ? (
-          targetMeta.map(({ key, label, value, icon: Icon, color, type }) => (
-          <div key={key} className={`rounded-xl shadow-md bg-gradient-to-br ${color} p-4 flex flex-col items-center relative`}>
-            <div className="absolute top-2 right-2">
-              {editingTarget === key ? (
-                <button
-                  className="text-white hover:text-gray-200"
-                  onClick={() => setEditingTarget(null)}
-                  title="Cancel Edit"
-                >
-                  ✖️
-                </button>
-              ) : (
-                <button
-                  className="text-white/80 hover:text-white"
-                  onClick={() => {
-                    console.log(`[WorkoutTargetEditGrid] Starting edit for ${key}`);
-                    setEditingTarget(key);
-                    if (key === 'workout_days') {
-                      const value = parseWorkoutDays(client?.workout_days);
-                      console.log(`[WorkoutTargetEditGrid] Setting workout_days value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'training_time_per_session') {
-                      const value = client?.training_time_per_session?.toString() || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting training_time_per_session value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'cl_primary_goal') {
-                      const value = client?.cl_primary_goal || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting cl_primary_goal value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'specific_outcome') {
-                      const value = client?.specific_outcome || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting specific_outcome value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'goal_timeline') {
-                      const value = client?.goal_timeline || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting goal_timeline value: ${value}`);
-                      setTargetEditValue(value);
-                    } else if (key === 'injuries_limitations') {
-                      const value = client?.injuries_limitations || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting injuries_limitations value: ${value}`);
-                      setTargetEditValue(value);
-                    } else {
-                      const value = client?.workout_time || '';
-                      console.log(`[WorkoutTargetEditGrid] Setting workout_time value: ${value}`);
-                      setTargetEditValue(value);
-                    }
-                  }}
-                  title={`Edit ${label}`}
-                >
-                  ✏️
-                </button>
-              )}
+      <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        {/* Header Row - Primary Goal + Timeline */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg">
+              <Target className="h-4 w-4 text-white" />
             </div>
-            {type !== 'days' && <Icon className="h-6 w-6 mb-2 text-white drop-shadow" />}
-            <div className="text-sm font-bold text-white mb-2">{label}</div>
-            {editingTarget === key ? (
-              <div className="flex items-center gap-2 w-full">
-                {type === 'time' ? (
-                  <input
-                    type="time"
-                    value={targetEditValue}
-                    onChange={e => setTargetEditValue(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                    autoFocus
-                    disabled={isSavingTarget}
-                  />
-                ) : type === 'number' ? (
-                  <div className="flex items-center gap-2 w-full">
-                    <input
-                      type="number"
-                      value={targetEditValue}
-                      onChange={e => {
-                        console.log(`[WorkoutTargetEditGrid] Number input changed for ${key}: ${e.target.value}`);
-                        setTargetEditValue(e.target.value);
-                      }}
-                                          onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                      onBlur={() => {
-                        if (targetEditValue) saveWorkoutTarget(key, parseInt(targetEditValue) || 0);
-                        else setEditingTarget(null);
-                      }}
-                      className="w-20 px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                      autoFocus
-                      disabled={isSavingTarget}
-                      min="15"
-                      max="180"
-                      placeholder="45"
-                    />
-                    <span className="text-white text-sm font-semibold">min</span>
-                  </div>
-                ) : type === 'textarea' ? (
-                  <textarea
-                    value={targetEditValue}
-                    onChange={e => {
-                      console.log(`[WorkoutTargetEditGrid] Textarea changed for ${key}: ${e.target.value}`);
-                      setTargetEditValue(e.target.value);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && e.ctrlKey) {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow resize-none"
-                    autoFocus
-                    disabled={isSavingTarget}
-                    placeholder="Enter limitations and constraints..."
-                    rows={3}
-                  />
-                ) : type === 'days' ? (
-                  <div className="w-full">
-                    <div className="grid grid-cols-7 gap-1 mb-2">
-                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
-                        const isSelected = targetEditValue.toLowerCase().includes(day.toLowerCase());
-                        return (
-                          <button
-                            key={day}
-                            onClick={() => {
-                              const currentDays = targetEditValue.split(',').map(d => d.trim()).filter(d => d);
-                              if (isSelected) {
-                                const newDays = currentDays.filter(d => !d.toLowerCase().includes(day.toLowerCase()));
-                                setTargetEditValue(newDays.join(', '));
-                              } else {
-                                const newDays = [...currentDays, day];
-                                setTargetEditValue(newDays.join(', '));
-                              }
-                            }}
-                            className={`w-8 h-8 rounded-full text-xs font-bold transition-all ${
-                              isSelected 
-                                ? 'bg-white text-blue-600 shadow-lg' 
-                                : 'bg-white/20 text-white hover:bg-white/30'
-                            }`}
-                          >
-                            {day}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <input
-                      type="text"
-                      value={targetEditValue}
-                      onChange={e => {
-                        console.log(`[WorkoutTargetEditGrid] Days input changed for ${key}: ${e.target.value}`);
-                        setTargetEditValue(e.target.value);
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          saveWorkoutTarget(key, targetEditValue);
-                        } else if (e.key === 'Escape') {
-                          setEditingTarget(null);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                        else setEditingTarget(null);
-                      }}
-                      className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                      autoFocus
-                      disabled={isSavingTarget}
-                      placeholder="e.g., Monday, Wednesday, Friday"
-                    />
-                  </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Primary Goal</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('cl_primary_goal', targetMeta.find(t => t.key === 'cl_primary_goal')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
+              <Clock className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Timeline</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('goal_timeline', targetMeta.find(t => t.key === 'goal_timeline')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Middle Row - Workout Days + Duration */}
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-200 dark:border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg">
+              <CalendarDays className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Workout Days</div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {targetMeta.find(t => t.key === 'workout_days')?.value !== 'Not set' ? (
+                  targetMeta.find(t => t.key === 'workout_days')?.value.split(',').map((day: string, index: number) => (
+                    <span key={index} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-xs font-medium">
+                      {day.trim()}
+                    </span>
+                  ))
                 ) : (
-                  <input
-                    type="text"
-                    value={targetEditValue}
-                    onChange={e => {
-                      console.log(`[WorkoutTargetEditGrid] Text input changed for ${key}: ${e.target.value}`);
-                      setTargetEditValue(e.target.value);
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        saveWorkoutTarget(key, targetEditValue);
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        setEditingTarget(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (targetEditValue) saveWorkoutTarget(key, targetEditValue);
-                      else setEditingTarget(null);
-                    }}
-                    className="w-full px-2 py-1 rounded border-2 border-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 text-sm font-semibold text-gray-900 bg-white shadow"
-                    autoFocus
-                    disabled={isSavingTarget}
-                    placeholder="e.g., Monday, Wednesday, Friday"
-                  />
-                )}
-                {isSavingTarget && editingTarget === key && (
-                  <div className="text-white text-sm">Saving...</div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Not set</span>
                 )}
               </div>
-            ) : (
-              <div className="text-lg font-bold text-white text-center">
-                {type === 'days' && value !== 'Not set' ? (
-                  <div className="flex flex-wrap justify-center gap-1">
-                    {value.split(',').map((day: string, index: number) => (
-                      <span key={index} className="px-2 py-1 bg-white/20 rounded-full text-sm">
-                        {day.trim()}
-                      </span>
-                    ))}
-                  </div>
-                ) : type === 'textarea' ? (
-                  <div className="text-sm text-white text-left max-h-20 overflow-y-auto">
-                    {value.length > 100 ? `${value.substring(0, 100)}...` : value}
-                  </div>
-                ) : (
-                  <div className="text-sm text-white text-center">
-                    {value.length > 50 ? `${value.substring(0, 50)}...` : value}
-                  </div>
-                )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg">
+              <Clock className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Duration</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {targetMeta.find(t => t.key === 'training_time_per_session')?.value || 'Not set'}
               </div>
-            )}
+            </div>
           </div>
-        ))) : (
-          <div className="col-span-full text-center py-8 text-gray-500">
-            No client data available
+        </div>
+
+        {/* Bottom Row - Specific Outcome + Constraints */}
+        <div className="flex justify-between items-start">
+          <div className="flex items-start gap-2 flex-1">
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg mt-1">
+              <Target className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Specific Outcome</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('specific_outcome', targetMeta.find(t => t.key === 'specific_outcome')?.value || 'Not set')}
+              </div>
+            </div>
           </div>
-        )}
+          <div className="flex items-start gap-2 flex-1">
+            <div className="p-2 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-lg mt-1">
+              <FileText className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">Constraints</div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                {getUserFriendlyText('injuries_limitations', targetMeta.find(t => t.key === 'injuries_limitations')?.value || 'Not set')}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -2498,10 +2373,10 @@ const WorkoutPlanSection = ({
           title: 'Template Plan Loaded',
           description: `Showing plan from ${templateDate} as template for ${currentDate}. You can generate a new plan for this date.`,
           action: (
-            <Button 
-              onClick={() => handleGeneratePlan()} 
+            <Button
+              onClick={() => handleGenerateSearchPlan()}
               size="sm"
-              className="mt-2"
+              className="mt-2 bg-green-600 hover:bg-green-700"
             >
               Generate New Plan
             </Button>
@@ -2705,7 +2580,8 @@ const WorkoutPlanSection = ({
     }
   }, [numericClientId, hasAIGeneratedPlan]);
 
-  // AI generation handler
+  // AI generation removed - using search-based generation as default
+  /*
   const handleGeneratePlan = async () => {
     setAiError(null); // Clear previous error
     if (!numericClientId) {
@@ -2809,20 +2685,52 @@ const WorkoutPlanSection = ({
       clearLoading();
     }
   };
+  */
 
   // Helper to check approval status for the week using unified utility
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string} | null>(null);
+  const [forceRefreshKey, setForceRefreshKey] = useState(0); // Add force refresh mechanism
+const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false); // Collapsible Plan Management state
+  
+  // Force refresh function to trigger immediate status update
+  const forceRefreshStatus = () => {
+    console.log('[forceRefreshStatus] Triggering force refresh...');
+    setForceRefreshKey(prev => prev + 1);
+    // Clear any cached data to force fresh fetch
+    setLastApprovalCheck(null);
+    // Trigger immediate status check
+    checkPlanApprovalStatus();
+  };
   
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
 
-    // Add debouncing to prevent rapid successive calls
-    if (isCheckingApproval) {
+    // Create a unique key for this check
+    const checkKey = {
+      viewMode,
+      clientId: numericClientId,
+      date: planStartDate.toISOString().split('T')[0]
+    };
+
+    // Check if we're already checking the same data (unless it's a force refresh)
+    if (isCheckingApproval && forceRefreshKey === 0) {
       console.log('[checkPlanApprovalStatus] Already running, skipping...');
       return;
     }
 
+    // Check if we've already checked this exact combination recently (unless it's a force refresh)
+    if (lastApprovalCheck && 
+        lastApprovalCheck.viewMode === checkKey.viewMode &&
+        lastApprovalCheck.clientId === checkKey.clientId &&
+        lastApprovalCheck.date === checkKey.date &&
+        forceRefreshKey === 0) {
+      console.log('[checkPlanApprovalStatus] Already checked this combination recently, skipping...');
+      return;
+    }
+
     setIsCheckingApproval(true);
+    setLastApprovalCheck(checkKey);
 
     try {
       console.log(`[checkPlanApprovalStatus] Checking approval status for ${viewMode} view`);
@@ -2834,8 +2742,6 @@ const WorkoutPlanSection = ({
         // For monthly view, get detailed week-by-week status
         const monthlyResult = await checkMonthlyWorkoutStatus(supabase, numericClientId, planStartDate);
         result = monthlyResult;
-
-
 
         // Build week statuses array for UI
         // If no weeklyBreakdown exists, create empty weeks
@@ -2894,8 +2800,37 @@ const WorkoutPlanSection = ({
         // For weekly view, use the existing logic
         result = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
 
-        // Clear week statuses for weekly view
-        setWeekStatuses([]);
+        // Calculate week status for weekly view (single week)
+        const weekStart = planStartDate;
+        const weekEnd = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+        // Check if week has draft data that can be approved
+        const weekPreviewData = result.previewData.filter(day =>
+          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+        );
+
+        const weekScheduleData = result.scheduleData.filter(day =>
+          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
+          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
+        );
+
+        // Can approve if: has preview data AND (no schedule data OR data doesn't match)
+        const hasPreviewData = weekPreviewData.length > 0;
+        const hasScheduleData = weekScheduleData.length > 0;
+        const dataMatches = hasPreviewData && hasScheduleData ?
+          compareWorkoutData(weekPreviewData, weekScheduleData) : false;
+
+        const canApprove = hasPreviewData && (!hasScheduleData || !dataMatches);
+
+        // Set single week status for weekly view
+        setWeekStatuses([{
+          weekNumber: 1,
+          status: result.status === 'partial_approved' ? 'draft' : result.status,
+          startDate: weekStart,
+          endDate: weekEnd,
+          canApprove
+        }]);
       }
 
       console.log('[checkPlanApprovalStatus] Status result:', result);
@@ -2948,6 +2883,10 @@ const WorkoutPlanSection = ({
       });
     } finally {
       setIsCheckingApproval(false);
+      // Reset force refresh key after successful check
+      if (forceRefreshKey > 0) {
+        setForceRefreshKey(0);
+      }
     }
   };
 
@@ -3003,9 +2942,14 @@ const WorkoutPlanSection = ({
   // Removed workoutPlanState.status from dependencies to prevent infinite loop
   useEffect(() => {
     if (numericClientId && planStartDate) {
-      checkPlanApprovalStatus();
+      // Add a small delay to prevent rapid successive calls when viewMode changes
+      const timeoutId = setTimeout(() => {
+        checkPlanApprovalStatus();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [numericClientId, planStartDate, workoutPlan, viewMode]);
+  }, [numericClientId, planStartDate, viewMode]); // Removed workoutPlan from dependencies to prevent loops
 
   // Load date from localStorage when clientId changes
   useEffect(() => {
@@ -3024,6 +2968,62 @@ const WorkoutPlanSection = ({
     }
   }, [clientId]);
 
+  // Monthly generation callbacks
+  const handleMonthlyGenerationComplete = (monthlyPlan: any) => {
+    console.log('✅ Monthly plan generation completed:', monthlyPlan);
+    console.log('📊 Monthly plan structure:', {
+      totalWeeks: monthlyPlan.weeks?.length || 0,
+      weeksWithPlans: monthlyPlan.weeks?.filter((w: any) => w.plan)?.length || 0
+    });
+
+    // Convert monthly plan to weekly format for display
+    const firstWeek = monthlyPlan.weeks?.[0];
+    if (firstWeek && firstWeek.plan && firstWeek.plan.days) {
+      console.log('📅 Setting first week for display:', {
+        weekNumber: firstWeek.weekNumber,
+        daysCount: firstWeek.plan.days.length,
+        startDate: firstWeek.startDate,
+        endDate: firstWeek.endDate
+      });
+
+      const newWorkoutPlan = {
+        week: firstWeek.plan.days,
+        hasAnyWorkouts: firstWeek.plan.days.some((day: any) => day.exercises && day.exercises.length > 0),
+        planStartDate: firstWeek.startDate,
+        planEndDate: firstWeek.endDate
+      };
+
+      setWorkoutPlan(newWorkoutPlan);
+      setHasAIGeneratedPlan(true);
+    } else {
+      console.warn('⚠️ No valid first week found in monthly plan');
+    }
+
+    // Store the full monthly plan for later use
+    if (monthlyPlan.weeks) {
+      const monthlyWeeks = monthlyPlan.weeks.map((week: any) => week.plan?.days || []);
+      setMonthlyData(monthlyWeeks);
+      console.log('💾 Stored monthly data with', monthlyWeeks.length, 'weeks');
+    }
+
+    toast({
+      title: 'Monthly Plan Generated',
+      description: '4-week progressive workout plan created and saved successfully.'
+    });
+
+    setIsMonthlyGeneratorOpen(false);
+  };
+
+  const handleMonthlyGenerationError = (error: string) => {
+    console.error('❌ Monthly plan generation failed:', error);
+    toast({
+      title: 'Monthly Generation Failed',
+      description: error,
+      variant: 'destructive'
+    });
+    setIsMonthlyGeneratorOpen(false);
+  };
+
   // Search-based generation handler
   const handleGenerateSearchPlan = async () => {
     setAiError(null); // Clear previous error
@@ -3031,12 +3031,19 @@ const WorkoutPlanSection = ({
       toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
       return;
     }
-    
+
+    // Check if we're in monthly mode - if so, show the monthly generator modal
+    if (viewMode === 'monthly') {
+      console.log('📅 Monthly mode detected - opening monthly generator modal');
+      setIsMonthlyGeneratorOpen(true);
+      return;
+    }
+
     console.log('🔄 === SEARCH-BASED GENERATION START ===');
     console.log('🔄 Client ID:', numericClientId);
     console.log('🔄 Plan Start Date:', planStartDate.toISOString());
     console.log('🔄 Current loading states:', { isGenerating, isGeneratingSearch });
-    
+
     setLoading('generating', 'Starting search-based workout generation... This may take up to 60 seconds.');
     setIsGeneratingSearch(true);
     
@@ -3197,6 +3204,7 @@ const WorkoutPlanSection = ({
         
         // Refresh approval status after generating and saving plan with timeout protection
         try {
+          console.log('[DEBUG] Triggering approval status check after plan generation...');
           const approvalPromise = checkPlanApprovalStatus();
           await Promise.race([
             approvalPromise,
@@ -3204,6 +3212,7 @@ const WorkoutPlanSection = ({
               setTimeout(() => reject(new Error('Approval check timeout')), 5000)
             )
           ]);
+          console.log('[DEBUG] Approval status check completed after plan generation');
         } catch (approvalError) {
           console.warn('⚠️ Approval status check failed:', approvalError);
           // Don't show error to user for this non-critical operation
@@ -3289,61 +3298,9 @@ const WorkoutPlanSection = ({
           <div>
             <h3 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 whitespace-nowrap">Workout Planning and Management</h3>
             <p className="text-base text-gray-600 dark:text-gray-400 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-500" />
+              <Brain className="h-4 w-4 text-blue-500" />
               AI-powered workout planning and exercise tracking
             </p>
-
-            {/* Enhanced Status Indicator */}
-            <div className="flex items-center gap-2 mt-2">
-              {workoutPlanState.status === 'approved' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-medium border border-green-300 dark:border-green-700">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  ✅ Approved Plan
-                </div>
-              )}
-              {workoutPlanState.status === 'draft' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium border border-blue-300 dark:border-blue-700">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  📝 Draft Plan
-                  {workoutPlanState.hasUnsavedChanges && (
-                    <span className="text-xs">(Unsaved)</span>
-                  )}
-                </div>
-              )}
-              {workoutPlanState.status === 'template' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium border border-purple-300 dark:border-purple-700">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                  📋 Template Plan
-                  {workoutPlanState.templateDate && (
-                    <span className="text-xs">({format(new Date(workoutPlanState.templateDate), 'MMM d')})</span>
-                  )}
-                </div>
-              )}
-              {workoutPlanState.status === 'no_plan' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium border border-gray-300 dark:border-gray-700">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                  ⚪ No Plan
-                </div>
-              )}
-              
-              {/* Loading indicator */}
-              {loadingState.type && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium border border-blue-200 dark:border-blue-800">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  {loadingState.message}
-                </div>
-              )}
-              
-              {/* Auto-save indicator */}
-              {workoutPlanState.isAutoSaving && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded-full text-sm font-medium border border-yellow-200 dark:border-yellow-800">
-                  <Save className="h-3 w-3 animate-spin" />
-                  Auto-saving...
-                </div>
-              )}
-              
-
-            </div>
           </div>
         </div>
 
@@ -3357,87 +3314,21 @@ const WorkoutPlanSection = ({
           Workout Plan Workflow
         </h4>
         
-        {/* Prominent Action Bar - Strategic placement for important actions */}
-        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-lg hover:shadow-xl transition-all duration-300">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 shadow-md">
-                <Save className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h5 className="text-lg font-bold text-blue-900 dark:text-blue-100">Plan Management</h5>
-                <p className="text-sm text-blue-700 dark:text-blue-300">Import, export, or save your workout plans for future use</p>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Import Button - Always available */}
-              <WorkoutImportButton
-                clientId={numericClientId}
-                clientName={client?.name}
-                planStartDate={planStartDate}
-                onImportSuccess={handleImportSuccess}
-                disabled={isGenerating}
-                className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
-                clientWorkoutDays={parsedWorkoutDays}
-              />
-              
-              {/* Export Button - Only show when there's workout data */}
-              {workoutPlan && workoutPlan.hasAnyWorkouts && (
-                <WorkoutExportButton
-                  weekData={getTableData()}
-                  clientId={numericClientId}
-                  planStartDate={planStartDate}
-                  clientName={client?.name}
-                  disabled={isGenerating}
-                  className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
-                  viewMode={viewMode}
-                />
-              )}
-              
-              {/* Save Plan for Future Button - Only show when there's workout data */}
-              {workoutPlan && workoutPlan.hasAnyWorkouts && (
-                <Button 
-                  variant="outline" 
-                  size="default"
-                  className="bg-gradient-to-r from-purple-500 via-indigo-600 to-blue-600 hover:from-purple-600 hover:via-indigo-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
-                  onClick={() => { 
-                    setTemplateTags([]); 
-                    setTemplateTagInput(''); 
-                    setTemplateDuration('7day'); // Default to 7-day
-                    setIsSaveTemplateOpen(true); 
-                  }}
-                >
-                  <Save className="h-4 w-4 mr-2" /> 
-                  Save Plan for Future
-                </Button>
-              )}
-
-              {/* Import Plan Template Button */}
-              <Button 
-                variant="outline" 
-                size="default"
-                className="bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600 hover:from-green-600 hover:via-emerald-700 hover:to-teal-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
-                onClick={() => { 
-                  setIsImportTemplateOpen(true);
-                  loadAvailableTemplates();
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" /> 
-                Import Plan Template
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex flex-row flex-wrap gap-6 items-center">
-          {/* Step 1: Select Plan Start Date */}
-          <div className="flex items-center gap-3">
+        {/* Step 1: Plan Configuration (Combined Date + View Mode) */}
+        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl border-2 border-blue-200 dark:border-blue-700 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
             <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               1
             </div>
-            <div className="flex flex-row items-center gap-3">
-              {/* Step 1: Plan Start Date */}
+            <div>
+              <h5 className="text-lg font-bold text-blue-900 dark:text-blue-100">Plan Configuration</h5>
+              <p className="text-sm text-blue-700 dark:text-blue-300">Select your plan start date and duration</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+            {/* Date Picker */}
+            <div className="flex items-center gap-3">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -3448,7 +3339,7 @@ const WorkoutPlanSection = ({
                     {format(planStartDate, "PPP")}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
                   <Calendar
                     mode="single"
                     selected={planStartDate}
@@ -3472,107 +3363,123 @@ const WorkoutPlanSection = ({
               </Popover>
             </div>
             
-            {/* Warning message for past dates */}
-            {isPastDate(planStartDate) && (
-              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                  <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
-                    Past date selected. Please choose a future date to generate a workout plan.
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+              <Button
+                variant={viewMode === 'weekly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('weekly')}
+                className="text-xs"
+              >
+                <Calendar className="h-3 w-3 mr-1" />
+                7 Days
+              </Button>
+              <Button
+                variant={viewMode === 'monthly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('monthly')}
+                className="text-xs"
+              >
+                <CalendarDays className="h-3 w-3 mr-1" />
+                Monthly
+              </Button>
+            </div>
           </div>
-
-          {/* Step 2: Generate Workout Plan */}
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+          
+          {/* Warning message for past dates */}
+          {isPastDate(planStartDate) && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <span className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                  Past date selected. Please choose a future date to generate a workout plan.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Step 2: Generate Workout Plan */}
+        <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               2
             </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={handleGeneratePlan}
-                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
-                size="lg"
-                className={`bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[200px] ${
-                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate workout plan'}
-              >
-                {loadingState.type === 'generating' ? (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3 animate-spin" />
-                    <span className="ml-3">Generating{currentModel ? ` (${currentModel}${retryCount > 0 ? `, Retry ${retryCount}` : ''})` : '...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5 mr-3" />
-                    Generate Workout Plan
-                  </>
-                )}
-              </Button>
-              
-              {/* Search-based generation button */}
-              <Button
-                onClick={handleGenerateSearchPlan}
-                disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
-                variant="outline"
-                size="lg"
-                className={`border-green-300 hover:bg-green-50 dark:border-green-600 dark:hover:bg-green-900/20 ${
-                  isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-                title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : 'Generate search-based workout plan'}
-              >
-                {loadingState.type === 'generating' ? (
-                  <>
-                    <Search className="h-4 w-4 mr-2 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <Search className="h-4 w-4 mr-2" />
-                    SearchBased
-                  </>
-                )}
-              </Button>
-              
-              {/* Manual reset button for stuck states */}
-              {loadingState.type && (
-                <Button
-                  onClick={() => {
-                    console.log('🔄 Manual reset triggered by user');
-                    clearLoading();
-                    setAiError(null);
-                    toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-              )}
+            <div>
+              <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Generate Plan</h5>
+              <p className="text-sm text-green-700 dark:text-green-300">Create your workout plan using AI-powered exercise selection</p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Primary Search-based generation button */}
+            <Button
+              onClick={handleGenerateSearchPlan}
+              disabled={loadingState.type !== null || !numericClientId || isPastDate(planStartDate)}
+              size="lg"
+              className={`bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[220px] ${
+                isPastDate(planStartDate) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              title={isPastDate(planStartDate) ? 'Cannot generate plan for past dates' : `Generate ${viewMode === 'monthly' ? 'monthly' : 'optimized'} workout plan using smart exercise selection`}
+            >
+              {loadingState.type === 'generating' ? (
+                <>
+                  <Search className="h-5 w-5 mr-3 animate-spin" />
+                  Generating Plan...
+                </>
+              ) : (
+                <>
+                  <Search className="h-5 w-5 mr-3" />
+                  {viewMode === 'monthly' ? 'Generate Monthly Plan' : 'Generate Workout Plan'}
+                </>
+              )}
+            </Button>
+            
+            {/* Manual reset button for stuck states */}
+            {loadingState.type && (
+              <Button
+                onClick={() => {
+                  console.log('🔄 Manual reset triggered by user');
+                  clearLoading();
+                  setAiError(null);
+                  toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
+                }}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            )}
+          </div>
+        </div>
 
 
 
-          {/* Step 3: Approve Plan */}
-          {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
-            <div className="flex items-center gap-3">
+        {/* Step 3: Approve Current Plan */}
+        {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
                 3
               </div>
+              <div>
+                <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Approve Plan</h5>
+                <p className="text-sm text-green-700 dark:text-green-300">Approve your draft plan to save it to the main schedule</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
               <Button
                 onClick={async () => {
-                  setLoading('approving', 'Approving plan...');
+                  const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
+                  setLoading('approving', `Approving ${planType} plan...`);
                   setIsApproving(true);
                   
                   try {
                     // Add a timeout to prevent hanging
-                    const approvalPromise = approvePlan(numericClientId, planStartDate);
+                    const approvalPromise = approvePlan(numericClientId, planStartDate, viewMode);
                     const timeoutPromise = new Promise((_, reject) => 
                       setTimeout(() => reject(new Error('Approval timeout after 30 seconds')), 30000)
                     );
@@ -3580,7 +3487,12 @@ const WorkoutPlanSection = ({
                     const result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
                     
                     if (result.success) {
-                      toast({ title: 'Plan Approved', description: 'The workout plan has been approved and saved to the main schedule.', variant: 'default' });
+                      const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
+                      toast({ 
+                        title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`, 
+                        description: `The ${planType} workout plan has been approved and saved to the main schedule.`, 
+                        variant: 'default' 
+                      });
                       
                       // Update state immediately
                       setIsDraftPlan(false);
@@ -3619,14 +3531,110 @@ const WorkoutPlanSection = ({
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
+                    ✅ Approve Current Plan
                   </>
                 )}
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Collapsible Plan Management */}
+      {(workoutPlan?.hasAnyWorkouts || availableTemplates.length > 0) && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
+                <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              </div>
+              <div>
+                <h5 className="text-lg font-bold text-gray-900 dark:text-gray-100">Plan Management</h5>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Import, export, or save your workout plans</p>
+              </div>
+            </div>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsPlanManagementExpanded(!isPlanManagementExpanded)}
+              className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+            >
+              {isPlanManagementExpanded ? 'Hide Options' : 'More Options'}
+              {isPlanManagementExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          
+          {/* Collapsible Content */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            isPlanManagementExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="p-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mt-2">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Import Button - Always available */}
+                <WorkoutImportButton
+                  clientId={numericClientId}
+                  clientName={client?.name}
+                  planStartDate={planStartDate}
+                  onImportSuccess={handleImportSuccess}
+                  disabled={isGenerating}
+                  className="bg-white hover:bg-blue-50 border-2 border-blue-300 text-blue-700 hover:text-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                  clientWorkoutDays={parsedWorkoutDays}
+                />
+                
+                {/* Export Button - Only show when there's workout data */}
+                {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                  <WorkoutExportButton
+                    weekData={getTableData()}
+                    clientId={numericClientId}
+                    planStartDate={planStartDate}
+                    clientName={client?.name}
+                    disabled={isGenerating}
+                    className="bg-white hover:bg-green-50 border-2 border-green-300 text-green-700 hover:text-green-800 shadow-lg hover:shadow-xl transition-all duration-200 font-semibold px-6 py-2"
+                    viewMode={viewMode}
+                  />
+                )}
+                
+                {/* Save Plan for Future Button - Only show when there's workout data */}
+                {workoutPlan && workoutPlan.hasAnyWorkouts && (
+                  <Button 
+                    variant="outline" 
+                    size="default"
+                    className="bg-gradient-to-r from-purple-500 via-indigo-600 to-blue-600 hover:from-purple-600 hover:via-indigo-700 hover:to-blue-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                    onClick={() => { 
+                      setTemplateTags([]); 
+                      setTemplateTagInput(''); 
+                      setTemplateDuration('7day'); // Default to 7-day
+                      setIsSaveTemplateOpen(true); 
+                    }}
+                  >
+                    <Save className="h-4 w-4 mr-2" /> 
+                    Save Plan for Future
+                  </Button>
+                )}
+
+                {/* Import Plan Template Button */}
+                <Button 
+                  variant="outline" 
+                  size="default"
+                  className="bg-gradient-to-r from-green-500 via-emerald-600 to-teal-600 hover:from-green-600 hover:via-emerald-700 hover:to-teal-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                  onClick={() => { 
+                    setIsImportTemplateOpen(true);
+                    loadAvailableTemplates();
+                  }}
+                >
+                  <Download className="h-4 w-4 mr-2" /> 
+                  Import Plan Template
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Plan Table or Empty State */}
       <div>
@@ -3749,9 +3757,10 @@ const WorkoutPlanSection = ({
                 clientId={numericClientId}
                 onViewModeChange={setViewMode}
                 onMonthlyDataChange={setMonthlyData}
-                onApprovalStatusCheck={checkPlanApprovalStatus}
-                weekStatuses={weekStatuses}
-                onApproveWeek={handleApproveWeek}
+                              onApprovalStatusCheck={checkPlanApprovalStatus}
+              onForceRefreshStatus={forceRefreshStatus}
+              weekStatuses={weekStatuses}
+              onApproveWeek={handleApproveWeek}
               />
             </Card>
 
@@ -3850,20 +3859,20 @@ const WorkoutPlanSection = ({
                     This could be because no plan has been generated for this date range yet.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      onClick={handleGeneratePlan} 
-                      disabled={isGenerating} 
-                      className="bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700"
+                    <Button
+                      onClick={handleGenerateSearchPlan}
+                      disabled={isGenerating}
+                      className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700"
                     >
                       {isGenerating ? (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
+                          <Search className="h-4 w-4 mr-2 animate-spin" />
+                          Generating Plan...
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Generate with AI
+                          <Search className="h-4 w-4 mr-2" />
+                          Generate Workout Plan
                         </>
                       )}
                     </Button>
@@ -3880,7 +3889,7 @@ const WorkoutPlanSection = ({
                       ) : (
                         <>
                           <Search className="h-4 w-4 mr-2" />
-                          SearchBased
+                          {viewMode === 'monthly' ? 'Monthly SearchBased Plan' : 'SearchBased'}
                         </>
                       )}
                     </Button>
@@ -4029,6 +4038,17 @@ const WorkoutPlanSection = ({
                 </div>
               </DialogContent>
             </Dialog>
+
+            {/* Monthly Plan Generator Modal */}
+            <MonthlyPlanGenerator
+              isOpen={isMonthlyGeneratorOpen}
+              onClose={() => setIsMonthlyGeneratorOpen(false)}
+              clientId={numericClientId || 0}
+              planStartDate={planStartDate}
+              onGenerationComplete={handleMonthlyGenerationComplete}
+              onGenerationError={handleMonthlyGenerationError}
+              onSaveWeek={savePlanToSchedulePreview}
+            />
           </div>
         ) : (
           <Card className="flex flex-col items-center justify-center h-64 text-center">

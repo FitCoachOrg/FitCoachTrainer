@@ -1,5 +1,5 @@
 "use client"
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { format, parseISO, addWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -40,6 +40,7 @@ interface WeeklyPlanHeaderProps {
   onViewModeChange?: (viewMode: 'weekly' | 'monthly') => void;
   onMonthlyDataChange?: (monthlyData: WeekDay[][]) => void;
   onApprovalStatusCheck?: () => void; // Callback to trigger approval status check
+  onForceRefreshStatus?: () => void; // Callback to force refresh status
   weekStatuses?: WeekApprovalStatus[]; // Week-level approval statuses
   onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
 }
@@ -61,13 +62,27 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const [viewMode, setViewMode] = useState<ViewMode>('weekly');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    // Try to get viewMode from localStorage, default to 'weekly'
+    if (clientId) {
+      const savedViewMode = localStorage.getItem(`workoutPlanViewMode_${clientId}`);
+      return (savedViewMode as ViewMode) || 'weekly';
+    }
+    return 'weekly';
+  });
+  
+  // Persist viewMode changes to localStorage
+  useEffect(() => {
+    if (clientId && viewMode) {
+      localStorage.setItem(`workoutPlanViewMode_${clientId}`, viewMode);
+    }
+  }, [viewMode, clientId]);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [copySourceDate, setCopySourceDate] = useState<string | null>(null);
   const [copyTargetDate, setCopyTargetDate] = useState<string | null>(null);
@@ -83,6 +98,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
 
   // Week approval state
   const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
+  
+  // Add debouncing for approval status checks
+  const [lastApprovalCheck, setLastApprovalCheck] = useState<number>(0);
+  
+  const debouncedApprovalCheck = useCallback(() => {
+    const now = Date.now();
+    if (now - lastApprovalCheck > 500) { // Reduced to 500ms for more responsive updates
+      setLastApprovalCheck(now);
+      if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
+    }
+  }, [onApprovalStatusCheck, lastApprovalCheck]);
 
   // Generate monthly data (4 weeks) from the current week data
   const monthlyData = useMemo(() => {
@@ -441,12 +469,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // Call onPlanChange to trigger auto-save in parent component
       onPlanChange(updated);
       
-      // Trigger approval status check after a short delay to ensure save completes
+      // Trigger immediate approval status check for responsive UI
+      if (onForceRefreshStatus) {
+        onForceRefreshStatus();
+      } else if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
+      
+      // Also trigger a delayed check to ensure save completes
       setTimeout(() => {
-        if (onApprovalStatusCheck) {
-          onApprovalStatusCheck();
-        }
-      }, 2000);
+        debouncedApprovalCheck();
+      }, 1000);
     } else {
       // For monthly view, update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -472,10 +505,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // Persist the deletion to the database immediately
       await persistDeletionToDatabase(date);
       
-      // Trigger approval status check after database persistence
-      if (onApprovalStatusCheck) {
+      // Trigger immediate approval status check for responsive UI
+      if (onForceRefreshStatus) {
+        onForceRefreshStatus();
+      } else if (onApprovalStatusCheck) {
         onApprovalStatusCheck();
       }
+      
+      // Also trigger a delayed check to ensure database sync
+      setTimeout(() => {
+        debouncedApprovalCheck();
+      }, 500);
     }
     setMenuOpenFor(null);
   };
@@ -505,12 +545,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // Call onPlanChange to trigger auto-save in parent component
       onPlanChange(updated);
       
-      // Trigger approval status check after a short delay to ensure save completes
+      // Trigger immediate approval status check for responsive UI
+      if (onForceRefreshStatus) {
+        onForceRefreshStatus();
+      } else if (onApprovalStatusCheck) {
+        onApprovalStatusCheck();
+      }
+      
+      // Also trigger a delayed check to ensure save completes
       setTimeout(() => {
-        if (onApprovalStatusCheck) {
-          onApprovalStatusCheck();
-        }
-      }, 2000);
+        debouncedApprovalCheck();
+      }, 1000);
     } else {
       // For monthly view, find source and target days in all days
       const sourceDay = allDays.find(d => d.date === copySourceDate);
@@ -542,10 +587,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // Persist the change to the database immediately
       await persistMonthlyChangeToDatabase(copyTargetDate, sourceDay);
       
-      // Trigger approval status check after database persistence
-      if (onApprovalStatusCheck) {
+      // Trigger immediate approval status check for responsive UI
+      if (onForceRefreshStatus) {
+        onForceRefreshStatus();
+      } else if (onApprovalStatusCheck) {
         onApprovalStatusCheck();
       }
+      
+      // Also trigger a delayed check to ensure database sync
+      setTimeout(() => {
+        debouncedApprovalCheck();
+      }, 500);
     }
     
     setCopySourceDate(null);
@@ -603,10 +655,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // Persist the week copy to the database
       await persistWeekCopyToDatabase(copySourceWeek, copyTargetWeek, sourceWeek);
       
-      // Trigger approval status check after database persistence
-      if (onApprovalStatusCheck) {
+      // Trigger immediate approval status check for responsive UI
+      if (onForceRefreshStatus) {
+        onForceRefreshStatus();
+      } else if (onApprovalStatusCheck) {
         onApprovalStatusCheck();
       }
+      
+      // Also trigger a delayed check to ensure database sync
+      setTimeout(() => {
+        debouncedApprovalCheck();
+      }, 500);
       
       // Reset state
       setCopySourceWeek(null);
@@ -833,8 +892,59 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   };
 
   const renderWeeklyView = () => (
-    <div className="grid grid-cols-7 gap-2 text-sm">
-      {days.map((day, index) => renderDayBox(day, index))}
+    <div className="space-y-4">
+      {/* Weekly Status Indicator */}
+      {viewMode === 'weekly' && weekStatuses && weekStatuses.length > 0 && (
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              weekStatuses[0].status === 'approved'
+                ? 'bg-green-500'
+                : weekStatuses[0].status === 'draft'
+                ? 'bg-blue-500'
+                : 'bg-gray-400'
+            }`}></div>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {weekStatuses[0].status === 'approved' ? 'Approved' :
+               weekStatuses[0].status === 'draft' ? 'Draft' :
+               'No Plan'}
+            </span>
+          </div>
+          
+          {/* Weekly Approval Button */}
+          {weekStatuses[0]?.canApprove && onApproveWeek && (
+            <button
+              onClick={async () => {
+                setApprovingWeek(0);
+                try {
+                  await onApproveWeek(0);
+                } finally {
+                  setApprovingWeek(null);
+                }
+              }}
+              disabled={approvingWeek === 0}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
+            >
+              {approvingWeek === 0 ? (
+                <>
+                  <Check className="h-3 w-3 mr-1 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3 w-3 mr-1" />
+                  Approve Week
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+      
+      {/* Weekly Plan Grid */}
+      <div className="grid grid-cols-7 gap-2 text-sm">
+        {days.map((day, index) => renderDayBox(day, index))}
+      </div>
     </div>
   );
 

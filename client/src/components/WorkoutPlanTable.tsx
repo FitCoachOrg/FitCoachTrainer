@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { checkWeeklyWorkoutStatus, compareWorkoutData } from '@/utils/workoutStatusUtils';
 
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
@@ -99,6 +100,114 @@ const getYouTubeVideoId = (url: string) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
+};
+
+// Helper to calculate week status consistently with WeeklyPlanHeader
+const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientId: number) => {
+  try {
+    // Use the same unified status calculation as WeeklyPlanHeader
+    const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const result = await checkWeeklyWorkoutStatus(supabase, clientId, weekStartDate);
+    
+    // Filter data for this specific week
+    const weekPreviewData = result.previewData.filter(day =>
+      day.for_date >= format(weekStartDate, 'yyyy-MM-dd') &&
+      day.for_date <= format(weekEndDate, 'yyyy-MM-dd')
+    );
+    
+    const weekScheduleData = result.scheduleData.filter(day =>
+      day.for_date >= format(weekStartDate, 'yyyy-MM-dd') &&
+      day.for_date <= format(weekEndDate, 'yyyy-MM-dd')
+    );
+    
+    // Calculate status based on unified logic
+    const hasPreviewData = weekPreviewData.length > 0;
+    const hasScheduleData = weekScheduleData.length > 0;
+    
+    if (!hasPreviewData && !hasScheduleData) {
+      return { status: 'no_plan', approvedDays: 0, totalDays: 0 };
+    } else if (hasPreviewData && hasScheduleData) {
+      const dataMatches = compareWorkoutData(weekPreviewData, weekScheduleData);
+      if (dataMatches) {
+        return { status: 'approved', approvedDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
+      } else {
+        return { status: 'draft', approvedDays: 0, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
+      }
+    } else if (hasPreviewData) {
+      return { status: 'draft', approvedDays: 0, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
+    } else {
+      return { status: 'approved', approvedDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
+    }
+  } catch (error) {
+    console.error('Error calculating week status:', error);
+    // Fallback to old logic
+    const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
+    const totalDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
+    return { status: 'pending', approvedDays, totalDays };
+  }
+};
+
+// Component for displaying week status
+const WeekStatusDisplay = ({ weekDays, weekStartDate, clientId }: { 
+  weekDays: any[]; 
+  weekStartDate: Date; 
+  clientId: number; 
+}) => {
+  const [weekStatus, setWeekStatus] = useState<{status: string, approvedDays: number, totalDays: number} | null>(null);
+  
+  useEffect(() => {
+    const getStatus = async () => {
+      const status = await calculateWeekStatus(weekDays, weekStartDate, clientId);
+      setWeekStatus(status);
+    };
+    getStatus();
+  }, [weekDays, weekStartDate, clientId]);
+  
+  if (!weekStatus) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-gray-400">
+        <ClockIcon className="h-3 w-3" />
+        <span>Loading...</span>
+      </div>
+    );
+  }
+  
+  if (weekStatus.totalDays === 0) {
+    return (
+      <div className="flex items-center gap-1 text-xs text-gray-400">
+        <ClockIcon className="h-3 w-3" />
+        <span>No workouts</span>
+      </div>
+    );
+  } else if (weekStatus.status === 'approved') {
+    return (
+      <div className="flex items-center gap-1 text-xs text-green-600">
+        <CheckCircle className="h-3 w-3" />
+        <span>Approved</span>
+      </div>
+    );
+  } else if (weekStatus.status === 'draft') {
+    return (
+      <div className="flex items-center gap-1 text-xs text-blue-600">
+        <ClockIcon className="h-3 w-3" />
+        <span>Draft</span>
+      </div>
+    );
+  } else if (weekStatus.status === 'no_plan') {
+    return (
+      <div className="flex items-center gap-1 text-xs text-gray-500">
+        <ClockIcon className="h-3 w-3" />
+        <span>No Plan</span>
+      </div>
+    );
+  } else {
+    return (
+      <div className="flex items-center gap-1 text-xs text-gray-500">
+        <ClockIcon className="h-3 w-3" />
+        <span>Pending</span>
+      </div>
+    );
+  }
 };
 
 // Helper to get YouTube thumbnail URL
@@ -801,40 +910,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                                 </div>
                       {/* Approval Status Indicator */}
                       <div className="flex items-center gap-1">
-                        {(() => {
-                          const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
-                          const totalWorkoutDays = workoutDaysCount;
-                          
-                          if (totalWorkoutDays === 0) {
-                            return (
-                              <div className="flex items-center gap-1 text-xs text-gray-400">
-                                <ClockIcon className="h-3 w-3" />
-                                <span>No workouts</span>
-                                </div>
-                            );
-                          } else if (approvedDays === totalWorkoutDays) {
-                            return (
-                              <div className="flex items-center gap-1 text-xs text-green-600">
-                                <CheckCircle className="h-3 w-3" />
-                                <span>Approved</span>
-                              </div>
-                            );
-                          } else if (approvedDays > 0) {
-                            return (
-                              <div className="flex items-center gap-1 text-xs text-yellow-600">
-                                <ClockIcon className="h-3 w-3" />
-                                <span>Partial ({approvedDays}/{totalWorkoutDays})</span>
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <ClockIcon className="h-3 w-3" />
-                                <span>Pending</span>
-                              </div>
-                            );
-                          }
-                        })()}
+                        <WeekStatusDisplay 
+                          weekDays={weekDays} 
+                          weekStartDate={weekStartDate} 
+                          clientId={clientId} 
+                        />
                       </div>
                     </div>
                   </div>
@@ -873,40 +953,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       {weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length} workout days
                     </span>
                     {/* Approval Status Indicator */}
-                    {(() => {
-                      const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
-                      const totalWorkoutDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
-                      
-                      if (totalWorkoutDays === 0) {
-                        return (
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <ClockIcon className="h-3 w-3" />
-                            <span>No workouts</span>
-                          </div>
-                        );
-                      } else if (approvedDays === totalWorkoutDays) {
-                        return (
-                          <div className="flex items-center gap-1 text-xs text-green-600">
-                            <CheckCircle className="h-3 w-3" />
-                            <span>Approved</span>
-                          </div>
-                        );
-                      } else if (approvedDays > 0) {
-                        return (
-                          <div className="flex items-center gap-1 text-xs text-yellow-600">
-                            <ClockIcon className="h-3 w-3" />
-                            <span>Partial ({approvedDays}/{totalWorkoutDays})</span>
-                          </div>
-                        );
-                      } else {
-                        return (
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <ClockIcon className="h-3 w-3" />
-                            <span>Pending</span>
-                          </div>
-                        );
-                      }
-                    })()}
+                    <WeekStatusDisplay 
+                      weekDays={weekDays} 
+                      weekStartDate={weekStartDate} 
+                      clientId={clientId} 
+                    />
                   </div>
                 </div>
               </CardHeader>

@@ -113,6 +113,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
+import { getClientImageUrl, getFallbackAvatarUrl } from '@/utils/image-utils'
 
 // Import the real AI workout plan generator (used in WorkoutPlanSection)
 // import { generateAIWorkoutPlan } from "@/lib/ai-fitness-plan"
@@ -1905,20 +1906,12 @@ export default function ClientDashboard() {
           setClient(data);
           setError(null);
 
-          // Fetch client image URL
-          const filePath = `${data.client_id}.jpg`;
-          const { data: imageData, error: imageError } = await supabase.storage
-            .from('client-images')
-            .createSignedUrl(filePath, 60 * 60); // 1 hour expiry
+          // Fetch client image URL using the new utility
+          const imageUrl = await getClientImageUrl(data.client_id);
 
           if (!isMounted) return; // Don't update state if component unmounted
 
-          if (imageData && imageData.signedUrl) {
-            setClientImageUrl(imageData.signedUrl);
-          } else {
-            console.warn(`No image found or error fetching signed URL for client ${data.client_id}:`, imageError);
-            setClientImageUrl(null);
-          }
+          setClientImageUrl(imageUrl);
 
         } else {
           setError("Client not found");

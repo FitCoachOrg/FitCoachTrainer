@@ -57,6 +57,16 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   // Local state for active tab
   const [activeTab, setActiveTab] = React.useState<OverviewTab>('onboarding');
 
+  // Debug: Log when openPopup changes
+  React.useEffect(() => {
+    console.log('🔍 ClientOverviewSection - openPopup changed to:', openPopup)
+  }, [openPopup])
+
+  // Debug: Log when openPopup changes
+  React.useEffect(() => {
+    console.log('🔍 ClientOverviewSection - openPopup changed to:', openPopup)
+  }, [openPopup])
+
   // Handle onboarding completion
   const handleOnboardingComplete = (data: any) => {
     console.log('Onboarding completed:', data);
@@ -118,7 +128,11 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
         {/* Placeholder Cards Section - 5 mini cards that open popup windows */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-          <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+          <TrainingPreferencesPlaceholder onClick={() => {
+            console.log('🔍 ClientOverviewSection - TrainingPreferencesPlaceholder clicked!')
+            console.log('🔍 ClientOverviewSection - Setting openPopup to trainingPreferences')
+            setOpenPopup('trainingPreferences')
+          }} client={client} />
           <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
           <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
           <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
