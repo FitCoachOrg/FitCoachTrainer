@@ -7,10 +7,15 @@ import { supabase } from "@/lib/supabase"
 import { useNavigate } from "react-router-dom"
 import ProfessionalCalendar from "@/components/dashboard/ProfessionalCalendar"
 import TodoList from "@/components/dashboard/TodoList"
+import { ClientInsightsCards } from "@/components/dashboard/ClientInsightsCards"
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const [isProcessingAuth, setIsProcessingAuth] = useState(false)
+
+  useEffect(() => {
+    console.log('[Route] Dashboard mounted')
+  }, [])
 
   // Handle hash fragment with access token
   useEffect(() => {
@@ -70,7 +75,14 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       <div className="px-4 md:px-6 lg:px-8 py-6 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-3rem)]">
+        {/* Client Insights Cards - Top Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Client Performance Overview</h2>
+          <ClientInsightsCards />
+        </div>
+        
+        {/* Main Dashboard Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-12rem)]">
           {/* Professional Calendar - Left Side */}
           <div className="h-full">
             <ProfessionalCalendar />

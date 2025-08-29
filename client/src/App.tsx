@@ -50,10 +50,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
+    console.log('[ProtectedRoute] location:', location.pathname)
     // Check authentication status
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
+        console.log('[ProtectedRoute] getSession ->', !!session)
         if (session) {
           setIsAuthenticated(true)
           // Warm up exercise cache when user is authenticated
@@ -75,6 +77,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[ProtectedRoute] onAuthStateChange:', event, !!session)
       if (event === 'SIGNED_IN' && session) {
         setIsAuthenticated(true)
         // Warm up exercise cache when user signs in
@@ -90,6 +93,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   }, [])
 
   if (isLoading) {
+    console.log('[ProtectedRoute] Loading gate active')
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-white">Loading...</div>
@@ -99,10 +103,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   // If not authenticated, redirect to login
   if (!isAuthenticated) {
+    console.log('[ProtectedRoute] Not authenticated, redirecting to /login')
     return <Navigate to="/login" replace />
   }
 
   // If authenticated, show the protected content
+  console.log('[ProtectedRoute] Authenticated, rendering protected content for', location.pathname)
   return <>{children}</>
 }
 
