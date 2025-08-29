@@ -12,7 +12,7 @@ interface ClientInsight {
 
 type Trend = 'up' | 'down' | 'stable'
 
-interface InsightsData {
+export interface InsightsData {
   momentum: {
     average: number
     topPerformers: ClientInsight[]
@@ -33,50 +33,8 @@ interface InsightsData {
   }
 }
 
-// Static mock data (no fetching, no loading state)
-const MOCK_INSIGHTS: InsightsData = {
-  momentum: {
-    average: 12.5,
-    topPerformers: [
-      { client_id: 1, client_name: 'John Doe', value: 25.0 },
-      { client_id: 2, client_name: 'Jane Smith', value: 18.3 },
-      { client_id: 3, client_name: 'Mike Johnson', value: 15.7 },
-    ],
-    bottomPerformers: [
-      { client_id: 4, client_name: 'Sarah Wilson', value: -8.2 },
-      { client_id: 5, client_name: 'Tom Brown', value: -12.1 },
-      { client_id: 6, client_name: 'Lisa Davis', value: -15.5 },
-    ],
-    trend: 'up',
-  },
-  adherence: {
-    average: 78.5,
-    topPerformers: [
-      { client_id: 7, client_name: 'Chris Lee', value: 95.2 },
-      { client_id: 8, client_name: 'Emma Davis', value: 92.8 },
-      { client_id: 9, client_name: 'Alex Kim', value: 89.1 },
-    ],
-    bottomPerformers: [
-      { client_id: 10, client_name: 'Taylor Hall', value: 45.3 },
-      { client_id: 11, client_name: 'Jordan Park', value: 38.7 },
-      { client_id: 12, client_name: 'Sam Carter', value: 32.1 },
-    ],
-    trend: 'stable',
-  },
-  engagement: {
-    average: 72.3,
-    topPerformers: [
-      { client_id: 13, client_name: 'Nina Patel', value: 89.5 },
-      { client_id: 14, client_name: 'Omar Khan', value: 85.2 },
-      { client_id: 15, client_name: 'Rita Gomez', value: 81.7 },
-    ],
-    bottomPerformers: [
-      { client_id: 16, client_name: 'Paul Young', value: 42.3 },
-      { client_id: 17, client_name: 'Ivy Chen', value: 38.9 },
-      { client_id: 18, client_name: 'Ben Turner', value: 35.1 },
-    ],
-    trend: 'stable',
-  },
+interface ClientInsightsCardsProps {
+  data?: InsightsData | null
 }
 
 function TrendIcon({ trend }: { trend: Trend }) {
@@ -91,7 +49,7 @@ function trendBadgeClass(trend: Trend): string {
   return 'text-gray-600 bg-gray-100 dark:bg-gray-900/20'
 }
 
-export function ClientInsightsCards() {
+export function ClientInsightsCards({ data }: ClientInsightsCardsProps) {
   console.log('[ClientInsightsCards] mounted/render')
   // Local UI-only state for flips (no effects, no re-fetch)
   const [isMomentumFlipped, setIsMomentumFlipped] = useState(false)
@@ -102,7 +60,7 @@ export function ClientInsightsCards() {
   const toggleAdherence = useCallback(() => setIsAdherenceFlipped(v => !v), [])
   const toggleEngagement = useCallback(() => setIsEngagementFlipped(v => !v), [])
 
-  const data = MOCK_INSIGHTS
+  const insights = data || null
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -121,26 +79,26 @@ export function ClientInsightsCards() {
                     <BarChart3 className="h-5 w-5 text-blue-600" />
                     <span>Fitness Momentum</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.momentum.trend)}>
-                    <TrendIcon trend={data.momentum.trend} />
+                  <Badge className={trendBadgeClass(insights?.momentum.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.momentum.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="text-center mb-6">
                   <div className="text-3xl font-bold text-blue-600 mb-2">
-                    {data.momentum.average > 0 ? '+' : ''}{data.momentum.average.toFixed(1)}%
+                    {insights ? `${insights.momentum.average > 0 ? '+' : ''}${insights.momentum.average.toFixed(1)}%` : '—'}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Average Volume Change</p>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Top Performers</span>
-                    <span className="font-medium text-green-600">{data.momentum.topPerformers.length}</span>
+                    <span className="font-medium text-green-600">{insights?.momentum.topPerformers.length ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Needs Support</span>
-                    <span className="font-medium text-red-600">{data.momentum.bottomPerformers.length}</span>
+                    <span className="font-medium text-red-600">{insights?.momentum.bottomPerformers.length ?? 0}</span>
                   </div>
                 </div>
                 <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">Click to see details</div>
@@ -154,8 +112,8 @@ export function ClientInsightsCards() {
                     <BarChart3 className="h-5 w-5 text-blue-600" />
                     <span>Fitness Momentum</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.momentum.trend)}>
-                    <TrendIcon trend={data.momentum.trend} />
+                  <Badge className={trendBadgeClass(insights?.momentum.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.momentum.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -167,7 +125,7 @@ export function ClientInsightsCards() {
                       Top Performers
                     </h4>
                     <div className="space-y-2">
-                      {data.momentum.topPerformers.map(client => (
+                      {(insights?.momentum.topPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-green-600">+{client.value.toFixed(1)}%</Badge>
@@ -181,7 +139,7 @@ export function ClientInsightsCards() {
                       Needs Support
                     </h4>
                     <div className="space-y-2">
-                      {data.momentum.bottomPerformers.map(client => (
+                      {(insights?.momentum.bottomPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
@@ -211,32 +169,32 @@ export function ClientInsightsCards() {
                     <Target className="h-5 w-5 text-green-600" />
                     <span>Workout Adherence</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.adherence.trend)}>
-                    <TrendIcon trend={data.adherence.trend} />
+                  <Badge className={trendBadgeClass(insights?.adherence.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.adherence.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="text-center mb-6">
                   <div className="text-3xl font-bold text-green-600 mb-2">
-                    {data.adherence.average.toFixed(1)}%
+                    {insights ? `${insights.adherence.average.toFixed(1)}%` : '—'}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">14-Day Completion Rate</p>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
                   <div
                     className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(data.adherence.average, 100)}%` }}
+                    style={{ width: `${Math.min(insights?.adherence.average ?? 0, 100)}%` }}
                   ></div>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">High Performers</span>
-                    <span className="font-medium text-green-600">{data.adherence.topPerformers.length}</span>
+                    <span className="font-medium text-green-600">{insights?.adherence.topPerformers.length ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">At Risk</span>
-                    <span className="font-medium text-red-600">{data.adherence.bottomPerformers.length}</span>
+                    <span className="font-medium text-red-600">{insights?.adherence.bottomPerformers.length ?? 0}</span>
                   </div>
                 </div>
                 <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">Click to see details</div>
@@ -250,8 +208,8 @@ export function ClientInsightsCards() {
                     <Target className="h-5 w-5 text-green-600" />
                     <span>Workout Adherence</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.adherence.trend)}>
-                    <TrendIcon trend={data.adherence.trend} />
+                  <Badge className={trendBadgeClass(insights?.adherence.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.adherence.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -263,7 +221,7 @@ export function ClientInsightsCards() {
                       High Performers
                     </h4>
                     <div className="space-y-2">
-                      {data.adherence.topPerformers.map(client => (
+                      {(insights?.adherence.topPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-green-600">{client.value.toFixed(1)}%</Badge>
@@ -277,7 +235,7 @@ export function ClientInsightsCards() {
                       At Risk
                     </h4>
                     <div className="space-y-2">
-                      {data.adherence.bottomPerformers.map(client => (
+                      {(insights?.adherence.bottomPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
@@ -307,32 +265,32 @@ export function ClientInsightsCards() {
                     <Activity className="h-5 w-5 text-purple-600" />
                     <span>Client Engagement</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.engagement.trend)}>
-                    <TrendIcon trend={data.engagement.trend} />
+                  <Badge className={trendBadgeClass(insights?.engagement.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.engagement.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
                 <div className="text-center mb-6">
                   <div className="text-3xl font-bold text-purple-600 mb-2">
-                    {data.engagement.average.toFixed(1)}%
+                    {insights ? `${insights.engagement.average.toFixed(1)}%` : '—'}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Daily Engagement Score</p>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
                   <div
                     className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(data.engagement.average, 100)}%` }}
+                    style={{ width: `${Math.min(insights?.engagement.average ?? 0, 100)}%` }}
                   ></div>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Highly Engaged</span>
-                    <span className="font-medium text-green-600">{data.engagement.topPerformers.length}</span>
+                    <span className="font-medium text-green-600">{insights?.engagement.topPerformers.length ?? 0}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Low Engagement</span>
-                    <span className="font-medium text-red-600">{data.engagement.bottomPerformers.length}</span>
+                    <span className="font-medium text-red-600">{insights?.engagement.bottomPerformers.length ?? 0}</span>
                   </div>
                 </div>
                 <div className="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center">Click to see details</div>
@@ -346,8 +304,8 @@ export function ClientInsightsCards() {
                     <Activity className="h-5 w-5 text-purple-600" />
                     <span>Client Engagement</span>
                   </div>
-                  <Badge className={trendBadgeClass(data.engagement.trend)}>
-                    <TrendIcon trend={data.engagement.trend} />
+                  <Badge className={trendBadgeClass(insights?.engagement.trend ?? 'stable')}>
+                    <TrendIcon trend={insights?.engagement.trend ?? 'stable'} />
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -359,7 +317,7 @@ export function ClientInsightsCards() {
                       Highly Engaged
                     </h4>
                     <div className="space-y-2">
-                      {data.engagement.topPerformers.map(client => (
+                      {(insights?.engagement.topPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-green-600">{client.value.toFixed(1)}%</Badge>
@@ -373,7 +331,7 @@ export function ClientInsightsCards() {
                       Low Engagement
                     </h4>
                     <div className="space-y-2">
-                      {data.engagement.bottomPerformers.map(client => (
+                      {(insights?.engagement.bottomPerformers ?? []).map(client => (
                         <div key={client.client_id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{client.client_name}</span>
                           <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
