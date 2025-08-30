@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import TrainerOnboardingScreen from "./TrainerOnboardingScreen";
 import ClientTargetsTable from "./ClientTargetsTable";
+import ClientMonthlyReportSection from "./monthly-report/ClientMonthlyReportSection";
 
 import { AICoachInsightsState } from "@/types/ai-coach-insights";
+import { FileText } from "lucide-react";
 
 interface ClientOverviewSectionProps {
   client: any;
@@ -30,7 +32,7 @@ interface ClientOverviewSectionProps {
   refreshClientData: () => void;
 }
 
-type OverviewTab = 'onboarding' | 'targets';
+type OverviewTab = 'onboarding' | 'targets' | 'monthly-report';
 
 const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   client,
@@ -116,6 +118,16 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
           </div>
         );
       
+      case 'monthly-report':
+        return (
+          <div className="w-full">
+            <ClientMonthlyReportSection 
+              clientId={client?.client_id?.toString() || ''}
+              client={client}
+            />
+          </div>
+        );
+      
       default:
         return null;
     }
@@ -163,6 +175,19 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
             }`}
           >
             <span>Client Targets</span>
+          </Button>
+          <Button
+            variant={activeTab === 'monthly-report' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('monthly-report')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              activeTab === 'monthly-report'
+                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
+                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
+            }`}
+          >
+            <FileText className="h-4 w-4" />
+            <span>Client Monthly Report</span>
           </Button>
         </div>
       </div>
