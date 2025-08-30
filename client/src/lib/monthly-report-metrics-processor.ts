@@ -79,13 +79,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(relevantData, 'created_at');
     const monthlyAverage = this.calculateAverage(relevantData.map(d => d.qty));
-    const trend = this.calculateTrend(relevantData);
+    const trendAnalysis = this.calculateTrend(relevantData);
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 
@@ -112,13 +113,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(relevantData, 'created_at');
     const monthlyAverage = this.calculateAverage(relevantData.map(d => d.qty));
-    const trend = this.calculateTrend(relevantData);
+    const trendAnalysis = this.calculateTrend(relevantData);
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 
@@ -145,13 +147,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(relevantData, 'created_at');
     const monthlyAverage = this.calculateAverage(relevantData.map(d => d.qty));
-    const trend = this.calculateTrend(relevantData);
+    const trendAnalysis = this.calculateTrend(relevantData);
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 
@@ -167,13 +170,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(relevantData, 'for_date');
     const monthlyAverage = this.calculateAverage(relevantData.map(d => d.eng_score));
-    const trend = this.calculateTrend(relevantData.map(d => ({ ...d, qty: d.eng_score })));
+    const trendAnalysis = this.calculateTrend(relevantData.map(d => ({ ...d, qty: d.eng_score })));
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 
@@ -193,13 +197,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(relevantData, 'created_at');
     const monthlyAverage = this.calculateAverage(relevantData.map(d => d.qty));
-    const trend = this.calculateTrend(relevantData);
+    const trendAnalysis = this.calculateTrend(relevantData);
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 
@@ -235,10 +240,20 @@ export class MonthlyReportMetricsProcessor {
   }
 
   /**
-   * Calculate trend based on data progression
+   * Calculate trend based on data progression with detailed analysis
    */
-  private static calculateTrend(data: any[]): 'up' | 'down' | 'stable' {
-    if (data.length < 2) return 'stable';
+  private static calculateTrend(data: any[]): { trend: 'up' | 'down' | 'stable', firstHalfData: any[], secondHalfData: any[], firstAvg: number, secondAvg: number, change: number, dataAvailable: boolean } {
+    if (data.length < 2) {
+      return {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: 0,
+        secondAvg: 0,
+        change: 0,
+        dataAvailable: false
+      };
+    }
     
     const sortedData = data.sort((a, b) => new Date(a.created_at || a.for_date).getTime() - new Date(b.created_at || b.for_date).getTime());
     const firstHalf = sortedData.slice(0, Math.floor(sortedData.length / 2));
@@ -247,13 +262,34 @@ export class MonthlyReportMetricsProcessor {
     const firstAvg = this.calculateAverage(firstHalf.map(d => d.qty));
     const secondAvg = this.calculateAverage(secondHalf.map(d => d.qty));
     
-    if (firstAvg === 0) return 'stable';
+    if (firstAvg === 0) {
+      return {
+        trend: 'stable',
+        firstHalfData: firstHalf,
+        secondHalfData: secondHalf,
+        firstAvg: 0,
+        secondAvg: secondAvg,
+        change: 0,
+        dataAvailable: true
+      };
+    }
     
     const change = ((secondAvg - firstAvg) / firstAvg) * 100;
     
-    if (change > 5) return 'up';
-    if (change < -5) return 'down';
-    return 'stable';
+    let trend: 'up' | 'down' | 'stable';
+    if (change > 5) trend = 'up';
+    else if (change < -5) trend = 'down';
+    else trend = 'stable';
+    
+    return {
+      trend,
+      firstHalfData: firstHalf,
+      secondHalfData: secondHalf,
+      firstAvg,
+      secondAvg,
+      change,
+      dataAvailable: true
+    };
   }
 
   /**
@@ -273,7 +309,16 @@ export class MonthlyReportMetricsProcessor {
       metric,
       weeklyData: [],
       monthlyAverage: 0,
-      trend: 'stable' as const
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: 0,
+        secondAvg: 0,
+        change: 0,
+        dataAvailable: false
+      }
     };
   }
 
@@ -360,7 +405,16 @@ export class MonthlyReportMetricsProcessor {
       metric: { key: 'hipsWaistRatio', label: 'Hips/Waist Ratio' },
       weeklyData,
       monthlyAverage: ratio,
-      trend: 'stable' as const
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: ratio,
+        secondAvg: ratio,
+        change: 0,
+        dataAvailable: true
+      }
     };
   }
 
@@ -378,7 +432,16 @@ export class MonthlyReportMetricsProcessor {
       metric: { key: 'mealLogins', label: 'Meal Logins' },
       weeklyData,
       monthlyAverage: uniqueDays,
-      trend: 'stable' as const
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: uniqueDays,
+        secondAvg: uniqueDays,
+        change: 0,
+        dataAvailable: true
+      }
     };
   }
 
@@ -394,7 +457,16 @@ export class MonthlyReportMetricsProcessor {
       metric: { key: 'numExercises', label: 'Number of Exercises' },
       weeklyData,
       monthlyAverage: exerciseCount,
-      trend: 'stable' as const
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: exerciseCount,
+        secondAvg: exerciseCount,
+        change: 0,
+        dataAvailable: true
+      }
     };
   }
 
@@ -417,8 +489,74 @@ export class MonthlyReportMetricsProcessor {
       metric: { key: 'workoutAdherence', label: 'Workout Adherence' },
       weeklyData,
       monthlyAverage: adherence,
-      trend: 'stable' as const
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: adherence,
+        secondAvg: adherence,
+        change: 0,
+        dataAvailable: true
+      }
     };
+  }
+
+  /**
+   * Generate detailed trend analysis for display
+   */
+  static generateTrendAnalysisDisplay(processedMetrics: ProcessedMetrics): Array<{
+    metricKey: string;
+    metricLabel: string;
+    trend: string;
+    firstHalfData: any[];
+    secondHalfData: any[];
+    firstAvg: number;
+    secondAvg: number;
+    change: number;
+    dataAvailable: boolean;
+    displayText: string;
+  }> {
+    return Object.entries(processedMetrics).map(([metricKey, metric]) => {
+      const trendAnalysis = metric.trendAnalysis || {
+        trend: 'stable',
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: 0,
+        secondAvg: 0,
+        change: 0,
+        dataAvailable: false
+      };
+
+      let displayText = '';
+      
+      if (!trendAnalysis.dataAvailable) {
+        displayText = 'No data available';
+      } else if (trendAnalysis.firstHalfData.length === 0 || trendAnalysis.secondHalfData.length === 0) {
+        displayText = 'Insufficient data for trend analysis';
+      } else {
+        const firstHalfValues = trendAnalysis.firstHalfData.map(d => d.qty).join(', ');
+        const secondHalfValues = trendAnalysis.secondHalfData.map(d => d.qty).join(', ');
+        
+        displayText = `First Half: [${firstHalfValues}] (Avg: ${trendAnalysis.firstAvg.toFixed(2)}) | ` +
+                     `Second Half: [${secondHalfValues}] (Avg: ${trendAnalysis.secondAvg.toFixed(2)}) | ` +
+                     `Change: ${trendAnalysis.change.toFixed(1)}% | ` +
+                     `Trend: ${trendAnalysis.trend.toUpperCase()}`;
+      }
+
+      return {
+        metricKey,
+        metricLabel: metric.metric.label,
+        trend: trendAnalysis.trend,
+        firstHalfData: trendAnalysis.firstHalfData,
+        secondHalfData: trendAnalysis.secondHalfData,
+        firstAvg: trendAnalysis.firstAvg,
+        secondAvg: trendAnalysis.secondAvg,
+        change: trendAnalysis.change,
+        dataAvailable: trendAnalysis.dataAvailable,
+        displayText
+      };
+    });
   }
 
   /**
@@ -441,13 +579,14 @@ export class MonthlyReportMetricsProcessor {
 
     const weeklyData = this.groupByWeek(convertedData, 'created_at');
     const monthlyAverage = this.calculateAverage(convertedData.map(d => d.qty));
-    const trend = this.calculateTrend(convertedData);
+    const trendAnalysis = this.calculateTrend(convertedData);
 
     return {
       metric,
       weeklyData,
       monthlyAverage,
-      trend
+      trend: trendAnalysis.trend,
+      trendAnalysis
     };
   }
 }
