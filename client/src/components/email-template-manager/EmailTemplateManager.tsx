@@ -144,9 +144,9 @@ The {business_name} Team`,
         // Create default branding
         const defaultBranding: TrainerBranding = {
           trainer_id: trainerId,
-          business_name: 'FitCoachTrainer',
+          business_name: 'CoachEZ',
           website_url: 'https://repute.cloud',
-          contact_email: 'support@fitcoachtrainer.com'
+                      contact_email: 'support@coachez.ai'
         }
         setBranding(defaultBranding)
       }
@@ -476,7 +476,7 @@ The {business_name} Team`,
                     __html: template.html_template
                       .replace(/{client_name}/g, 'John Doe')
                       .replace(/{trainer_name}/g, branding.business_name || 'Your Trainer')
-                      .replace(/{business_name}/g, branding.business_name || 'FitCoachTrainer')
+                      .replace(/{business_name}/g, branding.business_name || 'CoachEZ')
                       .replace(/{signup_url}/g, '#')
                       .replace(/{custom_message}/g, '')
                       .replace(/{logo_url}/g, template.logo_url || '')

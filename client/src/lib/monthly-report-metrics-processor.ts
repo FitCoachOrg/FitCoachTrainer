@@ -23,24 +23,38 @@ export class MonthlyReportMetricsProcessor {
       }
 
       try {
-        switch (metric.dataSource) {
-          case 'activity_info':
-            processedMetrics[metricKey] = this.processActivityMetric(rawData.activityData, metric);
-            break;
-          case 'meal_info':
-            processedMetrics[metricKey] = this.processMealMetric(rawData.mealData, metric);
-            break;
-          case 'workout_info':
-            processedMetrics[metricKey] = this.processWorkoutMetric(rawData.workoutData, metric);
-            break;
-          case 'client_engagement_score':
-            processedMetrics[metricKey] = this.processEngagementMetric(rawData.engagementData, metric);
-            break;
-          case 'external_device_connect':
-            processedMetrics[metricKey] = this.processExternalDeviceMetric(rawData.activityData, metric);
-            break;
-          default:
-            console.warn(`Unknown data source for metric: ${metricKey}`);
+        // Handle special calculated metrics first
+        if (metricKey === 'hipsWaistRatio') {
+          processedMetrics[metricKey] = this.calculateHipsWaistRatio(rawData.activityData);
+        } else if (metricKey === 'mealLogins') {
+          processedMetrics[metricKey] = this.calculateMealLogins(rawData.mealData);
+        } else if (metricKey === 'numExercises') {
+          processedMetrics[metricKey] = this.calculateNumExercises(rawData.workoutData);
+        } else if (metricKey === 'workoutAdherence') {
+          processedMetrics[metricKey] = this.calculateWorkoutAdherence(rawData.workoutData, rawData.scheduleData);
+        } else if (metricKey === 'waterIntake') {
+          processedMetrics[metricKey] = this.processWaterIntake(rawData.activityData, metric);
+        } else {
+          // Handle regular metrics
+          switch (metric.dataSource) {
+            case 'activity_info':
+              processedMetrics[metricKey] = this.processActivityMetric(rawData.activityData, metric);
+              break;
+            case 'meal_info':
+              processedMetrics[metricKey] = this.processMealMetric(rawData.mealData, metric);
+              break;
+            case 'workout_info':
+              processedMetrics[metricKey] = this.processWorkoutMetric(rawData.workoutData, metric);
+              break;
+            case 'client_engagement_score':
+              processedMetrics[metricKey] = this.processEngagementMetric(rawData.engagementData, metric);
+              break;
+            case 'external_device_connect':
+              processedMetrics[metricKey] = this.processExternalDeviceMetric(rawData.activityData, metric);
+              break;
+            default:
+              console.warn(`Unknown data source for metric: ${metricKey}`);
+          }
         }
       } catch (error) {
         console.error(`Error processing metric ${metricKey}:`, error);
@@ -315,5 +329,125 @@ export class MonthlyReportMetricsProcessor {
     });
 
     return totalWeight > 0 ? Math.round(score / totalWeight) : 0;
+  }
+
+  /**
+   * Calculate Hip/Waist Ratio from hip and waist measurements
+   */
+  private static calculateHipsWaistRatio(activityData: any[]) {
+    const hipData = activityData.filter(item => 
+      item.activity && item.activity.toLowerCase().includes('hip')
+    );
+    const waistData = activityData.filter(item => 
+      item.activity && item.activity.toLowerCase().includes('waist')
+    );
+
+    if (hipData.length === 0 || waistData.length === 0) {
+      return this.createEmptyMetric({ key: 'hipsWaistRatio', label: 'Hips/Waist Ratio' });
+    }
+
+    const hipAvg = this.calculateAverage(hipData.map(d => d.qty));
+    const waistAvg = this.calculateAverage(waistData.map(d => d.qty));
+
+    if (waistAvg === 0) {
+      return this.createEmptyMetric({ key: 'hipsWaistRatio', label: 'Hips/Waist Ratio' });
+    }
+
+    const ratio = hipAvg / waistAvg;
+    const weeklyData = this.groupByWeek([{ qty: ratio, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'hipsWaistRatio', label: 'Hips/Waist Ratio' },
+      weeklyData,
+      monthlyAverage: ratio,
+      trend: 'stable' as const
+    };
+  }
+
+  /**
+   * Calculate Meal Logins (count of meal records)
+   */
+  private static calculateMealLogins(mealData: any[]) {
+    const uniqueDays = new Set(mealData.map(item => 
+      new Date(item.created_at).toDateString()
+    )).size;
+
+    const weeklyData = this.groupByWeek([{ qty: uniqueDays, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'mealLogins', label: 'Meal Logins' },
+      weeklyData,
+      monthlyAverage: uniqueDays,
+      trend: 'stable' as const
+    };
+  }
+
+  /**
+   * Calculate Number of Exercises (count of workout records)
+   */
+  private static calculateNumExercises(workoutData: any[]) {
+    const exerciseCount = workoutData.length;
+
+    const weeklyData = this.groupByWeek([{ qty: exerciseCount, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'numExercises', label: 'Number of Exercises' },
+      weeklyData,
+      monthlyAverage: exerciseCount,
+      trend: 'stable' as const
+    };
+  }
+
+  /**
+   * Calculate Workout Adherence (workout days vs expected days)
+   */
+  private static calculateWorkoutAdherence(workoutData: any[], scheduleData: any[]) {
+    const uniqueWorkoutDays = new Set(workoutData.map(item => 
+      new Date(item.created_at).toDateString()
+    )).size;
+
+    // Calculate expected workout days (assuming 4 workouts per week = ~17-18 days per month)
+    const expectedWorkouts = 17; // Conservative estimate for a month
+    
+    const adherence = expectedWorkouts > 0 ? (uniqueWorkoutDays / expectedWorkouts) * 100 : 0;
+
+    const weeklyData = this.groupByWeek([{ qty: adherence, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'workoutAdherence', label: 'Workout Adherence' },
+      weeklyData,
+      monthlyAverage: adherence,
+      trend: 'stable' as const
+    };
+  }
+
+  /**
+   * Process Water Intake with conversion from cups to liters
+   */
+  private static processWaterIntake(activityData: any[], metric: any) {
+    const relevantData = activityData.filter(item => 
+      item.activity && item.activity.toLowerCase().includes('hydration')
+    );
+
+    if (relevantData.length === 0) {
+      return this.createEmptyMetric(metric);
+    }
+
+    // Convert from cups to liters (1 cup = 240mL = 0.24L)
+    const convertedData = relevantData.map(item => ({
+      ...item,
+      qty: item.qty * 0.24 // Convert cups to liters
+    }));
+
+    const weeklyData = this.groupByWeek(convertedData, 'created_at');
+    const monthlyAverage = this.calculateAverage(convertedData.map(d => d.qty));
+    const trend = this.calculateTrend(convertedData);
+
+    return {
+      metric,
+      weeklyData,
+      monthlyAverage,
+      trend
+    };
   }
 }

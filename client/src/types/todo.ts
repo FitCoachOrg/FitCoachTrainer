@@ -1,4 +1,4 @@
-// Todo Types for FitCoachTrainer
+// Todo Types for CoachEZ
 // These types match the database schema in database_schema_todos.sql
 // Enhanced: Added AI integration types for converting AI recommendations to todos
 

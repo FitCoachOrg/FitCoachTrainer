@@ -11,6 +11,7 @@ import { ProcessedMetrics } from '@/lib/monthly-report-data-service';
 import { MonthlyReportMetricsProcessor } from '@/lib/monthly-report-metrics-processor';
 import { MonthlyReportAIAnalysis, MonthlyReportAIInsights } from '@/lib/ai-monthly-report-analysis';
 import { MonthlyReportPDFGenerator } from '@/lib/monthly-report-pdf-generator';
+import { MonthlyReportHTMLGenerator } from '@/lib/monthly-report-html-generator';
 import { MonthlyReportStorageService, MonthlyReportPreferences, GeneratedReport } from '@/lib/monthly-report-storage-service';
 import { LLMDataModal } from './LLMDataModal';
 
@@ -32,6 +33,7 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['weight', 'sleep', 'heartRate']);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isGeneratingHTML, setIsGeneratingHTML] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLLMDataModalOpen, setIsLLMDataModalOpen] = useState(false);
   const [availableDateRanges, setAvailableDateRanges] = useState<{ month: string; label: string; recordCount: number }[]>([]);
@@ -253,26 +255,34 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
         }
       );
 
-      // Upload to Supabase storage
-      const filePath = await MonthlyReportStorageService.uploadPDF(
-        clientId,
-        reportData.clientData.month,
-        blob,
-        fileName
-      );
+      // Try to upload to Supabase storage (optional)
+      let filePath = null;
+      try {
+        filePath = await MonthlyReportStorageService.uploadPDF(
+          clientId,
+          reportData.clientData.month,
+          blob,
+          fileName
+        );
 
-      // Add to generated reports history
-      await MonthlyReportStorageService.addGeneratedReport(
-        clientId,
-        reportData.clientData.month,
-        filePath,
-        selectedMetrics.length,
-        blob.size
-      );
+        // Add to generated reports history
+        await MonthlyReportStorageService.addGeneratedReport(
+          clientId,
+          reportData.clientData.month,
+          filePath,
+          selectedMetrics.length,
+          blob.size
+        );
 
-      // Refresh generated reports list
-      const reports = await MonthlyReportStorageService.getGeneratedReports(clientId);
-      setGeneratedReports(reports);
+        // Refresh generated reports list
+        const reports = await MonthlyReportStorageService.getGeneratedReports(clientId);
+        setGeneratedReports(reports);
+
+        console.log('✅ PDF uploaded to storage successfully');
+      } catch (storageError) {
+        console.warn('⚠️ Storage upload failed, continuing with local download:', storageError);
+        // Continue with local download even if storage fails
+      }
 
       // Download the file locally
       const url = URL.createObjectURL(blob);
@@ -285,8 +295,10 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
       URL.revokeObjectURL(url);
 
       toast({
-        title: "PDF generated and saved!",
-        description: `Report saved to cloud storage and downloaded locally.`,
+        title: "PDF generated successfully!",
+        description: filePath 
+          ? `Report saved to cloud storage and downloaded locally.`
+          : `Report downloaded locally. (Storage upload failed - check RLS policies)`,
       });
 
     } catch (error) {
@@ -298,6 +310,65 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
       });
     } finally {
       setIsGeneratingPDF(false);
+    }
+  };
+
+
+
+  // Download report as HTML
+  const handleDownloadHTML = async () => {
+    if (!reportData.clientData || !reportData.processedMetrics || !reportData.aiInsights) {
+      toast({
+        title: "No report data available",
+        description: "Please generate a report first before downloading.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGeneratingHTML(true);
+    
+    try {
+      const clientName = client?.cl_name || 'Client';
+
+      // Generate HTML content
+      const htmlContent = MonthlyReportHTMLGenerator.generateHTML({
+        clientName,
+        month: reportData.clientData.month,
+        selectedMetrics,
+        processedMetrics: reportData.processedMetrics,
+        aiInsights: reportData.aiInsights,
+        clientData: reportData.clientData
+      });
+
+      // Create filename
+      const fileName = `Monthly_Report_${clientName.replace(/\s+/g, '_')}_${reportData.clientData.month.replace(/\s+/g, '_')}.html`;
+
+      // Create blob and download
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "HTML report generated successfully!",
+        description: `Report downloaded as HTML file. You can open it in Word or any text editor.`,
+      });
+
+    } catch (error) {
+      console.error('❌ Error downloading HTML:', error);
+      toast({
+        title: "Error downloading HTML",
+        description: "Please try again or contact support if the issue persists.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingHTML(false);
     }
   };
 
@@ -732,8 +803,8 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
             </Card>
           )}
 
-          {/* Download Button */}
-          <div className="flex justify-center">
+          {/* Download Buttons */}
+          <div className="flex justify-center gap-4">
             <Button 
               onClick={handleDownloadPDF} 
               disabled={isGeneratingPDF}
@@ -747,7 +818,28 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               ) : (
                 <>
                   <Cloud className="h-4 w-4" />
-                  Generate & Save PDF Report
+                  Generate PDF Report
+                </>
+              )}
+            </Button>
+            
+
+            
+            <Button 
+              onClick={handleDownloadHTML} 
+              disabled={isGeneratingHTML}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              {isGeneratingHTML ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating HTML...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4" />
+                  Generate HTML Report
                 </>
               )}
             </Button>

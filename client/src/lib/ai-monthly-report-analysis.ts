@@ -369,7 +369,42 @@ export class MonthlyReportAIAnalysis {
    * Build comprehensive analysis prompt
    */
   private static buildAnalysisPrompt(context: any): string {
-    return `You are an expert fitness coach analyzing a client's monthly performance report. 
+    return `You are an expert fitness coach analyzing a client's monthly performance report. Generate a comprehensive, professional fitness report following this EXACT formatting schema:
+
+## PDF FORMATTING REQUIREMENTS
+
+### Typography & Colors
+- **Fonts**: Helvetica for all text
+- **Sizes**: Title (24pt), Headings (16pt), Subheadings (12pt), Body (10pt), Captions (8pt)
+- **Colors**: Primary blue (#3B82F6), Green for positive (#22C55E), Red for concerns (#EF4444)
+
+### Content Structure & Guidelines
+
+#### 1. EXECUTIVE SUMMARY
+- **Overall Performance**: 2-3 sentences, professional and encouraging tone, max 200 characters
+- **Key Achievements**: 3-5 bullet points, start with action verbs, focus on measurable accomplishments
+- **Areas of Concern**: 2-4 bullet points, constructive tone, solution-oriented
+- **Performance Score**: 0-100 based on adherence, consistency, and progress
+
+#### 2. POSITIVE TRENDS
+- **What's Working Well**: 3-5 items, focus on positive trends with data support
+- **Strengths**: 4-6 items, detailed explanations of client capabilities and positive behaviors
+
+#### 3. RECOMMENDATIONS
+- **Areas for Improvement**: 3-5 items, specific actionable areas with clear objectives
+- **Specific Actions**: 4-6 items, immediate actionable steps with exact numbers and frequencies
+- **Priority Level**: high/medium/low based on impact and feasibility
+
+#### 4. PLAN FORWARD
+- **Next Month Goals**: 3-5 SMART goals (Specific, Measurable, Achievable, Relevant, Time-bound)
+- **Action Steps**: 4-6 concrete actions with timelines
+- **Expected Outcomes**: 3-4 measurable results with specific metrics
+
+### Content Guidelines
+- **Tone**: Professional, encouraging, data-driven, actionable
+- **Language**: Clear, concise, action-oriented, specific numbers and metrics
+- **Data Integration**: Reference specific numbers from client data, explain trends in practical terms
+- **Avoid**: Vague statements, negative language, technical jargon, generic advice
 
 CLIENT PROFILE:
 - Name: ${context.clientProfile.name}
@@ -398,15 +433,7 @@ ACTIVITY SUMMARY:
 - Nutrition Records: ${context.nutritionSummary.records} over ${context.nutritionSummary.days} days
 - Workout Records: ${context.workoutSummary.records} over ${context.workoutSummary.days} days
 
-Based on this comprehensive data, provide detailed insights in the following areas:
-
-1. EXECUTIVE SUMMARY: Overall performance assessment with key achievements and concerns
-2. POSITIVE TRENDS: What's working well and strengths to build upon
-3. RECOMMENDATIONS: Specific areas for improvement with actionable steps
-4. PLAN FORWARD: Next month's goals and expected outcomes
-5. METRICS ANALYSIS: Individual metric performance insights
-
-Be specific, actionable, and encouraging while maintaining professional coaching standards.`;
+Generate the report following this exact structure and formatting requirements.`;
   }
 
   /**

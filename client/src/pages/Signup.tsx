@@ -161,8 +161,8 @@ export default function Signup() {
           </CardTitle>
           <CardDescription className="text-center">
             {invitationFound && trainerName 
-              ? `You've been invited by ${trainerName} to join FitCoachTrainer`
-              : "Sign up to get started with FitCoachTrainer"}
+              ? `You've been invited by ${trainerName} to join CoachEZ`
+: "Sign up to get started with CoachEZ"}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -208,7 +208,7 @@ export const METRIC_LIBRARY: Metric[] = [
     color: "#0ea5e9",
     data: [], // Will be populated from activity_info table
     dataKey: "qty",
-    yLabel: "mL",
+    yLabel: "L",
     activityName: "hydration",
     dataSource: "activity_info",
     categories: ["Nutritional and Hydration"]

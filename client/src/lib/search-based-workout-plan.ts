@@ -12,9 +12,9 @@ const LOCALSTORAGE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 const INDEXEDDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Cache keys
-const CACHE_KEY = 'fitcoach_exercises_cache';
-const CACHE_TIMESTAMP_KEY = 'fitcoach_exercises_cache_timestamp';
-const CACHE_VERSION_KEY = 'fitcoach_exercises_cache_version';
+const CACHE_KEY = 'coachez_exercises_cache';
+const CACHE_TIMESTAMP_KEY = 'coachez_exercises_cache_timestamp';
+const CACHE_VERSION_KEY = 'coachez_exercises_cache_version';
 const CACHE_VERSION = '1.0.0'; // Increment this when exercise data structure changes
 
 // Clean exercise data (equivalent to Python's _clean_library method)

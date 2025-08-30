@@ -1,6 +1,6 @@
 const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY as string;
 const YOUR_SITE_URL = import.meta.env.VITE_SITE_URL || "http://localhost:8080";
-const YOUR_SITE_NAME = "FitCoachTrainer";
+const YOUR_SITE_NAME = "CoachEZ";
 
 export interface OpenRouterResponse {
   response: string;

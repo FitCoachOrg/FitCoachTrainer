@@ -4,6 +4,7 @@ import { ClientReportData } from './monthly-report-data-service';
 import { ProcessedMetrics } from './monthly-report-data-service';
 import { MonthlyReportAIInsights } from './ai-monthly-report-analysis';
 import { METRIC_LIBRARY } from './metrics-library';
+import { MonthlyReportHTMLGenerator } from './monthly-report-html-generator';
 
 export interface PDFReportOptions {
   clientName: string;
@@ -35,42 +36,50 @@ export class MonthlyReportPDFGenerator {
     console.log('📄 Generating PDF report for:', options.clientName, options.month);
 
     try {
-      // Create PDF document
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      let currentY = this.PAGE_MARGIN;
-
-      // Add header
-      currentY = this.addHeader(pdf, options, currentY);
-
-      // Add executive summary
-      currentY = this.addExecutiveSummary(pdf, aiInsights, currentY);
-
-      // Add performance metrics table
-      currentY = this.addPerformanceMetricsTable(pdf, processedMetrics, options.selectedMetrics, currentY);
-
-      // Add AI insights
-      if (options.includeAIInsights !== false) {
-        currentY = this.addAIInsights(pdf, aiInsights, currentY);
-      }
-
-      // Add recommendations
-      currentY = this.addRecommendations(pdf, aiInsights, currentY);
-
-      // Add plan forward
-      currentY = this.addPlanForward(pdf, aiInsights, currentY);
-
-      // Add footer to the last page
-      this.addFooter(pdf, options);
-
-      // Generate blob
-      const fileName = `Monthly_Report_${options.clientName.replace(/\s+/g, '_')}_${options.month}.pdf`;
-      const blob = pdf.output('blob');
-
-      console.log('✅ PDF generated successfully as blob:', fileName);
-      return { blob, fileName };
+      // Use HTML-to-PDF approach for better formatting
+      return await this.generatePDFFromHTMLContent(clientData, processedMetrics, aiInsights, options);
     } catch (error) {
-      console.error('❌ Error generating PDF:', error);
-      throw new Error('Failed to generate PDF report');
+      console.error('❌ Error generating PDF from HTML, falling back to direct PDF generation:', error);
+      
+      // Fallback to original PDF generation method
+      try {
+        // Create PDF document
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        let currentY = this.PAGE_MARGIN;
+
+        // Add header
+        currentY = this.addHeader(pdf, options, currentY);
+
+        // Add executive summary
+        currentY = this.addExecutiveSummary(pdf, aiInsights, currentY);
+
+        // Add performance metrics table
+        currentY = this.addPerformanceMetricsTable(pdf, processedMetrics, options.selectedMetrics, currentY);
+
+        // Add AI insights
+        if (options.includeAIInsights !== false) {
+          currentY = this.addAIInsights(pdf, aiInsights, currentY);
+        }
+
+        // Add recommendations
+        currentY = this.addRecommendations(pdf, aiInsights, currentY);
+
+        // Add plan forward
+        currentY = this.addPlanForward(pdf, aiInsights, currentY);
+
+        // Add footer to the last page
+        this.addFooter(pdf, options);
+
+        // Generate blob
+        const fileName = `Monthly_Report_${options.clientName.replace(/\s+/g, '_')}_${options.month}.pdf`;
+        const blob = pdf.output('blob');
+
+        console.log('✅ PDF generated successfully as blob (fallback method):', fileName);
+        return { blob, fileName };
+      } catch (fallbackError) {
+        console.error('❌ Error in fallback PDF generation:', fallbackError);
+        throw new Error('Failed to generate PDF report');
+      }
     }
   }
 
@@ -127,7 +136,7 @@ export class MonthlyReportPDFGenerator {
     // Subtitle
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'normal');
-    pdf.text('FitCoach Trainer Platform', 105, 30, { align: 'center' });
+    pdf.text('CoachEZ Trainer Platform', 105, 30, { align: 'center' });
 
     // Reset to normal content area
     pdf.setTextColor(0, 0, 0);
@@ -143,10 +152,7 @@ export class MonthlyReportPDFGenerator {
     
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(`Report Period: ${new Date(options.month).toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long' 
-    })}`, this.PAGE_MARGIN + 5, currentY + 16);
+    pdf.text(`Report Period: ${this.formatReportPeriod(options.month)}`, this.PAGE_MARGIN + 5, currentY + 16);
     
     pdf.text(`Generated: ${new Date().toLocaleDateString('en-US', { 
       year: 'numeric', 
@@ -341,11 +347,16 @@ export class MonthlyReportPDFGenerator {
       // Value
       pdf.text(`${row.value} ${row.unit}`, this.PAGE_MARGIN + col1Width + 5, currentY + 5);
       
-      // Trend with color
-      const trendText = row.trend === 'up' ? '↗ Improving' : row.trend === 'down' ? '↘ Declining' : '→ Stable';
-      const trendColor = row.trend === 'up' ? [34, 197, 94] : row.trend === 'down' ? [239, 68, 68] : [107, 114, 128];
-      pdf.setTextColor(trendColor[0], trendColor[1], trendColor[2]);
-      pdf.text(trendText, this.PAGE_MARGIN + col1Width + col2Width + 5, currentY + 5);
+              // Trend with color
+        const trendIcon = this.getTrendIcon(row.trend);
+        const trendText = row.trend === 'up' ? `${trendIcon} Improving` : 
+                         row.trend === 'down' ? `${trendIcon} Declining` : 
+                         `${trendIcon} Stable`;
+        const trendColor = row.trend === 'up' ? [34, 197, 94] : 
+                          row.trend === 'down' ? [239, 68, 68] : 
+                          [107, 114, 128];
+        pdf.setTextColor(trendColor[0], trendColor[1], trendColor[2]);
+        pdf.text(trendText, this.PAGE_MARGIN + col1Width + col2Width + 5, currentY + 5);
       
       currentY += rowHeight;
     });
@@ -556,16 +567,81 @@ export class MonthlyReportPDFGenerator {
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(107, 114, 128); // Gray color
-    pdf.text(`Generated by FitCoach Trainer Platform`, this.PAGE_MARGIN, footerY + 5);
+            pdf.text(`Generated by CoachEZ Trainer Platform`, this.PAGE_MARGIN, footerY + 5);
     pdf.text(`Report for ${options.clientName} - ${options.month}`, this.PAGE_MARGIN, footerY + 10);
     pdf.text(`Page ${pdf.getCurrentPageInfo().pageNumber}`, this.PAGE_MARGIN + this.CONTENT_WIDTH - 20, footerY + 5, { align: 'right' });
+  }
+
+  /**
+   * Clean text by removing markdown syntax and fixing formatting
+   */
+  private static cleanText(text: string): string {
+    if (!text) return '';
+    
+    return text
+      // Remove markdown bold syntax
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      // Remove markdown italic syntax
+      .replace(/\*(.*?)\*/g, '$1')
+      // Remove markdown code syntax
+      .replace(/`(.*?)`/g, '$1')
+      // Fix bullet points to consistent format
+      .replace(/^[\s]*[•\-\*][\s]*/gm, '• ')
+      // Remove extra spaces
+      .replace(/\s+/g, ' ')
+      // Trim whitespace
+      .trim();
+  }
+
+  /**
+   * Format report period for display
+   */
+  private static formatReportPeriod(month: string): string {
+    try {
+      // Handle date range format like "Jul 30 - Aug 29, 2025"
+      if (month.includes(' - ')) {
+        return month; // Return as is for date ranges
+      }
+      
+      // Handle standard month format like "2025-08"
+      const date = new Date(month + '-01');
+      if (isNaN(date.getTime())) {
+        return month; // Return original if parsing fails
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long' 
+      });
+    } catch (error) {
+      return month; // Return original if any error
+    }
+  }
+
+  /**
+   * Get proper trend icon
+   */
+  private static getTrendIcon(trend: string): string {
+    switch (trend?.toLowerCase()) {
+      case 'improving':
+      case 'up':
+        return '↗';
+      case 'declining':
+      case 'down':
+        return '↘';
+      case 'stable':
+      default:
+        return '→';
+    }
   }
 
   /**
    * Split text to fit within page width with improved algorithm
    */
   private static splitTextToFit(text: string, maxWidth: number): string[] {
-    const words = text.split(' ');
+    // Clean the text first
+    const cleanedText = this.cleanText(text);
+    const words = cleanedText.split(' ');
     const lines: string[] = [];
     let currentLine = '';
 
@@ -609,6 +685,149 @@ export class MonthlyReportPDFGenerator {
       }
     }
     return width;
+  }
+
+  /**
+   * Generate PDF from HTML content (new method)
+   */
+  static async generatePDFFromHTMLContent(
+    clientData: ClientReportData,
+    processedMetrics: ProcessedMetrics,
+    aiInsights: MonthlyReportAIInsights,
+    options: PDFReportOptions
+  ): Promise<{ blob: Blob; fileName: string }> {
+    try {
+      console.log('📄 Generating PDF from HTML for:', options.clientName, options.month);
+
+      // Generate HTML content
+      const htmlContent = MonthlyReportHTMLGenerator.generateHTML({
+        clientName: options.clientName,
+        month: options.month,
+        selectedMetrics: options.selectedMetrics,
+        processedMetrics,
+        aiInsights,
+        clientData
+      });
+
+      // Create a temporary container
+      const container = document.createElement('div');
+      container.innerHTML = htmlContent;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '0';
+      container.style.width = '210mm'; // A4 width
+      container.style.backgroundColor = '#ffffff';
+      document.body.appendChild(container);
+
+      try {
+        // Create PDF document
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pageWidth - 20;
+
+        // Convert entire HTML to canvas first
+        const fullCanvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          width: 794, // A4 width in pixels at 96 DPI
+          scrollX: 0,
+          scrollY: 0
+        });
+
+        // Calculate total height and number of pages needed
+        const totalHeight = (fullCanvas.height * imgWidth) / fullCanvas.width;
+        const availablePageHeight = pageHeight - 20; // 10mm margin top and bottom
+        const pagesNeeded = Math.ceil(totalHeight / availablePageHeight);
+
+        // Safety check for extremely long content
+        const maxPages = 50; // Reasonable limit
+        let finalCanvas = fullCanvas;
+        let finalTotalHeight = totalHeight;
+        let finalPagesNeeded = pagesNeeded;
+
+        if (pagesNeeded > maxPages) {
+          console.warn(`⚠️ Content is very long (${pagesNeeded} pages). Limiting to ${maxPages} pages for performance.`);
+          // Truncate the canvas to fit within maxPages
+          const maxHeight = maxPages * availablePageHeight;
+          const maxHeightPx = maxHeight * (fullCanvas.width / imgWidth);
+          
+          // Create a new canvas with limited height
+          const limitedCanvas = document.createElement('canvas');
+          const limitedCtx = limitedCanvas.getContext('2d');
+          limitedCanvas.width = fullCanvas.width;
+          limitedCanvas.height = maxHeightPx;
+          
+          if (limitedCtx) {
+            limitedCtx.drawImage(fullCanvas, 0, 0, fullCanvas.width, maxHeightPx, 0, 0, fullCanvas.width, maxHeightPx);
+          }
+          
+          // Use the limited canvas
+          finalCanvas = limitedCanvas;
+          finalTotalHeight = maxHeight;
+          finalPagesNeeded = maxPages;
+          console.log(`📄 Limited total height: ${maxHeight.toFixed(1)}mm, Pages needed: ${finalPagesNeeded}`);
+        } else {
+          console.log(`📄 Total height: ${totalHeight.toFixed(1)}mm, Available page height: ${availablePageHeight}mm, Pages needed: ${pagesNeeded}`);
+        }
+
+        // Split canvas into pages
+        for (let page = 0; page < finalPagesNeeded; page++) {
+          if (page > 0) {
+            pdf.addPage();
+            console.log(`📄 Added page ${page + 1}`);
+          }
+
+          const pageStartY = page * availablePageHeight;
+          const pageEndY = Math.min((page + 1) * availablePageHeight, finalTotalHeight);
+          const currentPageHeight = pageEndY - pageStartY;
+          
+          // Calculate pixel dimensions for this page
+          const pageHeightPx = currentPageHeight * (finalCanvas.width / imgWidth);
+          const sourceY = pageStartY * (finalCanvas.height / finalTotalHeight);
+
+          console.log(`📄 Page ${page + 1}: Y=${pageStartY.toFixed(1)}-${pageEndY.toFixed(1)}mm (${currentPageHeight.toFixed(1)}mm), Pixels: ${pageHeightPx.toFixed(0)}px`);
+
+          // Create a temporary canvas for this page
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCanvas.width = finalCanvas.width;
+          tempCanvas.height = pageHeightPx;
+          
+          if (tempCtx) {
+            tempCtx.drawImage(
+              finalCanvas,
+              0, sourceY, finalCanvas.width, pageHeightPx,
+              0, 0, finalCanvas.width, pageHeightPx
+            );
+          }
+
+          const tempImgData = tempCanvas.toDataURL('image/png');
+          
+          // Add the page to PDF
+          pdf.addImage(tempImgData, 'PNG', 10, 10, imgWidth, currentPageHeight);
+        }
+
+        console.log(`📄 PDF generation completed: ${finalPagesNeeded} pages created`);
+
+        // Generate blob
+        const fileName = `Monthly_Report_${options.clientName.replace(/\s+/g, '_')}_${options.month}.pdf`;
+        const blob = pdf.output('blob');
+
+        console.log('✅ PDF generated from HTML successfully:', fileName);
+        return { blob, fileName };
+
+      } finally {
+        // Clean up
+        document.body.removeChild(container);
+      }
+
+    } catch (error) {
+      console.error('❌ Error generating PDF from HTML:', error);
+      throw new Error('Failed to generate PDF from HTML');
+    }
   }
 
   /**
