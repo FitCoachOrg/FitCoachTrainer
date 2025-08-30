@@ -139,6 +139,9 @@ export class MonthlyReportStorageService {
       const filePath = `${clientId}/reports/${monthYear}.pdf`;
 
       // Upload file to Supabase storage
+      console.log('🔍 Uploading to path:', filePath);
+      console.log('🔍 File size:', pdfBlob.size, 'bytes');
+      
       const { data, error } = await supabase.storage
         .from('client')
         .upload(filePath, pdfBlob, {
@@ -148,6 +151,18 @@ export class MonthlyReportStorageService {
 
       if (error) {
         console.error('❌ Error uploading PDF:', error);
+        console.error('🔍 Error details:', {
+          message: error.message,
+          statusCode: error.statusCode,
+          error: error.error,
+          details: error.details
+        });
+        
+        // If RLS error, provide specific guidance
+        if (error.message.includes('row-level security policy')) {
+          throw new Error(`Storage access denied. Please check RLS policies for the 'client' bucket. Error: ${error.message}`);
+        }
+        
         throw new Error(`Failed to upload PDF: ${error.message}`);
       }
 
@@ -282,10 +297,38 @@ export class MonthlyReportStorageService {
    * Format month for file naming (e.g., "2025-08" -> "July_25")
    */
   private static formatMonthYear(month: string): string {
-    const date = new Date(month + '-01');
-    const monthName = date.toLocaleDateString('en-US', { month: 'long' });
-    const year = date.getFullYear().toString().slice(-2);
-    return `${monthName}_${year}`;
+    try {
+      // Handle date range format like "Jul 30 - Aug 29, 2025"
+      if (month.includes(' - ')) {
+        const parts = month.split(' - ');
+        const endDate = parts[1]; // "Aug 29, 2025"
+        const monthYear = endDate.split(', ')[0]; // "Aug 29"
+        const year = endDate.split(', ')[1]; // "2025"
+        
+        // Parse the month name
+        const monthDate = new Date(`${monthYear} ${year}`);
+        const monthName = monthDate.toLocaleDateString('en-US', { month: 'long' });
+        const yearShort = year.slice(-2);
+        return `${monthName}_${yearShort}`;
+      }
+      
+      // Handle standard month format like "2025-08"
+      const date = new Date(month + '-01');
+      if (isNaN(date.getTime())) {
+        throw new Error(`Invalid date: ${month}`);
+      }
+      
+      const monthName = date.toLocaleDateString('en-US', { month: 'long' });
+      const year = date.getFullYear().toString().slice(-2);
+      return `${monthName}_${year}`;
+    } catch (error) {
+      console.error('❌ Error formatting month year:', error);
+      // Fallback to current date
+      const now = new Date();
+      const monthName = now.toLocaleDateString('en-US', { month: 'long' });
+      const year = now.getFullYear().toString().slice(-2);
+      return `${monthName}_${year}`;
+    }
   }
 
   /**

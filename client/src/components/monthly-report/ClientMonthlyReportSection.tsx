@@ -60,6 +60,12 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
   useEffect(() => {
     loadSavedPreferences();
     loadAvailableDateRanges();
+    
+    // Debug: Check data for client 34
+    if (clientId === '34') {
+      console.log('🔍 DEBUG: Triggering debug for client 34');
+      MonthlyReportDataService.debugClientData(clientId);
+    }
   }, [clientId]);
 
   // Load saved preferences from database
@@ -545,11 +551,15 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Overall Performance</p>
-                  <p className="text-lg font-semibold">{reportData.aiInsights.executiveSummary.overallPerformance}</p>
+                  <p className="text-lg font-semibold">
+                    {reportData.aiInsights?.executiveSummary?.overallPerformance || "Analysis in progress..."}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600 dark:text-gray-400">Performance Score</p>
-                  <p className="text-2xl font-bold text-blue-600">{reportData.aiInsights.executiveSummary.performanceScore}%</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {reportData.aiInsights?.executiveSummary?.performanceScore || 0}%
+                  </p>
                 </div>
               </div>
 
@@ -560,21 +570,21 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
                   Key Achievements
                 </h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.executiveSummary.keyAchievements.map((achievement, index) => (
+                  {reportData.aiInsights?.executiveSummary?.keyAchievements?.map((achievement, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {achievement}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading achievements...</li>}
                 </ul>
               </div>
 
               {/* Areas of Concern */}
-              {reportData.aiInsights.executiveSummary.areasOfConcern.length > 0 && (
+              {reportData.aiInsights?.executiveSummary?.areasOfConcern?.length > 0 && (
                 <div>
                   <h4 className="font-medium mb-2 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-yellow-500" />
                     Areas of Concern
                   </h4>
                   <ul className="space-y-1">
-                    {reportData.aiInsights.executiveSummary.areasOfConcern.map((concern, index) => (
+                    {reportData.aiInsights?.executiveSummary?.areasOfConcern?.map((concern, index) => (
                       <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {concern}</li>
                     ))}
                   </ul>
@@ -595,17 +605,17 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               <div>
                 <h4 className="font-medium mb-2">Strengths</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.positiveTrends.strengths.map((strength, index) => (
+                  {reportData.aiInsights?.positiveTrends?.strengths?.map((strength, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {strength}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading strengths...</li>}
                 </ul>
               </div>
               <div>
                 <h4 className="font-medium mb-2">Improvements</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.positiveTrends.improvements.map((improvement, index) => (
+                  {reportData.aiInsights?.positiveTrends?.improvements?.map((improvement, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {improvement}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading improvements...</li>}
                 </ul>
               </div>
             </CardContent>
@@ -623,27 +633,27 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               <div>
                 <h4 className="font-medium mb-2">Areas for Improvement</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.recommendations.areasForImprovement.map((area, index) => (
+                  {reportData.aiInsights?.recommendations?.areasForImprovement?.map((area, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {area}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading recommendations...</li>}
                 </ul>
               </div>
               <div>
                 <h4 className="font-medium mb-2">Specific Actions</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.recommendations.specificActions.map((action, index) => (
+                  {reportData.aiInsights?.recommendations?.specificActions?.map((action, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {action}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading actions...</li>}
                 </ul>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Priority Level:</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  reportData.aiInsights.recommendations.priorityLevel === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                  reportData.aiInsights.recommendations.priorityLevel === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                  reportData.aiInsights?.recommendations?.priorityLevel === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                  reportData.aiInsights?.recommendations?.priorityLevel === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
                   'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                 }`}>
-                  {reportData.aiInsights.recommendations.priorityLevel.toUpperCase()}
+                  {reportData.aiInsights?.recommendations?.priorityLevel?.toUpperCase() || 'MEDIUM'}
                 </span>
               </div>
             </CardContent>
@@ -661,17 +671,17 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               <div>
                 <h4 className="font-medium mb-2">Next Month Goals</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.planForward.nextMonthGoals.map((goal, index) => (
+                  {reportData.aiInsights?.planForward?.nextMonthGoals?.map((goal, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {goal}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading goals...</li>}
                 </ul>
               </div>
               <div>
                 <h4 className="font-medium mb-2">Action Steps</h4>
                 <ul className="space-y-1">
-                  {reportData.aiInsights.planForward.actionSteps.map((step, index) => (
+                  {reportData.aiInsights?.planForward?.actionSteps?.map((step, index) => (
                     <li key={index} className="text-sm text-gray-700 dark:text-gray-300">• {step}</li>
-                  ))}
+                  )) || <li className="text-sm text-gray-500">Loading action steps...</li>}
                 </ul>
               </div>
             </CardContent>
@@ -689,8 +699,8 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {selectedMetrics.map(metricKey => {
-                    const metric = reportData.processedMetrics![metricKey];
-                    const aiAnalysis = reportData.aiInsights!.metricsAnalysis[metricKey];
+                    const metric = reportData.processedMetrics?.[metricKey];
+                    const aiAnalysis = reportData.aiInsights?.metricsAnalysis?.[metricKey];
                     
                     if (!metric) return null;
 

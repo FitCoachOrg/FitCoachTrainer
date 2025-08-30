@@ -187,7 +187,7 @@ export class MonthlyReportPDFGenerator {
     pdf.setFontSize(20);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(59, 130, 246);
-    pdf.text(`${aiInsights.executiveSummary.performanceScore}%`, this.PAGE_MARGIN + 30, currentY + 12, { align: 'center' });
+    pdf.text(`${aiInsights?.executiveSummary?.performanceScore || 0}%`, this.PAGE_MARGIN + 30, currentY + 12, { align: 'center' });
     
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
@@ -198,7 +198,7 @@ export class MonthlyReportPDFGenerator {
     // Overall performance description
     pdf.setFontSize(12);
     pdf.setFont('helvetica', 'normal');
-    const performanceLines = this.splitTextToFit(aiInsights.executiveSummary.overallPerformance, this.CONTENT_WIDTH - scoreBoxWidth - 15);
+    const performanceLines = this.splitTextToFit(aiInsights?.executiveSummary?.overallPerformance || 'Analysis in progress...', this.CONTENT_WIDTH - scoreBoxWidth - 15);
     let lineY = currentY + 5;
     performanceLines.forEach(line => {
       pdf.text(line, this.PAGE_MARGIN + scoreBoxWidth + 10, lineY);
@@ -208,7 +208,7 @@ export class MonthlyReportPDFGenerator {
     currentY += Math.max(scoreBoxHeight, performanceLines.length * this.LINE_HEIGHT + 5) + 10;
 
     // Key achievements
-    if (aiInsights.executiveSummary.keyAchievements.length > 0) {
+    if (aiInsights?.executiveSummary?.keyAchievements?.length > 0) {
       currentY = this.addSubsection(pdf, 'Key Achievements', currentY);
       
       pdf.setFontSize(10);
@@ -224,7 +224,7 @@ export class MonthlyReportPDFGenerator {
     }
 
     // Areas of concern
-    if (aiInsights.executiveSummary.areasOfConcern.length > 0) {
+    if (aiInsights?.executiveSummary?.areasOfConcern?.length > 0) {
       currentY = this.addSubsection(pdf, 'Areas of Concern', currentY, true);
       
       pdf.setFontSize(10);
@@ -378,7 +378,7 @@ export class MonthlyReportPDFGenerator {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(0, 0, 0);
-    aiInsights.positiveTrends.whatIsWorking.forEach(item => {
+          aiInsights?.positiveTrends?.whatIsWorking?.forEach(item => {
       const lines = this.splitTextToFit(`• ${item}`, this.CONTENT_WIDTH - 10);
       lines.forEach(line => {
         pdf.text(line, this.PAGE_MARGIN + 5, currentY);
@@ -388,7 +388,7 @@ export class MonthlyReportPDFGenerator {
     });
 
     // Strengths
-    if (aiInsights.positiveTrends.strengths.length > 0) {
+    if (aiInsights?.positiveTrends?.strengths?.length > 0) {
       currentY = this.addSubsection(pdf, 'Strengths', currentY);
       
       aiInsights.positiveTrends.strengths.forEach(strength => {
@@ -424,8 +424,8 @@ export class MonthlyReportPDFGenerator {
     pdf.setTextColor(0, 0, 0);
 
     // Priority level badge
-    const priorityColor = aiInsights.recommendations.priorityLevel === 'high' ? [239, 68, 68] : 
-                         aiInsights.recommendations.priorityLevel === 'medium' ? [245, 158, 11] : 
+    const priorityColor = aiInsights?.recommendations?.priorityLevel === 'high' ? [239, 68, 68] : 
+                         aiInsights?.recommendations?.priorityLevel === 'medium' ? [245, 158, 11] : 
                          [34, 197, 94];
     pdf.setFillColor(priorityColor[0], priorityColor[1], priorityColor[2]);
     pdf.rect(this.PAGE_MARGIN, currentY, 80, 8, 'F');
@@ -433,7 +433,7 @@ export class MonthlyReportPDFGenerator {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(255, 255, 255);
-    pdf.text(`Priority: ${aiInsights.recommendations.priorityLevel.toUpperCase()}`, this.PAGE_MARGIN + 40, currentY + 5, { align: 'center' });
+    pdf.text(`Priority: ${aiInsights?.recommendations?.priorityLevel?.toUpperCase() || 'MEDIUM'}`, this.PAGE_MARGIN + 40, currentY + 5, { align: 'center' });
     
     currentY += 12;
     pdf.setTextColor(0, 0, 0);
@@ -443,7 +443,7 @@ export class MonthlyReportPDFGenerator {
     
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    aiInsights.recommendations.areasForImprovement.forEach(area => {
+    aiInsights?.recommendations?.areasForImprovement?.forEach(area => {
       const lines = this.splitTextToFit(`• ${area}`, this.CONTENT_WIDTH - 10);
       lines.forEach(line => {
         pdf.text(line, this.PAGE_MARGIN + 5, currentY);
@@ -455,7 +455,7 @@ export class MonthlyReportPDFGenerator {
     // Specific actions
     currentY = this.addSubsection(pdf, 'Specific Actions', currentY);
     
-    aiInsights.recommendations.specificActions.forEach(action => {
+    aiInsights?.recommendations?.specificActions?.forEach(action => {
       const lines = this.splitTextToFit(`• ${action}`, this.CONTENT_WIDTH - 10);
       lines.forEach(line => {
         pdf.text(line, this.PAGE_MARGIN + 5, currentY);
@@ -491,7 +491,7 @@ export class MonthlyReportPDFGenerator {
     
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    aiInsights.planForward.nextMonthGoals.forEach(goal => {
+    aiInsights?.planForward?.nextMonthGoals?.forEach(goal => {
       const lines = this.splitTextToFit(`• ${goal}`, this.CONTENT_WIDTH - 10);
       lines.forEach(line => {
         pdf.text(line, this.PAGE_MARGIN + 5, currentY);
@@ -503,7 +503,7 @@ export class MonthlyReportPDFGenerator {
     // Action steps
     currentY = this.addSubsection(pdf, 'Action Steps', currentY);
     
-    aiInsights.planForward.actionSteps.forEach(step => {
+    aiInsights?.planForward?.actionSteps?.forEach(step => {
       const lines = this.splitTextToFit(`• ${step}`, this.CONTENT_WIDTH - 10);
       lines.forEach(line => {
         pdf.text(line, this.PAGE_MARGIN + 5, currentY);
@@ -513,7 +513,7 @@ export class MonthlyReportPDFGenerator {
     });
 
     // Expected outcomes
-    if (aiInsights.planForward.expectedOutcomes.length > 0) {
+    if (aiInsights?.planForward?.expectedOutcomes?.length > 0) {
       currentY = this.addSubsection(pdf, 'Expected Outcomes', currentY);
       
       aiInsights.planForward.expectedOutcomes.forEach(outcome => {

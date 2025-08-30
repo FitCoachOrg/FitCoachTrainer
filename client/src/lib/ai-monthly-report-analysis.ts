@@ -58,15 +58,29 @@ export class MonthlyReportAIAnalysis {
     const analysisContext = this.prepareAnalysisContext(clientData, processedMetrics, selectedMetrics);
 
     try {
-      const aiResponse = await askCerebras({
-        prompt: this.buildAnalysisPrompt(analysisContext),
-        schema: this.getAnalysisSchema(),
-        temperature: 0.3, // Lower temperature for more consistent analysis
-        maxTokens: 2000
+      const prompt = this.buildAnalysisPrompt(analysisContext);
+      console.log('🔍 AI Prompt debugging:', {
+        promptType: typeof prompt,
+        promptLength: prompt?.length,
+        promptPreview: prompt?.substring(0, 200) + '...'
       });
 
+      const aiResponse = await askCerebras(
+        prompt,
+        undefined, // model (use default)
+        {
+          temperature: 0.3, // Lower temperature for more consistent analysis
+          max_tokens: 2000
+        }
+      );
+
       console.log('✅ AI analysis completed successfully');
-      return aiResponse as MonthlyReportAIInsights;
+      
+      // Parse the AI response text into structured insights
+      const parsedInsights = this.parseAIResponse(aiResponse.response);
+      console.log('🔍 Parsed AI insights:', parsedInsights);
+      
+      return parsedInsights;
     } catch (error) {
       console.error('❌ AI analysis failed:', error);
       return this.generateFallbackInsights(clientData, processedMetrics);
@@ -141,7 +155,7 @@ export class MonthlyReportAIAnalysis {
       fitnessProgress: this.calculateFitnessProgress(workoutData),
       
       // Engagement metrics
-      engagementScore: engagementData.length > 0 ? engagementData[0]?.engagement_score || 0 : 0,
+      engagementScore: this.calculateEngagementScore(engagementData, activityData, mealData, workoutData),
       momentumScore: engagementData.length > 0 ? engagementData[0]?.momentum_3w || 0 : 0,
       
       // Consistency metrics
@@ -153,11 +167,36 @@ export class MonthlyReportAIAnalysis {
    * Calculate adherence percentage
    */
   private static calculateAdherence(actualData: any[], scheduledData: any[]): number {
-    if (scheduledData.length === 0) return 0;
+    // If no schedule data, calculate based on expected frequency
+    if (scheduledData.length === 0) {
+      if (actualData.length === 0) return 0;
+      
+      // Calculate based on 30 days and expected workout frequency
+      const uniqueDays = new Set(actualData.map(w => new Date(w.created_at).toDateString())).size;
+      const expectedWorkouts = 30 * 0.4; // Assume 40% of days should have workouts (3-4 times per week)
+      const adherence = Math.round((uniqueDays / expectedWorkouts) * 100);
+      
+      console.log('🔍 Workout Adherence Calculation:', {
+        actualWorkouts: actualData.length,
+        uniqueWorkoutDays: uniqueDays,
+        expectedWorkouts,
+        calculatedAdherence: adherence
+      });
+      
+      return adherence;
+    }
     
     const completed = actualData.length;
     const scheduled = scheduledData.length;
-    return Math.round((completed / scheduled) * 100);
+    const adherence = Math.round((completed / scheduled) * 100);
+    
+    console.log('🔍 Workout Adherence Calculation (with schedule):', {
+      completed,
+      scheduled,
+      calculatedAdherence: adherence
+    });
+    
+    return adherence;
   }
 
   /**
@@ -208,6 +247,42 @@ export class MonthlyReportAIAnalysis {
     const avgDuration = totalDuration / workoutData.length;
     
     return Math.round(avgDuration);
+  }
+
+  /**
+   * Calculate engagement score based on data activity
+   */
+  private static calculateEngagementScore(engagementData: any[], activityData: any[], mealData: any[], workoutData: any[]): number {
+    // If we have engagement data, use it
+    if (engagementData.length > 0 && engagementData[0]?.engagement_score) {
+      return engagementData[0].engagement_score;
+    }
+    
+    // Calculate engagement based on data activity
+    const activityDays = new Set(activityData.map(a => new Date(a.created_at).toDateString())).size;
+    const mealDays = new Set(mealData.map(m => new Date(m.created_at).toDateString())).size;
+    const workoutDays = new Set(workoutData.map(w => new Date(w.created_at).toDateString())).size;
+    
+    const totalDays = 30;
+    const totalRecords = activityData.length + mealData.length + workoutData.length;
+    
+    // Calculate engagement based on consistency and volume
+    const consistencyScore = (activityDays + mealDays + workoutDays) / (totalDays * 3);
+    const volumeScore = Math.min(totalRecords / 100, 1); // Normalize to 0-1, assuming 100+ records is excellent
+    
+    const engagementScore = (consistencyScore * 0.6 + volumeScore * 0.4) * 100;
+    
+    console.log('🔍 Engagement Score Calculation:', {
+      activityDays,
+      mealDays,
+      workoutDays,
+      totalRecords,
+      consistencyScore: consistencyScore * 100,
+      volumeScore: volumeScore * 100,
+      finalScore: Math.round(engagementScore)
+    });
+    
+    return Math.round(engagementScore);
   }
 
   /**
@@ -387,6 +462,136 @@ Be specific, actionable, and encouraging while maintaining professional coaching
           }
         }
       }
+    };
+  }
+
+  /**
+   * Parse AI response text into structured insights
+   */
+  private static parseAIResponse(aiResponseText: string): MonthlyReportAIInsights {
+    try {
+      console.log('🔍 Parsing AI response text...');
+      console.log('📝 Response preview:', aiResponseText.substring(0, 500) + '...');
+      
+      // Try to parse as JSON first
+      try {
+        const parsed = JSON.parse(aiResponseText);
+        console.log('✅ Successfully parsed as JSON');
+        return this.validateAndFixInsights(parsed);
+      } catch (jsonError) {
+        console.log('⚠️ Not valid JSON, attempting to extract structured content...');
+      }
+      
+      // If not JSON, try to extract structured content from text
+      const insights = this.extractInsightsFromText(aiResponseText);
+      console.log('✅ Extracted insights from text');
+      return insights;
+      
+    } catch (error) {
+      console.error('❌ Error parsing AI response:', error);
+      return this.generateFallbackInsights(null, null);
+    }
+  }
+
+  /**
+   * Extract insights from unstructured text response
+   */
+  private static extractInsightsFromText(text: string): MonthlyReportAIInsights {
+    // Default structure
+    const insights: MonthlyReportAIInsights = {
+      executiveSummary: {
+        overallPerformance: "Analysis based on available data shows consistent engagement with room for improvement.",
+        keyAchievements: ["Maintained regular activity tracking", "Consistent data collection"],
+        areasOfConcern: ["Limited data available for comprehensive analysis"],
+        performanceScore: 70
+      },
+      positiveTrends: {
+        whatIsWorking: ["Regular data collection", "Consistent engagement"],
+        strengths: ["Commitment to tracking", "Willingness to share data"],
+        improvements: ["Data consistency", "Tracking frequency"]
+      },
+      recommendations: {
+        areasForImprovement: ["Increase data collection frequency", "Improve tracking consistency"],
+        specificActions: ["Log activities daily", "Track meals consistently", "Record workouts regularly"],
+        priorityLevel: "medium"
+      },
+      planForward: {
+        nextMonthGoals: ["Improve data collection", "Increase activity frequency"],
+        actionSteps: ["Set daily reminders", "Use mobile app consistently"],
+        expectedOutcomes: ["Better insights", "Improved progress tracking"]
+      },
+      metricsAnalysis: {}
+    };
+
+    // Try to extract meaningful content from the text
+    const lines = text.split('\n');
+    let currentSection = '';
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
+      
+      // Detect sections
+      if (trimmedLine.toLowerCase().includes('executive summary') || trimmedLine.toLowerCase().includes('overall performance')) {
+        currentSection = 'executive';
+      } else if (trimmedLine.toLowerCase().includes('positive') || trimmedLine.toLowerCase().includes('strengths') || trimmedLine.toLowerCase().includes('working well')) {
+        currentSection = 'positive';
+      } else if (trimmedLine.toLowerCase().includes('recommendation') || trimmedLine.toLowerCase().includes('improvement')) {
+        currentSection = 'recommendations';
+      } else if (trimmedLine.toLowerCase().includes('plan') || trimmedLine.toLowerCase().includes('goal')) {
+        currentSection = 'plan';
+      }
+      
+      // Extract content based on section
+      if (currentSection === 'executive' && trimmedLine.includes(':')) {
+        const [key, value] = trimmedLine.split(':').map(s => s.trim());
+        if (key.toLowerCase().includes('performance')) {
+          insights.executiveSummary.overallPerformance = value || insights.executiveSummary.overallPerformance;
+        }
+      } else if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-')) {
+        const content = trimmedLine.substring(1).trim();
+        if (currentSection === 'positive') {
+          insights.positiveTrends.strengths.push(content);
+        } else if (currentSection === 'recommendations') {
+          insights.recommendations.areasForImprovement.push(content);
+        } else if (currentSection === 'plan') {
+          insights.planForward.nextMonthGoals.push(content);
+        }
+      }
+    }
+    
+    return insights;
+  }
+
+  /**
+   * Validate and fix parsed insights structure
+   */
+  private static validateAndFixInsights(parsed: any): MonthlyReportAIInsights {
+    const defaultInsights = this.generateFallbackInsights(null, null);
+    
+    return {
+      executiveSummary: {
+        overallPerformance: parsed?.executiveSummary?.overallPerformance || defaultInsights.executiveSummary.overallPerformance,
+        keyAchievements: parsed?.executiveSummary?.keyAchievements || defaultInsights.executiveSummary.keyAchievements,
+        areasOfConcern: parsed?.executiveSummary?.areasOfConcern || defaultInsights.executiveSummary.areasOfConcern,
+        performanceScore: parsed?.executiveSummary?.performanceScore || defaultInsights.executiveSummary.performanceScore
+      },
+      positiveTrends: {
+        whatIsWorking: parsed?.positiveTrends?.whatIsWorking || defaultInsights.positiveTrends.whatIsWorking,
+        strengths: parsed?.positiveTrends?.strengths || defaultInsights.positiveTrends.strengths,
+        improvements: parsed?.positiveTrends?.improvements || defaultInsights.positiveTrends.improvements
+      },
+      recommendations: {
+        areasForImprovement: parsed?.recommendations?.areasForImprovement || defaultInsights.recommendations.areasForImprovement,
+        specificActions: parsed?.recommendations?.specificActions || defaultInsights.recommendations.specificActions,
+        priorityLevel: parsed?.recommendations?.priorityLevel || defaultInsights.recommendations.priorityLevel
+      },
+      planForward: {
+        nextMonthGoals: parsed?.planForward?.nextMonthGoals || defaultInsights.planForward.nextMonthGoals,
+        actionSteps: parsed?.planForward?.actionSteps || defaultInsights.planForward.actionSteps,
+        expectedOutcomes: parsed?.planForward?.expectedOutcomes || defaultInsights.planForward.expectedOutcomes
+      },
+      metricsAnalysis: parsed?.metricsAnalysis || defaultInsights.metricsAnalysis
     };
   }
 
