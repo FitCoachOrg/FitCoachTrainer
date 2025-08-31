@@ -214,6 +214,12 @@ export function ProgramsScreen({
     console.log('[ProgramsScreen] Selected type filter:', selectedType);
     console.log('[ProgramsScreen] Client object:', client);
 
+    // Test timezone conversion functions
+    console.log('[ProgramsScreen] Testing timezone conversion functions:');
+    console.log('[ProgramsScreen] Local timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    console.log('[ProgramsScreen] UTC to Local conversion test:', convertUTCToLocalTime('09:00'));
+    console.log('[ProgramsScreen] Local to UTC conversion test:', convertLocalTimeToUTC('09:00'));
+
     // Log bedtime tasks specifically
     const bedtimeTasks = scheduleItems.filter(item => item.type === 'bedtime');
     console.log('[ProgramsScreen] Bedtime tasks found:', bedtimeTasks);
@@ -256,18 +262,20 @@ export function ProgramsScreen({
     console.log('[ProgramsScreen] Converting time:', {
       utcTime,
       clientTimezone: client?.timezone,
-      clientId
+      clientId,
+      clientObject: client
     })
 
     // Test the conversion functions
     try {
-      if (client?.timezone) {
+      if (client?.timezone && client.timezone !== 'UTC') {
         const convertedTime = convertUTCToClientTime(utcTime, client.timezone)
         console.log('[ProgramsScreen] Converted to client timezone:', {
           utcTime,
           clientTimezone: client?.timezone,
           convertedTime,
-          isValidFormat: /^\d{2}:\d{2}$/.test(convertedTime)
+          isValidFormat: /^\d{2}:\d{2}$/.test(convertedTime),
+          conversionSuccessful: convertedTime !== utcTime
         })
 
         // If conversion returns the same time or invalid format, fallback to local
@@ -285,17 +293,26 @@ export function ProgramsScreen({
         return convertedTime
       }
 
+      // Default to local timezone conversion if no client timezone or UTC
       const localTime = convertUTCToLocalTime(utcTime)
-      console.log('[ProgramsScreen] Converted to local timezone:', {
+      console.log('[ProgramsScreen] Using local timezone conversion:', {
         utcTime,
         localTime,
         localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        isValidFormat: /^\d{2}:\d{2}$/.test(localTime)
+        reason: client?.timezone === 'UTC' ? 'Client timezone is UTC' : 'No client timezone set'
       })
+
+      // If local conversion also fails, return the original UTC time
+      if (!localTime || localTime === utcTime) {
+        console.warn('[ProgramsScreen] Local timezone conversion also failed, returning UTC time')
+        return utcTime
+      }
+
       return localTime
     } catch (error) {
       console.error('[ProgramsScreen] Error converting time:', error)
-      return utcTime // Return original time as fallback
+      // Return original UTC time if conversion fails completely
+      return utcTime
     }
   }
 
@@ -314,6 +331,44 @@ export function ProgramsScreen({
       for_time: convertUTCToLocalTime(item.for_time) // Convert UTC to local for display
     })
   }
+
+  // Debug function to test timezone conversion (can be called from browser console)
+  const debugTimezoneConversion = () => {
+    console.log('🔍 ProgramsScreen Timezone Debug:')
+
+    const testTimes = ['09:00', '14:30', '21:00', '02:15']
+
+    testTimes.forEach(utcTime => {
+      console.log(`\n--- Testing UTC time: ${utcTime} ---`)
+
+      // Test local conversion
+      const localTime = convertUTCToLocalTime(utcTime)
+      console.log(`UTC ${utcTime} → Local: ${localTime}`)
+
+      // Test client timezone conversion if available
+      if (client?.timezone) {
+        const clientTime = convertUTCToClientTime(utcTime, client.timezone)
+        console.log(`UTC ${utcTime} → Client (${client.timezone}): ${clientTime}`)
+      }
+
+      // Test our convertToLocalTime function
+      const ourConversion = convertToLocalTime(utcTime)
+      console.log(`UTC ${utcTime} → Our function: ${ourConversion}`)
+    })
+
+    console.log('\n📊 Client Info:', {
+      clientId,
+      clientTimezone: client?.timezone,
+      localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    })
+
+    console.log('\n💡 To call this debug function: window.debugTimezoneConversion()')
+  }
+
+  // Make debug function available globally for testing
+  useEffect(() => {
+    (window as any).debugTimezoneConversion = debugTimezoneConversion
+  }, [client])
 
   // Handle save edited item with scope selection
   const handleSaveEdit = async () => {
