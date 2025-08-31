@@ -212,15 +212,16 @@ export function ProgramsScreen({
   useEffect(() => {
     console.log('[ProgramsScreen] scheduleItems loaded:', scheduleItems);
     console.log('[ProgramsScreen] Selected type filter:', selectedType);
-    
+    console.log('[ProgramsScreen] Client object:', client);
+
     // Log bedtime tasks specifically
     const bedtimeTasks = scheduleItems.filter(item => item.type === 'bedtime');
     console.log('[ProgramsScreen] Bedtime tasks found:', bedtimeTasks);
-    
+
     // Log custom tasks
     const customTasks = scheduleItems.filter(item => item.task === 'custom');
     console.log('[ProgramsScreen] Custom tasks found:', customTasks);
-  }, [scheduleItems, selectedType]);
+  }, [scheduleItems, selectedType, client]);
 
   // Get start date for current view
   const getViewStartDate = () => {
@@ -252,10 +253,50 @@ export function ProgramsScreen({
 
   // Convert UTC time to client's timezone for display
   const convertToLocalTime = (utcTime: string) => {
-    if (client?.timezone) {
-      return convertUTCToClientTime(utcTime, client.timezone)
+    console.log('[ProgramsScreen] Converting time:', {
+      utcTime,
+      clientTimezone: client?.timezone,
+      clientId
+    })
+
+    // Test the conversion functions
+    try {
+      if (client?.timezone) {
+        const convertedTime = convertUTCToClientTime(utcTime, client.timezone)
+        console.log('[ProgramsScreen] Converted to client timezone:', {
+          utcTime,
+          clientTimezone: client?.timezone,
+          convertedTime,
+          isValidFormat: /^\d{2}:\d{2}$/.test(convertedTime)
+        })
+
+        // If conversion returns the same time or invalid format, fallback to local
+        if (convertedTime === utcTime || !/^\d{2}:\d{2}$/.test(convertedTime)) {
+          console.log('[ProgramsScreen] Client timezone conversion failed, using local timezone')
+          const localTime = convertUTCToLocalTime(utcTime)
+          console.log('[ProgramsScreen] Converted to local timezone:', {
+            utcTime,
+            localTime,
+            localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          })
+          return localTime
+        }
+
+        return convertedTime
+      }
+
+      const localTime = convertUTCToLocalTime(utcTime)
+      console.log('[ProgramsScreen] Converted to local timezone:', {
+        utcTime,
+        localTime,
+        localTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        isValidFormat: /^\d{2}:\d{2}$/.test(localTime)
+      })
+      return localTime
+    } catch (error) {
+      console.error('[ProgramsScreen] Error converting time:', error)
+      return utcTime // Return original time as fallback
     }
-    return convertUTCToLocalTime(utcTime)
   }
 
   // Get items for a specific date
