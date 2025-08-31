@@ -43,18 +43,69 @@ export function useClients() {
     async function fetchClients() {
       try {
         setLoading(true)
-        const { data, error } = await supabase
+        
+        // Get current user session
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user?.email) {
+          setError('User not authenticated')
+          return
+        }
+
+        // Get trainer ID from trainer table using email
+        const { data: trainerData, error: trainerError } = await supabase
+          .from('trainer')
+          .select('id')
+          .eq('trainer_email', session.user.email)
+          .single()
+
+        if (trainerError || !trainerData?.id) {
+          setError('Trainer profile not found')
+          return
+        }
+
+        // Step 1: Get client IDs associated with this trainer from trainer_client_web table
+        const { data: clientRelationships, error: relationshipError } = await supabase
+          .from('trainer_client_web')
+          .select('client_id')
+          .eq('trainer_id', trainerData.id)
+
+        if (relationshipError) {
+          console.error('Error fetching client relationships:', relationshipError)
+          setError(relationshipError.message)
+          return
+        }
+
+        // If no client relationships found, return empty array
+        if (!clientRelationships || clientRelationships.length === 0) {
+          console.log('No client relationships found for trainer:', trainerData.id)
+          setClients([])
+          return
+        }
+
+        // Extract client IDs
+        const clientIds = clientRelationships.map(rel => rel.client_id).filter(Boolean)
+        
+        if (clientIds.length === 0) {
+          console.log('No valid client IDs found')
+          setClients([])
+          return
+        }
+
+        // Step 2: Fetch client data for these client IDs
+        const { data: clientsData, error: clientsError } = await supabase
           .from('client')
           .select('*')
+          .in('client_id', clientIds)
           .order('created_at', { ascending: false })
 
-        if (error) {
-          setError(error.message)
+        if (clientsError) {
+          console.error('Error fetching clients:', clientsError)
+          setError(clientsError.message)
           return
         }
 
         // Transform the data to match MappedClient interface
-        const mappedClients: MappedClient[] = (data || []).map((client: any) => ({
+        const mappedClients: MappedClient[] = (clientsData || []).map((client: any) => ({
           id: client.client_id,
           client_id: client.client_id,
           name: client.cl_name,
