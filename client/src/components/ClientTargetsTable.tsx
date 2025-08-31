@@ -647,65 +647,7 @@ export const ClientTargetsTable: React.FC<ClientTargetsTableProps> = ({
         );
       })}
 
-      {/* All Targets Summary Table */}
-      {targets.length > 0 && (
-        <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black">
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-white">
-              All Targets Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/50 dark:bg-gray-800/50">
-                    <TableHead>Target Name</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {targets.map((target) => (
-                    <TableRow key={target.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                      <TableCell className="font-medium text-gray-900 dark:text-white">
-                        {target.goal}
-                      </TableCell>
-                      <TableCell className="text-gray-700 dark:text-gray-300">
-                        {target.target}
-                      </TableCell>
-                      <TableCell className="text-gray-500 dark:text-gray-400">
-                        {new Date(target.updated_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => startEditing(target.goal)}
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => deleteTarget(target.id, target.goal)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Empty State */}
       {targets.length === 0 && (
