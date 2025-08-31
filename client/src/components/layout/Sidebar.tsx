@@ -15,7 +15,7 @@ interface NavItem {
 
 const navigationItems: NavItem[] = [
   {
-    name: "Smart Alerts",
+    name: "Dashboard",
     href: "/dashboard",
     icon: <Icons.BellIcon className="h-5 w-5" />,
     alert: true,

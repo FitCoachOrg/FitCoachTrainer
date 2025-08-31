@@ -158,7 +158,7 @@ const Alerts: React.FC = () => {
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h1 className="text-2xl font-bold">Smart Alerts</h1>
+        <h1 className="text-2xl font-bold">Alerts</h1>
         <div className="flex gap-2">
           {selectedAlerts.length > 0 ? (
             <>
@@ -173,7 +173,7 @@ const Alerts: React.FC = () => {
             </>
           ) : (
             <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Icons.Plus className="h-4 w-4 mr-2" />
+              <Icons.PlusIcon className="h-4 w-4 mr-2" />
               Create Alert
             </Button>
           )}
@@ -230,7 +230,7 @@ const Alerts: React.FC = () => {
                 You're all caught up! There are no alerts at the moment.
               </p>
               <Button onClick={() => setIsCreateModalOpen(true)}>
-                <Icons.Plus className="h-4 w-4 mr-2" />
+                <Icons.PlusIcon className="h-4 w-4 mr-2" />
                 Create Alert
               </Button>
             </div>

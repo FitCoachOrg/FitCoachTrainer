@@ -38,8 +38,6 @@ const Clients: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [engagementFilter, setEngagementFilter] = useState("all");
-
   const [activityFilter, setActivityFilter] = useState("all");
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -315,13 +313,9 @@ const Clients: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const filter = params.get('filter');
-    const engagement = params.get('engagement');
     
     if (filter && STATUS_FILTERS.some(f => f.value === filter)) {
       setStatusFilter(filter);
-    }                                                                         
-    if (engagement === 'low') {
-      setEngagementFilter('low');
     }
   }, []);
 
@@ -335,14 +329,8 @@ const Clients: React.FC = () => {
       params.set('filter', statusFilter);
     }
     
-    if (engagementFilter === 'all') {
-      params.delete('engagement');
-    } else {
-      params.set('engagement', engagementFilter);
-    }
-    
     navigate(`?${params.toString()}`, { replace: true });
-  }, [statusFilter, engagementFilter, navigate]);
+  }, [statusFilter, navigate]);
 
   // Enhanced filtering logic that works with the existing data structure
   const filteredClients = clients.filter((client) => {
@@ -357,9 +345,6 @@ const Clients: React.FC = () => {
       statusFilter === "all" ||
       (statusFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
-    // Engagement score filter (mocked for now)
-    const matchesEngagement = true;
-
     // Activity filter
     const matchesActivity = 
       activityFilter === "all" ||
@@ -367,7 +352,7 @@ const Clients: React.FC = () => {
       (activityFilter === "moderate" && daysSinceActivity !== null && daysSinceActivity > 3 && daysSinceActivity <= 7) ||
       (activityFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
 
-    return matchesSearch && matchesStatus && matchesEngagement && matchesActivity;
+    return matchesSearch && matchesStatus && matchesActivity;
   });
 
   const sortedClients = [...filteredClients].sort((a, b) => {
@@ -575,18 +560,6 @@ const Clients: React.FC = () => {
                 </h1>
                 <div className="flex gap-3 flex-wrap">
                   <select
-                    value={engagementFilter}
-                    onChange={(e) => setEngagementFilter(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
-                    title="Engagement Score"
-                  >
-                    <option value="all">Engagement: All</option>
-                    <option value="high">High (80-100)</option>
-                    <option value="medium">Medium (50-79)</option>
-                    <option value="low">Low (0-49)</option>
-                  </select>
-
-                  <select
                     value={activityFilter}
                     onChange={(e) => setActivityFilter(e.target.value)}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
@@ -599,7 +572,6 @@ const Clients: React.FC = () => {
                   </select>
                   <button 
                     onClick={() => {
-                      setEngagementFilter("all");
                       setActivityFilter("all");
                       setStatusFilter("all");
                       setSearchQuery("");

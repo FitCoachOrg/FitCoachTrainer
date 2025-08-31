@@ -938,7 +938,7 @@ const ProfessionalCalendar: React.FC = () => {
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-[600px] overflow-y-auto relative bg-white dark:bg-gray-900">
+      <div className="h-full overflow-y-auto relative bg-white dark:bg-gray-900">
               {/* Time grid background - Google Calendar style */}
       <div className="absolute inset-0 ml-20 z-0">
           {hourSlots.map((time, index) => {
@@ -1081,7 +1081,7 @@ const ProfessionalCalendar: React.FC = () => {
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-[600px] overflow-y-auto bg-white dark:bg-gray-900">
+      <div className="h-full overflow-y-auto bg-white dark:bg-gray-900">
         <div className="grid grid-cols-8 gap-0">
                   {/* Time column - Enhanced with 30-minute ticks */}
         <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10">
@@ -1091,7 +1091,7 @@ const ProfessionalCalendar: React.FC = () => {
             </div>
             
             {/* Time labels - Hour only (like Daily view) */}
-            <div className="relative h-[552px]">
+            <div className="relative h-[calc(100%-48px)]">
               {hourSlots.map((time) => {
                 const [hours] = time.split(':').map(Number)
                 const minutesFromStart = (hours - startHour) * 60
@@ -1134,7 +1134,7 @@ const ProfessionalCalendar: React.FC = () => {
                 </div>
                 
                 {/* Time grid background - Hour only (like Daily view) */}
-                <div className="relative h-[552px]">
+                <div className="relative h-[calc(100%-48px)]">
                   {/* Hour lines */}
                   {hourSlots.map((time) => {
                     const [hours] = time.split(':').map(Number)
@@ -1247,7 +1247,7 @@ const ProfessionalCalendar: React.FC = () => {
     const weeks = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 })
     
     return (
-      <div className="space-y-2">
+      <div className="h-full space-y-2 bg-white dark:bg-gray-900">
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
@@ -1274,7 +1274,7 @@ const ProfessionalCalendar: React.FC = () => {
               return (
                 <div
                   key={day.toISOString()}
-                  className={`min-h-[120px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg ${
+                  className={`min-h-[120px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 ${
                     isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : ''
                   } ${!isCurrentMonth ? 'opacity-50' : ''}`}
                 >
@@ -1321,11 +1321,11 @@ const ProfessionalCalendar: React.FC = () => {
   }
 
   return (
-    <Card className="shadow-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-2xl">
-      <CardHeader className="pb-4">
+    <Card className="shadow-lg border border-border bg-card rounded-2xl h-full overflow-hidden">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
+          <CardTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             Professional Calendar
           </CardTitle>
           
@@ -1418,7 +1418,7 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
       </CardHeader>
       
-      <CardContent>
+      <CardContent className="p-6">
         {view === "daily" && renderDailyView()}
         {view === "weekly" && renderWeeklyView()}
         {view === "monthly" && renderMonthlyView()}

@@ -16,7 +16,11 @@ import {
   ChevronDown,
   Pencil,
   Save,
-  X
+  X,
+  AlertTriangle,
+  Clock,
+  Calendar,
+  Flag
 } from "lucide-react"
 import { useClients } from "@/hooks/use-clients"
 import { useTodos } from "@/hooks/use-todos"
@@ -156,6 +160,39 @@ const TodoList: React.FC = () => {
     return date < new Date() && date.toDateString() !== new Date().toDateString()
   }
 
+  // Enhanced priority badge component
+  const PriorityBadge = ({ priority, size = "default" }: { priority: "low" | "medium" | "high", size?: "small" | "default" }) => {
+    const config = {
+      low: {
+        color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800",
+        icon: <Flag className={`${size === "small" ? "h-3 w-3" : "h-4 w-4"} text-green-600 dark:text-green-400`} />,
+        text: "Low"
+      },
+      medium: {
+        color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800",
+        icon: <Flag className={`${size === "small" ? "h-3 w-3" : "h-4 w-4"} text-yellow-600 dark:text-yellow-400`} />,
+        text: "Medium"
+      },
+      high: {
+        color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-200 dark:border-red-800",
+        icon: <Flag className={`${size === "small" ? "h-3 w-3" : "h-4 w-4"} text-red-600 dark:text-red-400`} />,
+        text: "High"
+      }
+    }
+
+    const { color, icon, text } = config[priority]
+
+    return (
+      <Badge 
+        variant="outline" 
+        className={`${color} border ${size === "small" ? "text-xs px-2 py-1" : "text-sm px-3 py-1"} flex items-center gap-1 font-medium`}
+      >
+        {icon}
+        {size === "small" ? (priority === 'high' ? 'H' : priority === 'medium' ? 'M' : 'L') : text}
+      </Badge>
+    )
+  }
+
   // Show loading state while todos are being fetched
   if (todosLoading) {
     return (
@@ -183,32 +220,33 @@ const TodoList: React.FC = () => {
   }
 
   return (
-    <Card className="shadow-lg border border-border bg-card rounded-2xl h-full">
-      <CardHeader className="pb-4">
+    <Card className="shadow-lg border border-border bg-card rounded-2xl h-full overflow-hidden">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
-            <CheckCircle className="h-5 w-5" />
+            <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             To-Do List
           </CardTitle>
-          <Badge variant="secondary" className="text-sm">
+          <Badge variant="secondary" className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             {stats?.completed_todos || 0}/{stats?.total_todos || 0} completed
           </Badge>
         </div>
         
         {/* Error display */}
         {error && (
-          <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-            <p className="text-sm text-red-600 dark:text-red-400">
+          <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+            <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
               Error: {error}
             </p>
           </div>
         )}
       </CardHeader>
       
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         {/* Add Todo Form */}
         {isAddingTodo ? (
-          <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/40">
+          <div className="space-y-4 p-4 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
             {/* Client Dropdown - Moved to top */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -218,7 +256,7 @@ const TodoList: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground flex items-center justify-between"
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground flex items-center justify-between hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
                 >
                   <span>
                     {selectedClientId 
@@ -293,14 +331,14 @@ const TodoList: React.FC = () => {
               value={newTodo}
               onChange={(e) => setNewTodo(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
-              className="font-medium"
+              className="font-medium border-2 focus:border-blue-500 dark:focus:border-blue-400"
             />
             
             <div className="grid grid-cols-2 gap-3">
               <select
                 value={selectedPriority}
                 onChange={(e) => setSelectedPriority(e.target.value as "low" | "medium" | "high")}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 transition-colors"
               >
                 <option value="low">Low Priority</option>
                 <option value="medium">Medium Priority</option>
@@ -310,7 +348,7 @@ const TodoList: React.FC = () => {
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="text-sm"
+                className="text-sm border-2 focus:border-blue-500 dark:focus:border-blue-400"
               />
             </div>
             <Input
@@ -318,9 +356,10 @@ const TodoList: React.FC = () => {
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+              className="border-2 focus:border-blue-500 dark:focus:border-blue-400"
             />
             <div className="flex gap-2">
-              <Button onClick={handleAddTodo} size="sm" className="flex-1">
+              <Button onClick={handleAddTodo} size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700">
                 Add Todo
               </Button>
               <Button 
@@ -339,215 +378,236 @@ const TodoList: React.FC = () => {
         ) : (
           <Button 
             onClick={() => setIsAddingTodo(true)}
-            className="w-full gap-2"
+            className="w-full gap-2 bg-blue-600 hover:bg-blue-700 border-2 border-blue-200 dark:border-blue-800"
           >
             <Plus className="h-4 w-4" />
             Add New Todo
           </Button>
         )}
 
-        {/* Todo List as Compact Table */}
-        <div className="w-full">
-          <table className="w-full border-collapse text-sm table-fixed rounded-lg overflow-hidden">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-left py-2 px-2 font-medium text-foreground w-1/3">
-                  Task
-                </th>
-                <th className="text-left py-2 px-2 font-medium text-foreground w-1/6">
-                  Client
-                </th>
-                <th className="text-left py-2 px-2 font-medium text-foreground w-16">
-                  Priority
-                </th>
-                <th className="text-left py-2 px-2 font-medium text-foreground w-20">
-                  Due Date
-                </th>
-                <th className="text-left py-2 px-2 font-medium text-foreground w-1/6">
-                  Category
-                </th>
-                <th className="text-left py-2 px-2 font-medium text-foreground w-24">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {todos.map((todo: TodoWithClient) => (
-                <tr 
-                  key={todo.id}
-                  className={`border-b border-border hover:bg-muted/40 ${
-                    todo.completed ? 'opacity-75 bg-muted/40' : ''
-                  }`}
-                >
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <Input
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEditing()
-                          if (e.key === 'Escape') cancelEditing()
-                        }}
-                        className="font-medium"
-                        placeholder="Task title"
-                      />
-                    ) : (
-                      <div className="flex items-start gap-2">
-                        <Checkbox
-                          checked={todo.completed}
-                          onCheckedChange={() => handleToggleTodo(todo.id)}
-                          className="mt-0.5 flex-shrink-0"
+        {/* Enhanced Todo List with Gridlines */}
+        <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b-2 border-gray-300 dark:border-gray-600">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-1/3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      Task
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-1/6">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      Client
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-20">
+                    <div className="flex items-center gap-2">
+                      <Flag className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      Priority
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-24">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      Due Date
+                    </div>
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-1/6">
+                    Category
+                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white w-28">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {todos.map((todo: TodoWithClient, index: number) => (
+                  <tr 
+                    key={todo.id}
+                    className={`border-b border-gray-200 dark:border-gray-700 transition-all duration-200 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 ${
+                      todo.completed ? 'opacity-75 bg-gray-50/50 dark:bg-gray-800/50' : 
+                      index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'
+                    } ${
+                      isOverdue(todo.due_date || '') && !todo.completed ? 'border-l-4 border-l-red-500 bg-red-50/30 dark:bg-red-950/20' : ''
+                    }`}
+                  >
+                    <td className="py-3 px-4 align-top border-r border-gray-200 dark:border-gray-700">
+                      {editingId === todo.id ? (
+                        <Input
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEditing()
+                            if (e.key === 'Escape') cancelEditing()
+                          }}
+                          className="font-medium border-2 focus:border-blue-500 dark:focus:border-blue-400"
+                          placeholder="Task title"
                         />
-                        <span className={`font-medium break-words ${
-                          todo.completed 
-                            ? 'line-through text-muted-foreground' 
-                            : 'text-foreground'
-                        }`}>
-                          {todo.title}
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <select
-                        value={editClientId ?? ''}
-                        onChange={(e) => setEditClientId(e.target.value ? Number(e.target.value) : undefined)}
-                        className="w-full px-2 py-2 border border-input rounded-md bg-background text-foreground text-xs"
-                      >
-                        <option value="">No client</option>
-                        {clients.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      todo.client_id ? (
-                        <div className="flex items-start gap-1">
-                          <User className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                          <span className="text-xs text-foreground break-words">
-                            {getClientName(todo.client_id)}
+                      ) : (
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={todo.completed}
+                            onCheckedChange={() => handleToggleTodo(todo.id)}
+                            className="mt-1 flex-shrink-0 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                          />
+                          <span className={`font-medium break-words leading-relaxed ${
+                            todo.completed 
+                              ? 'line-through text-gray-500 dark:text-gray-400' 
+                              : 'text-gray-900 dark:text-white'
+                          }`}>
+                            {todo.title}
                           </span>
                         </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 align-top border-r border-gray-200 dark:border-gray-700">
+                      {editingId === todo.id ? (
+                        <select
+                          value={editClientId ?? ''}
+                          onChange={(e) => setEditClientId(e.target.value ? Number(e.target.value) : undefined)}
+                          className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400"
+                        >
+                          <option value="">No client</option>
+                          {clients.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
                       ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )
-                    )}
-                  </td>
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <select
-                        value={editPriority}
-                        onChange={(e) => setEditPriority(e.target.value as "low" | "medium" | "high")}
-                        className="w-full px-2 py-2 border border-input rounded-md bg-background text-foreground text-xs"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                    ) : (
-                      <Badge 
-                        variant="secondary" 
-                        className={`text-xs px-1 py-0.5 ${
-                          todo.priority === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                          todo.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                        }`}
-                      >
-                        {todo.priority === 'high' ? 'H' : todo.priority === 'medium' ? 'M' : 'L'}
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <Input
-                        type="date"
-                        value={editDueDate}
-                        onChange={(e) => setEditDueDate(e.target.value)}
-                        className="text-xs"
-                      />
-                    ) : (
-                      todo.due_date ? (
-                        <span className={`text-xs break-words ${
-                          isOverdue(todo.due_date) && !todo.completed 
-                            ? 'text-red-600 dark:text-red-400 font-medium' 
-                            : 'text-muted-foreground'
-                        }`}>
-                          {formatDueDate(todo.due_date)}
-                        </span>
+                        todo.client_id ? (
+                          <div className="flex items-start gap-2">
+                            <User className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-sm text-gray-900 dark:text-white break-words font-medium">
+                              {getClientName(todo.client_id)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">-</span>
+                        )
+                      )}
+                    </td>
+                    <td className="py-3 px-4 align-top border-r border-gray-200 dark:border-gray-700">
+                      {editingId === todo.id ? (
+                        <select
+                          value={editPriority}
+                          onChange={(e) => setEditPriority(e.target.value as "low" | "medium" | "high")}
+                          className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400"
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
                       ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )
-                    )}
-                  </td>
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <Input
-                        placeholder="Category"
-                        value={editCategory}
-                        onChange={(e) => setEditCategory(e.target.value)}
-                        className="text-xs"
-                      />
-                    ) : (
-                      todo.category ? (
-                        <span className="text-xs text-foreground capitalize break-words">
-                          {todo.category}
-                        </span>
+                        <PriorityBadge priority={todo.priority} size="small" />
+                      )}
+                    </td>
+                    <td className="py-3 px-4 align-top border-r border-gray-200 dark:border-gray-700">
+                      {editingId === todo.id ? (
+                        <Input
+                          type="date"
+                          value={editDueDate}
+                          onChange={(e) => setEditDueDate(e.target.value)}
+                          className="text-sm border-2 focus:border-blue-500 dark:focus:border-blue-400"
+                        />
                       ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )
-                    )}
-                  </td>
-                  <td className="py-2 px-2 align-top">
-                    {editingId === todo.id ? (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={saveEditing}
-                          disabled={savingEdit}
-                        >
-                          <Save className="h-3 w-3" /> Save
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={cancelEditing}
-                          disabled={savingEdit}
-                        >
-                          <X className="h-3 w-3" /> Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2"
-                          onClick={() => startEditing(todo)}
-                        >
-                          <Pencil className="h-3 w-3" /> Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-red-600 hover:text-red-700"
-                          onClick={() => handleDeleteTodo(todo.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        todo.due_date ? (
+                          <div className="flex items-center gap-2">
+                            {isOverdue(todo.due_date) && !todo.completed && (
+                              <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                            )}
+                            <span className={`text-sm break-words font-medium ${
+                              isOverdue(todo.due_date) && !todo.completed 
+                                ? 'text-red-600 dark:text-red-400' 
+                                : 'text-gray-900 dark:text-white'
+                            }`}>
+                              {formatDueDate(todo.due_date)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">-</span>
+                        )
+                      )}
+                    </td>
+                    <td className="py-3 px-4 align-top border-r border-gray-200 dark:border-gray-700">
+                      {editingId === todo.id ? (
+                        <Input
+                          placeholder="Category"
+                          value={editCategory}
+                          onChange={(e) => setEditCategory(e.target.value)}
+                          className="text-sm border-2 focus:border-blue-500 dark:focus:border-blue-400"
+                        />
+                      ) : (
+                        todo.category ? (
+                          <Badge variant="outline" className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600">
+                            {todo.category}
+                          </Badge>
+                        ) : (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 italic">-</span>
+                        )
+                      )}
+                    </td>
+                    <td className="py-3 px-4 align-top">
+                      {editingId === todo.id ? (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="h-8 px-3 bg-green-600 hover:bg-green-700"
+                            onClick={saveEditing}
+                            disabled={savingEdit}
+                          >
+                            <Save className="h-3 w-3 mr-1" /> Save
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={cancelEditing}
+                            disabled={savingEdit}
+                          >
+                            <X className="h-3 w-3 mr-1" /> Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                            onClick={() => startEditing(todo)}
+                          >
+                            <Pencil className="h-3 w-3 mr-1" /> Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-3 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
+                            onClick={() => handleDeleteTodo(todo.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           
           {todos.length === 0 && !todosLoading && (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No todos yet. Add your first todo to get started!</p>
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-800/50">
+              <CheckCircle className="h-16 w-16 mx-auto mb-4 opacity-50 text-blue-400" />
+              <h3 className="text-lg font-semibold mb-2 text-gray-700 dark:text-gray-300">No todos yet</h3>
+              <p className="mb-4 text-gray-600 dark:text-gray-400">Add your first todo to get started and stay organized!</p>
+              <Button 
+                onClick={() => setIsAddingTodo(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Todo
+              </Button>
             </div>
           )}
         </div>

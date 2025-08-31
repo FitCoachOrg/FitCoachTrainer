@@ -30,7 +30,7 @@ const WelcomeCard: React.FC<WelcomeCardProps> = ({ name = "Coach" }) => {
             Good {getTimeOfDay()}, <span className="text-green-600 dark:text-green-400">{name}</span>!
           </h1>
           <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm md:text-base">
-            Stay organized with smart alerts and a modular UI to manage clients effectively.{" "}
+            Stay organized with alerts and a modular UI to manage clients effectively.{" "}
             <br className="hidden sm:block" />
             Deliver personalized fitness and nutrition plans effortlessly.
           </p>
