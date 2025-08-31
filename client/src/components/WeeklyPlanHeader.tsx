@@ -9,6 +9,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
+import VideoModal from '@/components/VideoModal';
+import VideoThumbnail from '@/components/VideoThumbnail';
 import { 
   checkMonthlyWorkoutStatus, 
   getStatusDisplay,
@@ -101,7 +103,25 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   
   // Add debouncing for approval status checks
   const [lastApprovalCheck, setLastApprovalCheck] = useState<number>(0);
-  
+
+  // Video modal state
+  const [videoModalOpen, setVideoModalOpen] = useState(false);
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState('');
+  const [selectedExerciseName, setSelectedExerciseName] = useState('');
+
+  // Video modal handlers
+  const openVideoModal = (videoUrl: string, exerciseName: string) => {
+    setSelectedVideoUrl(videoUrl);
+    setSelectedExerciseName(exerciseName);
+    setVideoModalOpen(true);
+  };
+
+  const closeVideoModal = () => {
+    setVideoModalOpen(false);
+    setSelectedVideoUrl('');
+    setSelectedExerciseName('');
+  };
+
   const debouncedApprovalCheck = useCallback(() => {
     const now = Date.now();
     if (now - lastApprovalCheck > 500) { // Reduced to 500ms for more responsive updates
@@ -706,14 +726,14 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     }
 
     return (
-      <div className="bg-white rounded-lg shadow-lg p-4 max-w-2xl">
+      <div className="bg-white rounded-lg shadow-lg p-4 max-w-4xl max-w-[95vw] md:max-w-4xl">
         <div className="text-center border-b border-gray-200 pb-3 mb-3">
           <div className="text-gray-800 font-bold text-lg">{day.focus || 'Workout'}</div>
           <div className="text-sm text-gray-500 mt-1">{day.exercises.length} exercise{day.exercises.length > 1 ? 's' : ''}</div>
         </div>
 
         <div className="overflow-x-auto max-h-64 overflow-y-auto">
-          <table className="w-full text-xs border-collapse min-w-max">
+          <table className="w-full text-xs border-collapse min-w-max md:min-w-0">
             <thead className="sticky top-0 bg-gray-50 z-10">
               <tr className="border-b border-gray-300">
                 <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-48">Exercise</th>
@@ -722,6 +742,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                 <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-16">Weight</th>
                 <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-32">Equipment</th>
                 <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-18">Duration</th>
+                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-24 md:w-32">Video</th>
               </tr>
             </thead>
             <tbody>
@@ -732,6 +753,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                 const weight = exercise.weight || exercise.weights || 'BW';
                 const equipment = exercise.equipment || 'None';
                 const duration = exercise.duration || exercise.duration_sec || '15min';
+                const videoLink = exercise.video_link || exercise.videoLink || exercise.video_url || exercise.youtube_video_id || '';
 
                 return (
                   <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50/30' : 'bg-white'}`}>
@@ -751,6 +773,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                       </div>
                     </td>
                     <td className="p-2 text-center font-mono text-gray-700 font-semibold">{duration}</td>
+                    <td className="p-2 text-center">
+                      {videoLink ? (
+                        <VideoThumbnail
+                          videoUrl={videoLink}
+                          exerciseName={name}
+                          onClick={() => openVideoModal(videoLink, name)}
+                        />
+                      ) : (
+                        <div className="w-20 md:w-24 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400">
+                          No Video
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -1180,6 +1215,14 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           {viewMode === 'weekly' ? renderWeeklyView() : renderMonthlyView()}
       </SortableContext>
     </DndContext>
+
+    {/* Video Modal */}
+    <VideoModal
+      open={videoModalOpen}
+      onClose={closeVideoModal}
+      videoUrl={selectedVideoUrl}
+      exerciseName={selectedExerciseName}
+    />
     </div>
   );
 }
