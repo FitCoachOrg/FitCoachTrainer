@@ -41,6 +41,7 @@ import DatePickerTestPage from "./pages/DatePickerTestPage"
 import Admin from "./pages/Admin"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import TermsOfService from "./pages/TermsOfService"
+import Support from "./pages/Support"
 import Footer from "./components/layout/Footer"
 
 // ProtectedRoute wrapper - now properly protects routes
@@ -209,6 +210,15 @@ function App() {
                   element={
                     <PublicLayout>
                       <TermsOfService />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/support"
+                  element={
+                    <PublicLayout>
+                      <Support />
                     </PublicLayout>
                   }
                 />

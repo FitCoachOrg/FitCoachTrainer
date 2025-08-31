@@ -102,12 +102,12 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <a 
-                  href="mailto:support@coachez.com" 
+                <Link 
+                  to="/support" 
                   className={`hover:text-green-500 transition-colors ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}
                 >
-                  Contact Support
-                </a>
+                  Support
+                </Link>
               </li>
             </ul>
           </div>
