@@ -3326,63 +3326,82 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
             </div>
           </div>
           
-          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
-            {/* Date Picker */}
-            <div className="flex items-center gap-3">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className="w-full sm:w-[220px] justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(planStartDate, "PPP")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
-                  <Calendar
-                    mode="single"
-                    selected={planStartDate}
-                    // Disable all dates that are not the client's plan start day
-                    disabled={(date: Date) => {
-                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      const clientPlanStartDay = client?.plan_start_day || 'Sunday';
-                      return weekdays[date.getDay()] !== clientPlanStartDay;
-                    }}
-                    onSelect={(date) => {
-                      if (!date) return;
-                      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      const clientPlanStartDay = client?.plan_start_day || 'Sunday';
-                      if (weekdays[date.getDay()] === clientPlanStartDay) {
-                        handleDateChange(date);
-                      }
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-8">
+            {/* Date Picker Section */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Plan Start Date
+              </label>
+              <div className="flex items-center gap-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className="w-full sm:w-[220px] justify-start text-left font-normal shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      {format(planStartDate, "PPP")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-50" align="start" side="bottom" sideOffset={8}>
+                    <Calendar
+                      mode="single"
+                      selected={planStartDate}
+                      // Disable all dates that are not the client's plan start day
+                      disabled={(date: Date) => {
+                        const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                        const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+                        return weekdays[date.getDay()] !== clientPlanStartDay;
+                      }}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                        const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+                        if (weekdays[date.getDay()] === clientPlanStartDay) {
+                          handleDateChange(date);
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-            
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-              <Button
-                variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('weekly')}
-                className="text-xs"
+
+            {/* View Mode Toggle Section */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                View Mode
+              </label>
+              <div
+                className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 shadow-sm"
+                onClick={(e) => e.stopPropagation()}
               >
-                <Calendar className="h-3 w-3 mr-1" />
-                7 Days
-              </Button>
-              <Button
-                variant={viewMode === 'monthly' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('monthly')}
-                className="text-xs"
-              >
-                <CalendarDays className="h-3 w-3 mr-1" />
-                Monthly
-              </Button>
+                <Button
+                  variant={viewMode === 'weekly' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode('weekly');
+                  }}
+                  className="text-xs hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Calendar className="h-3 w-3 mr-1 text-gray-600 dark:text-gray-400" />
+                  7 Days
+                </Button>
+                <Button
+                  variant={viewMode === 'monthly' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewMode('monthly');
+                  }}
+                  className="text-xs hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <CalendarDays className="h-3 w-3 mr-1 text-gray-600 dark:text-gray-400" />
+                  Monthly
+                </Button>
+              </div>
             </div>
           </div>
           
