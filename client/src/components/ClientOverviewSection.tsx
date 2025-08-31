@@ -94,7 +94,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
     switch (activeTab) {
       case 'onboarding':
         return (
-          <div className="w-full">
+          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg">
             <TrainerOnboardingScreen
               clientId={client?.client_id?.toString() || ''}
               client={client}
@@ -110,8 +110,8 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
       
       case 'targets':
         return (
-          <div className="w-full">
-            <ClientTargetsTable 
+          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg p-6">
+            <ClientTargetsTable
               clientId={client?.client_id?.toString() || ''}
               client={client}
             />
@@ -120,8 +120,8 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
       
       case 'monthly-report':
         return (
-          <div className="w-full">
-            <ClientMonthlyReportSection 
+          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg p-6">
+            <ClientMonthlyReportSection
               clientId={client?.client_id?.toString() || ''}
               client={client}
             />
