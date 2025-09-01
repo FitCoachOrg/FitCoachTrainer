@@ -26,6 +26,8 @@ import { ProgressPicturesCard } from "./ProgressPicturesCard"
 import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceholder, NutritionalPreferencesPlaceholder, TrainingPreferencesPlaceholder } from "@/components/placeholder-cards"
 import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
 import { type PopupKey } from "@/components/popups/trainer-popups.config"
+import { Button } from "@/components/ui/button"
+import { ChevronDown, ChevronUp } from "lucide-react"
 
 interface MetricsSectionProps {
   clientId?: number
@@ -115,9 +117,21 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
   const [timeRange, setTimeRange] = useState<"7D" | "30D" | "90D">("30D")
   const [chartType, setChartType] = useState<"line" | "bar">("line")
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards")
-  
+
   // Unified popup state
   const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
+
+  // State for collapsible client details
+  const [showClientDetails, setShowClientDetails] = useState<boolean>(() => {
+    // Load from localStorage, default to false (hidden)
+    const saved = localStorage.getItem('metrics-show-details');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Save to localStorage when state changes
+  useEffect(() => {
+    localStorage.setItem('metrics-show-details', JSON.stringify(showClientDetails));
+  }, [showClientDetails]);
 
   // Filter data based on selected time range
   const filterDataByTimeRange = useCallback(() => {
@@ -1184,13 +1198,35 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Placeholder Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+      {/* Collapsible Client Details Section */}
+      <div className="mb-6">
+        <Button
+          onClick={() => setShowClientDetails(!showClientDetails)}
+          variant="outline"
+          className="w-full justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 transition-all duration-300"
+        >
+          <span className="font-medium text-gray-900 dark:text-white">
+            Show Client Details
+          </span>
+          {showClientDetails ? (
+            <ChevronUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          )}
+        </Button>
+
+        {/* Collapsible Cards Container */}
+        <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
+          showClientDetails ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
+        }`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+            <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+            <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+            <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+            <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+          </div>
+        </div>
       </div>
 
       {/* Client Stats Section - Removed */}

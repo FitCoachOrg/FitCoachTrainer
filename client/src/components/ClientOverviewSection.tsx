@@ -9,7 +9,7 @@ import ClientTargetsTable from "./ClientTargetsTable";
 import ClientMonthlyReportSection from "./monthly-report/ClientMonthlyReportSection";
 
 import { AICoachInsightsState } from "@/types/ai-coach-insights";
-import { FileText } from "lucide-react";
+import { FileText, ChevronDown, ChevronUp } from "lucide-react";
 
 interface ClientOverviewSectionProps {
   client: any;
@@ -58,6 +58,18 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
   const [openPopup, setOpenPopup] = React.useState<PopupKey | null>(null);
   // Local state for active tab
   const [activeTab, setActiveTab] = React.useState<OverviewTab>('onboarding');
+
+  // State for collapsible client details
+  const [showClientDetails, setShowClientDetails] = React.useState<boolean>(() => {
+    // Load from localStorage, default to false (hidden)
+    const saved = localStorage.getItem('client-overview-show-details');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Save to localStorage when state changes
+  React.useEffect(() => {
+    localStorage.setItem('client-overview-show-details', JSON.stringify(showClientDetails));
+  }, [showClientDetails]);
 
   // Debug: Log when openPopup changes
   React.useEffect(() => {
@@ -137,17 +149,39 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
     <div className="flex flex-col h-full">
       {/* Fixed Header Section - Mini Cards and Tabs */}
       <div className="flex-shrink-0">
-        {/* Placeholder Cards Section - 5 mini cards that open popup windows */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-          <TrainingPreferencesPlaceholder onClick={() => {
-            console.log('🔍 ClientOverviewSection - TrainingPreferencesPlaceholder clicked!')
-            console.log('🔍 ClientOverviewSection - Setting openPopup to trainingPreferences')
-            setOpenPopup('trainingPreferences')
-          }} client={client} />
-          <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
-          <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
-          <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+        {/* Collapsible Client Details Section */}
+        <div className="mb-6">
+          <Button
+            onClick={() => setShowClientDetails(!showClientDetails)}
+            variant="outline"
+            className="w-full justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 transition-all duration-300"
+          >
+            <span className="font-medium text-gray-900 dark:text-white">
+              Show Client Details
+            </span>
+            {showClientDetails ? (
+              <ChevronUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            )}
+          </Button>
+
+          {/* Collapsible Cards Container */}
+          <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            showClientDetails ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+              <TrainingPreferencesPlaceholder onClick={() => {
+                console.log('🔍 ClientOverviewSection - TrainingPreferencesPlaceholder clicked!')
+                console.log('🔍 ClientOverviewSection - Setting openPopup to trainingPreferences')
+                setOpenPopup('trainingPreferences')
+              }} client={client} />
+              <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+              <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+              <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+            </div>
+          </div>
         </div>
 
         {/* Tab Navigation - Underneath the mini cards */}

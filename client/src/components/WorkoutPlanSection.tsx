@@ -1397,6 +1397,18 @@ const WorkoutPlanSection = ({
   const [isImportTemplateOpen, setIsImportTemplateOpen] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  // State for collapsible client details
+  const [showClientDetails, setShowClientDetails] = useState<boolean>(() => {
+    // Load from localStorage, default to false (hidden)
+    const saved = localStorage.getItem('workout-show-details');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Save to localStorage when state changes
+  useEffect(() => {
+    localStorage.setItem('workout-show-details', JSON.stringify(showClientDetails));
+  }, [showClientDetails]);
   const [templateImportStartDate, setTemplateImportStartDate] = useState<Date>(new Date());
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isImportingTemplate, setIsImportingTemplate] = useState(false);
@@ -3623,13 +3635,35 @@ const WorkoutPlanSection = ({
       <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
         isClientGoalsExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
       }`}>
-        {/* Placeholder Cards Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-          <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
-          <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
-          <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
-          <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+        {/* Collapsible Client Details Section */}
+        <div className="mb-6">
+          <Button
+            onClick={() => setShowClientDetails(!showClientDetails)}
+            variant="outline"
+            className="w-full justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 transition-all duration-300"
+          >
+            <span className="font-medium text-gray-900 dark:text-white">
+              Show Client Details
+            </span>
+            {showClientDetails ? (
+              <ChevronUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            )}
+          </Button>
+
+          {/* Collapsible Cards Container */}
+          <div className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            showClientDetails ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+              <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+              <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+              <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+              <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+            </div>
+          </div>
         </div>
 
         {/* Client Goals & Preferences Section */}
