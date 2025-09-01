@@ -293,6 +293,16 @@ export class MonthlyReportHTMLGenerator {
             opacity: 0.6;
             margin-top: 10px;
         }
+
+        /* Page break utility */
+        .page-break {
+            page-break-before: always;
+        }
+
+        /* Force page break for detailed metrics */
+        .detailed-metrics-break {
+            page-break-before: always;
+        }
         .client-info {
             background-color: #f8f9fa;
             padding: 25px;
@@ -528,8 +538,8 @@ export class MonthlyReportHTMLGenerator {
     <div class="client-section">
         <div class="client-profile">
             <div class="client-avatar">
-                ${options.clientData?.clientInfo?.cl_profile_image ?
-                  `<img src="${options.clientData.clientInfo.cl_profile_image}" alt="Client Profile" class="profile-image" />` :
+                ${options.clientData?.clientInfo?.profile_image_url ?
+                  `<img src="${options.clientData.clientInfo.profile_image_url}" alt="Client Profile" class="profile-image" />` :
                   '<div class="default-avatar">👤</div>'
                 }
             </div>
@@ -607,6 +617,7 @@ export class MonthlyReportHTMLGenerator {
 
     <div class="section page-break">
         <div class="section-title">Detailed Metrics Analysis</div>
+        <div class="page-break"></div>
         <table class="metrics-table">
             <thead>
                 <tr>
