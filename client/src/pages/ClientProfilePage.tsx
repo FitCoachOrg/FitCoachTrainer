@@ -2327,7 +2327,7 @@ export default function ClientDashboard() {
         {/* Tab Content Sections */}
         {activeTab === "metrics" && (
           <div className="client-profile-scrollable h-full overflow-hidden">
-            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+            <Card className="h-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl overflow-hidden">
               <CardHeader className="pb-0 flex-shrink-0">
                 <MetricsSection 
                   clientId={clientId} 
@@ -2356,7 +2356,7 @@ export default function ClientDashboard() {
 
         {activeTab === "workout" && (
           <div className="client-profile-scrollable h-full overflow-hidden">
-            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+            <Card className="h-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl overflow-hidden">
               <CardHeader className="pb-0 flex-shrink-0">
                 <WorkoutPlanSection 
                   clientId={client?.client_id}
@@ -2383,7 +2383,7 @@ export default function ClientDashboard() {
 
         {activeTab === "nutrition" && (
           <div className="client-profile-scrollable h-full overflow-hidden">
-            <Card className="h-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black overflow-hidden">
+            <Card className="h-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl overflow-hidden">
               <CardHeader className="pb-0 flex-shrink-0">
                 <NutritionPlanSection 
                   clientId={clientId} 

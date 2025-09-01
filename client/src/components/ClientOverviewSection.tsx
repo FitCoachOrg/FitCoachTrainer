@@ -106,7 +106,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
     switch (activeTab) {
       case 'onboarding':
         return (
-          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg">
+          <div className="w-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl rounded-lg">
             <TrainerOnboardingScreen
               clientId={client?.client_id?.toString() || ''}
               client={client}
@@ -122,7 +122,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
       
       case 'targets':
         return (
-          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg p-6">
+          <div className="w-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl rounded-lg p-6">
             <ClientTargetsTable
               clientId={client?.client_id?.toString() || ''}
               client={client}
@@ -132,7 +132,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
       
       case 'monthly-report':
         return (
-          <div className="w-full bg-white/90 backdrop-blur-sm border-0 shadow-xl dark:bg-black rounded-lg p-6">
+          <div className="w-full bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl rounded-lg p-6">
             <ClientMonthlyReportSection
               clientId={client?.client_id?.toString() || ''}
               client={client}
@@ -154,7 +154,7 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
           <Button
             onClick={() => setShowClientDetails(!showClientDetails)}
             variant="outline"
-            className="w-full justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 transition-all duration-300"
+            className="w-full justify-between bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 shadow-sm hover:shadow-md"
           >
             <span className="font-medium text-gray-900 dark:text-white">
               Show Client Details
@@ -185,15 +185,15 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
         </div>
 
         {/* Tab Navigation - Underneath the mini cards */}
-        <div className="flex space-x-2 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm p-1 rounded-xl mb-6">
+        <div className="flex space-x-2 bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm p-1 rounded-xl mb-6 border border-gray-200/50 dark:border-gray-700/50">
           <Button
             variant={activeTab === 'onboarding' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveTab('onboarding')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === 'onboarding'
-                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
+                ? "bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg hover:from-blue-700 hover:to-indigo-800"
+                : "text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
             <span>Client Settings and Goals</span>
@@ -204,8 +204,8 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
             onClick={() => setActiveTab('targets')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === 'targets'
-                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
+                ? "bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg hover:from-blue-700 hover:to-indigo-800"
+                : "text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
             <span>Client Targets</span>
@@ -216,8 +216,8 @@ const ClientOverviewSection: React.FC<ClientOverviewSectionProps> = ({
             onClick={() => setActiveTab('monthly-report')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeTab === 'monthly-report'
-                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
+                ? "bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg hover:from-blue-700 hover:to-indigo-800"
+                : "text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-300 dark:hover:border-gray-600"
             }`}
           >
             <FileText className="h-4 w-4" />
