@@ -1016,25 +1016,32 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
         
               {/* Events positioned absolutely with proportional sizing */}
-      <div className="ml-20 relative h-full z-20">
+      <div className="ml-20 relative z-20" style={{ height: '1200px' }}>
+          {dayEvents.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
+              No events for this day
+            </div>
+          )}
           {dayEvents.map((event) => {
             const eventDate = new Date(event.date)
             const eventHours = eventDate.getHours()
             const eventMinutes = eventDate.getMinutes()
-            
+
             // Calculate position based on start time
             const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
             const top = minutesFromStart * pixelsPerMinute
-            
+
             // Calculate height based on duration for proportional display
             const height = Math.max(event.duration * pixelsPerMinute, 24) // Minimum 24px height
-            
+
+            console.log('📅 Rendering daily event:', event.title, 'at position:', top, 'height:', height, 'time:', eventHours + ':' + eventMinutes)
+
             return (
               <div
                 key={event.id}
                 className="absolute left-2 right-2 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
-                style={{ 
-                  top: `${top}px`, 
+                style={{
+                  top: `${top}px`,
                   height: `${height}px`,
                   minHeight: '24px' // Minimum height for visibility
                 }}
@@ -1104,17 +1111,17 @@ const ProfessionalCalendar: React.FC = () => {
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-full overflow-y-auto bg-white dark:bg-gray-900">
-        <div className="grid grid-cols-8 gap-0">
+      <div className="h-full overflow-y-auto bg-white dark:bg-gray-900" style={{ minHeight: '1200px' }}>
+        <div className="grid grid-cols-8 gap-0" style={{ height: '1200px' }}>
                   {/* Time column - Enhanced with 30-minute ticks */}
-        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10">
+        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10" style={{ height: '1200px' }}>
             {/* Time header */}
             <div className="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
               <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
             </div>
             
             {/* Time labels - Hour only (like Daily view) */}
-            <div className="relative h-[calc(100%-48px)]">
+            <div className="relative" style={{ height: 'calc(1200px - 48px)' }}>
               {hourSlots.map((time) => {
                 const [hours] = time.split(':').map(Number)
                 const minutesFromStart = (hours - startHour) * 60
@@ -1141,7 +1148,7 @@ const ProfessionalCalendar: React.FC = () => {
             const isCurrentDay = isToday(day)
             
             return (
-              <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700">
+              <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700" style={{ height: '1200px' }}>
                               {/* Day header - Google Calendar style */}
               <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center z-10 ${
                 isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
@@ -1157,7 +1164,7 @@ const ProfessionalCalendar: React.FC = () => {
                 </div>
                 
                 {/* Time grid background - Hour only (like Daily view) */}
-                <div className="relative h-[calc(100%-48px)]">
+                <div className="relative" style={{ height: 'calc(1200px - 48px)' }}>
                   {/* Hour lines */}
                   {hourSlots.map((time) => {
                     const [hours] = time.split(':').map(Number)
@@ -1189,24 +1196,31 @@ const ProfessionalCalendar: React.FC = () => {
                   })}
                   
                   {/* Events positioned absolutely with proportional sizing */}
+                  {dayEvents.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 text-xs">
+                      No events
+                    </div>
+                  )}
                   {dayEvents.map((event) => {
                     const eventDate = new Date(event.date)
                     const eventHours = eventDate.getHours()
                     const eventMinutes = eventDate.getMinutes()
-                    
+
                     // Calculate position based on start time
                     const minutesFromStart = (eventHours - startHour) * 60 + eventMinutes
                     const top = minutesFromStart * pixelsPerMinute
-                    
+
                     // Calculate height based on duration for proportional display
                     const height = Math.max(event.duration * pixelsPerMinute, 32) // Increased minimum height for multi-line layout
-                    
+
+                    console.log('📅 Rendering weekly event:', event.title, 'at position:', top, 'height:', height, 'time:', eventHours + ':' + eventMinutes)
+
                     return (
                       <div
                         key={event.id}
                         className="absolute left-1 right-1 rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 z-30"
-                        style={{ 
-                          top: `${top}px`, 
+                        style={{
+                          top: `${top}px`,
                           height: `${height}px`,
                           minHeight: '32px' // Increased minimum height for multi-line layout
                         }}

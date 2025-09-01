@@ -388,7 +388,7 @@ const TodoList: React.FC = () => {
         {/* Enhanced Todo List with Gridlines */}
         <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse text-sm table-fixed">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b-2 border-gray-300 dark:border-gray-600">
                   <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-1/3">
@@ -418,8 +418,8 @@ const TodoList: React.FC = () => {
                   <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-1/6">
                     Category
                   </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white w-28">
-                    Actions
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white w-20">
+                    {/* Actions column - icons only */}
                   </th>
                 </tr>
               </thead>
@@ -553,20 +553,22 @@ const TodoList: React.FC = () => {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            className="h-8 px-3 bg-green-600 hover:bg-green-700"
+                            className="h-8 w-8 p-0 bg-green-600 hover:bg-green-700"
                             onClick={saveEditing}
                             disabled={savingEdit}
+                            title="Save changes"
                           >
-                            <Save className="h-3 w-3 mr-1" /> Save
+                            <Save className="h-3 w-3" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 px-3"
+                            className="h-8 w-8 p-0"
                             onClick={cancelEditing}
                             disabled={savingEdit}
+                            title="Cancel editing"
                           >
-                            <X className="h-3 w-3 mr-1" /> Cancel
+                            <X className="h-3 w-3" />
                           </Button>
                         </div>
                       ) : (
@@ -574,16 +576,18 @@ const TodoList: React.FC = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-3 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                            className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
                             onClick={() => startEditing(todo)}
+                            title="Edit todo"
                           >
-                            <Pencil className="h-3 w-3 mr-1" /> Edit
+                            <Pencil className="h-3 w-3" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-8 px-3 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
                             onClick={() => handleDeleteTodo(todo.id)}
+                            title="Delete todo"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
