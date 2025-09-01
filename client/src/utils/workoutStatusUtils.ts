@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { RequestLogger } from './requestLogger';
 
 export type WorkoutStatus = 'no_plan' | 'draft' | 'approved' | 'partial_approved';
 export type WorkoutSource = 'generated' | 'template' | 'database';
@@ -49,7 +50,13 @@ export async function checkWorkoutApprovalStatus(
   try {
     console.log(`[checkWorkoutApprovalStatus] Checking status for ${totalDays} days: ${startDateStr} to ${endDateStr}`);
 
-    // Get data from both tables
+    // Get data from both tables with logging
+    RequestLogger.logDatabaseQuery('schedule_preview', 'select', 'checkWorkoutApprovalStatus', {
+      clientId,
+      dateRange: `${startDateStr} to ${endDateStr}`,
+      totalDays
+    });
+    
     const { data: previewData, error: previewError } = await supabase
       .from('schedule_preview')
       .select('id, for_date, summary, details_json, is_approved')
@@ -60,7 +67,18 @@ export async function checkWorkoutApprovalStatus(
 
     if (previewError) {
       console.error('Preview check error:', previewError);
+      RequestLogger.logError('checkWorkoutApprovalStatus', new Error(`Preview query failed: ${previewError.message}`), {
+        clientId,
+        dateRange: `${startDateStr} to ${endDateStr}`,
+        error: previewError
+      });
     }
+
+    RequestLogger.logDatabaseQuery('schedule', 'select', 'checkWorkoutApprovalStatus', {
+      clientId,
+      dateRange: `${startDateStr} to ${endDateStr}`,
+      totalDays
+    });
 
     // Get data from schedule table for comparison (but UI still only uses schedule_preview)
     const { data: scheduleData, error: scheduleError } = await supabase
@@ -73,6 +91,11 @@ export async function checkWorkoutApprovalStatus(
 
     if (scheduleError) {
       console.error('Schedule check error:', scheduleError);
+      RequestLogger.logError('checkWorkoutApprovalStatus', new Error(`Schedule query failed: ${scheduleError.message}`), {
+        clientId,
+        dateRange: `${startDateStr} to ${endDateStr}`,
+        error: scheduleError
+      });
     }
 
     console.log(`[checkWorkoutApprovalStatus] Preview data: ${previewData?.length || 0} entries`);
@@ -126,6 +149,11 @@ export async function checkWorkoutApprovalStatus(
 
   } catch (error: any) {
     console.error('Error checking workout approval status:', error);
+    RequestLogger.logError('checkWorkoutApprovalStatus', error, {
+      clientId,
+      dateRange: `${startDateStr} to ${endDateStr}`,
+      totalDays
+    });
     return {
       status: 'no_plan',
       source: 'database',
@@ -145,8 +173,24 @@ export async function checkWeeklyWorkoutStatus(
   clientId: number,
   planStartDate: Date
 ): Promise<WorkoutStatusResult> {
+  const startTime = Date.now();
+  console.log(`[checkWeeklyWorkoutStatus] Starting weekly status check for client ${clientId}, start date: ${planStartDate.toISOString()}`);
+  
   const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-  return await checkWorkoutApprovalStatus(supabase, clientId, planStartDate, endDate);
+  const result = await checkWorkoutApprovalStatus(supabase, clientId, planStartDate, endDate);
+  
+  const duration = Date.now() - startTime;
+  console.log(`[checkWeeklyWorkoutStatus] Completed in ${duration}ms: status=${result.status}, previewData=${result.previewData.length}, scheduleData=${result.scheduleData.length}`);
+  
+  RequestLogger.logPerformance('weekly_workout_status_check', 'checkWeeklyWorkoutStatus', startTime, {
+    clientId,
+    duration,
+    status: result.status,
+    previewDataCount: result.previewData.length,
+    scheduleDataCount: result.scheduleData.length
+  });
+  
+  return result;
 }
 
 /**
@@ -157,11 +201,17 @@ export async function checkMonthlyWorkoutStatus(
   clientId: number,
   planStartDate: Date
 ): Promise<WorkoutStatusResult> {
+  const startTime = Date.now();
+  console.log(`[checkMonthlyWorkoutStatus] Starting monthly status check for client ${clientId}, start date: ${planStartDate.toISOString()}`);
+  
   const endDate = new Date(planStartDate.getTime() + 27 * 24 * 60 * 60 * 1000);
   const result = await checkWorkoutApprovalStatus(supabase, clientId, planStartDate, endDate);
 
+  console.log(`[checkMonthlyWorkoutStatus] Base result received: status=${result.status}, previewData=${result.previewData.length}, scheduleData=${result.scheduleData.length}`);
+
   // Add weekly breakdown for monthly views
   if (result.previewData.length > 0 || result.scheduleData.length > 0) {
+    console.log(`[checkMonthlyWorkoutStatus] Processing weekly breakdown...`);
     const weeklyBreakdown: WeeklyStatus[] = [];
     
     for (let week = 0; week < 4; week++) {
@@ -189,6 +239,8 @@ export async function checkMonthlyWorkoutStatus(
         }
       }
       
+      console.log(`[checkMonthlyWorkoutStatus] Week ${week + 1}: status=${weekStatus}, previewData=${weekPreviewData.length}, scheduleData=${weekScheduleData.length}`);
+      
       weeklyBreakdown.push({
         week: week + 1,
         status: weekStatus,
@@ -215,12 +267,31 @@ export async function checkMonthlyWorkoutStatus(
       overallStatus = 'partial_approved';
     }
     
+    console.log(`[checkMonthlyWorkoutStatus] Final status: ${overallStatus} (approved: ${approvedWeeks}, draft: ${draftWeeks}, noPlan: ${noPlanWeeks})`);
+    
+    const duration = Date.now() - startTime;
+    RequestLogger.logPerformance('monthly_workout_status_check', 'checkMonthlyWorkoutStatus', startTime, {
+      clientId,
+      duration,
+      weeklyBreakdown: weeklyBreakdown.length,
+      overallStatus
+    });
+    
     return {
       ...result,
       status: overallStatus,
       weeklyBreakdown
     };
   }
+  
+  console.log(`[checkMonthlyWorkoutStatus] No data found, returning base result`);
+  const duration = Date.now() - startTime;
+  RequestLogger.logPerformance('monthly_workout_status_check', 'checkMonthlyWorkoutStatus', startTime, {
+    clientId,
+    duration,
+    weeklyBreakdown: 0,
+    overallStatus: result.status
+  });
   
   return result;
 }

@@ -41,6 +41,8 @@ import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generatio
 import WorkoutExportButton from './WorkoutExportButton';
 import WorkoutImportButton from './WorkoutImportButton';
 import { normalizeDateForStorage, createDateFromString } from '../lib/date-utils';
+import { RequestLogger, loggedOperation, loggedStateUpdate } from '@/utils/requestLogger';
+import RequestDeduplication from '@/utils/requestDeduplication';
 import { generateSearchBasedWorkoutPlanForReview, warmupExerciseCache } from "@/lib/search-based-workout-plan"
 import { SimpleWorkoutGenerator } from "@/lib/simple-workout-generator"
 import { EnhancedWorkoutGenerator } from "@/lib/enhanced-workout-generator"
@@ -1082,14 +1084,41 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
 // Helper to save plan to schedule_preview
 async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, planStartDate: Date) {
   const startTime = performance.now();
+  const componentName = 'savePlanToSchedulePreview';
   
   try {
     // Fetch client's preferred workout_time. Fallback to a default if not set.
+    const clientQueryStartTime = Date.now();
+    RequestLogger.logDatabaseQuery(
+      'client',
+      'select',
+      componentName,
+      {
+        clientId,
+        filters: { client_id: clientId, select: 'workout_time' },
+        startTime: clientQueryStartTime
+      }
+    );
+    
     const { data: clientData, error: clientError } = await supabase
       .from('client')
       .select('workout_time')
       .eq('client_id', clientId)
       .single();
+
+    RequestLogger.logDatabaseQuery(
+      'client',
+      'select',
+      componentName,
+      {
+        clientId,
+        filters: { client_id: clientId, select: 'workout_time' },
+        startTime: clientQueryStartTime,
+        success: !clientError,
+        error: clientError?.message,
+        resultCount: clientData ? 1 : 0
+      }
+    );
 
     if (clientError) {
       console.error('[Supabase] Client fetch error:', clientError);
@@ -1111,6 +1140,22 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
 
     // Get existing preview data for this client and week
     const fetchStart = performance.now();
+    const existingDataQueryStartTime = Date.now();
+    RequestLogger.logDatabaseQuery(
+      'schedule_preview',
+      'select',
+      componentName,
+      {
+        clientId,
+        filters: { 
+          client_id: clientId, 
+          type: 'workout',
+          date_range: `${firstDate} to ${lastDate}`
+        },
+        startTime: existingDataQueryStartTime
+      }
+    );
+    
     const { data: existingData, error: fetchError } = await supabase
       .from('schedule_preview')
       .select('*')
@@ -1118,7 +1163,25 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
       .eq('type', 'workout')
       .gte('for_date', firstDate)
       .lte('for_date', lastDate);
+      
     const fetchEnd = performance.now();
+    RequestLogger.logDatabaseQuery(
+      'schedule_preview',
+      'select',
+      componentName,
+      {
+        clientId,
+        filters: { 
+          client_id: clientId, 
+          type: 'workout',
+          date_range: `${firstDate} to ${lastDate}`
+        },
+        startTime: existingDataQueryStartTime,
+        success: !fetchError,
+        error: fetchError?.message,
+        resultCount: existingData?.length || 0
+      }
+    );
     console.log('[Supabase] Fetch existing data:', `${(fetchEnd - fetchStart).toFixed(2)}ms`);
 
     if (fetchError) {
@@ -1200,6 +1263,28 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
     
     const endTime = performance.now();
     console.log('[Save Plan] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
+    
+    // Trigger status refresh and approve button activation after successful save
+    try {
+      console.log('[Save Plan] Triggering status refresh after save...');
+      // Use setTimeout to ensure the database transaction is complete
+      setTimeout(async () => {
+        try {
+          // Refresh approval status to update the approve button
+          await checkPlanApprovalStatus();
+          
+          // Set draft plan flag to true to activate approve button
+          setIsDraftPlan(true);
+          
+          console.log('[Save Plan] Status refresh completed, approve button should be active');
+        } catch (statusError) {
+          console.warn('[Save Plan] Status refresh warning:', statusError);
+        }
+      }, 100); // Small delay to ensure database consistency
+    } catch (refreshError) {
+      console.warn('[Save Plan] Status refresh error:', refreshError);
+    }
+    
     return { success: true };
   } catch (err: any) {
     const endTime = performance.now();
@@ -1495,6 +1580,8 @@ const WorkoutPlanSection = ({
       }
       // Clear any pending timeouts
       clearLoading();
+      // Clear all pending requests
+      RequestDeduplication.clearAll();
     };
   }, [isGeneratingSearch, isGenerating]);
   
@@ -2208,19 +2295,41 @@ const WorkoutPlanSection = ({
   };
 
   const fetchPlan = async () => {
+    const componentName = 'WorkoutPlanSection';
+    const operationStartTime = Date.now();
+    
     if (!numericClientId) {
+      RequestLogger.logError(componentName, new Error('fetchPlan called without clientId'), {
+        numericClientId,
+        planStartDate: planStartDate?.toISOString()
+      });
       return;
     }
 
-    // Prevent multiple simultaneous calls
-    if (isFetchingPlan) {
-      console.log('🔄 [fetchPlan] Already fetching, skipping...');
-      return;
-    }
+    // Generate unique key for this fetch operation
+    const fetchKey = RequestDeduplication.generateKey('fetchPlan', {
+      clientId: numericClientId,
+      planStartDate: planStartDate?.toISOString(),
+      viewMode
+    });
+
+    // Use request deduplication to prevent multiple simultaneous calls
+    return RequestDeduplication.execute(fetchKey, async () => {
+      // Prevent multiple simultaneous calls (legacy check)
+      if (isFetchingPlan) {
+        RequestLogger.logStateChange(componentName, 'fetchPlan', 'blocked', 'already_fetching', 'duplicate_call_prevention');
+        console.log('🔄 [fetchPlan] Already fetching, skipping...');
+        return;
+      }
+
+    RequestLogger.logPerformance('fetchPlan_start', componentName, operationStartTime, {
+      success: true,
+      metadata: { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
+    });
 
     console.log('🔄 [fetchPlan] Starting fetch for client:', numericClientId, 'date:', planStartDate);
-    setLoading('fetching', 'Loading workout plan...');
-    setIsFetchingPlan(true);
+    loggedStateUpdate(componentName, 'loadingState', loadingState, { type: 'fetching', message: 'Loading workout plan...' }, setLoading, 'fetchPlan_start');
+    loggedStateUpdate(componentName, 'isFetchingPlan', isFetchingPlan, true, setIsFetchingPlan, 'fetchPlan_start');
     
     // Add timeout protection to prevent infinite loading
     const timeoutId = setTimeout(() => {
@@ -2243,9 +2352,25 @@ const WorkoutPlanSection = ({
 
     try {
       console.log('🔄 [fetchPlan] Calling checkWeeklyWorkoutStatus...');
+      const statusQueryStartTime = Date.now();
+      
       // Use the unified weekly status function (same logic as monthly view)
-      const weeklyResult: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate);
+      const weeklyResult: WorkoutStatusResult = await loggedOperation(
+        'checkWeeklyWorkoutStatus',
+        componentName,
+        () => checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate),
+        { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
+      );
+      
       console.log('🔄 [fetchPlan] checkWeeklyWorkoutStatus completed:', weeklyResult);
+      RequestLogger.logPerformance('checkWeeklyWorkoutStatus', componentName, statusQueryStartTime, {
+        success: true,
+        metadata: { 
+          resultStatus: weeklyResult.status, 
+          previewDataCount: weeklyResult.previewData?.length || 0,
+          scheduleDataCount: weeklyResult.scheduleData?.length || 0
+        }
+      });
       
       // Use preview data as primary source (same as monthly view)
       if (weeklyResult.previewData && weeklyResult.previewData.length > 0) {
@@ -2256,6 +2381,18 @@ const WorkoutPlanSection = ({
         // Strategy 3: Try to find the most recent plan and use it as a template
         // Try to find the most recent plan from schedule_preview first
         console.log('🔄 [fetchPlan] Querying recent preview data...');
+        const recentQueryStartTime = Date.now();
+        const recentQueryId = RequestLogger.logDatabaseQuery(
+          'schedule_preview',
+          'select',
+          componentName,
+          {
+            clientId: numericClientId,
+            filters: { client_id: numericClientId, type: 'workout', order: 'for_date desc', limit: 1 },
+            startTime: recentQueryStartTime
+          }
+        );
+        
         let { data: recentPreviewData, error: recentPreviewError } = await supabase
           .from('schedule_preview')
           .select('*')
@@ -2263,6 +2400,21 @@ const WorkoutPlanSection = ({
           .eq('type', 'workout')
           .order('for_date', { ascending: false })
           .limit(1);
+          
+        RequestLogger.logDatabaseQuery(
+          'schedule_preview',
+          'select',
+          componentName,
+          {
+            clientId: numericClientId,
+            filters: { client_id: numericClientId, type: 'workout', order: 'for_date desc', limit: 1 },
+            startTime: recentQueryStartTime,
+            success: !recentPreviewError,
+            error: recentPreviewError?.message,
+            resultCount: recentPreviewData?.length || 0
+          }
+        );
+        
         console.log('🔄 [fetchPlan] Recent preview query completed:', { data: recentPreviewData?.length, error: recentPreviewError });
         
         if (!recentPreviewError && recentPreviewData && recentPreviewData.length > 0) {
@@ -2412,13 +2564,45 @@ const WorkoutPlanSection = ({
       }
     }
     } catch (error: any) {
+      RequestLogger.logError(componentName, error, {
+        operation: 'fetchPlan',
+        clientId: numericClientId,
+        planStartDate: planStartDate?.toISOString(),
+        duration: Date.now() - operationStartTime
+      });
+      
+      RequestLogger.logPerformance('fetchPlan_error', componentName, operationStartTime, {
+        success: false,
+        error: error.message,
+        metadata: { clientId: numericClientId }
+      });
+      
       toast({ title: 'Error fetching plan', description: error.message, variant: 'destructive' });
-      setWorkoutPlan(null);
+      loggedStateUpdate(componentName, 'workoutPlan', workoutPlan, null, setWorkoutPlan, 'fetchPlan_error');
     } finally {
       clearTimeout(timeoutId); // Clear the timeout
-      setIsFetchingPlan(false);
-      clearLoading();
+      
+      loggedStateUpdate(componentName, 'isFetchingPlan', isFetchingPlan, false, setIsFetchingPlan, 'fetchPlan_cleanup');
+      loggedStateUpdate(componentName, 'loadingState', loadingState, { type: null, message: '' }, clearLoading, 'fetchPlan_cleanup');
+      
+      RequestLogger.logPerformance('fetchPlan_complete', componentName, operationStartTime, {
+        success: true,
+        metadata: { 
+          totalDuration: Date.now() - operationStartTime,
+          clientId: numericClientId 
+        }
+      });
     }
+  }, {
+    onDuplicate: () => {
+      console.log('🔄 [fetchPlan] Duplicate request detected, returning existing promise');
+      toast({ 
+        title: 'Loading in Progress', 
+        description: 'Plan is already being loaded. Please wait.',
+        variant: 'default' 
+      });
+    }
+  });
   };
 
   // Debounced save function for autosaving inline edits
@@ -2524,12 +2708,40 @@ const WorkoutPlanSection = ({
 
   // Fetch workout plan for client and date
   useEffect(() => {
+    const componentName = 'WorkoutPlanSection';
+    const effectStartTime = Date.now();
+    
+    RequestLogger.logStateChange(
+      componentName,
+      'useEffect_fetchPlan',
+      'triggered',
+      'executing',
+      `dependencies: clientId=${numericClientId}, date=${planStartDate?.toISOString()}, hasAI=${hasAIGeneratedPlan}`
+    );
+    
     console.log('🔄 [useEffect] fetchPlan trigger - client:', numericClientId, 'date:', planStartDate, 'hasAI:', hasAIGeneratedPlan);
     
     if (hasAIGeneratedPlan) {
+      RequestLogger.logStateChange(
+        componentName,
+        'useEffect_fetchPlan',
+        'executing',
+        'skipped',
+        'hasAIGeneratedPlan=true'
+      );
       console.log('🔄 [useEffect] Skipping fetchPlan due to hasAIGeneratedPlan');
       return;
     }
+    
+    RequestLogger.logPerformance('useEffect_fetchPlan', componentName, effectStartTime, {
+      success: true,
+      metadata: { 
+        triggeredBy: 'dependencies',
+        clientId: numericClientId,
+        planStartDate: planStartDate?.toISOString(),
+        hasAIGeneratedPlan
+      }
+    });
     
     fetchPlan();
   }, [numericClientId, planStartDate, hasAIGeneratedPlan]); // Removed client?.plan_start_day to prevent infinite loops
@@ -2691,7 +2903,16 @@ const WorkoutPlanSection = ({
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
   const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string} | null>(null);
   const [forceRefreshKey, setForceRefreshKey] = useState(0); // Add force refresh mechanism
-const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false); // Collapsible Plan Management state
+  const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false); // Collapsible Plan Management state
+  const [isClientGoalsExpanded, setIsClientGoalsExpanded] = useState(() => {
+    // Try to get user preference from localStorage
+    try {
+      const stored = localStorage.getItem('clientGoalsExpanded');
+      return stored ? JSON.parse(stored) : false;
+    } catch {
+      return false;
+    }
+  }); // Collapsible Client Goals state with persistence
   
   // Force refresh function to trigger immediate status update
   const forceRefreshStatus = () => {
@@ -2702,35 +2923,69 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
     // Trigger immediate status check
     checkPlanApprovalStatus();
   };
+
+  // Handle client goals toggle with persistence
+  const handleClientGoalsToggle = () => {
+    const newValue = !isClientGoalsExpanded;
+    setIsClientGoalsExpanded(newValue);
+    
+    // Persist user preference
+    try {
+      localStorage.setItem('clientGoalsExpanded', JSON.stringify(newValue));
+    } catch (error) {
+      console.warn('Failed to save client goals preference:', error);
+    }
+  };
   
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
 
-    // Create a unique key for this check
-    const checkKey = {
+    // Generate unique key for this approval status check
+    const approvalKey = RequestDeduplication.generateKey('checkPlanApprovalStatus', {
       viewMode,
       clientId: numericClientId,
-      date: planStartDate.toISOString().split('T')[0]
-    };
+      date: planStartDate.toISOString().split('T')[0],
+      forceRefreshKey
+    });
 
-    // Check if we're already checking the same data (unless it's a force refresh)
-    if (isCheckingApproval && forceRefreshKey === 0) {
-      console.log('[checkPlanApprovalStatus] Already running, skipping...');
-      return;
-    }
+    // Use request deduplication to prevent multiple simultaneous checks
+    return RequestDeduplication.execute(approvalKey, async () => {
+      // Create a unique key for this check
+      const checkKey = {
+        viewMode,
+        clientId: numericClientId,
+        date: planStartDate.toISOString().split('T')[0]
+      };
 
-    // Check if we've already checked this exact combination recently (unless it's a force refresh)
-    if (lastApprovalCheck && 
-        lastApprovalCheck.viewMode === checkKey.viewMode &&
-        lastApprovalCheck.clientId === checkKey.clientId &&
-        lastApprovalCheck.date === checkKey.date &&
-        forceRefreshKey === 0) {
-      console.log('[checkPlanApprovalStatus] Already checked this combination recently, skipping...');
-      return;
-    }
+      // Check if we're already checking the same data (unless it's a force refresh)
+      if (isCheckingApproval && forceRefreshKey === 0) {
+        console.log('[checkPlanApprovalStatus] Already running, skipping...');
+        return;
+      }
+
+      // Check if we've already checked this exact combination recently (unless it's a force refresh)
+      if (lastApprovalCheck && 
+          lastApprovalCheck.viewMode === checkKey.viewMode &&
+          lastApprovalCheck.clientId === checkKey.clientId &&
+          lastApprovalCheck.date === checkKey.date &&
+          forceRefreshKey === 0) {
+        console.log('[checkPlanApprovalStatus] Already checked this combination recently, skipping...');
+        return;
+      }
 
     setIsCheckingApproval(true);
     setLastApprovalCheck(checkKey);
+
+    // Add timeout to prevent infinite hanging
+    const timeoutId = setTimeout(() => {
+      console.error('[checkPlanApprovalStatus] Timeout reached (30 seconds), forcing completion');
+      setIsCheckingApproval(false);
+      setPlanApprovalStatus('pending');
+      updateWorkoutPlanState({
+        status: 'no_plan',
+        source: 'database'
+      });
+    }, 30000); // 30 second timeout
 
     try {
       console.log(`[checkPlanApprovalStatus] Checking approval status for ${viewMode} view`);
@@ -2882,12 +3137,18 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
         source: 'database'
       });
     } finally {
+      clearTimeout(timeoutId); // Clear the timeout
       setIsCheckingApproval(false);
       // Reset force refresh key after successful check
       if (forceRefreshKey > 0) {
         setForceRefreshKey(0);
       }
     }
+  }, {
+    onDuplicate: () => {
+      console.log('🔄 [checkPlanApprovalStatus] Duplicate request detected, returning existing promise');
+    }
+  });
   };
 
   // Handle individual week approval for monthly view
@@ -2941,13 +3202,47 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
   // Re-check approval status whenever plan, client, date, or view mode changes
   // Removed workoutPlanState.status from dependencies to prevent infinite loop
   useEffect(() => {
+    const componentName = 'WorkoutPlanSection';
+    
     if (numericClientId && planStartDate) {
-      // Add a small delay to prevent rapid successive calls when viewMode changes
-      const timeoutId = setTimeout(() => {
-        checkPlanApprovalStatus();
-      }, 100);
+      RequestLogger.logStateChange(
+        componentName,
+        'useEffect_checkApprovalStatus',
+        'triggered',
+        'scheduled',
+        `dependencies: clientId=${numericClientId}, date=${planStartDate?.toISOString()}, viewMode=${viewMode}`
+      );
       
-      return () => clearTimeout(timeoutId);
+      // Add a longer delay to prevent rapid successive calls when viewMode changes
+      const timeoutId = setTimeout(() => {
+        RequestLogger.logStateChange(
+          componentName,
+          'useEffect_checkApprovalStatus',
+          'scheduled',
+          'executing',
+          'timeout_triggered'
+        );
+        checkPlanApprovalStatus();
+      }, 500); // Increased from 100ms to 500ms
+      
+      return () => {
+        RequestLogger.logStateChange(
+          componentName,
+          'useEffect_checkApprovalStatus',
+          'scheduled',
+          'cancelled',
+          'component_cleanup'
+        );
+        clearTimeout(timeoutId);
+      };
+    } else {
+      RequestLogger.logStateChange(
+        componentName,
+        'useEffect_checkApprovalStatus',
+        'triggered',
+        'skipped',
+        `missing_data: clientId=${numericClientId}, date=${planStartDate?.toISOString()}`
+      );
     }
   }, [numericClientId, planStartDate, viewMode]); // Removed workoutPlan from dependencies to prevent loops
 
@@ -3026,6 +3321,8 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
 
   // Search-based generation handler
   const handleGenerateSearchPlan = async () => {
+    const componentName = 'WorkoutPlanSection';
+    
     setAiError(null); // Clear previous error
     if (!numericClientId) {
       toast({ title: 'No Client Selected', description: 'Please select a client.', variant: 'destructive' });
@@ -3038,6 +3335,16 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
       setIsMonthlyGeneratorOpen(true);
       return;
     }
+
+    // Generate unique key for this generation operation
+    const generationKey = RequestDeduplication.generateKey('generateSearchPlan', {
+      clientId: numericClientId,
+      planStartDate: planStartDate?.toISOString(),
+      viewMode
+    });
+
+    // Use request deduplication to prevent multiple simultaneous generations
+    return RequestDeduplication.execute(generationKey, async () => {
 
     console.log('🔄 === SEARCH-BASED GENERATION START ===');
     console.log('🔄 Client ID:', numericClientId);
@@ -3058,14 +3365,22 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
     
     try {
       console.log('🚀 Starting search-based workout plan generation...');
+      const generationStartTime = Date.now();
       
       // Update loading message to show progress
       setLoading('generating', 'Analyzing client data and generating personalized workout plan...');
       
+      RequestLogger.logPerformance('enhanced_workout_generation_start', componentName, generationStartTime, {
+        success: true,
+        metadata: { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
+      });
+      
       // Use the search-based workout generator with timeout protection
-      const generationPromise = EnhancedWorkoutGenerator.generateWorkoutPlan(
-        numericClientId,
-        planStartDate
+      const generationPromise = loggedOperation(
+        'EnhancedWorkoutGenerator.generateWorkoutPlan',
+        componentName,
+        () => EnhancedWorkoutGenerator.generateWorkoutPlan(numericClientId, planStartDate),
+        { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
       );
       
       // Race against timeout - increased to 60 seconds to match search-based generator
@@ -3263,30 +3578,72 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
       clearLoading();
       console.log('🔄 === ENHANCED GENERATION END ===');
     }
+  }, {
+    onDuplicate: () => {
+      console.log('🔄 [handleGenerateSearchPlan] Duplicate request detected, returning existing promise');
+      toast({ 
+        title: 'Generation in Progress', 
+        description: 'Workout plan is already being generated. Please wait.',
+        variant: 'default' 
+      });
+    }
+  });
   };
 
   return (
     <div className="space-y-8">
-      {/* Placeholder Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+      {/* Client Goals & Preferences Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl border border-blue-200 dark:border-blue-700 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/40">
+            <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Client Goals & Preferences</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">View and edit client goals, preferences, and insights</p>
+          </div>
+        </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClientGoalsToggle}
+          className="flex items-center gap-2 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+        >
+          {isClientGoalsExpanded ? 'Hide Details' : 'Show Details'}
+          {isClientGoalsExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </Button>
       </div>
+      
+      {/* Collapsible Client Goals & Preferences Content */}
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+        isClientGoalsExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+      }`}>
+        {/* Placeholder Cards Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+          <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+          <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+          <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+          <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+        </div>
 
-      {/* Client Goals & Preferences Section */}
-      <div className="mb-8">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
-          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-          {client?.name || 'Client'} Goals & Workout Preferences
-        </h3>
-        <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
-          <CardContent className="p-6">
-            <WorkoutTargetEditGrid />
-          </CardContent>
-        </Card>
+        {/* Client Goals & Preferences Section */}
+        <div className="mb-8">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
+            <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            {client?.name || 'Client'} Goals & Workout Preferences
+          </h3>
+          <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
+            <CardContent className="p-6">
+              <WorkoutTargetEditGrid />
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Enhanced Header with AI Generation */}
@@ -3374,31 +3731,39 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
                 View Mode
               </label>
               <div
-                className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 shadow-sm"
+                className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl p-2 shadow-lg border border-blue-200 dark:border-blue-700"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Button
                   variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-                  size="sm"
+                  size="default"
                   onClick={(e) => {
                     e.stopPropagation();
                     setViewMode('weekly');
                   }}
-                  className="text-xs hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
+                    viewMode === 'weekly' 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl' 
+                      : 'hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-2 border-blue-200 dark:border-blue-700'
+                  }`}
                 >
-                  <Calendar className="h-3 w-3 mr-1 text-gray-600 dark:text-gray-400" />
-                  7 Days
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Weekly
                 </Button>
                 <Button
                   variant={viewMode === 'monthly' ? 'default' : 'ghost'}
-                  size="sm"
+                  size="default"
                   onClick={(e) => {
                     e.stopPropagation();
                     setViewMode('monthly');
                   }}
-                  className="text-xs hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
+                    viewMode === 'monthly' 
+                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xl' 
+                      : 'hover:bg-purple-100 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-2 border-purple-200 dark:border-purple-700'
+                  }`}
                 >
-                  <CalendarDays className="h-3 w-3 mr-1 text-gray-600 dark:text-gray-400" />
+                  <CalendarDays className="h-4 w-4 mr-2" />
                   Monthly
                 </Button>
               </div>
@@ -3418,15 +3783,20 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
           )}
         </div>
         
-        {/* Step 2: Generate Workout Plan */}
+        {/* Step 2: Generate & Approve Workout Plan */}
         <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
               2
             </div>
             <div>
-              <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Generate Plan</h5>
-              <p className="text-sm text-green-700 dark:text-green-300">Create your workout plan using AI-powered exercise selection</p>
+              <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Generate & Approve Plan</h5>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                {((planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan) 
+                  ? 'Create or approve your workout plan using AI-powered exercise selection' 
+                  : 'Create your workout plan using AI-powered exercise selection'
+                }
+              </p>
             </div>
           </div>
           
@@ -3454,42 +3824,8 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
               )}
             </Button>
             
-            {/* Manual reset button for stuck states */}
-            {loadingState.type && (
-              <Button
-                onClick={() => {
-                  console.log('🔄 Manual reset triggered by user');
-                  clearLoading();
-                  setAiError(null);
-                  toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
-                }}
-                variant="outline"
-                size="sm"
-                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-            )}
-          </div>
-        </div>
-
-
-
-        {/* Step 3: Approve Current Plan */}
-        {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
-          <div className="mb-6 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 shadow-lg">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
-                3
-              </div>
-              <div>
-                <h5 className="text-lg font-bold text-green-900 dark:text-green-100">Approve Plan</h5>
-                <p className="text-sm text-green-700 dark:text-green-300">Approve your draft plan to save it to the main schedule</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
+            {/* Approve Plan Button - Shows when approval is needed */}
+            {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
               <Button
                 onClick={async () => {
                   const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
@@ -3550,13 +3886,31 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5 mr-3" />
-                    ✅ Approve Current Plan
+                    ✅ Approve Plan
                   </>
                 )}
               </Button>
-            </div>
+            )}
+            
+            {/* Manual reset button for stuck states */}
+            {loadingState.type && (
+              <Button
+                onClick={() => {
+                  console.log('🔄 Manual reset triggered by user');
+                  clearLoading();
+                  setAiError(null);
+                  toast({ title: 'Reset Complete', description: 'Operation has been cancelled.', variant: 'default' });
+                }}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Collapsible Plan Management */}
@@ -3704,6 +4058,8 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
                     };
                     console.log('[Save Changes] Setting workout plan in UI to:', dbWorkoutPlan);
                     setWorkoutPlan(dbWorkoutPlan);
+                    // Set draft plan flag to true to activate approve button
+                    setIsDraftPlan(true);
                     // Refresh approval status after saving changes
                     await checkPlanApprovalStatus();
                   } else {
@@ -3774,12 +4130,12 @@ const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false);
                 onReorder={handlePlanChange}
                 onPlanChange={handlePlanChange}
                 clientId={numericClientId}
-                onViewModeChange={setViewMode}
+                viewMode={viewMode}
                 onMonthlyDataChange={setMonthlyData}
-                              onApprovalStatusCheck={checkPlanApprovalStatus}
-              onForceRefreshStatus={forceRefreshStatus}
-              weekStatuses={weekStatuses}
-              onApproveWeek={handleApproveWeek}
+                onApprovalStatusCheck={checkPlanApprovalStatus}
+                onForceRefreshStatus={forceRefreshStatus}
+                weekStatuses={weekStatuses}
+                onApproveWeek={handleApproveWeek}
               />
             </Card>
 

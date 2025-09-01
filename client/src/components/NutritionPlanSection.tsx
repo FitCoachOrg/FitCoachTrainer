@@ -18,6 +18,7 @@ import {
   Lightbulb,
   Calendar as CalendarIcon,
   ChevronDown,
+  ChevronUp,
   Coffee,
   Sun,
   Moon,
@@ -215,6 +216,28 @@ const NutritionPlanSection = ({
   const [hasExistingSchedule, setHasExistingSchedule] = useState(false);
   const [isShiftHeld, setIsShiftHeld] = useState(false);
   const [showGroceryListConfirmModal, setShowGroceryListConfirmModal] = useState(false);
+  const [isClientNutritionExpanded, setIsClientNutritionExpanded] = useState(() => {
+    // Try to get user preference from localStorage
+    try {
+      const stored = localStorage.getItem('clientNutritionExpanded');
+      return stored ? JSON.parse(stored) : false;
+    } catch {
+      return false;
+    }
+  }); // Collapsible Client Nutrition state with persistence
+  // Handle client nutrition toggle with persistence
+  const handleClientNutritionToggle = () => {
+    const newValue = !isClientNutritionExpanded;
+    setIsClientNutritionExpanded(newValue);
+    
+    // Persist user preference
+    try {
+      localStorage.setItem('clientNutritionExpanded', JSON.stringify(newValue));
+    } catch (error) {
+      console.warn('Failed to save client nutrition preference:', error);
+    }
+  };
+
   // --- Debug logger for approvalStatus ---
   useEffect(() => {
     console.log('approvalStatus changed:', approvalStatus);
@@ -1898,26 +1921,58 @@ const NutritionPlanSection = ({
   return (
     <TooltipProvider>
     <div className="space-y-8">
-      {/* Placeholder Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
-        <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
-        <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
-        <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
-        <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+      {/* Client Nutrition & Targets Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 rounded-xl border border-green-200 dark:border-green-700 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/40">
+            <Target className="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Client Nutrition & Targets</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">View and edit client nutritional preferences, targets, and insights</p>
+          </div>
+        </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClientNutritionToggle}
+          className="flex items-center gap-2 text-green-600 dark:text-green-400 border-green-300 dark:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+        >
+          {isClientNutritionExpanded ? 'Hide Details' : 'Show Details'}
+          {isClientNutritionExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </Button>
       </div>
+      
+      {/* Collapsible Client Nutrition & Targets Content */}
+      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+        isClientNutritionExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+      }`}>
+        {/* Placeholder Cards Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <FitnessGoalsPlaceholder onClick={() => setOpenPopup('fitnessGoals')} client={client} />
+          <TrainingPreferencesPlaceholder onClick={() => setOpenPopup('trainingPreferences')} client={client} />
+          <NutritionalPreferencesPlaceholder onClick={() => setOpenPopup('nutritionalPreferences')} client={client} />
+          <TrainerNotesPlaceholder onClick={() => setOpenPopup('trainerNotes')} client={client} />
+          <AICoachInsightsPlaceholder onClick={() => setOpenPopup('aiCoachInsights')} client={client} />
+        </div>
 
-      {/* Client Nutritional Targets Section */}
-      <div className="mb-8">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
-          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-          {client?.name || 'Client'} Nutritional Targets
-        </h3>
-        <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
-          <CardContent className="p-6">
-            <TargetEditGrid />
-          </CardContent>
-        </Card>
+        {/* Client Nutritional Targets Section */}
+        <div className="mb-8">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-3">
+            <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            {client?.name || 'Client'} Nutritional Targets
+          </h3>
+          <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-0 shadow-xl rounded-2xl overflow-hidden">
+            <CardContent className="p-6">
+              <TargetEditGrid />
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Enhanced Header with AI Generation */}

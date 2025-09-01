@@ -166,12 +166,12 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
   }) => (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs text-gray-500">{label}</label>
+        <label className="block text-xs text-gray-500 dark:text-gray-400">{label}</label>
         {value.length > 0 && (
           <button
             type="button"
             onClick={() => clearOne(setValue)}
-            className="text-[11px] text-blue-600 hover:underline inline-flex items-center gap-1"
+            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
           >
             <X className="h-3 w-3" /> Clear
           </button>
@@ -185,7 +185,7 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
           setPage(0);
           setValue(selected);
         }}
-        className="w-full border p-2 rounded min-h-[120px]"
+        className="w-full border p-2 rounded min-h-[120px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>
@@ -193,7 +193,7 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
           </option>
         ))}
       </select>
-      {value.length > 0 && <div className="mt-1 text-[11px] text-gray-500">{value.length} selected</div>}
+      {value.length > 0 && <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{value.length} selected</div>}
     </div>
   );
 
@@ -227,12 +227,12 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
           </div>
 
           {/* Filters */}
-          <Card>
+          <Card className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm text-gray-600">Filters</div>
+                <div className="text-sm text-gray-600 dark:text-gray-300">Filters</div>
                 {optionsLoading && (
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                     <RefreshCw className="h-4 w-4 animate-spin" /> Updating filters…
                   </div>
                 )}
@@ -247,43 +247,43 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
           </Card>
 
           {/* Table */}
-          <div className="border rounded-lg overflow-x-auto w-full">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto w-full bg-white dark:bg-gray-800">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead>Exercise Name</TableHead>
-                  <TableHead>Experience</TableHead>
-                  <TableHead>Target</TableHead>
-                  <TableHead>Equipment</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead></TableHead>
+                <TableRow className="bg-gray-50 dark:bg-gray-700">
+                  <TableHead className="text-gray-900 dark:text-gray-100">Exercise Name</TableHead>
+                  <TableHead className="text-gray-900 dark:text-gray-100">Experience</TableHead>
+                  <TableHead className="text-gray-900 dark:text-gray-100">Target</TableHead>
+                  <TableHead className="text-gray-900 dark:text-gray-100">Equipment</TableHead>
+                  <TableHead className="text-gray-900 dark:text-gray-100">Category</TableHead>
+                  <TableHead className="text-gray-900 dark:text-gray-100"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {error && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-red-600">
+                    <TableCell colSpan={6} className="text-red-600 dark:text-red-400">
                       {error}
                     </TableCell>
                   </TableRow>
                 )}
                 {!error && loading && (
                   <TableRow>
-                    <TableCell colSpan={6}>Loading…</TableCell>
+                    <TableCell colSpan={6} className="text-gray-700 dark:text-gray-300">Loading…</TableCell>
                   </TableRow>
                 )}
                 {!error && !loading && rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6}>No exercises found</TableCell>
+                    <TableCell colSpan={6} className="text-gray-700 dark:text-gray-300">No exercises found</TableCell>
                   </TableRow>
                 )}
                 {rows.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.exercise_name}</TableCell>
-                    <TableCell>{r.expereince_level || "-"}</TableCell>
-                    <TableCell>{r.target_muscle || "-"}</TableCell>
-                    <TableCell>{r.equipment || "-"}</TableCell>
-                    <TableCell>{r.category || "-"}</TableCell>
+                  <TableRow key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <TableCell className="font-medium text-gray-900 dark:text-gray-100">{r.exercise_name}</TableCell>
+                    <TableCell className="text-gray-700 dark:text-gray-300">{r.expereince_level || "-"}</TableCell>
+                    <TableCell className="text-gray-700 dark:text-gray-300">{r.target_muscle || "-"}</TableCell>
+                    <TableCell className="text-gray-700 dark:text-gray-300">{r.equipment || "-"}</TableCell>
+                    <TableCell className="text-gray-700 dark:text-gray-300">{r.category || "-"}</TableCell>
                     <TableCell className="text-right">
                       <Button size="sm" onClick={() => onSelect(r)}>Add</Button>
                     </TableCell>
@@ -294,7 +294,7 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
+          <div className="flex items-center justify-center gap-4 text-sm text-gray-600 dark:text-gray-300">
             <Button
               variant="ghost"
               size="sm"

@@ -13,6 +13,7 @@ import VideoModal from '@/components/VideoModal';
 import VideoThumbnail from '@/components/VideoThumbnail';
 import { 
   checkMonthlyWorkoutStatus, 
+  checkWeeklyWorkoutStatus,
   getStatusDisplay,
   type WorkoutStatusResult 
 } from '@/utils/workoutStatusUtils';
@@ -39,7 +40,7 @@ interface WeeklyPlanHeaderProps {
   onPlanChange: (updatedWeek: WeekDay[]) => void;
   onMonthlyChange?: (updatedMonthlyData: WeekDay[][]) => void;
   clientId?: number; // Add clientId for fetching multi-week data
-  onViewModeChange?: (viewMode: 'weekly' | 'monthly') => void;
+  viewMode: 'weekly' | 'monthly'; // View mode passed from parent
   onMonthlyDataChange?: (monthlyData: WeekDay[][]) => void;
   onApprovalStatusCheck?: () => void; // Callback to trigger approval status check
   onForceRefreshStatus?: () => void; // Callback to force refresh status
@@ -64,27 +65,13 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, onViewModeChange, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, viewMode, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    // Try to get viewMode from localStorage, default to 'weekly'
-    if (clientId) {
-      const savedViewMode = localStorage.getItem(`workoutPlanViewMode_${clientId}`);
-      return (savedViewMode as ViewMode) || 'weekly';
-    }
-    return 'weekly';
-  });
-  
-  // Persist viewMode changes to localStorage
-  useEffect(() => {
-    if (clientId && viewMode) {
-      localStorage.setItem(`workoutPlanViewMode_${clientId}`, viewMode);
-    }
-  }, [viewMode, clientId]);
+  // View mode is now passed from parent component
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
   const [copySourceDate, setCopySourceDate] = useState<string | null>(null);
   const [copyTargetDate, setCopyTargetDate] = useState<string | null>(null);
@@ -97,6 +84,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [copyTargetWeek, setCopyTargetWeek] = useState<number | null>(null);
   const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
   const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
+  const [weeklyStatus, setWeeklyStatus] = useState<WorkoutStatusResult | null>(null);
 
   // Week approval state
   const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
@@ -248,6 +236,18 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     }
   };
 
+  // Fetch weekly status data when view mode changes to weekly
+  const fetchWeeklyStatus = async () => {
+    if (!clientId) return;
+    
+    try {
+      const weeklyResult: WorkoutStatusResult = await checkWeeklyWorkoutStatus(supabase, clientId, planStartDate);
+      setWeeklyStatus(weeklyResult);
+    } catch (error) {
+      console.error('Error fetching weekly status:', error);
+    }
+  };
+
   // Fetch multi-week data when view mode changes to monthly
   useEffect(() => {
     if (viewMode === 'monthly' && clientId) {
@@ -255,12 +255,14 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     }
   }, [viewMode, clientId, planStartDate]);
 
-  // Notify parent when viewMode changes
+  // Fetch weekly status when view mode changes to weekly
   useEffect(() => {
-    if (onViewModeChange) {
-      onViewModeChange(viewMode);
+    if (viewMode === 'weekly' && clientId) {
+      fetchWeeklyStatus();
     }
-  }, [viewMode, onViewModeChange]);
+  }, [viewMode, clientId, planStartDate]);
+
+
 
   // Notify parent when monthlyData changes
   useEffect(() => {
@@ -1150,55 +1152,47 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         </div>
       )}
 
-      {/* View Toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-gray-600" />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan View</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Monthly Status Indicator */}
-          {viewMode === 'monthly' && monthlyStatus && (
-            <div className="flex items-center gap-2">
-              {(() => {
-                const statusDisplay = getStatusDisplay(monthlyStatus.status, true);
-                return (
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusDisplay.className}`}>
-                    <span>{statusDisplay.icon}</span>
-                    <span>{statusDisplay.text}</span>
-                    {monthlyStatus.weeklyBreakdown && (
-                      <span className="text-xs opacity-75">
-                        ({monthlyStatus.weeklyBreakdown.filter(w => w.status === 'approved').length}/4 weeks)
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-          
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <Button
-              variant={viewMode === 'weekly' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('weekly')}
-              className="text-xs"
-            >
-              <Calendar className="h-3 w-3 mr-1" />
-              7 Day
-            </Button>
-            <Button
-              variant={viewMode === 'monthly' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('monthly')}
-              className="text-xs"
-            >
-              <CalendarDays className="h-3 w-3 mr-1" />
-              Monthly
-            </Button>
+      {/* Monthly Status Indicator */}
+      {viewMode === 'monthly' && monthlyStatus && (
+        <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center gap-2">
+            {(() => {
+              const statusDisplay = getStatusDisplay(monthlyStatus.status, true);
+              return (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusDisplay.className}`}>
+                  <span>{statusDisplay.icon}</span>
+                  <span>{statusDisplay.text}</span>
+                  {monthlyStatus.weeklyBreakdown && (
+                    <span className="text-xs opacity-75">
+                      ({monthlyStatus.weeklyBreakdown.filter(w => w.status === 'approved').length}/4 weeks)
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Weekly Status Indicator */}
+      {viewMode === 'weekly' && weeklyStatus && (
+        <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center gap-2">
+            {(() => {
+              const statusDisplay = getStatusDisplay(weeklyStatus.status, false);
+              return (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusDisplay.className}`}>
+                  <span>{statusDisplay.icon}</span>
+                  <span>{statusDisplay.text}</span>
+                  <span className="text-xs opacity-75">
+                    ({weeklyStatus.previewData.filter(d => d.is_approved).length}/7 days)
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Plan Grid */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

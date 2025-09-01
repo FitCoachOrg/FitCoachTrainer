@@ -251,14 +251,14 @@ const EditableCell = ({
   placeholder = '',
   className = ''
 }: {
-  value: string | number;
+  value: string | number | undefined | null;
   onSave: (newValue: string) => void;
   type?: 'text' | 'number';
   placeholder?: string;
   className?: string;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(value.toString());
+  const [editValue, setEditValue] = useState(value?.toString() || '');
 
   const handleSave = () => {
     onSave(editValue);
@@ -266,7 +266,7 @@ const EditableCell = ({
   };
 
   const handleCancel = () => {
-    setEditValue(value.toString());
+    setEditValue(value?.toString() || '');
     setIsEditing(false);
   };
 
@@ -306,7 +306,7 @@ const EditableCell = ({
       className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 ${className}`}
       onClick={() => setIsEditing(true)}
     >
-      <span className="truncate">{value || placeholder}</span>
+      <span className="truncate">{value?.toString() || placeholder}</span>
       <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
     );

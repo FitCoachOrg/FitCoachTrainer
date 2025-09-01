@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { RequestLogger, loggedOperation } from '@/utils/requestLogger'
 
 // Types for client data
 export interface MappedClient {
@@ -41,22 +42,61 @@ export function useClients() {
 
   useEffect(() => {
     async function fetchClients() {
+      const componentName = 'useClients';
+      const operationStartTime = Date.now();
+      
       try {
         setLoading(true)
+        RequestLogger.logStateChange(componentName, 'loading', false, true, 'fetchClients_start');
         
         // Get current user session
+        const sessionStartTime = Date.now();
         const { data: { session } } = await supabase.auth.getSession()
+        RequestLogger.logPerformance('auth.getSession', componentName, sessionStartTime, {
+          success: !!session,
+          metadata: { hasEmail: !!session?.user?.email }
+        });
+        
         if (!session?.user?.email) {
+          RequestLogger.logError(componentName, new Error('User not authenticated'), {
+            operation: 'fetchClients',
+            hasSession: !!session,
+            hasUser: !!session?.user
+          });
           setError('User not authenticated')
           return
         }
 
         // Get trainer ID from trainer table using email
+        const trainerQueryStartTime = Date.now();
+        RequestLogger.logDatabaseQuery(
+          'trainer',
+          'select',
+          componentName,
+          {
+            filters: { trainer_email: session.user.email },
+            startTime: trainerQueryStartTime
+          }
+        );
+        
         const { data: trainerData, error: trainerError } = await supabase
           .from('trainer')
           .select('id')
           .eq('trainer_email', session.user.email)
           .single()
+
+        RequestLogger.logDatabaseQuery(
+          'trainer',
+          'select',
+          componentName,
+          {
+            filters: { trainer_email: session.user.email },
+            startTime: trainerQueryStartTime,
+            success: !trainerError,
+            error: trainerError?.message,
+            resultCount: trainerData ? 1 : 0
+          }
+        );
 
         if (trainerError || !trainerData?.id) {
           setError('Trainer profile not found')
@@ -64,10 +104,34 @@ export function useClients() {
         }
 
         // Step 1: Get client IDs associated with this trainer from trainer_client_web table
+        const relationshipQueryStartTime = Date.now();
+        RequestLogger.logDatabaseQuery(
+          'trainer_client_web',
+          'select',
+          componentName,
+          {
+            filters: { trainer_id: trainerData.id },
+            startTime: relationshipQueryStartTime
+          }
+        );
+        
         const { data: clientRelationships, error: relationshipError } = await supabase
           .from('trainer_client_web')
           .select('client_id')
           .eq('trainer_id', trainerData.id)
+
+        RequestLogger.logDatabaseQuery(
+          'trainer_client_web',
+          'select',
+          componentName,
+          {
+            filters: { trainer_id: trainerData.id },
+            startTime: relationshipQueryStartTime,
+            success: !relationshipError,
+            error: relationshipError?.message,
+            resultCount: clientRelationships?.length || 0
+          }
+        );
 
         if (relationshipError) {
           console.error('Error fetching client relationships:', relationshipError)
@@ -92,11 +156,35 @@ export function useClients() {
         }
 
         // Step 2: Fetch client data for these client IDs
+        const clientsQueryStartTime = Date.now();
+        RequestLogger.logDatabaseQuery(
+          'client',
+          'select',
+          componentName,
+          {
+            filters: { client_ids: clientIds, order: 'created_at desc' },
+            startTime: clientsQueryStartTime
+          }
+        );
+        
         const { data: clientsData, error: clientsError } = await supabase
           .from('client')
           .select('*')
           .in('client_id', clientIds)
           .order('created_at', { ascending: false })
+
+        RequestLogger.logDatabaseQuery(
+          'client',
+          'select',
+          componentName,
+          {
+            filters: { client_ids: clientIds, order: 'created_at desc' },
+            startTime: clientsQueryStartTime,
+            success: !clientsError,
+            error: clientsError?.message,
+            resultCount: clientsData?.length || 0
+          }
+        );
 
         if (clientsError) {
           console.error('Error fetching clients:', clientsError)
@@ -150,9 +238,30 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
 
   useEffect(() => {
     async function fetchSchedule() {
+      const componentName = 'useClientSchedule';
+      const operationStartTime = Date.now();
+      
       try {
         setLoading(true)
+        RequestLogger.logStateChange(componentName, 'loading', false, true, 'fetchSchedule_start');
+        
         // ALWAYS fetch from schedule_preview first (primary source)
+        const scheduleQueryStartTime = Date.now();
+        RequestLogger.logDatabaseQuery(
+          'schedule_preview',
+          'select',
+          componentName,
+          {
+            clientId,
+            filters: { 
+              client_id: clientId, 
+              date_range: `${startDate} to ${endDate}`,
+              order: 'for_date asc'
+            },
+            startTime: scheduleQueryStartTime
+          }
+        );
+        
         let { data, error } = await supabase
           .from('schedule_preview')
           .select('*')
@@ -160,8 +269,32 @@ export function useClientSchedule(clientId: number, startDate: string, endDate: 
           .gte('for_date', startDate)
           .lte('for_date', endDate)
           .order('for_date', { ascending: true })
+          
+        RequestLogger.logDatabaseQuery(
+          'schedule_preview',
+          'select',
+          componentName,
+          {
+            clientId,
+            filters: { 
+              client_id: clientId, 
+              date_range: `${startDate} to ${endDate}`,
+              order: 'for_date asc'
+            },
+            startTime: scheduleQueryStartTime,
+            success: !error,
+            error: error?.message,
+            resultCount: data?.length || 0
+          }
+        );
+        
         if (error) {
           console.warn('Error fetching from schedule_preview:', error)
+          RequestLogger.logError(componentName, error, {
+            operation: 'fetchSchedule',
+            clientId,
+            dateRange: `${startDate} to ${endDate}`
+          });
         }
         
         let isFromPreview = true;
