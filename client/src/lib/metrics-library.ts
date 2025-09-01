@@ -58,6 +58,8 @@ export interface Metric {
   category?: string
   /** Optional multiple categories for a metric to belong to several groups */
   categories?: string[]
+  description?: string
+  unit?: string
 }
 
 /**
@@ -80,6 +82,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "weight",
     label: "Weight",
+    description: "Body weight measurement tracking changes over time",
+    unit: "kg",
     icon: Weight,
     type: "line",
     color: "#3b82f6",
@@ -95,6 +99,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "hipCircumference",
     label: "Hips",
+    description: "Hip circumference measurement for body composition tracking",
+    unit: "inches",
     icon: Ruler,
     type: "line",
     color: "#0ea5e9",
@@ -109,6 +115,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "waistCircumference",
     label: "Waist",
+    description: "Waist circumference measurement for health and fitness tracking",
+    unit: "inches",
     icon: Ruler,
     type: "line",
     color: "#22c55e",
@@ -151,6 +159,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "hipsWaistRatio",
     label: "Hips/Waist Ratio",
+    description: "Calculated ratio of hip to waist measurements for body composition analysis",
+    unit: "ratio",
     icon: Divide,
     type: "line",
     color: "#a855f7",
@@ -164,6 +174,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "sleep",
     label: "Sleep Hours",
+    description: "User-inputted sleep duration tracking for recovery and health monitoring",
+    unit: "hours",
     icon: Clock,
     type: "bar",
     color: "#14b8a6",
@@ -177,6 +189,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "heartRate",
     label: "Resting Heart Rate",
+    description: "Resting heart rate measurement indicating cardiovascular fitness",
+    unit: "bpm",
     icon: Heart,
     type: "line",
     color: "#e11d48",
@@ -190,6 +204,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "steps",
     label: "Steps",
+    description: "Daily step count measuring physical activity level",
+    unit: "steps",
     icon: Footprints,
     type: "bar",
     color: "#d97706",
@@ -216,12 +232,14 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "hydrationLogins",
     label: "Hydration Logins",
+    description: "Calculated count of days with hydration tracking entries for fluid intake monitoring",
+    unit: "days",
     icon: Droplet,
     type: "bar",
     color: "#22d3ee",
     data: [],
     dataKey: "qty",
-    yLabel: "count",
+    yLabel: "days",
     activityName: "hydration",
     dataSource: "activity_info",
     categories: ["Engagement"]
@@ -242,6 +260,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "energyLevel",
     label: "Morning Energy",
+    description: "User-inputted morning energy level rating for recovery assessment",
+    unit: "stars",
     icon: Zap,
     type: "line",
     color: "#f59e0b",
@@ -255,12 +275,14 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "mealLogins",
     label: "Meal Logins",
+    description: "Calculated count of days with meal entries for nutrition tracking engagement",
+    unit: "days",
     icon: Utensils,
     type: "bar",
     color: "#34d399",
     data: [],
     dataKey: "qty",
-    yLabel: "count",
+    yLabel: "days",
     activityName: "Meal Logins",
     dataSource: "meal_info",
     tableName: "meal_info",
@@ -270,6 +292,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "caloriesSpent",
     label: "Calories Spent",
+    description: "Total calories burned through physical activity and exercise",
+    unit: "kcal",
     icon: Activity,
     type: "bar",
     color: "#6366f1",
@@ -283,6 +307,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "exerciseTime",
     label: "Exercise Time",
+    description: "Total time spent on physical exercise and workouts",
+    unit: "minutes",
     icon: Clock,
     type: "bar",
     color: "#10b981",
@@ -296,6 +322,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "workoutAdherence",
     label: "Workout Adherence",
+    description: "Percentage of scheduled workout days completed",
+    unit: "percentage",
     icon: Activity,
     type: "line",
     color: "#6366f1",
@@ -308,12 +336,14 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "wakeupLogins",
     label: "Wakeup Logins",
+    description: "Number of days with recorded wakeup activities",
+    unit: "days",
     icon: Clock,
     type: "bar",
     color: "#fbbf24",
     data: [],
     dataKey: "qty",
-    yLabel: "count",
+    yLabel: "days",
     activityName: "wakeup",
     dataSource: "activity_info",
     categories: ["Engagement"]
@@ -346,6 +376,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "stress",
     label: "Stress Level",
+    description: "User-inputted stress level rating for mental health and recovery monitoring",
+    unit: "level",
     icon: AlertTriangle,
     type: "line",
     color: "#dc2626",
@@ -358,6 +390,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "engagementLevel",
     label: "Engagement Level",
+    description: "Overall engagement score based on activity and interaction patterns",
+    unit: "percentage",
     icon: Target,
     type: "line",
     color: "#7c3aed",
@@ -373,21 +407,25 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "workoutLogins",
     label: "Workout Logins",
+    description: "Number of days with recorded workout activities",
+    unit: "days",
     icon: Activity,
     type: "bar",
     color: "#7dd3fc",
     data: [], // Computed count from workout_info
     dataKey: "qty",
-    yLabel: "count",
+    yLabel: "days",
     activityName: "Workout Logins",
     dataSource: "workout_info",
     tableName: "workout_info",
-    columnName: "count",
+    // No columnName - this will be calculated as record count
     categories: ["Engagement"]
   },
   {
     key: "calories",
     label: "Calories Intake",
+    description: "Daily caloric intake from meals and nutrition tracking",
+    unit: "kcal",
     icon: Utensils,
     type: "bar",
     color: "#f97316",
@@ -403,6 +441,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "proteinIntake",
     label: "Protein Intake",
+    description: "Daily protein consumption for muscle building and recovery",
+    unit: "grams",
     icon: Utensils,
     type: "bar",
     color: "#16a34a",
@@ -418,6 +458,8 @@ export const METRIC_LIBRARY: Metric[] = [
   {
     key: "fatIntake",
     label: "Fats Intake",
+    description: "User-inputted fats consumption from meals for nutritional balance monitoring",
+    unit: "grams",
     icon: Utensils,
     type: "bar",
     color: "#a16207",

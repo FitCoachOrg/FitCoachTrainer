@@ -771,46 +771,150 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
             </CardContent>
           </Card>
 
-          {/* Metrics Analysis */}
-          {reportData.processedMetrics && (
-            <Card>
+          {/* Client Profile & Report Overview */}
+          {reportData.clientData && (
+            <Card className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/50 dark:via-indigo-950/50 dark:to-purple-950/50 border-0 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Metrics Analysis
+                  <Database className="h-5 w-5 text-blue-500" />
+                  Report Overview
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedMetrics.map(metricKey => {
-                    const metric = reportData.processedMetrics?.[metricKey];
-                    const aiAnalysis = reportData.aiInsights?.metricsAnalysis?.[metricKey];
-                    
-                    if (!metric) return null;
-
-                    return (
-                      <div key={metricKey} className="p-4 border border-gray-200 rounded-lg dark:border-gray-600">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium">{METRIC_LIBRARY.find(m => m.key === metricKey)?.label || metricKey}</h4>
-                          {getTrendIcon(metric.trend)}
-                        </div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Current Average:</span>
-                            <span className="font-medium">{metric.monthlyAverage.toFixed(1)}</span>
-                          </div>
-                          {aiAnalysis && (
-                            <div className="space-y-1">
-                              <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPerformanceColor(aiAnalysis.performance)}`}>
-                                {aiAnalysis.performance.replace('_', ' ').toUpperCase()}
-                              </div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">{aiAnalysis.insights}</p>
-                            </div>
-                          )}
-                        </div>
+                <div className="flex items-center gap-6 mb-4">
+                  <div className="flex-shrink-0">
+                    {reportData.clientData.clientInfo?.profile_image_url ? (
+                      <img
+                        src={reportData.clientData.clientInfo.profile_image_url}
+                        alt="Client Profile"
+                        className="w-16 h-16 rounded-full border-4 border-white shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl shadow-lg">
+                        👤
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                      {client?.cl_name || client?.cl_prefer_name || 'Client'}
+                    </h3>
+                    <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <span>Report Period: {reportData.clientData.month}</span>
+                      <span>Total Activities: {reportData.clientData.activityData.length}</span>
+                      <span>Workouts: {reportData.clientData.workoutData.length}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Detailed Metrics Analysis Table */}
+          {reportData.processedMetrics && (
+            <Card className="border-0 shadow-xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-blue-500" />
+                  Detailed Metrics Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          Metric Definition
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          30-Day Average
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          First Half Average
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          Second Half Average
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          Trend
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
+                          Comments
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-900">
+                      {selectedMetrics.map((metricKey, index) => {
+                        const metric = reportData.processedMetrics?.[metricKey];
+                        const metricDef = METRIC_LIBRARY.find(m => m.key === metricKey);
+
+                        if (!metric || !metricDef) return null;
+
+                        const firstHalfAvg = metric.trendAnalysis?.firstAvg || 0;
+                        const secondHalfAvg = metric.trendAnalysis?.secondAvg || 0;
+                        const trend = metric.trend || 'stable';
+
+                        let comments = '';
+                        if (metric.trendAnalysis?.dataAvailable) {
+                          const change = metric.trendAnalysis.change || 0;
+                          if (Math.abs(change) > 10) {
+                            comments = change > 0 ? 'Significant improvement' : 'Significant decline';
+                          } else if (Math.abs(change) > 5) {
+                            comments = change > 0 ? 'Moderate improvement' : 'Moderate decline';
+                          } else {
+                            comments = 'Stable performance';
+                          }
+                        } else {
+                          comments = 'Insufficient data';
+                        }
+
+                        return (
+                          <tr key={metricKey} className={index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800'}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50">
+                                  <metricDef.icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                                    {metricDef.label}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">
+                                    {metricDef.description || 'No description available'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                              {metric.monthlyAverage.toFixed(1)} {metricDef.unit || metricDef.yLabel || ''}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              {firstHalfAvg.toFixed(1)} {metricDef.unit || metricDef.yLabel || ''}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                              {secondHalfAvg.toFixed(1)} {metricDef.unit || metricDef.yLabel || ''}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                trend === 'up' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' :
+                                trend === 'down' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-400'
+                              }`}>
+                                {trend === 'up' && <TrendingUp className="w-3 h-3 mr-1" />}
+                                {trend === 'down' && <TrendingDown className="w-3 h-3 mr-1" />}
+                                {trend === 'stable' && <Minus className="w-3 h-3 mr-1" />}
+                                {trend.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-xs">
+                              {comments}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>

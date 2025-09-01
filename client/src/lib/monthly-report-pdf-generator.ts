@@ -726,15 +726,27 @@ export class MonthlyReportPDFGenerator {
         const pageHeight = pdf.internal.pageSize.getHeight();
         const imgWidth = pageWidth - 20;
 
-        // Convert entire HTML to canvas first
+        // Convert entire HTML to canvas first with optimized settings
         const fullCanvas = await html2canvas(container, {
-          scale: 2,
+          scale: 1, // Reduced from 2 to 1 for smaller file size
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
           width: 794, // A4 width in pixels at 96 DPI
           scrollX: 0,
-          scrollY: 0
+          scrollY: 0,
+          // Optimize for smaller file size
+          imageTimeout: 0,
+          removeContainer: true,
+          foreignObjectRendering: false, // Use canvas rendering for better compression
+          // Exclude unnecessary elements to reduce file size
+          ignoreElements: (element) => {
+            // Skip elements that might have large backgrounds or are not needed for PDF
+            return element.classList.contains('cursor-pointer') ||
+                   element.classList.contains('hover:bg-opacity-80') ||
+                   element.tagName === 'SCRIPT' ||
+                   element.tagName === 'LINK';
+          }
         });
 
         // Calculate total height and number of pages needed
@@ -804,10 +816,11 @@ export class MonthlyReportPDFGenerator {
             );
           }
 
-          const tempImgData = tempCanvas.toDataURL('image/png');
-          
+          // Use JPEG with compression for smaller file size
+          const tempImgData = tempCanvas.toDataURL('image/jpeg', 0.8);
+
           // Add the page to PDF
-          pdf.addImage(tempImgData, 'PNG', 10, 10, imgWidth, currentPageHeight);
+          pdf.addImage(tempImgData, 'JPEG', 10, 10, imgWidth, currentPageHeight);
         }
 
         console.log(`📄 PDF generation completed: ${finalPagesNeeded} pages created`);
@@ -836,13 +849,26 @@ export class MonthlyReportPDFGenerator {
   static async generatePDFFromHTML(element: HTMLElement, fileName: string): Promise<void> {
     try {
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 1, // Reduced from 2 to 1 for smaller file size
         useCORS: true,
         allowTaint: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        // Optimize for smaller file size
+        imageTimeout: 0,
+        removeContainer: true,
+        foreignObjectRendering: false, // Use canvas rendering for better compression
+        // Exclude unnecessary elements to reduce file size
+        ignoreElements: (element) => {
+          // Skip elements that might have large backgrounds or are not needed for PDF
+          return element.classList.contains('cursor-pointer') ||
+                 element.classList.contains('hover:bg-opacity-80') ||
+                 element.tagName === 'SCRIPT' ||
+                 element.tagName === 'LINK';
+        }
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG with compression for smaller file size
+      const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();

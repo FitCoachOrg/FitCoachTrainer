@@ -57,6 +57,12 @@ export const MetricChart: React.FC<MetricChartProps> = ({ metric, chartType }) =
                 <span className="text-xs text-amber-500 dark:text-amber-400 ml-1">(Demo)</span>
               )}
             </span>
+            {metric.description && (
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 leading-tight">
+                {metric.description}
+                {metric.unit && <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">• Unit: {metric.unit}</span>}
+              </p>
+            )}
           </div>
         </CardTitle>
       </CardHeader>

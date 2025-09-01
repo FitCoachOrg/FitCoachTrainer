@@ -20,6 +20,15 @@ export interface ProcessedMetrics {
     monthlyAverage: number;
     trend: 'up' | 'down' | 'stable';
     performance?: 'excellent' | 'good' | 'needs_improvement' | 'poor';
+    trendAnalysis?: {
+      trend: 'up' | 'down' | 'stable';
+      firstHalfData: any[];
+      secondHalfData: any[];
+      firstAvg: number;
+      secondAvg: number;
+      change: number;
+      dataAvailable: boolean;
+    };
   };
 }
 

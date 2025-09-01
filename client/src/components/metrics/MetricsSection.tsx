@@ -114,6 +114,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
   const [dataLoaded, setDataLoaded] = useState(false)
   const [timeRange, setTimeRange] = useState<"7D" | "30D" | "90D">("30D")
   const [chartType, setChartType] = useState<"line" | "bar">("line")
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards")
   
   // Unified popup state
   const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
@@ -1202,6 +1203,8 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
         setTimeRange={setTimeRange}
         chartType={chartType}
         setChartType={setChartType}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         draggingId={draggingId}
         setDraggingId={setDraggingId}
         onDragEnd={handleDragEnd}
@@ -1209,7 +1212,7 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       />
 
       {/* Enhanced Metrics Grid */}
-      <MetricsGrid selectedKeys={selectedKeys} onDragEnd={handleDragEnd} chartType={chartType} />
+      <MetricsGrid selectedKeys={selectedKeys} onDragEnd={handleDragEnd} chartType={chartType} viewMode={viewMode} />
 
       {/* Workout History and Progress Pictures Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -121,14 +121,38 @@ const initialEvents: CalendarEvent[] = [
 ]
 
 const eventTypeColors = {
-  consultation: { bg: "bg-blue-100", border: "border-blue-300", text: "text-blue-800", dark: "dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300" },
-  "check-in": { bg: "bg-green-100", border: "border-green-300", text: "text-green-800", dark: "dark:bg-green-900/30 dark:border-green-700 dark:text-green-300" },
-  meeting: { bg: "bg-purple-100", border: "border-purple-300", text: "text-purple-800", dark: "dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300" },
-  fitness: { bg: "bg-orange-100", border: "border-orange-300", text: "text-orange-800", dark: "dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-300" },
-  nutrition: { bg: "bg-emerald-100", border: "border-emerald-300", text: "text-emerald-800", dark: "dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-300" },
-  assessment: { bg: "bg-red-100", border: "border-red-300", text: "text-red-800", dark: "dark:bg-red-900/30 dark:border-red-700 dark:text-red-300" },
-  "follow-up": { bg: "bg-cyan-100", border: "border-cyan-300", text: "text-cyan-800", dark: "dark:bg-cyan-900/30 dark:border-cyan-700 dark:text-cyan-300" },
-  group_session: { bg: "bg-pink-100", border: "border-pink-300", text: "text-pink-800", dark: "dark:bg-pink-900/30 dark:border-pink-700 dark:text-pink-300" },
+  consultation: {
+    light: { bg: "bg-blue-100", border: "border-blue-300", text: "text-blue-900", secondary: "text-blue-700" },
+    dark: { bg: "bg-blue-900/40", border: "border-blue-600", text: "text-blue-100", secondary: "text-blue-200" }
+  },
+  "check-in": {
+    light: { bg: "bg-green-100", border: "border-green-300", text: "text-green-900", secondary: "text-green-700" },
+    dark: { bg: "bg-green-900/40", border: "border-green-600", text: "text-green-100", secondary: "text-green-200" }
+  },
+  meeting: {
+    light: { bg: "bg-purple-100", border: "border-purple-300", text: "text-purple-900", secondary: "text-purple-700" },
+    dark: { bg: "bg-purple-900/40", border: "border-purple-600", text: "text-purple-100", secondary: "text-purple-200" }
+  },
+  fitness: {
+    light: { bg: "bg-orange-100", border: "border-orange-300", text: "text-orange-900", secondary: "text-orange-700" },
+    dark: { bg: "bg-orange-900/40", border: "border-orange-600", text: "text-orange-100", secondary: "text-orange-200" }
+  },
+  nutrition: {
+    light: { bg: "bg-emerald-100", border: "border-emerald-300", text: "text-emerald-900", secondary: "text-emerald-700" },
+    dark: { bg: "bg-emerald-900/40", border: "border-emerald-600", text: "text-emerald-100", secondary: "text-emerald-200" }
+  },
+  assessment: {
+    light: { bg: "bg-red-100", border: "border-red-300", text: "text-red-900", secondary: "text-red-700" },
+    dark: { bg: "bg-red-900/40", border: "border-red-600", text: "text-red-100", secondary: "text-red-200" }
+  },
+  "follow-up": {
+    light: { bg: "bg-cyan-100", border: "border-cyan-300", text: "text-cyan-900", secondary: "text-cyan-700" },
+    dark: { bg: "bg-cyan-900/40", border: "border-cyan-600", text: "text-cyan-100", secondary: "text-cyan-200" }
+  },
+  group_session: {
+    light: { bg: "bg-pink-100", border: "border-pink-300", text: "text-pink-900", secondary: "text-pink-700" },
+    dark: { bg: "bg-pink-900/40", border: "border-pink-600", text: "text-pink-100", secondary: "text-pink-200" }
+  },
 }
 
 const getEventsForDay = (date: Date, events: CalendarEvent[]) => {
@@ -473,13 +497,12 @@ const EventCard: React.FC<{
   proportional?: boolean // New prop for proportional rendering
 }> = ({ event, onEdit, onDelete, compact = false, proportional = false }) => {
   const typeColor = eventTypeColors[event.type]
-  
+
   return (
-    <div 
-      className={`group ${typeColor.bg} ${typeColor.dark} border ${typeColor.border} rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-40`}
-      style={{ 
-        borderLeftColor: event.color || typeColor.border,
-        borderLeftWidth: '4px'
+    <div
+      className={`group border rounded-md cursor-pointer hover:shadow-lg transition-all duration-200 h-full overflow-hidden relative z-40 ${typeColor.light.bg} dark:${typeColor.dark.bg} ${typeColor.light.border} dark:${typeColor.dark.border} border-l-4`}
+      style={{
+        borderLeftColor: event.color || (compact ? '#3B82F6' : '#3B82F6') // Default blue if no custom color
       }}
       onClick={(e) => {
         console.log('Event card clicked:', event.title)
@@ -490,8 +513,8 @@ const EventCard: React.FC<{
       {compact ? (
         // Multi-line layout for weekly view to accommodate more text
         <div className="flex flex-col h-full p-1.5 relative">
-          {/* Title - First line, can wrap to multiple lines */}
-          <h4 className={`font-medium text-xs leading-tight ${typeColor.text} break-words flex-1 min-h-0`} style={{ 
+                    {/* Title - First line, can wrap to multiple lines */}
+          <h4 className={`font-semibold text-xs leading-tight break-words flex-1 min-h-0 ${typeColor.light.text} dark:${typeColor.dark.text}`} style={{
             lineHeight: '1.2',
             display: '-webkit-box',
             WebkitLineClamp: 2,
@@ -500,26 +523,26 @@ const EventCard: React.FC<{
           }}>
             {event.title}
           </h4>
-          
+
           {/* Second line - Client name and time info */}
           <div className="flex items-center gap-2 mt-0.5 flex-shrink-0">
             {/* Client name */}
             {event.clientName && (
               <div className="flex items-center gap-1 flex-shrink-0">
                 <User className="h-2 w-2 text-gray-500 dark:text-gray-400" />
-                <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
+                <span className={`text-xs truncate max-w-24 font-medium ${typeColor.light.secondary} dark:${typeColor.dark.secondary}`}>{event.clientName}</span>
               </div>
             )}
-            
+
             {/* Time and duration */}
-            <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+            <div className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200 font-medium flex-shrink-0">
               <Clock className="h-2 w-2" />
               <span>{event.time}</span>
               {event.duration > 0 && (
                 <span>• {event.duration}m</span>
               )}
             </div>
-            
+
             {/* Meeting link indicator */}
             {event.meetingUrl && (
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -580,29 +603,29 @@ const EventCard: React.FC<{
         {/* Main content in a single row */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Title */}
-          <h4 className={`font-medium text-sm leading-tight truncate flex-1 ${typeColor.text}`}>{event.title}</h4>
-          
+          <h4 className={`font-medium text-sm leading-tight truncate flex-1 ${typeColor.light.text} dark:${typeColor.dark.text}`}>{event.title}</h4>
+
           {/* Client name */}
           {event.clientName && (
             <div className="flex items-center gap-1 flex-shrink-0">
               <User className="h-3 w-3 text-gray-500 dark:text-gray-400" />
-              <span className="text-xs text-gray-700 dark:text-gray-300 truncate max-w-24">{event.clientName}</span>
+              <span className={`text-xs truncate max-w-24 font-medium ${typeColor.light.secondary} dark:${typeColor.dark.secondary}`}>{event.clientName}</span>
             </div>
           )}
-          
+
           {/* Time and duration */}
-          <div className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">
+          <div className="flex items-center gap-1 text-xs text-gray-800 dark:text-gray-200 font-medium flex-shrink-0">
             <Clock className="h-3 w-3" />
             <span>{event.time}</span>
             {event.duration > 0 && (
               <span>• {event.duration}min</span>
             )}
           </div>
-          
+
           {/* Meeting link indicator */}
           {event.meetingUrl && (
             <div className="flex items-center gap-1 flex-shrink-0">
-              <span className={`text-xs ${typeColor.text} font-medium`}>🔗 Meeting</span>
+              <span className={`text-xs font-medium ${typeColor.light.text} dark:${typeColor.dark.text}`}>🔗 Meeting</span>
             </div>
           )}
         </div>
@@ -938,9 +961,9 @@ const ProfessionalCalendar: React.FC = () => {
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-full overflow-y-auto relative bg-white dark:bg-gray-900">
+      <div className="h-full overflow-y-auto relative bg-white dark:bg-gray-900" style={{ minHeight: '1200px' }}>
               {/* Time grid background - Google Calendar style */}
-      <div className="absolute inset-0 ml-20 z-0">
+      <div className="absolute inset-0 ml-20 z-0" style={{ minHeight: '1200px' }}>
           {hourSlots.map((time, index) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60
@@ -972,7 +995,7 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
         
               {/* Time labels - Google Calendar style */}
-      <div className="absolute left-0 top-0 w-20 h-full bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10">
+      <div className="absolute left-0 top-0 w-20 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10" style={{ height: '1200px' }}>
           {hourSlots.map((time) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60

@@ -34,6 +34,10 @@ export class MonthlyReportMetricsProcessor {
           processedMetrics[metricKey] = this.calculateWorkoutAdherence(rawData.workoutData, rawData.scheduleData);
         } else if (metricKey === 'waterIntake') {
           processedMetrics[metricKey] = this.processWaterIntake(rawData.activityData, metric);
+        } else if (metricKey === 'wakeupLogins') {
+          processedMetrics[metricKey] = this.calculateWakeupLogins(rawData.activityData);
+        } else if (metricKey === 'workoutLogins') {
+          processedMetrics[metricKey] = this.calculateWorkoutLogins(rawData.workoutData);
         } else {
           // Handle regular metrics
           switch (metric.dataSource) {
@@ -245,7 +249,7 @@ export class MonthlyReportMetricsProcessor {
   private static calculateTrend(data: any[]): { trend: 'up' | 'down' | 'stable', firstHalfData: any[], secondHalfData: any[], firstAvg: number, secondAvg: number, change: number, dataAvailable: boolean } {
     if (data.length < 2) {
       return {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: 0,
@@ -254,17 +258,17 @@ export class MonthlyReportMetricsProcessor {
         dataAvailable: false
       };
     }
-    
+
     const sortedData = data.sort((a, b) => new Date(a.created_at || a.for_date).getTime() - new Date(b.created_at || b.for_date).getTime());
     const firstHalf = sortedData.slice(0, Math.floor(sortedData.length / 2));
     const secondHalf = sortedData.slice(Math.floor(sortedData.length / 2));
-    
+
     const firstAvg = this.calculateAverage(firstHalf.map(d => d.qty));
     const secondAvg = this.calculateAverage(secondHalf.map(d => d.qty));
-    
+
     if (firstAvg === 0) {
       return {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: firstHalf,
         secondHalfData: secondHalf,
         firstAvg: 0,
@@ -273,16 +277,16 @@ export class MonthlyReportMetricsProcessor {
         dataAvailable: true
       };
     }
-    
+
     const change = ((secondAvg - firstAvg) / firstAvg) * 100;
-    
+
     let trend: 'up' | 'down' | 'stable';
     if (change > 5) trend = 'up';
     else if (change < -5) trend = 'down';
     else trend = 'stable';
-    
+
     return {
-      trend,
+      trend: trend as 'up' | 'down' | 'stable',
       firstHalfData: firstHalf,
       secondHalfData: secondHalf,
       firstAvg,
@@ -311,7 +315,7 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage: 0,
       trend: 'stable' as const,
       trendAnalysis: {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: 0,
@@ -407,7 +411,7 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage: ratio,
       trend: 'stable' as const,
       trendAnalysis: {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: ratio,
@@ -434,7 +438,7 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage: uniqueDays,
       trend: 'stable' as const,
       trendAnalysis: {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: uniqueDays,
@@ -459,7 +463,7 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage: exerciseCount,
       trend: 'stable' as const,
       trendAnalysis: {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: exerciseCount,
@@ -491,7 +495,7 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage: adherence,
       trend: 'stable' as const,
       trendAnalysis: {
-        trend: 'stable',
+        trend: 'stable' as const,
         firstHalfData: [],
         secondHalfData: [],
         firstAvg: adherence,
@@ -587,6 +591,65 @@ export class MonthlyReportMetricsProcessor {
       monthlyAverage,
       trend: trendAnalysis.trend,
       trendAnalysis
+    };
+  }
+
+  /**
+   * Calculate Wakeup Logins (count of wakeup records)
+   */
+  private static calculateWakeupLogins(activityData: any[]) {
+    const uniqueDays = new Set(activityData.map(item => 
+      new Date(item.created_at).toDateString()
+    )).size;
+
+    const weeklyData = this.groupByWeek([{ qty: uniqueDays, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'wakeupLogins', label: 'Wakeup Logins' },
+      weeklyData,
+      monthlyAverage: uniqueDays,
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable' as const,
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: uniqueDays,
+        secondAvg: uniqueDays,
+        change: 0,
+        dataAvailable: true
+      }
+    };
+  }
+
+  /**
+   * Calculate Workout Logins (count of unique days with workout activities)
+   */
+  private static calculateWorkoutLogins(workoutData: any[]) {
+    if (workoutData.length === 0) {
+      return this.createEmptyMetric({ key: 'workoutLogins', label: 'Workout Logins' });
+    }
+
+    // Count unique days with workout activities
+    const uniqueDays = new Set(workoutData.map(item =>
+      new Date(item.created_at).toDateString()
+    )).size;
+
+    const weeklyData = this.groupByWeek([{ qty: uniqueDays, created_at: new Date().toISOString() }], 'created_at');
+
+    return {
+      metric: { key: 'workoutLogins', label: 'Workout Logins' },
+      weeklyData,
+      monthlyAverage: uniqueDays,
+      trend: 'stable' as const,
+      trendAnalysis: {
+        trend: 'stable' as const,
+        firstHalfData: [],
+        secondHalfData: [],
+        firstAvg: uniqueDays,
+        secondAvg: uniqueDays,
+        change: 0,
+        dataAvailable: true
+      }
     };
   }
 }
