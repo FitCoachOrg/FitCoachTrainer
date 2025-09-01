@@ -28,18 +28,104 @@ export class MonthlyReportDataService {
    * Get client data for a specific month
    */
   static async getClientData(clientId: string, month: string): Promise<ClientReportData> {
-    const startDate = new Date(month + '-01').toISOString();
-    const endDate = new Date(new Date(month + '-01').getFullYear(), new Date(month + '-01').getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+    // Handle different month formats
+    let startDate: Date;
+    let endDate: Date;
+    let monthLabel: string = month;
     
-    console.log('📅 Date range calculation:', {
-      month,
-      startDate,
-      endDate,
-      startDateObj: new Date(startDate),
-      endDateObj: new Date(endDate)
-    });
-    
-    return this.getClientDataForDateRange(clientId, startDate, endDate, month);
+    try {
+      // Check if month is in YYYY-MM format
+      if (/^\d{4}-\d{2}$/.test(month)) {
+        // Standard YYYY-MM format
+        startDate = new Date(month + '-01');
+        endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59, 999);
+        monthLabel = startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      } 
+      // Check if month is a custom date range format like "Jul 30 - Aug 29, 2025"
+      else if (month.includes(' - ') && month.match(/\w{3}\s+\d{1,2}\s+-\s+\w{3}\s+\d{1,2},\s+\d{4}/)) {
+        // Parse custom date range format
+        const parts = month.split(' - ');
+        if (parts.length === 2) {
+          const startPart = parts[0].trim(); // "Jul 30"
+          const endPart = parts[1].trim(); // "Aug 29, 2025"
+          
+          // Extract year from end part
+          const yearMatch = endPart.match(/(\d{4})$/);
+          const year = yearMatch ? yearMatch[1] : new Date().getFullYear().toString();
+          
+          // Parse start date
+          const startDateStr = `${startPart}, ${year}`;
+          startDate = new Date(startDateStr);
+          
+          // Parse end date
+          endDate = new Date(endPart);
+          
+          // Validate parsed dates
+          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            throw new Error('Invalid custom date range format');
+          }
+          
+          monthLabel = month; // Keep original format for display
+          
+          console.log('📅 Parsed custom date range:', {
+            original: month,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
+          });
+        } else {
+          throw new Error('Invalid custom date range format');
+        }
+      }
+      // Check if month is a standard month name format like "January 2025"
+      else if (month.match(/^[A-Za-z]+\s+\d{4}$/)) {
+        startDate = new Date(month + ' 1');
+        endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59, 999);
+        monthLabel = month;
+      }
+      else {
+        // Fallback to current month
+        console.warn('⚠️ Invalid month format received:', month, '- using current month as fallback');
+        const now = new Date();
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        monthLabel = startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      }
+      
+      // Validate dates
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid date range calculated');
+      }
+      
+      const startDateISO = startDate.toISOString();
+      const endDateISO = endDate.toISOString();
+      
+      console.log('📅 Date range calculation:', {
+        month,
+        startDate: startDateISO,
+        endDate: endDateISO,
+        startDateObj: startDate,
+        endDateObj: endDate,
+        monthLabel
+      });
+      
+      return this.getClientDataForDateRange(clientId, startDateISO, endDateISO, monthLabel);
+    } catch (error) {
+      console.error('❌ Error parsing month parameter:', error);
+      
+      // Ultimate fallback: use current month
+      const now = new Date();
+      const fallbackStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const fallbackEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      const fallbackLabel = fallbackStart.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      
+      console.log('🔄 Using fallback date range:', {
+        start: fallbackStart.toISOString(),
+        end: fallbackEnd.toISOString(),
+        label: fallbackLabel
+      });
+      
+      return this.getClientDataForDateRange(clientId, fallbackStart.toISOString(), fallbackEnd.toISOString(), fallbackLabel);
+    }
   }
 
   /**

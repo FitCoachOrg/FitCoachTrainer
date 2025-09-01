@@ -137,6 +137,19 @@ export const ClientMonthlyReportSection: React.FC<ClientMonthlyReportSectionProp
 
   // Handle month selection
   const handleMonthChange = async (month: string) => {
+    console.log('🔄 Month selection changed:', {
+      newMonth: month,
+      oldMonth: selectedMonth,
+      isValidFormat: /^\d{4}-\d{2}$/.test(month)
+    });
+    
+    // Validate month format before setting
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      console.warn('⚠️ Invalid month format received in handleMonthChange:', month);
+      // Don't set invalid format
+      return;
+    }
+    
     setSelectedMonth(month);
     await savePreferences({ last_generated_month: month });
   };
