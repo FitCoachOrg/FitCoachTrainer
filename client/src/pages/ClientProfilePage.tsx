@@ -1129,11 +1129,13 @@ function AllClientsSidebar({
   onClientSelect,
   trainerClients,
   clientsLoading,
+  collapsed = false,
 }: {
   currentClientId?: number
   onClientSelect: (clientId: number) => void
   trainerClients: any[]
   clientsLoading: boolean
+  collapsed?: boolean
 }) {
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -1146,7 +1148,7 @@ function AllClientsSidebar({
       <div className="flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-3">
           <LoadingSpinner size="small" />
-          <span className="text-sm text-gray-500 dark:text-gray-400">Loading clients...</span>
+          {!collapsed && <span className="text-sm text-gray-500 dark:text-gray-400">Loading clients...</span>}
         </div>
       </div>
     )
@@ -1154,43 +1156,56 @@ function AllClientsSidebar({
 
   return (
     <div className="space-y-4">
-      {/* Enhanced Search Bar */}
-      <div className="relative group">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
-        <Input
-          placeholder="Search clients..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 bg-white/50 dark:bg-gray-800/50 border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 transition-all duration-200"
-        />
-      </div>
+      {/* Enhanced Search Bar - Hidden when collapsed */}
+      {!collapsed && (
+        <div className="relative group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+          <Input
+            placeholder="Search clients..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 bg-white/50 dark:bg-gray-800/50 border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm hover:bg-white dark:hover:bg-gray-800 focus:bg-white dark:focus:bg-gray-800 transition-all duration-200"
+          />
+        </div>
+      )}
 
-      {/* Clients List - No height limit, no overflow */}
+      {/* Clients List */}
       <div className="space-y-2">
         {filteredClients.length === 0 ? (
           <div className="text-center py-8">
             <Users className="h-8 w-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {searchQuery ? "No clients found" : "No clients assigned"}
-            </p>
+            {!collapsed && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {searchQuery ? "No clients found" : "No clients assigned"}
+              </p>
+            )}
           </div>
         ) : (
           filteredClients.map((client) => (
             <div
               key={client.client_id}
-              className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${
+              className={`group relative cursor-pointer transition-all duration-200 hover:shadow-md ${
+                collapsed 
+                  ? "p-2 flex justify-center" 
+                  : "p-3 rounded-xl"
+              } ${
                 currentClientId === client.client_id
-                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-500 shadow-sm"
-                  : "hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50/30 dark:hover:from-gray-800/50 dark:hover:to-blue-900/10"
+                  ? collapsed
+                    ? "bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg"
+                    : "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-l-4 border-blue-500 shadow-sm"
+                  : collapsed
+                    ? "hover:bg-gradient-to-br hover:from-gray-100 hover:to-gray-200 dark:hover:from-gray-700 dark:hover:to-gray-600 rounded-xl"
+                    : "hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50/30 dark:hover:from-gray-800/50 dark:hover:to-blue-900/10"
               }`}
               onClick={() => onClientSelect(client.client_id)}
+              title={collapsed ? client.cl_name : undefined}
             >
-              <div className="flex items-center gap-3">
-                {/* Scaled down Avatar with profile pic support */}
+              {collapsed ? (
+                // Collapsed view - just avatar with tooltip
                 <div className="relative">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-200 ${
                     currentClientId === client.client_id
-                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg"
+                      ? "bg-white text-blue-600 shadow-lg"
                       : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 group-hover:from-blue-100 group-hover:to-indigo-100 dark:group-hover:from-blue-800 dark:group-hover:to-blue-800 group-hover:text-blue-700 dark:group-hover:text-blue-300"
                   }`}>
                     {/* Try to show profile image if available, otherwise show initials */}
@@ -1224,39 +1239,81 @@ function AllClientsSidebar({
                   {/* Active Status Indicator */}
                   <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 shadow-lg"></div>
                 </div>
-
-                {/* Client Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className={`font-medium truncate transition-colors text-sm ${
+              ) : (
+                // Expanded view - full client info
+                <div className="flex items-center gap-3">
+                  {/* Scaled down Avatar with profile pic support */}
+                  <div className="relative">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-200 ${
                       currentClientId === client.client_id
-                        ? "text-blue-900 dark:text-blue-300"
-                        : "text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                        ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg"
+                        : "bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 group-hover:from-blue-100 group-hover:to-indigo-100 dark:group-hover:from-blue-800 dark:group-hover:to-blue-800 group-hover:text-blue-700 dark:group-hover:text-blue-300"
                     }`}>
-                      {client.cl_name}
-                    </p>
-                    {currentClientId === client.client_id && (
-                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                    )}
+                      {/* Try to show profile image if available, otherwise show initials */}
+                      {client.profile_image_url ? (
+                        <img
+                          src={client.profile_image_url}
+                          alt={client.cl_name}
+                          className="w-full h-full rounded-full object-cover"
+                          onError={(e) => {
+                            // Fallback to initials if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.textContent = client.cl_name
+                                ?.split(" ")
+                                .map((n: string) => n[0])
+                                .join("")
+                                .toUpperCase() || "?";
+                            }
+                          }}
+                        />
+                      ) : (
+                        client.cl_name
+                          ?.split(" ")
+                          .map((n: string) => n[0])
+                          .join("")
+                          .toUpperCase() || "?"
+                      )}
+                    </div>
+                    {/* Active Status Indicator */}
+                    <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 shadow-lg"></div>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {client.last_active
-                      ? `Active ${new Date(client.last_active).toLocaleDateString()}`
-                      : "No recent activity"}
-                  </p>
-                </div>
 
-                {/* Hover Arrow */}
-                <div className={`transition-all duration-200 ${
-                  currentClientId === client.client_id
-                    ? "opacity-100 text-blue-500"
-                    : "opacity-0 group-hover:opacity-100 text-gray-400"
-                }`}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  {/* Client Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium truncate transition-colors text-sm ${
+                        currentClientId === client.client_id
+                          ? "text-blue-900 dark:text-blue-300"
+                          : "text-gray-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-300"
+                      }`}>
+                        {client.cl_name}
+                      </p>
+                      {currentClientId === client.client_id && (
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {client.last_active
+                        ? `Active ${new Date(client.last_active).toLocaleDateString()}`
+                        : "No recent activity"}
+                    </p>
+                  </div>
+
+                  {/* Hover Arrow */}
+                  <div className={`transition-all duration-200 ${
+                    currentClientId === client.client_id
+                      ? "opacity-100 text-blue-500"
+                      : "opacity-0 group-hover:opacity-100 text-gray-400"
+                  }`}>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))
         )}
@@ -1330,6 +1387,13 @@ export default function ClientDashboard() {
   const [clientImageUrl, setClientImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Sidebar collapse state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    // Get saved preference from localStorage, default to collapsed
+    const saved = localStorage.getItem('client-sidebar-collapsed');
+    return saved ? JSON.parse(saved) : true; // Default to collapsed
+  });
 
   const [searchQuery, setSearchQuery] = useState("")
   const [notes, setNotes] = useState<string | null>(null)
@@ -1415,9 +1479,29 @@ export default function ClientDashboard() {
     return () => clearTimeout(timer);
   }, [client, activeTab]);
 
+  // Keyboard shortcut for sidebar toggle (Ctrl/Cmd + B)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'b') {
+        event.preventDefault();
+        handleSidebarToggle();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [sidebarCollapsed]); // Include sidebarCollapsed in dependencies
+
   // Handler for client selection from sidebar
   const handleClientSelect = (selectedClientId: number) => {
     navigate(`/client/${selectedClientId}`)
+  }
+
+  // Handler for sidebar toggle
+  const handleSidebarToggle = () => {
+    const newCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(newCollapsed);
+    localStorage.setItem('client-sidebar-collapsed', JSON.stringify(newCollapsed));
   }
 
   // Placeholder handler functions
@@ -1980,18 +2064,45 @@ export default function ClientDashboard() {
   return (
     <div className="client-profile-container min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/30 dark:to-indigo-950/50 flex overflow-hidden">
       {/* AllClientsSidebar - Left Sidebar */}
-      <div className="client-profile-sidebar w-64 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto flex-shrink-0">
-        <div className="p-4">
+      <div className={`client-profile-sidebar transition-all duration-300 ${
+        sidebarCollapsed ? 'w-16' : 'w-64'
+      } bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-r border-gray-200/70 dark:border-gray-700/70 shadow-xl overflow-y-auto flex-shrink-0 group hover:w-64`}>
+        <div className={`${sidebarCollapsed ? 'p-2' : 'p-4'}`}>
+          {/* Header with toggle button */}
+          <div className="flex items-center justify-between mb-4">
+            {!sidebarCollapsed && (
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                All Clients
+              </h3>
+            )}
+            <button
+              onClick={handleSidebarToggle}
+              className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 ${
+                sidebarCollapsed ? 'w-full' : 'ml-auto'
+              }`}
+              title={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar (Ctrl+B)`}
+            >
+              <svg 
+                className={`w-4 h-4 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${
+                  sidebarCollapsed ? 'rotate-180' : ''
+                }`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          </div>
+          
           {/* All Clients List */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
-              All Clients
-            </h3>
             <AllClientsSidebar 
               currentClientId={clientId} 
               onClientSelect={handleClientSelect}
               trainerClients={trainerClients}
               clientsLoading={clientsLoading}
+              collapsed={sidebarCollapsed}
             />
           </div>
         </div>
