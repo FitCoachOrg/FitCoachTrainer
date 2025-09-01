@@ -1381,7 +1381,7 @@ export default function ClientDashboard() {
     return "metrics";
   };
   
-  const [activeTab, setActiveTab] = useState(getInitialTab);
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
   const [showProfileCard, setShowProfileCard] = useState(false)
   const [client, setClient] = useState<any>(null)
   const [clientImageUrl, setClientImageUrl] = useState<string | null>(null);
@@ -1445,7 +1445,20 @@ export default function ClientDashboard() {
       const newInitialTab = getInitialTab();
       setActiveTab(newInitialTab);
     }
-  }, [clientId, location.search]);
+  }, [clientId, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle URL navigation to special tabs (fallback for external navigation)
+  useEffect(() => {
+    if (activeTab === "client-notes" && !openPopup) {
+      setOpenPopup('trainerNotes');
+      // Switch to overview tab after opening popup
+      setTimeout(() => setActiveTab("overview"), 100);
+    } else if (activeTab === "ai-insights" && !openPopup) {
+      setOpenPopup('aiCoachInsights');
+      // Switch to overview tab after opening popup
+      setTimeout(() => setActiveTab("overview"), 100);
+    }
+  }, [activeTab, openPopup]);
 
   // Force layout containment when content loads
   useEffect(() => {
@@ -2059,6 +2072,8 @@ export default function ClientDashboard() {
     { id: "workout", label: "Workout Plans", icon: Dumbbell },
     { id: "nutrition", label: "Nutrition", icon: Utensils },
     { id: "programs", label: "Programs", icon: Trophy },
+    { id: "client-notes", label: "Client Notes", icon: FileText },
+    { id: "ai-insights", label: "AI Insights", icon: Brain },
   ]
 
   return (
@@ -2155,7 +2170,19 @@ export default function ClientDashboard() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      if (tab.id === "client-notes") {
+                        // Special handling for Client Notes - open popup and switch to overview tab
+                        setOpenPopup('trainerNotes');
+                        setActiveTab("overview");
+                      } else if (tab.id === "ai-insights") {
+                        // Special handling for AI Insights - open popup and switch to overview tab
+                        setOpenPopup('aiCoachInsights');
+                        setActiveTab("overview");
+                      } else {
+                        setActiveTab(tab.id);
+                      }
+                    }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       activeTab === tab.id
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
@@ -2384,7 +2411,7 @@ export default function ClientDashboard() {
 
         {activeTab === "programs" && (
           <div className="client-profile-scrollable h-full overflow-hidden">
-            <ProgramsScreen 
+            <ProgramsScreen
               clientId={clientId}
               client={client}
               onGoalsSaved={refreshClientData}
@@ -2392,6 +2419,10 @@ export default function ClientDashboard() {
             />
           </div>
         )}
+
+        {/* Client Notes Tab - Content removed since it opens popup directly */}
+
+        {/* AI Insights Tab - Content removed since it opens popup directly */}
       </div>
    
 
