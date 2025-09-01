@@ -1264,26 +1264,8 @@ async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, 
     const endTime = performance.now();
     console.log('[Save Plan] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
     
-    // Trigger status refresh and approve button activation after successful save
-    try {
-      console.log('[Save Plan] Triggering status refresh after save...');
-      // Use setTimeout to ensure the database transaction is complete
-      setTimeout(async () => {
-        try {
-          // Refresh approval status to update the approve button
-          await checkPlanApprovalStatus();
-          
-          // Set draft plan flag to true to activate approve button
-          setIsDraftPlan(true);
-          
-          console.log('[Save Plan] Status refresh completed, approve button should be active');
-        } catch (statusError) {
-          console.warn('[Save Plan] Status refresh warning:', statusError);
-        }
-      }, 100); // Small delay to ensure database consistency
-    } catch (refreshError) {
-      console.warn('[Save Plan] Status refresh error:', refreshError);
-    }
+            // Note: Status refresh and approve button activation will be handled by the calling component
+        // This function only handles saving to the database
     
     return { success: true };
   } catch (err: any) {
@@ -1473,6 +1455,9 @@ const WorkoutPlanSection = ({
     }
     return 'weekly';
   });
+  
+  // Add state to control the calendar popover
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [monthlyData, setMonthlyData] = useState<any[][]>([]);
   
   // Persist viewMode changes to localStorage
@@ -2340,7 +2325,8 @@ const WorkoutPlanSection = ({
     });
 
     console.log('🔄 [fetchPlan] Starting fetch for client:', numericClientId, 'date:', planStartDate);
-    loggedStateUpdate(componentName, 'loadingState', loadingState, { type: 'fetching', message: 'Loading workout plan...' }, setLoading, 'fetchPlan_start');
+    // Update loading state directly since setLoading is a custom function
+    setLoading('fetching', 'Loading workout plan...');
     loggedStateUpdate(componentName, 'isFetchingPlan', isFetchingPlan, true, setIsFetchingPlan, 'fetchPlan_start');
     
     // Add timeout protection to prevent infinite loading
@@ -2595,7 +2581,8 @@ const WorkoutPlanSection = ({
       clearTimeout(timeoutId); // Clear the timeout
       
       loggedStateUpdate(componentName, 'isFetchingPlan', isFetchingPlan, false, setIsFetchingPlan, 'fetchPlan_cleanup');
-      loggedStateUpdate(componentName, 'loadingState', loadingState, { type: null, message: '' }, clearLoading, 'fetchPlan_cleanup');
+      // Clear loading state directly since clearLoading is a custom function
+      clearLoading();
       
       RequestLogger.logPerformance('fetchPlan_complete', componentName, operationStartTime, {
         success: true,
@@ -3724,7 +3711,7 @@ const WorkoutPlanSection = ({
                 Plan Start Date
               </label>
               <div className="flex items-center gap-3">
-                <Popover>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
@@ -3750,6 +3737,7 @@ const WorkoutPlanSection = ({
                         const clientPlanStartDay = client?.plan_start_day || 'Sunday';
                         if (weekdays[date.getDay()] === clientPlanStartDay) {
                           handleDateChange(date);
+                          setIsCalendarOpen(false);
                         }
                       }}
                       initialFocus
@@ -3766,14 +3754,13 @@ const WorkoutPlanSection = ({
               </label>
               <div
                 className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl p-2 shadow-lg border border-blue-200 dark:border-blue-700"
-                onClick={(e) => e.stopPropagation()}
               >
                 <Button
                   variant={viewMode === 'weekly' ? 'default' : 'ghost'}
                   size="default"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     setViewMode('weekly');
+                    setIsCalendarOpen(false);
                   }}
                   className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
                     viewMode === 'weekly' 
@@ -3787,9 +3774,9 @@ const WorkoutPlanSection = ({
                 <Button
                   variant={viewMode === 'monthly' ? 'default' : 'ghost'}
                   size="default"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     setViewMode('monthly');
+                    setIsCalendarOpen(false);
                   }}
                   className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
                     viewMode === 'monthly' 
