@@ -2619,13 +2619,15 @@ const WorkoutPlanSection = ({
       });
       // Force a fresh approval status check (avoid dedupe) after saving
       setForceRefreshKey(prev => prev + 1);
+      // Small delay to ensure DB transaction is visible to subsequent SELECT
+      await new Promise(resolve => setTimeout(resolve, 250));
       await checkPlanApprovalStatus();
       // DO NOT REFETCH HERE. The local state is the source of truth during editing.
       // fetchPlan(); 
     } else {
       toast({ title: 'Save Failed', description: 'Could not save changes.', variant: 'destructive' });
     }
-  }, 1500); // 1.5-second debounce delay
+  }, 1000); // 1.0-second debounce delay for snappier saves without extra load
 
   const handlePlanChange = (updatedWeek: WeekDay[]) => {
     
@@ -3880,6 +3882,8 @@ const WorkoutPlanSection = ({
                         lastSaved: new Date()
                       });
                       
+                      // Force a fresh approval status check (avoid dedupe)
+                      setForceRefreshKey(prev => prev + 1);
                       // Refresh approval status to ensure consistency
                       await checkPlanApprovalStatus();
                       
@@ -4147,7 +4151,13 @@ const WorkoutPlanSection = ({
                 </h3>
               </div>
               <WeeklyPlanHeader
-                week={workoutPlan.week}
+                week={(viewMode === 'weekly') ? (() => {
+                  // Ensure only 7 days are passed in weekly mode
+                  const startStr = format(planStartDate, 'yyyy-MM-dd');
+                  const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+                  const endStr = format(endDate, 'yyyy-MM-dd');
+                  return (workoutPlan.week || []).filter((d: any) => d && d.date >= startStr && d.date <= endStr).slice(0, 7);
+                })() : workoutPlan.week}
                 planStartDate={planStartDate}
                 onReorder={handlePlanChange}
                 onPlanChange={handlePlanChange}

@@ -457,11 +457,34 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   }));
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
-    const updatedWeek = [...normalizedWeek];
-    const newExercises = [...updatedWeek[dayIdx].exercises];
-    newExercises[exIdx] = { ...newExercises[exIdx], [field]: value };
-    updatedWeek[dayIdx] = { ...updatedWeek[dayIdx], exercises: newExercises };
-    
+    // Map the global day index to an actual date, then update by date
+    const fullWeekArray = getFullWeek(planStartDate, editableWeek, viewMode);
+    const targetDay = fullWeekArray[dayIdx];
+    if (!targetDay) return; // safety
+
+    // Find or create the target day in editableWeek by date
+    const existingIndex = editableWeek.findIndex(d => d && d.date === targetDay.date);
+    let updatedWeek = [...editableWeek];
+
+    if (existingIndex === -1) {
+      // Create a new day entry if missing
+      updatedWeek = [
+        ...updatedWeek,
+        { date: targetDay.date, focus: 'Workout', exercises: [] as any[] }
+      ].sort((a: any, b: any) => a.date.localeCompare(b.date));
+    }
+
+    const idx = existingIndex === -1
+      ? updatedWeek.findIndex(d => d && d.date === targetDay.date)
+      : existingIndex;
+
+    const currentDay = updatedWeek[idx];
+    const dayExercises = [...(currentDay.exercises || [])];
+    if (!dayExercises[exIdx]) return; // only editing existing rows here
+
+    dayExercises[exIdx] = { ...dayExercises[exIdx], [field]: value };
+    updatedWeek[idx] = { ...currentDay, exercises: dayExercises } as any;
+
     setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
     onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
   };
@@ -589,6 +612,12 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     // Persist to schedule_preview
     const exercisesForDate = (existingDay ? existingDay.exercises : [newExercise]);
     await persistExercisesForDate(targetDate, exercisesForDate, existingDay?.focus || 'Workout');
+
+    // Trigger immediate status refresh (global + week approve buttons)
+    try {
+      // Best-effort custom event; parent listens via debouncedSave/forceRefresh
+      window.dispatchEvent(new CustomEvent('workoutPlan:changed'));
+    } catch {}
 
     setIsPickerOpen(false);
     setPickerDayIdx(null);

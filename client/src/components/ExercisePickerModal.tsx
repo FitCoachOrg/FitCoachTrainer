@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -94,7 +94,7 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
       let q = supabase
         .from("exercises_raw")
         .select("expereince_level, target_muscle, equipment, category")
-        .limit(10000);
+        .limit(3000);
       q = applyAllFilters(q);
       const { data, error } = await q;
       if (error) throw error;
@@ -105,7 +105,8 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
       setEquipmentOptions(uniq(list.map((r) => r.equipment)));
       setCategoryOptions(uniq(list.map((r) => r.category)));
     } finally {
-      if (rid === optionsReqId.current) setOptionsLoading(false);
+      // Always clear the loading flag to avoid a stuck spinner if a request is cancelled/replaced
+      setOptionsLoading(false);
     }
   };
 
@@ -202,6 +203,7 @@ export default function ExercisePickerModal({ open, onClose, onSelect }: Exercis
       <DialogContent className="max-w-[90vw] md:max-w-5xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Exercise</DialogTitle>
+          <DialogDescription>Add an exercise to the selected day</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
