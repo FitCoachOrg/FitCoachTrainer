@@ -34,6 +34,7 @@ import { format, parseISO, addWeeks } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
+import type { Exercise as TableExercise, WeekDay as TableWeekDay } from './WorkoutPlanTable';
 import WeeklyPlanHeader from './WeeklyPlanHeader';
 import MonthlyPlanGenerator from './MonthlyPlanGenerator';
 import { debounce } from 'lodash';
@@ -53,19 +54,7 @@ import {
   type WorkoutStatusResult 
 } from '@/utils/workoutStatusUtils';
 
-// Types
-interface Exercise {
-  id: string
-  name: string
-  instructions: string
-  sets: string
-  reps: string
-  duration: string
-  equipment: string
-  difficulty: "Beginner" | "Intermediate" | "Advanced"
-  createdAt: Date
-}
-
+// Types imported from WorkoutPlanTable to ensure consistency
 interface WorkoutExercise {
   workout: string
   day?: string
@@ -92,22 +81,8 @@ interface WorkoutPlan {
   exercises: WorkoutExercise[]
 }
 
-// 1. Update WeeklyWorkoutPlan and WeekDay interfaces to match new schema
-interface WeekDay {
-  date: string;
-  focus: string;
-  exercises: any[];
-  timeBreakdown?: {
-    warmup: number;
-    exercises: number;
-    rest: number;
-    cooldown: number;
-    total: number;
-  };
-}
-
 interface WeeklyWorkoutPlan {
-  week: WeekDay[];
+  week: TableWeekDay[];
   hasAnyWorkouts: boolean;
   planStartDate: string;
   planEndDate: string;
@@ -783,7 +758,7 @@ function normalizeExercise(ex: any): any {
 // ---
 
 // Helper to build the payload for schedule_preview
-function buildSchedulePreviewRows(planWeek: WeekDay[], clientId: number, for_time: string, workout_id: string) {
+function buildSchedulePreviewRows(planWeek: TableWeekDay[], clientId: number, for_time: string, workout_id: string) {
   return planWeek.map((day) => {
     // Format focus field properly - simple concatenation approach
     let formattedFocus = 'Rest Day';
@@ -1086,7 +1061,7 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
 }
 
 // Helper to save plan to schedule_preview
-async function savePlanToSchedulePreview(planWeek: WeekDay[], clientId: number, planStartDate: Date) {
+async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: number, planStartDate: Date) {
   const startTime = performance.now();
   const componentName = 'savePlanToSchedulePreview';
   
@@ -1613,7 +1588,7 @@ const WorkoutPlanSection = ({
 
   const removeTemplateTag = (t: string) => setTemplateTags(prev => prev.filter(x => x !== t));
 
-  const buildTemplateJson = (weekData: WeekDay[], tags: string[], duration: '7day' | '30day') => {
+  const buildTemplateJson = (weekData: TableWeekDay[], tags: string[], duration: '7day' | '30day') => {
     const toWeekdayKey = (dateStr: string) => {
       const d = new Date(dateStr);
       const idx = d.getDay(); // 0=Sun..6=Sat
@@ -1871,7 +1846,7 @@ const WorkoutPlanSection = ({
     templateJson: any,
     startDate: Date,
     workoutDays: string[]
-  ): WeekDay[] => {
+  ): TableWeekDay[] => {
     const toWeekdayKey = (dateStr: string) => {
       const d = new Date(dateStr);
       const idx = d.getDay(); // 0=Sun..6=Sat
@@ -1893,7 +1868,7 @@ const WorkoutPlanSection = ({
     }
 
     // Create a week of dates starting from the selected start date
-    const weekData: WeekDay[] = [];
+    const weekData: TableWeekDay[] = [];
     const weekdays = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     
     for (let i = 0; i < 7; i++) {
@@ -1922,10 +1897,10 @@ const WorkoutPlanSection = ({
 
   // Map template exercises to client's workout days
   const mapTemplateToWorkoutDays = (
-    weekData: WeekDay[],
+    weekData: TableWeekDay[],
     startDate: Date,
     workoutDays: string[]
-  ): WeekDay[] => {
+  ): TableWeekDay[] => {
     // Filter to only include workout days
     const workoutDayData = weekData.filter(day => {
       const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
@@ -1933,7 +1908,7 @@ const WorkoutPlanSection = ({
     });
 
     // Create a new week with exercises mapped to workout days
-    const mappedWeek: WeekDay[] = [];
+    const mappedWeek: TableWeekDay[] = [];
     let currentDate = new Date(startDate);
     let exerciseIndex = 0;
 
@@ -2606,7 +2581,7 @@ const WorkoutPlanSection = ({
     };
   }, []);
 
-  const handlePlanChange = (updatedWeek: WeekDay[], isFromSave: boolean = false) => {
+  const handlePlanChange = (updatedWeek: TableWeekDay[], isFromSave: boolean = false) => {
     // Update the state immediately for a responsive UI
     setWorkoutPlan(currentPlan => {
       if (!currentPlan) return null;
@@ -2865,7 +2840,7 @@ const WorkoutPlanSection = ({
         
         const newWorkoutPlan = {
           week,
-          hasAnyWorkouts: week.some((day: WeekDay) => day.exercises && day.exercises.length > 0),
+          hasAnyWorkouts: week.some((day: TableWeekDay) => day.exercises && day.exercises.length > 0),
           planStartDate: week[0]?.date || '',
           planEndDate: week[week.length - 1]?.date || ''
         };
@@ -3473,7 +3448,7 @@ const WorkoutPlanSection = ({
         
         const newWorkoutPlan = {
           week,
-          hasAnyWorkouts: week.some((day: WeekDay) => day.exercises && day.exercises.length > 0),
+          hasAnyWorkouts: week.some((day: TableWeekDay) => day.exercises && day.exercises.length > 0),
           planStartDate: week[0]?.date || '',
           planEndDate: week[week.length - 1]?.date || ''
         };

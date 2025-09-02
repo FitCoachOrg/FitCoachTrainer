@@ -59,21 +59,26 @@ export interface Exercise {
   video_thumbnail?: string; // Video thumbnail URL
 }
 
+export interface WeekDay {
+  date: string;
+  focus: string;
+  exercises: Exercise[];
+  timeBreakdown?: {
+    warmup: number;
+    exercises: number;
+    rest: number;
+    cooldown: number;
+    total: number;
+  };
+}
+
 interface WorkoutPlanTableProps {
-  week: Array<{
-    date: string;
-    focus: string;
-    exercises: any[];
-  }>;
+  week: WeekDay[];
   clientId: number;
-  onPlanChange: (updatedWeek: any[], isFromSave?: boolean) => void; // Callback to notify parent of changes
+  onPlanChange: (updatedWeek: WeekDay[], isFromSave?: boolean) => void; // Callback to notify parent of changes
   planStartDate: Date;
   clientName?: string;
-  onImportSuccess?: (weekData: Array<{
-    date: string;
-    focus: string;
-    exercises: any[];
-  }>, dateRange: { start: string; end: string }) => void;
+  onImportSuccess?: (weekData: WeekDay[], dateRange: { start: string; end: string }) => void;
   // New flags for template mode (read/write local only, no DB persistence)
   isTemplateMode?: boolean;
   hideDates?: boolean;
@@ -98,7 +103,7 @@ const getFocusIcon = (focus: string) => {
 };
 
 // Helper to get an exercise icon (optional, fallback to focus icon)
-const getExerciseIcon = (ex: any) => {
+const getExerciseIcon = (ex: Exercise) => {
   const cat = (ex.category || '').toLowerCase();
   if (cat.includes('cardio')) return <HeartPulse className="h-4 w-4 text-red-500" />;
   if (cat.includes('strength')) return <Dumbbell className="h-4 w-4 text-green-600" />;
@@ -117,7 +122,7 @@ const getYouTubeVideoId = (url: string) => {
 };
 
 // Helper to calculate week status consistently with WeeklyPlanHeader
-const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientId: number) => {
+const calculateWeekStatus = async (weekDays: WeekDay[], weekStartDate: Date, clientId: number) => {
   try {
     // Use the same unified status calculation as WeeklyPlanHeader
     const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
@@ -157,8 +162,8 @@ const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientI
     }
   } catch (error) {
     console.error('Error calculating week status:', error);
-    // Fallback to old logic
-    const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0 && day.is_approved).length;
+    // Fallback to old logic - removed is_approved check since it doesn't exist on WeekDay
+    const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
     const totalDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
     return { status: 'pending', approvedDays, totalDays };
   }
@@ -166,7 +171,7 @@ const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientI
 
 // Component for displaying week status (exact replica from WeeklyPlanHeader)
 const WeekStatusDisplay = ({ weekDays, weekStartDate, clientId, weekIndex, weekStatuses, onApproveWeek }: { 
-  weekDays: any[]; 
+  weekDays: WeekDay[]; 
   weekStartDate: Date; 
   clientId: number; 
   weekIndex: number;
@@ -217,7 +222,7 @@ const getYouTubeThumbnail = (videoId: string) => {
 };
 
 // Helper to get a full array for the week/month, filling missing days as null
-function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly') {
+function getFullWeek(startDate: Date, week: WeekDay[], viewMode: 'weekly' | 'monthly') {
   const days = [];
   const totalDays = viewMode === 'monthly' ? 28 : 7;
   
@@ -231,7 +236,7 @@ function getFullWeek(startDate: Date, week: any[], viewMode: 'weekly' | 'monthly
 }
 
 // Helper to organize days into weeks
-function organizeIntoWeeks(days: any[], viewMode: 'weekly' | 'monthly') {
+function organizeIntoWeeks(days: (WeekDay | null)[], viewMode: 'weekly' | 'monthly') {
   if (viewMode === 'weekly') {
     return [days]; // Single week
   }
@@ -667,7 +672,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   }, [fullWeek, viewMode]);
 
   // Helper: persist updated exercises array for a given date to schedule_preview
-  const persistExercisesForDate = async (dateStr: string, exercises: any[], summaryFallback: string = 'Workout') => {
+  const persistExercisesForDate = async (dateStr: string, exercises: Exercise[], summaryFallback: string = 'Workout') => {
     try {
       if (isTemplateMode) return; // no DB writes in template mode
       const { data: existingRows, error: fetchErr } = await supabase
@@ -712,20 +717,21 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     const targetDate = pickerDateStr;
 
     // Build normalized exercise from exercises_raw
-    const newExercise = {
+    const newExercise: Exercise = {
+      id: uuidv4(),
       exercise: selected.exercise_name,
       category: selected.category || '',
       body_part: selected.target_muscle || selected.primary_muscle || '',
       sets: '3',
       reps: '10',
-      duration: '15',
+      time: '15',
       weight: 'Bodyweight',
       equipment: selected.equipment || '',
       coach_tip: 'Focus on proper form',
       rest: '60',
       video_link: selected.video_link || '',
       date: targetDate,
-    } as any;
+    };
 
     // Update local state (ensure day exists)
     const updatedWeek = [...editableWeek];
@@ -733,10 +739,10 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     if (existingDay) {
       existingDay.exercises = [...(existingDay.exercises || []), newExercise];
     } else {
-      // If day missing, create it with default focus
-      updatedWeek.push({ date: targetDate, focus: 'Workout', exercises: [newExercise] });
-      // Keep array sorted by date
-      updatedWeek.sort((a: any, b: any) => a.date.localeCompare(b.date));
+          // If day missing, create it with default focus
+    updatedWeek.push({ date: targetDate, focus: 'Workout', exercises: [newExercise] });
+    // Keep array sorted by date
+    updatedWeek.sort((a: WeekDay, b: WeekDay) => a.date.localeCompare(b.date));
     }
     setEditableWeek(updatedWeek);
     onPlanChange(updatedWeek);
@@ -1220,7 +1226,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       {/* Approval Status Indicator */}
                       <div className="flex items-center gap-1">
                         <WeekStatusDisplay 
-                          weekDays={weekDays} 
+                          weekDays={weekDays.filter((day): day is WeekDay => day !== null)} 
                           weekStartDate={weekStartDate} 
                           clientId={clientId} 
                           weekIndex={weekIdx}
@@ -1326,7 +1332,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       }
                       return (
                         <WeekStatusDisplay 
-                          weekDays={weekDays} 
+                          weekDays={weekDays.filter((day): day is WeekDay => day !== null)} 
                           weekStartDate={weekStartDate} 
                           clientId={clientId} 
                           weekIndex={weekIdx}
