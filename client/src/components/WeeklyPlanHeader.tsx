@@ -834,10 +834,10 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       const isSecondToLastBox = index === totalBoxes - 2;
 
       // For edge boxes, use bottom positioning to avoid screen cutoff
-      if (isFirstBox) return "bottom-start";
+      if (isFirstBox) return "bottom";
       if (isSecondBox) return "bottom";
       if (isSecondToLastBox) return "bottom";
-      if (isLastBox) return "bottom-end";
+      if (isLastBox) return "bottom";
 
       // For middle boxes, use top (default)
       return "top";

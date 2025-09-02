@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { checkWeeklyWorkoutStatus, compareWorkoutData } from '@/utils/workoutStatusUtils';
+import { checkWeeklyWorkoutStatus } from '@/utils/workoutStatusUtils';
 
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
@@ -127,8 +127,11 @@ const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientI
     if (!hasPreviewData && !hasScheduleData) {
       return { status: 'no_plan', approvedDays: 0, totalDays: 0 };
     } else if (hasPreviewData && hasScheduleData) {
-      const dataMatches = compareWorkoutData(weekPreviewData, weekScheduleData);
-      if (dataMatches) {
+      // Use the new is_approved system: check if all days in this week are approved
+      const approvedDaysInWeek = weekPreviewData.filter(day => day.is_approved === true).length;
+      const totalDaysInWeek = weekPreviewData.length;
+      
+      if (totalDaysInWeek > 0 && approvedDaysInWeek === totalDaysInWeek) {
         return { status: 'approved', approvedDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
       } else {
         return { status: 'draft', approvedDays: 0, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };

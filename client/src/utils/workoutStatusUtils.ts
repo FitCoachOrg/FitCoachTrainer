@@ -218,13 +218,15 @@ export async function checkMonthlyWorkoutStatus(
       );
       
       let weekStatus: WorkoutStatus = 'no_plan';
-      if (weekPreviewData.length > 0 || weekScheduleData.length > 0) {
-        if (weekPreviewData.length > 0 && weekScheduleData.length > 0) {
-          weekStatus = compareWorkoutData(weekPreviewData, weekScheduleData) ? 'approved' : 'draft';
-        } else if (weekPreviewData.length > 0) {
-          weekStatus = 'draft';
-        } else {
+      if (weekPreviewData.length > 0) {
+        // Use the new is_approved system: check if all days in this week are approved
+        const approvedDaysInWeek = weekPreviewData.filter(day => day.is_approved === true).length;
+        const totalDaysInWeek = weekPreviewData.length;
+        
+        if (totalDaysInWeek > 0 && approvedDaysInWeek === totalDaysInWeek) {
           weekStatus = 'approved';
+        } else {
+          weekStatus = 'draft';
         }
       }
       
@@ -285,48 +287,7 @@ export async function checkMonthlyWorkoutStatus(
   return result;
 }
 
-/**
- * Compare workout data between preview and schedule tables
- */
-export function compareWorkoutData(previewData: any[], scheduleData: any[]): boolean {
-  console.log('[compareWorkoutData] Starting comparison with', previewData.length, 'preview rows and', scheduleData.length, 'schedule rows');
-  
-  if (previewData.length !== scheduleData.length) {
-    console.log('[compareWorkoutData] Length mismatch:', previewData.length, 'vs', scheduleData.length);
-    return false;
-  }
-  
-  // Sort both arrays by date for comparison
-  const sortedPreview = previewData.sort((a, b) => a.for_date.localeCompare(b.for_date));
-  const sortedSchedule = scheduleData.sort((a, b) => a.for_date.localeCompare(b.for_date));
-  
-  console.log('[compareWorkoutData] Preview dates:', sortedPreview.map(p => p.for_date));
-  console.log('[compareWorkoutData] Schedule dates:', sortedSchedule.map(s => s.for_date));
-  
-  for (let i = 0; i < sortedPreview.length; i++) {
-    const preview = sortedPreview[i];
-    const schedule = sortedSchedule[i];
-    
-    if (preview.for_date !== schedule.for_date) {
-      console.log('[compareWorkoutData] Date mismatch at index', i, ':', preview.for_date, 'vs', schedule.for_date);
-      return false;
-    }
-    
-    // Compare details_json (the actual workout data)
-    const previewJson = JSON.stringify(preview.details_json);
-    const scheduleJson = JSON.stringify(schedule.details_json);
-    
-    if (previewJson !== scheduleJson) {
-      console.log('[compareWorkoutData] Data mismatch for date', preview.for_date);
-      console.log('[compareWorkoutData] Preview data:', preview.details_json);
-      console.log('[compareWorkoutData] Schedule data:', schedule.details_json);
-      return false;
-    }
-  }
-  
-  console.log('[compareWorkoutData] All data matches between tables');
-  return true;
-}
+
 
 /**
  * Get status display text and styling
