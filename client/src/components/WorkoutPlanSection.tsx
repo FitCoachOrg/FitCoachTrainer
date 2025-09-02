@@ -2586,12 +2586,14 @@ const WorkoutPlanSection = ({
 
   // Listen for immediate status refresh from inline edits
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const handleWorkoutPlanChanged = () => {
       console.log('[WorkoutPlanSection] Received workoutPlan:changed event, refreshing status immediately');
       // Force immediate status refresh for inline edits
       setForceRefreshKey(prev => prev + 1);
       // Add a small delay to ensure database transaction is visible
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         checkPlanApprovalStatus();
       }, 100);
     };
@@ -2600,6 +2602,7 @@ const WorkoutPlanSection = ({
     
     return () => {
       window.removeEventListener('workoutPlan:changed', handleWorkoutPlanChanged);
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 
@@ -2628,7 +2631,7 @@ const WorkoutPlanSection = ({
       updateWorkoutPlanState({ hasUnsavedChanges: false });
       
       // Refresh approval status after a short delay to ensure DB propagation
-      setTimeout(async () => {
+      const timeoutId = setTimeout(async () => {
         await checkPlanApprovalStatus();
       }, 500);
     } else {
