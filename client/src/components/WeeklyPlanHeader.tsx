@@ -37,7 +37,7 @@ interface WeeklyPlanHeaderProps {
   week: WeekDay[];
   planStartDate: Date;
   onReorder: (updatedWeek: WeekDay[]) => void;
-  onPlanChange: (updatedWeek: WeekDay[]) => void;
+  onPlanChange: (updatedWeek: WeekDay[], isFromSave?: boolean) => void;
   onMonthlyChange?: (updatedMonthlyData: WeekDay[][]) => void;
   clientId?: number; // Add clientId for fetching multi-week data
   viewMode: 'weekly' | 'monthly'; // View mode passed from parent
@@ -517,7 +517,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       const updated = days.map((d) => (d.date === date ? { ...d, focus: 'Rest Day', exercises: [] } : d));
       
       // Call onPlanChange to update parent component (no auto-save in explicit save model)
-      onPlanChange(updated);
+      onPlanChange(updated, false);
       
       // Mark the deleted date as dirty for explicit save model
       if (onDirtyDatesChange) {
@@ -542,7 +542,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       
       // Update the current week data (for backward compatibility)
       const updatedCurrentWeek = updatedMonthlyData[0];
-      onPlanChange(updatedCurrentWeek);
+      onPlanChange(updatedCurrentWeek, false);
       
       // If we have the monthly change callback, also update the full monthly data
       if (onMonthlyChange) {
@@ -589,7 +589,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       );
       
       // Call onPlanChange to update parent component (no auto-save in explicit save model)
-      onPlanChange(updated);
+      onPlanChange(updated, false);
       
       // Mark the target date as dirty for explicit save model
       if (onDirtyDatesChange) {
@@ -620,7 +620,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       
       // Update the current week data (for backward compatibility)
       const updatedCurrentWeek = updatedMonthlyData[0];
-      onPlanChange(updatedCurrentWeek);
+      onPlanChange(updatedCurrentWeek, false);
       
       // If we have the monthly change callback, also update the full monthly data
       if (onMonthlyChange) {
@@ -687,7 +687,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       
       // Update the current week data (for backward compatibility)
       const updatedCurrentWeek = updatedMonthlyData[0];
-      onPlanChange(updatedCurrentWeek);
+      onPlanChange(updatedCurrentWeek, false);
       
       // If we have the monthly change callback, also update the full monthly data
       if (onMonthlyChange) {

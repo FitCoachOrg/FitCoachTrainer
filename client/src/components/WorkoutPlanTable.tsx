@@ -66,7 +66,7 @@ interface WorkoutPlanTableProps {
     exercises: any[];
   }>;
   clientId: number;
-  onPlanChange: (updatedWeek: any[]) => void; // Callback to notify parent of changes
+  onPlanChange: (updatedWeek: any[], isFromSave?: boolean) => void; // Callback to notify parent of changes
   planStartDate: Date;
   clientName?: string;
   onImportSuccess?: (weekData: Array<{
@@ -1067,7 +1067,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                 clearDirtyDates();
                 
                 // Notify parent component that changes have been saved
-                onPlanChange(editableWeek);
+                onPlanChange(editableWeek, true);
               } catch (error) {
                 console.error('Save failed:', error);
                 toast({ title: 'Save Failed', description: 'An error occurred while saving.', variant: 'destructive' });

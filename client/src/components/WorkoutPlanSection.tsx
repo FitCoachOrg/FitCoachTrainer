@@ -2603,7 +2603,7 @@ const WorkoutPlanSection = ({
     };
   }, []);
 
-  const handlePlanChange = (updatedWeek: WeekDay[]) => {
+  const handlePlanChange = (updatedWeek: WeekDay[], isFromSave: boolean = false) => {
     // Update the state immediately for a responsive UI
     setWorkoutPlan(currentPlan => {
       if (!currentPlan) return null;
@@ -2611,11 +2611,33 @@ const WorkoutPlanSection = ({
       return updated;
     });
     
-    // Mark as having unsaved changes (but don't auto-save)
-    updateWorkoutPlanState({ hasUnsavedChanges: true });
+    // For monthly view, also update monthlyData to ensure consistency
+    if (viewMode === 'monthly' && monthlyData.length > 0) {
+      // Convert flat array back to 4 weeks structure
+      const updatedMonthlyData = [];
+      for (let i = 0; i < 4; i++) {
+        const weekStart = i * 7;
+        const weekEnd = weekStart + 7;
+        updatedMonthlyData.push(updatedWeek.slice(weekStart, weekEnd));
+      }
+      setMonthlyData(updatedMonthlyData);
+    }
     
-    // For inline edits, no need to refresh approval status immediately
-    // Status will be updated when changes are explicitly saved
+    if (isFromSave) {
+      // Changes were just saved - clear unsaved changes and refresh approval status
+      updateWorkoutPlanState({ hasUnsavedChanges: false });
+      
+      // Refresh approval status after a short delay to ensure DB propagation
+      setTimeout(async () => {
+        await checkPlanApprovalStatus();
+      }, 500);
+    } else {
+      // New unsaved changes
+      updateWorkoutPlanState({ hasUnsavedChanges: true });
+      
+      // For inline edits, no need to refresh approval status immediately
+      // Status will be updated when changes are explicitly saved
+    }
   };
 
   const handleImportSuccess = async (weekData: Array<{
@@ -4431,7 +4453,7 @@ const WorkoutPlanSection = ({
             {/* Workout Plan Table */}
             {workoutPlan.hasAnyWorkouts ? (
               <WorkoutPlanTable 
-                key={`${viewMode}-${workoutPlan.week.length}-${monthlyData.length}-${dirtyDates.size}`}
+                key={`${viewMode}-${planStartDate.toISOString().split('T')[0]}-${clientId}`}
                 week={getTableData()}
                 clientId={numericClientId}
                 onPlanChange={handlePlanChange}
