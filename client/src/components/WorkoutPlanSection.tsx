@@ -49,7 +49,6 @@ import { EnhancedWorkoutGenerator } from "@/lib/enhanced-workout-generator"
 import { 
   checkWeeklyWorkoutStatus, 
   checkMonthlyWorkoutStatus, 
-  compareWorkoutData,
   getStatusDisplay,
   type WorkoutStatusResult 
 } from '@/utils/workoutStatusUtils';
@@ -1549,6 +1548,10 @@ const WorkoutPlanSection = ({
           description: 'Your changes have been auto-saved.',
           variant: 'default'
         });
+        
+        // Force a fresh approval status check after auto-saving
+        setForceRefreshKey(prev => prev + 1);
+        await checkPlanApprovalStatus();
       }
     } catch (error) {
       console.error('Auto-save failed:', error);
@@ -2643,10 +2646,26 @@ const WorkoutPlanSection = ({
     }
   }, 1000); // 1.0-second debounce delay for snappier saves without extra load
 
-  const handlePlanChange = (updatedWeek: WeekDay[]) => {
-    
+  // Listen for immediate status refresh from inline edits
+  useEffect(() => {
+    const handleWorkoutPlanChanged = () => {
+      console.log('[WorkoutPlanSection] Received workoutPlan:changed event, refreshing status immediately');
+      // Force immediate status refresh for inline edits
+      setForceRefreshKey(prev => prev + 1);
+      // Add a small delay to ensure database transaction is visible
+      setTimeout(() => {
+        checkPlanApprovalStatus();
+      }, 100);
+    };
 
+    window.addEventListener('workoutPlan:changed', handleWorkoutPlanChanged);
     
+    return () => {
+      window.removeEventListener('workoutPlan:changed', handleWorkoutPlanChanged);
+    };
+  }, []);
+
+  const handlePlanChange = (updatedWeek: WeekDay[]) => {
     // Update the state immediately for a responsive UI
     setWorkoutPlan(currentPlan => {
       if (!currentPlan) return null;
@@ -2658,6 +2677,13 @@ const WorkoutPlanSection = ({
     
     // Trigger the debounced save
     debouncedSave(updatedWeek);
+    
+    // For inline edits, also trigger an immediate status refresh to update approval buttons
+    // This ensures the UI reflects the change immediately while the save is happening
+    setTimeout(() => {
+      setForceRefreshKey(prev => prev + 1);
+      checkPlanApprovalStatus();
+    }, 200); // Small delay to ensure any immediate DB writes are visible
   };
 
   const handleImportSuccess = async (weekData: Array<{
@@ -3025,24 +3051,15 @@ const WorkoutPlanSection = ({
             const weekStart = new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000);
             const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
 
-            // Check if week has draft data that can be approved
+            // Check if week has preview data for approval logic
             const weekPreviewData = monthlyResult.previewData.filter(day =>
               day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
               day.for_date <= format(weekEnd, 'yyyy-MM-dd')
             );
 
-            const weekScheduleData = monthlyResult.scheduleData.filter(day =>
-              day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
-              day.for_date <= format(weekEnd, 'yyyy-MM-dd')
-            );
-
-            // Can approve if: has preview data AND (no schedule data OR data doesn't match)
+            // Use the new is_approved logic: can approve if week status is 'draft' and has preview data
             const hasPreviewData = weekPreviewData.length > 0;
-            const hasScheduleData = weekScheduleData.length > 0;
-            const dataMatches = hasPreviewData && hasScheduleData ?
-              compareWorkoutData(weekPreviewData, weekScheduleData) : false;
-
-            const canApprove = hasPreviewData && (!hasScheduleData || !dataMatches);
+            const canApprove = hasPreviewData && weekData.status === 'draft';
 
             return {
               weekNumber: index + 1,
@@ -3079,24 +3096,9 @@ const WorkoutPlanSection = ({
         const weekStart = planStartDate;
         const weekEnd = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
 
-        // Check if week has draft data that can be approved
-        const weekPreviewData = result.previewData.filter(day =>
-          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
-          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
-        );
-
-        const weekScheduleData = result.scheduleData.filter(day =>
-          day.for_date >= format(weekStart, 'yyyy-MM-dd') &&
-          day.for_date <= format(weekEnd, 'yyyy-MM-dd')
-        );
-
-        // Can approve if: has preview data AND (no schedule data OR data doesn't match)
-        const hasPreviewData = weekPreviewData.length > 0;
-        const hasScheduleData = weekScheduleData.length > 0;
-        const dataMatches = hasPreviewData && hasScheduleData ?
-          compareWorkoutData(weekPreviewData, weekScheduleData) : false;
-
-        const canApprove = hasPreviewData && (!hasScheduleData || !dataMatches);
+        // Use the new is_approved logic: can approve if status is 'draft' and has preview data
+        const hasPreviewData = result.previewData.length > 0;
+        const canApprove = hasPreviewData && result.status === 'draft';
 
         // Set single week status for weekly view
         setWeekStatuses([{
@@ -3287,7 +3289,7 @@ const WorkoutPlanSection = ({
   }, [clientId]);
 
   // Monthly generation callbacks
-  const handleMonthlyGenerationComplete = (monthlyPlan: any) => {
+  const handleMonthlyGenerationComplete = async (monthlyPlan: any) => {
     console.log('✅ Monthly plan generation completed:', monthlyPlan);
     console.log('📊 Monthly plan structure:', {
       totalWeeks: monthlyPlan.weeks?.length || 0,
@@ -3328,6 +3330,10 @@ const WorkoutPlanSection = ({
       title: 'Monthly Plan Generated',
       description: '4-week progressive workout plan created and saved successfully.'
     });
+
+    // Force a fresh approval status check after monthly generation
+    setForceRefreshKey(prev => prev + 1);
+    await checkPlanApprovalStatus();
 
     setIsMonthlyGeneratorOpen(false);
   };
