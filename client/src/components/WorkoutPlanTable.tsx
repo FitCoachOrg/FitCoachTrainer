@@ -527,7 +527,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         const details = row.details_json || {};
         const { error: updErr } = await supabase
           .from('schedule_preview')
-          .update({ details_json: { ...details, exercises }, summary: row.summary || summaryFallback })
+          .update({ details_json: { ...details, exercises }, summary: row.summary || summaryFallback, is_approved: false })
           .eq('id', row.id);
         if (updErr) throw updErr;
       } else {
@@ -537,6 +537,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
           for_date: dateStr,
           details_json: { exercises },
           summary: summaryFallback,
+          is_approved: false,
         });
         if (insErr) throw insErr;
       }

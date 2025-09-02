@@ -933,19 +933,31 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       {/* Weekly Status Indicator */}
       {viewMode === 'weekly' && weekStatuses && weekStatuses.length > 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              weekStatuses[0].status === 'approved'
-                ? 'bg-green-500'
-                : weekStatuses[0].status === 'draft'
-                ? 'bg-blue-500'
-                : 'bg-gray-400'
-            }`}></div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {weekStatuses[0].status === 'approved' ? 'Approved' :
-               weekStatuses[0].status === 'draft' ? 'Draft' :
-               'No Plan'}
-            </span>
+          <div className="flex items-center gap-3">
+            {(() => {
+              const { status } = weekStatuses[0];
+              if (status === 'approved') {
+                return (
+                  <span className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
+                    <span className="h-3 w-3 rounded-full bg-green-500"></span>
+                    Approved
+                  </span>
+                );
+              }
+
+              const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+
+              return (
+                <span className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300">
+                  {/* Flashing red dot */}
+                  <span className="relative flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600"></span>
+                  </span>
+                  {label}
+                </span>
+              );
+            })()}
           </div>
           
           {/* Weekly Approval Button */}
@@ -1025,18 +1037,27 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                   {weekStatuses && weekStatuses[weekIndex] && (
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
-                        <div className={`w-2 h-2 rounded-full ${
-                          weekStatuses[weekIndex].status === 'approved'
-                            ? 'bg-green-500'
-                            : weekStatuses[weekIndex].status === 'draft'
-                            ? 'bg-blue-500'
-                            : 'bg-gray-400'
-                        }`}></div>
-                        <span className="text-xs font-medium text-gray-600">
-                          {weekStatuses[weekIndex].status === 'approved' ? 'Approved' :
-                           weekStatuses[weekIndex].status === 'draft' ? 'Draft' :
-                           'No Plan'}
-                        </span>
+                        {(() => {
+                          const status = weekStatuses[weekIndex].status;
+                          if (status === 'approved') {
+                            return (
+                              <span className="flex items-center gap-1 text-xs font-medium text-green-400">
+                                <span className="h-2 w-2 rounded-full bg-green-400"></span>
+                                Approved
+                              </span>
+                            );
+                          }
+                          const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+                          return (
+                            <span className="flex items-center gap-1 text-xs font-semibold text-red-400">
+                              <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                              </span>
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}

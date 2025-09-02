@@ -2617,7 +2617,8 @@ const WorkoutPlanSection = ({
         hasUnsavedChanges: false, 
         lastSaved: new Date() 
       });
-      // Check approval status after saving to update the approve button
+      // Force a fresh approval status check (avoid dedupe) after saving
+      setForceRefreshKey(prev => prev + 1);
       await checkPlanApprovalStatus();
       // DO NOT REFETCH HERE. The local state is the source of truth during editing.
       // fetchPlan(); 

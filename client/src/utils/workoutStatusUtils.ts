@@ -101,42 +101,31 @@ export async function checkWorkoutApprovalStatus(
     console.log(`[checkWorkoutApprovalStatus] Preview data: ${previewData?.length || 0} entries`);
     console.log(`[checkWorkoutApprovalStatus] Schedule data: ${scheduleData?.length || 0} entries`);
 
-    // Determine status based on data presence and consistency
+    // ----------------------------------------------------
+    // NEW SIMPLIFIED STATUS LOGIC  (2025-09-xx)
+    // ----------------------------------------------------
+    // We ignore the schedule table for status; the preview table is now the single source of truth.
+    // Rules (weekly or arbitrary date-range):
+    //   • totalRows === 0               ⇒   no_plan
+    //   • totalRows === expectedDays AND every row is_approved ⇒ approved
+    //   • otherwise                    ⇒   draft  (needs approval)
+    //   NOTE: expectedDays == totalDays computed earlier.
+
     let status: WorkoutStatus = 'no_plan';
     let source: WorkoutSource = 'database';
 
-    if (!previewData || previewData.length === 0) {
-      if (scheduleData && scheduleData.length > 0) {
-        // Edge case: approved data exists but no preview
-        console.log('[checkWorkoutApprovalStatus] ✅ Found approved plan in schedule table (no preview data)');
-        status = 'approved';
-        source = 'database';
-      } else {
-        // No data in either table
-        console.log('[checkWorkoutApprovalStatus] ⚪ No plan found in either table');
-        status = 'no_plan';
-        source = 'database';
-      }
+    const totalRows = previewData?.length || 0;
+    const approvedRows = (previewData || []).filter(r => r.is_approved === true).length;
+
+    if (totalRows === 0) {
+      status = 'no_plan';
+      source = 'database';
+    } else if (totalRows === totalDays && approvedRows === totalRows) {
+      status = 'approved';
+      source = 'database';
     } else {
-      // Preview data exists
-      if (!scheduleData || scheduleData.length === 0) {
-        // Only preview data exists = draft
-        console.log('[checkWorkoutApprovalStatus] 📝 Found draft plan in schedule_preview table');
-        status = 'draft';
-        source = 'generated';
-      } else {
-        // Both tables have data - check if they match
-        const dataMatches = compareWorkoutData(previewData, scheduleData);
-        if (dataMatches) {
-          console.log('[checkWorkoutApprovalStatus] ✅ Data matches between tables - marking as approved');
-          status = 'approved';
-          source = 'database';
-        } else {
-          console.log('[checkWorkoutApprovalStatus] 📝 Data differs between tables - marking as draft');
-          status = 'draft';
-          source = 'generated';
-        }
-      }
+      status = 'draft'; // renamed upstream to "not_approved" / needs approval.
+      source = 'generated';
     }
 
     return {
