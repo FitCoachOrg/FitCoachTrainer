@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Clock, Dumbbell, Target, Bug, BarChart3, Edit, PieChart, Save, Trash2, Plus, Cpu, Brain, FileText, Utensils, CheckCircle, CalendarDays, Search, RefreshCw, Settings, AlertTriangle, Download, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
@@ -1375,6 +1375,10 @@ const WorkoutPlanSection = ({
   const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
+  // Saving modal state
+  const [showSavingModal, setShowSavingModal] = useState(false);
+  const [savingMessage, setSavingMessage] = useState('');
+
   // Import Plan Template state
   const [isImportTemplateOpen, setIsImportTemplateOpen] = useState(false);
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
@@ -1527,6 +1531,8 @@ const WorkoutPlanSection = ({
   const autoSaveDraft = async () => {
     if (!workoutPlan || !workoutPlanState.hasUnsavedChanges) return;
     
+    setShowSavingModal(true);
+    setSavingMessage('Auto-saving draft...');
     updateWorkoutPlanState({ isAutoSaving: true });
     setLoading('saving', 'Auto-saving draft...');
     
@@ -1549,6 +1555,7 @@ const WorkoutPlanSection = ({
       updateWorkoutPlanState({ isAutoSaving: false });
     } finally {
       clearLoading();
+      setShowSavingModal(false);
     }
   };
 
@@ -2606,26 +2613,33 @@ const WorkoutPlanSection = ({
 
   // Debounced save function for autosaving inline edits
   const debouncedSave = debounce(async (updatedPlan: WeekDay[]) => {
-    
+    setShowSavingModal(true);
+    setSavingMessage('Changes are being saved...');
     setIsSavingEdits(true);
-    const result = await savePlanToSchedulePreview(updatedPlan, numericClientId, planStartDate);
-    setIsSavingEdits(false);
-    if (result.success) {
-      toast({ title: 'Changes saved', description: 'Your edits have been saved to the draft.' });
-      // Clear unsaved changes flag
-      updateWorkoutPlanState({ 
-        hasUnsavedChanges: false, 
-        lastSaved: new Date() 
-      });
-      // Force a fresh approval status check (avoid dedupe) after saving
-      setForceRefreshKey(prev => prev + 1);
-      // Small delay to ensure DB transaction is visible to subsequent SELECT
-      await new Promise(resolve => setTimeout(resolve, 250));
-      await checkPlanApprovalStatus();
-      // DO NOT REFETCH HERE. The local state is the source of truth during editing.
-      // fetchPlan(); 
-    } else {
-      toast({ title: 'Save Failed', description: 'Could not save changes.', variant: 'destructive' });
+    
+    try {
+      const result = await savePlanToSchedulePreview(updatedPlan, numericClientId, planStartDate);
+      
+      if (result.success) {
+        toast({ title: 'Changes saved', description: 'Your edits have been saved to the draft.' });
+        // Clear unsaved changes flag
+        updateWorkoutPlanState({ 
+          hasUnsavedChanges: false, 
+          lastSaved: new Date() 
+        });
+        // Force a fresh approval status check (avoid dedupe) after saving
+        setForceRefreshKey(prev => prev + 1);
+        // Small delay to ensure DB transaction is visible to subsequent SELECT
+        await new Promise(resolve => setTimeout(resolve, 250));
+        await checkPlanApprovalStatus();
+        // DO NOT REFETCH HERE. The local state is the source of truth during editing.
+        // fetchPlan(); 
+      } else {
+        toast({ title: 'Save Failed', description: 'Could not save changes.', variant: 'destructive' });
+      }
+    } finally {
+      setIsSavingEdits(false);
+      setShowSavingModal(false);
     }
   }, 1000); // 1.0-second debounce delay for snappier saves without extra load
 
@@ -2647,12 +2661,12 @@ const WorkoutPlanSection = ({
   };
 
   const handleImportSuccess = async (weekData: Array<{
-    date: string;
-    focus: string;
-    exercises: any[];
+    date: string; focus: string; exercises: any[];
   }>, dateRange: { start: string; end: string }) => {
     // Save the imported plan to schedule_preview first
     try {
+      setShowSavingModal(true);
+      setSavingMessage('Importing workout plan...');
       console.log('🔄 [Import] Starting import process...');
       
       // Use proper timezone handling for the start date
@@ -2705,6 +2719,8 @@ const WorkoutPlanSection = ({
         description: 'Plan imported but failed to save to database. Please try again.',
         variant: 'destructive'
       });
+    } finally {
+      setShowSavingModal(false);
     }
   };
 
@@ -2876,6 +2892,8 @@ const WorkoutPlanSection = ({
         // The plan start date should remain as the user selected it
         setHasAIGeneratedPlan(true); // Mark that AI generated data is now available
         // Immediately save to schedule_preview
+        setShowSavingModal(true);
+        setSavingMessage('Saving AI-generated plan...');
         console.log('[DEBUG] Calling savePlanToSchedulePreview...');
         const saveResult = await savePlanToSchedulePreview(week, numericClientId, planStartDate);
         if (!saveResult.success) {
@@ -3160,6 +3178,8 @@ const WorkoutPlanSection = ({
     const weekStatus = weekStatuses[weekIndex];
 
     try {
+      setShowSavingModal(true);
+      setSavingMessage(`Approving Week ${weekStatus.weekNumber}...`);
       setLoading('approving', `Approving Week ${weekStatus.weekNumber}...`);
 
       // Call the approveWeek function
@@ -3198,6 +3218,7 @@ const WorkoutPlanSection = ({
       });
     } finally {
       clearLoading();
+      setShowSavingModal(false);
     }
   };
 
@@ -3498,6 +3519,8 @@ const WorkoutPlanSection = ({
         setHasAIGeneratedPlan(true); // Mark that plan data is now available
         
         // Immediately save to schedule_preview with timeout protection
+        setShowSavingModal(true);
+        setSavingMessage('Saving generated workout plan...');
         console.log('[DEBUG] Calling savePlanToSchedulePreview...');
         try {
           const savePromise = savePlanToSchedulePreview(week, numericClientId, planStartDate);
@@ -3578,6 +3601,7 @@ const WorkoutPlanSection = ({
       setIsGeneratingSearch(false);
       clearTimeout(timeoutId);
       clearLoading();
+      setShowSavingModal(false);
       console.log('🔄 === ENHANCED GENERATION END ===');
     }
   }, {
@@ -3853,6 +3877,8 @@ const WorkoutPlanSection = ({
               <Button
                 onClick={async () => {
                   const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
+                  setShowSavingModal(true);
+                  setSavingMessage(`Approving ${planType} plan...`);
                   setLoading('approving', `Approving ${planType} plan...`);
                   setIsApproving(true);
                   
@@ -3898,6 +3924,7 @@ const WorkoutPlanSection = ({
                   } finally {
                     setIsApproving(false);
                     clearLoading();
+                    setShowSavingModal(false);
                   }
                 }}
                 disabled={isApproving}
@@ -4041,6 +4068,8 @@ const WorkoutPlanSection = ({
           <div className="mb-2 flex items-center gap-4">
             <Button
               onClick={async () => {
+                setShowSavingModal(true);
+                setSavingMessage('Saving changes...');
                 setIsSavingEdits(true);
                 const saveResult = await savePlanToSchedulePreview(workoutPlan.week, numericClientId, planStartDate);
                 if (saveResult.success) {
@@ -4096,6 +4125,7 @@ const WorkoutPlanSection = ({
                   toast({ title: 'Save Failed', description: 'Could not save changes to the draft.', variant: 'destructive' });
                 }
                 setIsSavingEdits(false);
+                setShowSavingModal(false);
               }}
               disabled={isSavingEdits}
               className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -4488,6 +4518,31 @@ const WorkoutPlanSection = ({
           setLastAIRecommendation: props.setLastAIRecommendation || (() => {})
         }}
       />
+
+      {/* Saving Modal */}
+      <Dialog open={showSavingModal} onOpenChange={setShowSavingModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              Saving Changes
+            </DialogTitle>
+            <DialogDescription>
+              {savingMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center py-6">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+              Please wait while your changes are being saved to the database.
+              <br />
+              <span className="text-xs text-gray-500 dark:text-gray-500">
+                This usually takes 1-2 seconds
+              </span>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
