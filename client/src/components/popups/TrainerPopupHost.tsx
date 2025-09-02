@@ -11,22 +11,14 @@ interface TrainerPopupHostProps {
 }
 
 export const TrainerPopupHost: React.FC<TrainerPopupHostProps> = ({ openKey, onClose, context }) => {
-  console.log('🔍 TrainerPopupHost - Component rendered')
-  console.log('🔍 TrainerPopupHost - openKey:', openKey)
-  console.log('🔍 TrainerPopupHost - context:', context)
-  
   if (!openKey) {
-    console.log('🔍 TrainerPopupHost - No openKey, returning null')
     return null
   }
   
   const cfg = trainerPopups[openKey]
   if (!cfg) {
-    console.log('🔍 TrainerPopupHost - No config found for openKey:', openKey)
     return null
   }
-
-  console.log('🔍 TrainerPopupHost - Rendering popup with config:', cfg)
 
   return (
     <SidePopup isOpen={true} onClose={onClose} title={cfg.title} icon={cfg.icon}>

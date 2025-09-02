@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { format, addWeeks } from 'date-fns';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { format, addWeeks, startOfDay } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -17,16 +17,25 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { checkWeeklyWorkoutStatus } from '@/utils/workoutStatusUtils';
+import { checkWeeklyWorkoutStatus, checkMonthlyWorkoutStatus, getStatusDisplay } from '@/utils/workoutStatusUtils';
 
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
+
+// Week-level approval status for monthly view (exact replica from WeeklyPlanHeader)
+interface WeekApprovalStatus {
+  weekNumber: number;
+  status: 'approved' | 'draft' | 'no_plan' | 'partial_approved';
+  startDate: Date;
+  endDate: Date;
+  canApprove: boolean;
+}
 
 // Define the type for a single exercise item
 export interface Exercise {
@@ -69,6 +78,11 @@ interface WorkoutPlanTableProps {
   isTemplateMode?: boolean;
   hideDates?: boolean;
   viewMode?: 'weekly' | 'monthly';
+  // Exact replica props from WeeklyPlanHeader
+  weekStatuses?: WeekApprovalStatus[]; // Week-level approval statuses
+  onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
+  onDirtyDatesChange?: (dirtyDates: Set<string>) => void; // Callback for dirty dates changes
+  dirtyDates?: Set<string>; // Parent's dirty dates to sync with
 }
 
 // Helper to get a focus icon
@@ -150,67 +164,51 @@ const calculateWeekStatus = async (weekDays: any[], weekStartDate: Date, clientI
   }
 };
 
-// Component for displaying week status
-const WeekStatusDisplay = ({ weekDays, weekStartDate, clientId }: { 
+// Component for displaying week status (exact replica from WeeklyPlanHeader)
+const WeekStatusDisplay = ({ weekDays, weekStartDate, clientId, weekIndex, weekStatuses, onApproveWeek }: { 
   weekDays: any[]; 
   weekStartDate: Date; 
   clientId: number; 
+  weekIndex: number;
+  weekStatuses?: WeekApprovalStatus[];
+  onApproveWeek?: (weekIndex: number) => void;
 }) => {
-  const [weekStatus, setWeekStatus] = useState<{status: string, approvedDays: number, totalDays: number} | null>(null);
-  
-  useEffect(() => {
-    const getStatus = async () => {
-      const status = await calculateWeekStatus(weekDays, weekStartDate, clientId);
-      setWeekStatus(status);
-    };
-    getStatus();
-  }, [weekDays, weekStartDate, clientId]);
-  
-  if (!weekStatus) {
+  // Week approval state (exact replica from WeeklyPlanHeader)
+  const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
+
+  if (!weekStatuses || !weekStatuses[weekIndex]) {
+    // Show a default status when weekStatuses is not provided
     return (
-      <div className="flex items-center gap-1 text-xs text-gray-400">
-        <ClockIcon className="h-3 w-3" />
-        <span>Loading...</span>
+      <div className="flex items-center gap-1 text-xs text-gray-500">
+        <span className="h-2 w-2 rounded-full bg-gray-400"></span>
+        <span>Pending</span>
       </div>
     );
   }
+
+  const { status } = weekStatuses[weekIndex];
   
-  if (weekStatus.totalDays === 0) {
-    return (
-      <div className="flex items-center gap-1 text-xs text-gray-400">
-        <ClockIcon className="h-3 w-3" />
-        <span>No workouts</span>
-      </div>
-    );
-  } else if (weekStatus.status === 'approved') {
+  if (status === 'approved') {
     return (
       <div className="flex items-center gap-1 text-xs text-green-600">
         <CheckCircle className="h-3 w-3" />
         <span>Approved</span>
       </div>
     );
-  } else if (weekStatus.status === 'draft') {
-    return (
-      <div className="flex items-center gap-1 text-xs text-blue-600">
-        <ClockIcon className="h-3 w-3" />
-        <span>Draft</span>
-      </div>
-    );
-  } else if (weekStatus.status === 'no_plan') {
-    return (
-      <div className="flex items-center gap-1 text-xs text-gray-500">
-        <ClockIcon className="h-3 w-3" />
-        <span>No Plan</span>
-      </div>
-    );
-  } else {
-    return (
-      <div className="flex items-center gap-1 text-xs text-gray-500">
-        <ClockIcon className="h-3 w-3" />
-        <span>Pending</span>
-      </div>
-    );
   }
+
+  const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-red-600">
+      {/* Flashing red dot (exact replica from WeeklyPlanHeader) */}
+      <span className="relative flex h-3 w-3">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+      </span>
+      <span>{label}</span>
+    </div>
+  );
 };
 
 // Helper to get YouTube thumbnail URL
@@ -393,7 +391,7 @@ const VideoCell = ({
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
               <iframe
                 src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
-                title="YouTube video player"
+                /* title="YouTube video player" */
                 className="absolute top-0 left-0 w-full h-full rounded-lg"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -416,10 +414,18 @@ const VideoCell = ({
   );
 };
 
-export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly' }: WorkoutPlanTableProps) => {
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly', weekStatuses, onApproveWeek, onDirtyDatesChange, dirtyDates: dirtyDatesProp }: WorkoutPlanTableProps) => {
   
   // State for delete confirmation
   const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
+
+  // Week approval state (exact replica from WeeklyPlanHeader)
+  const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
+
+  // Approval status state (exact replica from WeeklyPlanHeader)
+  const [monthlyStatus, setMonthlyStatus] = useState<any>(null);
+  const [weeklyStatus, setWeeklyStatus] = useState<any>(null);
+  const [localWeekStatuses, setLocalWeekStatuses] = useState<WeekApprovalStatus[]>([]);
 
   // State for exercise picker modal
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -428,11 +434,109 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   // Local copy of the week for editing
   const [editableWeek, setEditableWeek] = useState(week);
+  
+  // Force refresh state removed - no longer needed with explicit save model
+
+  // Normalize the planStartDate to local start-of-day to avoid UTC offset issues
+  const baseStartDate = useMemo(() => startOfDay(planStartDate), [planStartDate]);
+
+  // Local dirty tracking: set of dates with unsaved changes
+  const [localDirtyDates, setLocalDirtyDates] = useState<Set<string>>(new Set());
+
+  const markDateDirty = useCallback((dateStr: string) => {
+    // Update local state immediately for instant UI feedback
+    setLocalDirtyDates(prev => new Set(prev).add(dateStr));
+    
+    // Notify parent asynchronously to avoid blocking UI updates
+    if (onDirtyDatesChange) {
+      // Use setTimeout to ensure this runs after the current render cycle
+      setTimeout(() => {
+        const mergedDirtyDates = new Set([...Array.from(dirtyDatesProp || []), dateStr]);
+        onDirtyDatesChange(mergedDirtyDates);
+      }, 0);
+    }
+  }, [onDirtyDatesChange, dirtyDatesProp]);
+
+  const clearDirtyDates = () => {
+    setLocalDirtyDates(new Set());
+    // Notify parent that all dirty dates are cleared
+    if (onDirtyDatesChange) {
+      onDirtyDatesChange(new Set());
+    }
+  };
+
+  // Use local dirty dates for immediate UI feedback, merge with parent for consistency
+  const dirtyDates = new Set([...Array.from(localDirtyDates), ...Array.from(dirtyDatesProp || [])]);
+
+  // Derived states for dirty tracking - use merged dirty dates for accurate count
+  const hasUnsavedChanges = dirtyDates.size > 0;
+  const unsavedChangesCount = dirtyDates.size;
+
+  // Sync local dirty dates with parent's dirty dates
+  useEffect(() => {
+    if (dirtyDatesProp) {
+      // Only update if parent has new dirty dates that we don't have locally
+      const newDirtyDates = Array.from(dirtyDatesProp).filter(date => !localDirtyDates.has(date));
+      if (newDirtyDates.length > 0) {
+        setLocalDirtyDates(prev => new Set([...Array.from(prev), ...newDirtyDates]));
+      }
+    }
+  }, [dirtyDatesProp]);
+
+  // Note: onDirtyDatesChange is now called directly in markDateDirty for immediate notification
 
   useEffect(() => {
     // Keep local state in sync with parent prop
     setEditableWeek(week);
+    // Force refresh removed - no longer needed with explicit save model
   }, [week]);
+
+  // Fetch approval status when component mounts or when relevant props change
+  useEffect(() => {
+    if (clientId && planStartDate) {
+      fetchApprovalStatus();
+    }
+  }, [clientId, planStartDate, viewMode]);
+
+  // Function to fetch approval status (exact replica from WeeklyPlanHeader)
+  const fetchApprovalStatus = async () => {
+    if (!clientId) return;
+    
+    try {
+      if (viewMode === 'monthly') {
+        const monthlyResult = await checkMonthlyWorkoutStatus(supabase, clientId, baseStartDate);
+        setMonthlyStatus(monthlyResult);
+        
+        if (monthlyResult.weeklyBreakdown) {
+          const weekStatuses = monthlyResult.weeklyBreakdown.map((weekData, weekIndex) => ({
+            weekNumber: weekIndex,
+            status: weekData.status,
+            startDate: weekData.startDate,
+            endDate: weekData.endDate,
+            canApprove: (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false)
+          }));
+          setLocalWeekStatuses(weekStatuses);
+        }
+      } else {
+        const weeklyResult = await checkWeeklyWorkoutStatus(supabase, clientId, baseStartDate);
+        setWeeklyStatus(weeklyResult);
+        
+        // Create a single week status for weekly view
+        const weekStatus = {
+          weekNumber: 0,
+          status: weeklyResult.status,
+          startDate: baseStartDate,
+          endDate: new Date(baseStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
+          canApprove: (weeklyResult.status === 'draft' || weeklyResult.status === 'partial_approved') && weeklyResult.previewData?.some(d => d.is_approved === false)
+        };
+        setLocalWeekStatuses([weekStatus]);
+      }
+    } catch (error) {
+      console.error('Error fetching approval status:', error);
+    }
+  };
+
+  // Function to refresh approval status removed - no longer needed with explicit save model
 
   // --- Normalization function ---
   function normalizeExercise(ex: any): any {
@@ -460,10 +564,15 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   }));
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
+    console.log(`[Plan Change] Updating day ${dayIdx}, exercise ${exIdx}, field ${field} to ${value}`);
+    
     // Map the global day index to an actual date, then update by date
-    const fullWeekArray = getFullWeek(planStartDate, editableWeek, viewMode);
+    const fullWeekArray = getFullWeek(baseStartDate, editableWeek, viewMode);
     const targetDay = fullWeekArray[dayIdx];
-    if (!targetDay) return; // safety
+    if (!targetDay) {
+      console.error(`[Plan Change] No target day found for index: ${dayIdx}`);
+      return; // safety
+    }
 
     // Find or create the target day in editableWeek by date
     const existingIndex = editableWeek.findIndex(d => d && d.date === targetDay.date);
@@ -485,54 +594,61 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     const dayExercises = [...(currentDay.exercises || [])];
     if (!dayExercises[exIdx]) return; // only editing existing rows here
 
+    // Update the exercise with the new value
     dayExercises[exIdx] = { ...dayExercises[exIdx], [field]: value };
     updatedWeek[idx] = { ...currentDay, exercises: dayExercises } as any;
 
-    setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
-    onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
+    // Update local state immediately for UI responsiveness
+    setEditableWeek(updatedWeek);
+    
+    // Notify parent component of the change
+    onPlanChange(updatedWeek);
 
-    // Persist only this day's exercises immediately to flip is_approved=false and reflect status fast
-    // This keeps latency low in Monthly view while the parent performs the debounced weekly save.
-    (async () => {
-      try {
-        await persistExercisesForDate(targetDay.date, dayExercises, currentDay.focus || 'Workout');
-        try {
-          window.dispatchEvent(new CustomEvent('workoutPlan:changed'));
-        } catch {}
-      } catch (err) {
-        console.warn('[Inline Edit Persist] warning:', err);
-      }
-    })();
+    // Mark date dirty; no DB writes in explicit-save mode
+    markDateDirty(targetDay.date);
+    // Force refresh removed - no longer needed with explicit save model
   };
 
   const { toast } = useToast();
 
   // Delete all exercises for a day and remove the row from schedule_preview
-  const handleDeleteDay = async (dayIdx: number) => {
+  const handleDeleteDay = async (globalDayIdx: number) => {
     if (!window.confirm('Are you sure you want to delete all workouts for this day?')) return;
-    const day = editableWeek[dayIdx];
+    
+    // Map the global day index to the actual date
+    const fullWeekArray = getFullWeek(baseStartDate, editableWeek, viewMode);
+    const targetDay = fullWeekArray[globalDayIdx];
+    
+    if (!targetDay || !targetDay.date) {
+      console.error('[Delete Day] No target day found for index:', globalDayIdx);
+      toast({ title: 'Delete Failed', description: 'Could not find the day to delete.', variant: 'destructive' });
+      return;
+    }
+    
     try {
-      if (!isTemplateMode) {
-        // Delete the row from schedule_preview for this client and date
-        console.log(`[Delete Day] Deleting row for clientId ${clientId}, date ${day.date}`);
-        const { error } = await supabase
-          .from('schedule_preview')
-          .delete()
-          .eq('client_id', clientId)
-          .eq('for_date', day.date)
-          .eq('type', 'workout');
-        if (error) {
-          console.error('[Delete Day] Error deleting row:', error);
-          toast({ title: 'Delete Failed', description: 'Could not delete the day from the database.', variant: 'destructive' });
-          return;
-        }
-      }
-      // Remove the day from local state
-      const updatedWeek = editableWeek.map((d, idx) => idx === dayIdx ? { ...d, exercises: [] } : d);
+      // Find the day in editableWeek by date and clear its exercises (local-only)
+      const updatedWeek = editableWeek.map(d => 
+        d && d.date === targetDay.date 
+          ? { ...d, exercises: [] }
+          : d
+      );
+      
+      // Update local state
       setEditableWeek(updatedWeek);
+      
+      // Mark date dirty; no DB writes in explicit-save mode
+      markDateDirty(targetDay.date);
+      // Force UI refresh removed - no longer needed with explicit save model
+      
+      // Notify parent component
       onPlanChange(updatedWeek);
+      
       toast({ title: 'Day Deleted', description: 'The day has been removed from the plan.' });
       console.log('[Delete Day] Successfully deleted row and updated UI.');
+      
+      // Close the delete confirmation dialog
+      setDeleteDayIdx(null);
+      
     } catch (err) {
       console.error('[Delete Day] Unexpected error:', err);
       toast({ title: 'Delete Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
@@ -542,8 +658,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   // Always render the appropriate number of days, filling missing days as null
   // Use useMemo to recalculate when editableWeek changes
   const fullWeek = useMemo(() => {
-    return getFullWeek(planStartDate, editableWeek, viewMode);
-  }, [planStartDate, editableWeek, viewMode]);
+    return getFullWeek(baseStartDate, editableWeek, viewMode);
+  }, [baseStartDate, editableWeek, viewMode]);
 
   // Organize days into weeks
   const weeks = useMemo(() => {
@@ -625,15 +741,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     setEditableWeek(updatedWeek);
     onPlanChange(updatedWeek);
 
-    // Persist to schedule_preview
-    const exercisesForDate = (existingDay ? existingDay.exercises : [newExercise]);
-    await persistExercisesForDate(targetDate, exercisesForDate, existingDay?.focus || 'Workout');
-
-    // Trigger immediate status refresh (global + week approve buttons)
-    try {
-      // Best-effort custom event; parent listens via debouncedSave/forceRefresh
-      window.dispatchEvent(new CustomEvent('workoutPlan:changed'));
-    } catch {}
+    // Mark date dirty; no DB writes in explicit-save mode
+    markDateDirty(targetDate);
 
     setIsPickerOpen(false);
     setPickerDayIdx(null);
@@ -646,12 +755,14 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     const targetDay = fullWeekArray[dayIdx];
     
     if (!targetDay) {
+      console.error('[Delete Exercise] No target day found for index:', dayIdx);
       return;
     }
     
     // Find the day in editableWeek by date
     const dayInEditableWeek = editableWeek.find(d => d && d.date === targetDay.date);
     if (!dayInEditableWeek) {
+      console.error('[Delete Exercise] Day not found in editableWeek for date:', targetDay.date);
       return;
     }
     
@@ -664,16 +775,22 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         : d
     );
     
+    // Update local state immediately for UI responsiveness
     setEditableWeek(updatedWeek);
+    
+    // Notify parent component
     onPlanChange(updatedWeek);
-    await persistExercisesForDate(targetDay.date, newExercises, dayInEditableWeek.focus || 'Workout');
+
+    // Mark date dirty; no DB writes in explicit-save mode
+    markDateDirty(targetDay.date);
+    // Force refresh removed - no longer needed with explicit save model
   };
 
   const renderDay = (day: any, dayIdx: number, weekIdx: number) => {
     // Calculate the global day index across all weeks
     const globalDayIdx = weekIdx * 7 + dayIdx;
-    const currentDate = new Date(planStartDate.getTime() + globalDayIdx * 24 * 60 * 60 * 1000);
-        const dateStr = currentDate.toISOString().slice(0, 10);
+    const currentDate = new Date(baseStartDate.getTime() + globalDayIdx * 24 * 60 * 60 * 1000);
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
         const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
         const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -920,6 +1037,152 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   return (
     <div className="space-y-8">
+      {/* Save Changes Button - Only show when there are unsaved changes */}
+      {hasUnsavedChanges && (
+        <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <span className="h-4 w-4 rounded-full bg-orange-500"></span>
+            </div>
+            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+              You have {unsavedChangesCount} unsaved change{unsavedChangesCount === 1 ? '' : 's'}.
+            </span>
+          </div>
+          <Button
+            onClick={async () => {
+              // Save all changes to the database
+              try {
+                // Save all dirty dates to the database
+                const savePromises = Array.from(dirtyDates).map(async (dateStr) => {
+                  const dayIndex = editableWeek.findIndex(day => day && day.date === dateStr);
+                  if (dayIndex !== -1 && editableWeek[dayIndex]) {
+                    const day = editableWeek[dayIndex];
+                    await persistExercisesForDate(dateStr, day.exercises, day.focus);
+                  }
+                });
+                
+                await Promise.all(savePromises);
+                
+                toast({ title: 'Changes Saved', description: 'Your changes have been saved successfully.' });
+                clearDirtyDates();
+                
+                // Notify parent component that changes have been saved
+                onPlanChange(editableWeek);
+              } catch (error) {
+                console.error('Save failed:', error);
+                toast({ title: 'Save Failed', description: 'An error occurred while saving.', variant: 'destructive' });
+              }
+            }}
+            size="sm"
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save Changes
+          </Button>
+        </div>
+      )}
+
+      {/* Weekly Status Indicator (exact replica from WeeklyPlanHeader) */}
+      {viewMode === 'weekly' && (
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+          <div className="flex items-center gap-3">
+            {(() => {
+              // If any date within this week is dirty, show Unsaved Changes
+              const weekDirty = (() => {
+                const start = baseStartDate;
+                for (let i = 0; i < 7; i++) {
+                  const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                  if (dirtyDates.has(d as string)) return true;
+                }
+                return false;
+              })();
+
+              if (weekDirty) {
+                return (
+                  <span className="flex items-center gap-2 text-sm font-semibold text-orange-600 dark:text-orange-300">
+                    <span className="relative flex h-4 w-4">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-orange-600"></span>
+                    </span>
+                    Unsaved Changes
+                  </span>
+                );
+              }
+
+              if (!localWeekStatuses || localWeekStatuses.length === 0) {
+                return (
+                  <span className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    <span className="h-3 w-3 rounded-full bg-gray-500"></span>
+                    Loading...
+                  </span>
+                );
+              }
+
+              const { status } = localWeekStatuses[0];
+              if (status === 'approved') {
+                return (
+                  <span className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
+                    <span className="h-3 w-3 rounded-full bg-green-500"></span>
+                    Approved
+                  </span>
+                );
+              }
+
+              const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+
+              return (
+                <span className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300">
+                  {/* Flashing red dot */}
+                  <span className="relative flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-600"></span>
+                  </span>
+                  {label}
+                </span>
+              );
+            })()}
+          </div>
+          
+          {/* Weekly Approval Button */}
+          {onApproveWeek && localWeekStatuses && localWeekStatuses[0] && localWeekStatuses[0].canApprove && (() => {
+            // Disable Approve if any day in this week is dirty
+            const weekDirty = (() => {
+              const start = baseStartDate;
+              for (let i = 0; i < 7; i++) {
+                const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                if (dirtyDates.has(d as string)) return true;
+              }
+              return false;
+            })();
+            return !weekDirty;
+          })() && (
+            <Button
+              onClick={async () => {
+                setApprovingWeek(0);
+                try {
+                  await onApproveWeek(0);
+                } finally {
+                  setApprovingWeek(null);
+                }
+              }}
+              disabled={approvingWeek === 0}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
+            >
+              {approvingWeek === 0 ? (
+                <>
+                  <Check className="h-3 w-3 mr-1 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3 w-3 mr-1" />
+                  Approve Week
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Weeks Organization */}
       {viewMode === 'monthly' ? (
@@ -960,8 +1223,51 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                           weekDays={weekDays} 
                           weekStartDate={weekStartDate} 
                           clientId={clientId} 
+                          weekIndex={weekIdx}
+                          weekStatuses={localWeekStatuses}
+                          onApproveWeek={onApproveWeek}
                         />
                       </div>
+                      
+                      {/* Weekly Approval Button (disabled if week has dirty dates) */}
+                      {onApproveWeek && localWeekStatuses && localWeekStatuses[weekIdx] && localWeekStatuses[weekIdx].canApprove && (() => {
+                        const start = weekStartDate;
+                        const weekDirty = (() => {
+                          for (let i = 0; i < 7; i++) {
+                            const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                            if (dirtyDates.has(d as string)) return true;
+                          }
+                          return false;
+                        })();
+                        return !weekDirty;
+                      })() && (
+                        <Button
+                          onClick={async () => {
+                            setApprovingWeek(weekIdx);
+                            try {
+                              await onApproveWeek(weekIdx);
+                              // Refresh status after approval
+                              await fetchApprovalStatus();
+                            } finally {
+                              setApprovingWeek(null);
+                            }
+                          }}
+                          disabled={approvingWeek === weekIdx}
+                          className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
+                        >
+                        {approvingWeek === weekIdx ? (
+                          <>
+                            <Check className="h-3 w-3 mr-1 animate-spin" />
+                            Approving...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-3 w-3 mr-1" />
+                            Approve
+                          </>
+                        )}
+                      </Button>
+                      )}
                     </div>
                   </div>
                 </AccordionTrigger>
@@ -998,12 +1304,67 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     <span className="text-xs text-gray-500 dark:text-gray-400">
                       {weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length} workout days
                     </span>
-                    {/* Approval Status Indicator */}
-                    <WeekStatusDisplay 
-                      weekDays={weekDays} 
-                      weekStartDate={weekStartDate} 
-                      clientId={clientId} 
-                    />
+                    {/* Approval Status Indicator with Unsaved override */}
+                    {(() => {
+                      const weekDirty = (() => {
+                        for (let i = 0; i < 7; i++) {
+                          const d = format(new Date(weekStartDate.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                          if (dirtyDates.has(d as string)) return true;
+                        }
+                        return false;
+                      })();
+                      if (weekDirty) {
+                        return (
+                          <span className="flex items-center gap-2 text-xs font-semibold text-orange-600 dark:text-orange-300">
+                            <span className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-600"></span>
+                            </span>
+                            Unsaved Changes
+                          </span>
+                        );
+                      }
+                      return (
+                        <WeekStatusDisplay 
+                          weekDays={weekDays} 
+                          weekStartDate={weekStartDate} 
+                          clientId={clientId} 
+                          weekIndex={weekIdx}
+                          weekStatuses={localWeekStatuses}
+                          onApproveWeek={onApproveWeek}
+                        />
+                      );
+                    })()}
+                    
+                    {/* Weekly Approval Button (exact replica from WeeklyPlanHeader) */}
+                    {onApproveWeek && localWeekStatuses && localWeekStatuses[weekIdx] && localWeekStatuses[weekIdx].canApprove && (
+                      <Button
+                        onClick={async () => {
+                          setApprovingWeek(weekIdx);
+                          try {
+                            await onApproveWeek(weekIdx);
+                            // Refresh status after approval
+                            await fetchApprovalStatus();
+                          } finally {
+                            setApprovingWeek(null);
+                          }
+                        }}
+                        disabled={approvingWeek === weekIdx}
+                        className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
+                      >
+                        {approvingWeek === weekIdx ? (
+                          <>
+                            <Check className="h-3 w-3 mr-1 animate-spin" />
+                            Approving...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-3 w-3 mr-1" />
+                            Approve Week
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>

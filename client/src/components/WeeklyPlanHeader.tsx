@@ -1,21 +1,21 @@
 "use client"
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { format, parseISO, addWeeks, startOfWeek, endOfWeek } from 'date-fns';
+import { format, parseISO, addWeeks, startOfWeek, endOfWeek, startOfDay } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import VideoModal from '@/components/VideoModal';
 import VideoThumbnail from '@/components/VideoThumbnail';
-import { 
-  checkMonthlyWorkoutStatus, 
+import {
+  checkMonthlyWorkoutStatus,
   checkWeeklyWorkoutStatus,
   getStatusDisplay,
-  type WorkoutStatusResult 
+  type WorkoutStatusResult
 } from '@/utils/workoutStatusUtils';
 
 type WeekDay = {
@@ -46,6 +46,8 @@ interface WeeklyPlanHeaderProps {
   onForceRefreshStatus?: () => void; // Callback to force refresh status
   weekStatuses?: WeekApprovalStatus[]; // Week-level approval statuses
   onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
+  dirtyDates?: Set<string>; // New prop for dirty dates
+  onDirtyDatesChange?: (dirtyDates: Set<string>) => void; // Callback to notify about dirty dates
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -65,7 +67,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, viewMode, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, viewMode, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek, dirtyDates = new Set(), onDirtyDatesChange }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -85,6 +87,32 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
   const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
   const [weeklyStatus, setWeeklyStatus] = useState<WorkoutStatusResult | null>(null);
+
+  // Normalize planStartDate to start of local day to avoid timezone drift
+  const baseStartDate = useMemo(() => startOfDay(planStartDate), [planStartDate]);
+
+  // Helper function to check if a week has any dirty dates
+  const isWeekDirty = useCallback((weekIndex: number) => {
+    if (dirtyDates.size === 0) return false;
+    
+    const weekStartDate = weekIndex === 0 ? baseStartDate : addWeeks(baseStartDate, weekIndex);
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(weekStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const dateStr = format(dayDate, 'yyyy-MM-dd');
+      if (dirtyDates.has(dateStr)) {
+        return true;
+      }
+    }
+    return false;
+  }, [dirtyDates, baseStartDate]);
+
+  // Helper function to get display status for a week (overriding with unsaved changes if dirty)
+  const getWeekDisplayStatus = useCallback((weekIndex: number, originalStatus: string) => {
+    if (isWeekDirty(weekIndex)) {
+      return 'unsaved_changes';
+    }
+    return originalStatus;
+  }, [isWeekDirty]);
 
   // Week approval state
   const [approvingWeek, setApprovingWeek] = useState<number | null>(null);
@@ -488,20 +516,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       // For weekly view, update the current week
       const updated = days.map((d) => (d.date === date ? { ...d, focus: 'Rest Day', exercises: [] } : d));
       
-      // Call onPlanChange to trigger auto-save in parent component
+      // Call onPlanChange to update parent component (no auto-save in explicit save model)
       onPlanChange(updated);
       
-      // Trigger immediate approval status check for responsive UI
-      if (onForceRefreshStatus) {
-        onForceRefreshStatus();
-      } else if (onApprovalStatusCheck) {
-        onApprovalStatusCheck();
+      // Mark the deleted date as dirty for explicit save model
+      if (onDirtyDatesChange) {
+        // Merge with existing dirty dates instead of replacing
+        const newDirtyDates = new Set([...Array.from(dirtyDates), date]);
+        onDirtyDatesChange(newDirtyDates);
       }
       
-      // Also trigger a delayed check to ensure save completes
-      setTimeout(() => {
-        debouncedApprovalCheck();
-      }, 1000);
+      // No need to trigger approval status check immediately - will be updated when saved
     } else {
       // For monthly view, update the entire monthly data structure
       const updatedMonthlyData = monthlyData.map(week => 
@@ -524,20 +549,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         onMonthlyChange(updatedMonthlyData);
       }
       
-      // Persist the deletion to the database immediately
-      await persistDeletionToDatabase(date);
-      
-      // Trigger immediate approval status check for responsive UI
-      if (onForceRefreshStatus) {
-        onForceRefreshStatus();
-      } else if (onApprovalStatusCheck) {
-        onApprovalStatusCheck();
+      // Also update the monthly data state for the table
+      if (onMonthlyDataChange) {
+        onMonthlyDataChange(updatedMonthlyData);
       }
       
-      // Also trigger a delayed check to ensure database sync
-      setTimeout(() => {
-        debouncedApprovalCheck();
-      }, 500);
+      // Mark the deleted date as dirty for explicit save model
+      if (onDirtyDatesChange) {
+        // Merge with existing dirty dates instead of replacing
+        const newDirtyDates = new Set([...Array.from(dirtyDates), date]);
+        onDirtyDatesChange(newDirtyDates);
+      }
+      
+      // No immediate database persistence - changes are stored locally until explicitly saved
     }
     setMenuOpenFor(null);
   };
@@ -564,20 +588,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           : d
       );
       
-      // Call onPlanChange to trigger auto-save in parent component
+      // Call onPlanChange to update parent component (no auto-save in explicit save model)
       onPlanChange(updated);
       
-      // Trigger immediate approval status check for responsive UI
-      if (onForceRefreshStatus) {
-        onForceRefreshStatus();
-      } else if (onApprovalStatusCheck) {
-        onApprovalStatusCheck();
+      // Mark the target date as dirty for explicit save model
+      if (onDirtyDatesChange) {
+        // Merge with existing dirty dates instead of replacing
+        const newDirtyDates = new Set([...Array.from(dirtyDates), copyTargetDate]);
+        onDirtyDatesChange(newDirtyDates);
       }
       
-      // Also trigger a delayed check to ensure save completes
-      setTimeout(() => {
-        debouncedApprovalCheck();
-      }, 1000);
+      // No need to trigger approval status check immediately - will be updated when saved
     } else {
       // For monthly view, find source and target days in all days
       const sourceDay = allDays.find(d => d.date === copySourceDate);
@@ -606,20 +627,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         onMonthlyChange(updatedMonthlyData);
       }
       
-      // Persist the change to the database immediately
-      await persistMonthlyChangeToDatabase(copyTargetDate, sourceDay);
-      
-      // Trigger immediate approval status check for responsive UI
-      if (onForceRefreshStatus) {
-        onForceRefreshStatus();
-      } else if (onApprovalStatusCheck) {
-        onApprovalStatusCheck();
+      // Also update the monthly data state for the table
+      if (onMonthlyDataChange) {
+        onMonthlyDataChange(updatedMonthlyData);
       }
       
-      // Also trigger a delayed check to ensure database sync
-      setTimeout(() => {
-        debouncedApprovalCheck();
-      }, 500);
+      // Mark the target date as dirty for explicit save model
+      if (onDirtyDatesChange) {
+        // Merge with existing dirty dates instead of replacing
+        const newDirtyDates = new Set([...Array.from(dirtyDates), copyTargetDate]);
+        onDirtyDatesChange(newDirtyDates);
+      }
+      
+      // No immediate database persistence - changes are stored locally until explicitly saved
     }
     
     setCopySourceDate(null);
@@ -674,20 +694,25 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         onMonthlyChange(updatedMonthlyData);
       }
       
-      // Persist the week copy to the database
-      await persistWeekCopyToDatabase(copySourceWeek, copyTargetWeek, sourceWeek);
-      
-      // Trigger immediate approval status check for responsive UI
-      if (onForceRefreshStatus) {
-        onForceRefreshStatus();
-      } else if (onApprovalStatusCheck) {
-        onApprovalStatusCheck();
+      // Also update the monthly data state for the table
+      if (onMonthlyDataChange) {
+        onMonthlyDataChange(updatedMonthlyData);
       }
       
-      // Also trigger a delayed check to ensure database sync
-      setTimeout(() => {
-        debouncedApprovalCheck();
-      }, 500);
+      // Mark all dates in the target week as dirty for explicit save model
+      if (onDirtyDatesChange) {
+        const targetWeekStartDate = copyTargetWeek === 0 ? baseStartDate : addWeeks(baseStartDate, copyTargetWeek);
+        const targetWeekDates = [];
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(targetWeekStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          targetWeekDates.push(format(dayDate, 'yyyy-MM-dd'));
+        }
+        // Merge with existing dirty dates instead of replacing
+        const newDirtyDates = new Set([...Array.from(dirtyDates), ...targetWeekDates]);
+        onDirtyDatesChange(newDirtyDates);
+      }
+      
+      // No immediate database persistence - changes are stored locally until explicitly saved
       
       // Reset state
       setCopySourceWeek(null);
@@ -716,92 +741,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     return '💪';
   };
 
-  // Helper function to format tooltip content for exercises
-  const formatExerciseTooltip = (day: WeekDay) => {
-    if (!day.exercises || day.exercises.length === 0) {
-      return (
-        <div className="bg-white rounded-lg shadow-lg p-6 max-w-xs text-center">
-          <div className="text-gray-600 font-medium text-lg">{day.focus || 'Rest Day'}</div>
-          <div className="text-sm text-gray-400 mt-2">No exercises scheduled</div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="bg-white rounded-lg shadow-lg p-4 max-w-4xl max-w-[95vw] md:max-w-4xl">
-        <div className="text-center border-b border-gray-200 pb-3 mb-3">
-          <div className="text-gray-800 font-bold text-lg">{day.focus || 'Workout'}</div>
-          <div className="text-sm text-gray-500 mt-1">{day.exercises.length} exercise{day.exercises.length > 1 ? 's' : ''}</div>
-        </div>
-
-        <div className="overflow-x-auto max-h-64 overflow-y-auto">
-          <table className="w-full text-xs border-collapse min-w-max md:min-w-0">
-            <thead className="sticky top-0 bg-gray-50 z-10">
-              <tr className="border-b border-gray-300">
-                <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-48">Exercise</th>
-                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-14">Sets</th>
-                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-14">Reps</th>
-                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-16">Weight</th>
-                <th className="text-left p-1 font-bold text-gray-700 bg-gray-50 min-w-32">Equipment</th>
-                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-18">Duration</th>
-                <th className="text-center p-1 font-bold text-gray-700 bg-gray-50 w-24 md:w-32">Video</th>
-              </tr>
-            </thead>
-            <tbody>
-              {day.exercises.map((exercise: any, index: number) => {
-                const name = exercise.exercise || exercise.exercise_name || exercise.name || 'Unknown Exercise';
-                const sets = exercise.sets || '3';
-                const reps = exercise.reps || '10';
-                const weight = exercise.weight || exercise.weights || 'BW';
-                const equipment = exercise.equipment || 'None';
-                const duration = exercise.duration || exercise.duration_sec || '15min';
-                const videoLink = exercise.video_link || exercise.videoLink || exercise.video_url || exercise.youtube_video_id || '';
-
-                return (
-                  <tr key={index} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-gray-50/30' : 'bg-white'}`}>
-                    <td className="p-2 font-medium text-gray-900">
-                      <div className="flex items-center gap-2">
-                        <span className="text-blue-600 text-xs font-bold">#{index + 1}</span>
-                        <span className="break-words max-w-40" title={name}>{name}</span>
-                      </div>
-                    </td>
-                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{sets}</td>
-                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{reps}</td>
-                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{weight}</td>
-                    <td className="p-2 text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm">{getEquipmentIcon(equipment)}</span>
-                        <span className="break-words max-w-28" title={equipment}>{equipment}</span>
-                      </div>
-                    </td>
-                    <td className="p-2 text-center font-mono text-gray-700 font-semibold">{duration}</td>
-                    <td className="p-2 text-center">
-                      {videoLink ? (
-                        <VideoThumbnail
-                          videoUrl={videoLink}
-                          exerciseName={name}
-                          onClick={() => openVideoModal(videoLink, name)}
-                        />
-                      ) : (
-                        <div className="w-20 md:w-24 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-xs text-gray-400">
-                          No Video
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Rest period note */}
-        <div className="text-xs text-gray-500 border-t border-gray-200 pt-2 text-center">
-          💡 Rest: 60-90s between sets
-        </div>
-      </div>
-    );
-  };
+  // Helper function to format tooltip content for exercises - DISABLED FOR NOW
+  // const formatExerciseTooltip = (day: WeekDay) => { ... };
 
   const renderDayBox = (day: WeekDay, index: number, weekIndex: number = 0) => {
     const isSource = copySourceDate === day.date;
@@ -825,7 +766,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     const boxId = viewMode === 'weekly' ? `hdr-${index}` : `hdr-${weekIndex}-${index}`;
     const menuId = `menu-${day.date}`;
 
-    // Determine tooltip position based on box location to prevent cutoff
+    // Determine tooltip position based on box location to prevent cutoff - DISABLED FOR NOW
+    /*
     const getTooltipSide = () => {
       const totalBoxes = 7; // Always 7 days per week regardless of view mode
       const isFirstBox = index === 0;
@@ -853,12 +795,13 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       if (isLastBox) return "end";
       return "center";
     };
+    */
 
             return (
       <SortableHeaderBox key={boxId} id={boxId} disabled={copySourceDate != null}>
-                <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                {/* <TooltipProvider delayDuration={0} skipDelayDuration={0}>
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger asChild> */}
                       <div
                         className={`relative p-2 rounded text-center ${boxClasses} cursor-pointer`}
                         onClick={() => {
@@ -870,7 +813,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                           <PopoverTrigger asChild>
                             <button
                               className="absolute top-1 right-1 p-1 rounded hover:bg-black/10"
-                              title="More"
+                              // title="More"
                               onMouseDown={(e) => { e.stopPropagation(); }}
                               onPointerDown={(e) => { e.stopPropagation(); }}
                               onPointerUp={(e) => { e.stopPropagation(); }}
@@ -905,16 +848,16 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                         {isTarget && (
                           <div className="absolute top-1 left-1 flex gap-1"
                                onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                            <button className="p-1 rounded bg-white/80 hover:bg-white" title="Save" onClick={confirmPaste}>
+                            <button className="p-1 rounded bg-white/80 hover:bg-white" /* title="Save" */ onClick={confirmPaste}>
                               <Check className="h-4 w-4 text-green-600" />
                             </button>
-                            <button className="p-1 rounded bg-white/80 hover:bg-white" title="Cancel" onClick={cancelPaste}>
+                            <button className="p-1 rounded bg-white/80 hover:bg-white" /* title="Cancel" */ onClick={cancelPaste}>
                               <X className="h-4 w-4 text-red-600" />
                             </button>
                           </div>
                         )}
                       </div>
-                    </TooltipTrigger>
+                    {/* </TooltipTrigger>
                     <TooltipContent
                       side={getTooltipSide()}
                       align={getTooltipAlign()}
@@ -923,7 +866,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                       {formatExerciseTooltip(day)}
                     </TooltipContent>
                   </Tooltip>
-                </TooltipProvider>
+                </TooltipProvider> */}
               </SortableHeaderBox>
             );
   };
@@ -935,8 +878,10 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border">
           <div className="flex items-center gap-3">
             {(() => {
-              const { status } = weekStatuses[0];
-              if (status === 'approved') {
+              const originalStatus = weekStatuses[0]?.status || 'draft';
+              const displayStatus = getWeekDisplayStatus(0, originalStatus);
+              
+              if (displayStatus === 'approved') {
                 return (
                   <span className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
                     <span className="h-3 w-3 rounded-full bg-green-500"></span>
@@ -945,7 +890,16 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                 );
               }
 
-              const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+              if (displayStatus === 'unsaved_changes') {
+                return (
+                  <span className="flex items-center gap-2 text-sm font-semibold text-orange-700 dark:text-orange-300">
+                    <span className="h-3 w-3 rounded-full bg-orange-500"></span>
+                    Unsaved Changes
+                  </span>
+                );
+              }
+
+              const label = originalStatus === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
 
               return (
                 <span className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300">
@@ -971,13 +925,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                   setApprovingWeek(null);
                 }
               }}
-              disabled={approvingWeek === 0}
+              disabled={approvingWeek === 0 || isWeekDirty(0)}
+                                            /* title={isWeekDirty(0) ? "Save your changes before approving this week" : ""} */
               className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
             >
               {approvingWeek === 0 ? (
                 <>
                   <Check className="h-3 w-3 mr-1 animate-spin" />
                   Approving...
+                </>
+              ) : isWeekDirty(0) ? (
+                <>
+                  <Check className="h-3 w-3 mr-1" />
+                  Save First
                 </>
               ) : (
                 <>
@@ -1038,8 +998,10 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
                         {(() => {
-                          const status = weekStatuses[weekIndex].status;
-                          if (status === 'approved') {
+                          const originalStatus = weekStatuses[weekIndex].status;
+                          const displayStatus = getWeekDisplayStatus(weekIndex, originalStatus);
+                          
+                          if (displayStatus === 'approved') {
                             return (
                               <span className="flex items-center gap-1 text-xs font-medium text-green-400">
                                 <span className="h-2 w-2 rounded-full bg-green-400"></span>
@@ -1047,7 +1009,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                               </span>
                             );
                           }
-                          const label = status === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
+
+                          if (displayStatus === 'unsaved_changes') {
+                            return (
+                              <span className="flex items-center gap-1 text-xs font-semibold text-orange-400">
+                                <span className="h-2 w-2 rounded-full bg-orange-400"></span>
+                                Unsaved Changes
+                              </span>
+                            );
+                          }
+
+                          const label = originalStatus === 'draft' ? 'Plan Not Approved' : 'Plan Not Created';
                           return (
                             <span className="flex items-center gap-1 text-xs font-semibold text-red-400">
                               <span className="relative flex h-3 w-3">
@@ -1076,13 +1048,19 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                           setApprovingWeek(null);
                         }
                       }}
-                      disabled={approvingWeek === weekIndex}
+                      disabled={approvingWeek === weekIndex || isWeekDirty(weekIndex)}
+                      /* title={isWeekDirty(weekIndex) ? "Save your changes before approving this week" : ""} */
                       className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
                     >
                       {approvingWeek === weekIndex ? (
                         <>
                           <Check className="h-3 w-3 mr-1 animate-spin" />
                           Approving...
+                        </>
+                      ) : isWeekDirty(weekIndex) ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1" />
+                          Save First
                         </>
                       ) : (
                         <>
@@ -1098,7 +1076,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                     <button
                       className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                       onClick={() => startWeekCopy(weekIndex)}
-                      title="Copy entire week"
+                      /* title="Copy entire week" */
                     >
                       Copy Week
                     </button>
@@ -1108,7 +1086,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                     <button
                       className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                       onClick={() => selectWeekTarget(weekIndex)}
-                      title="Paste week here"
+                      /* title="Paste week here" */
                     >
                       <Check className="h-3 w-3 mr-1" />
                       Paste Week
@@ -1121,7 +1099,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                       <button
                         className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors whitespace-nowrap flex items-center justify-center min-w-fit"
                         onClick={cancelWeekPaste}
-                        title="Cancel copy"
+                        /* title="Cancel copy" */
                       >
                         Cancel
                       </button>
