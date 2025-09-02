@@ -487,6 +487,19 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
     setEditableWeek(updatedWeek); // Update local state immediately for responsiveness
     onPlanChange(updatedWeek); // Pass the entire updated plan to the parent
+
+    // Persist only this day's exercises immediately to flip is_approved=false and reflect status fast
+    // This keeps latency low in Monthly view while the parent performs the debounced weekly save.
+    (async () => {
+      try {
+        await persistExercisesForDate(targetDay.date, dayExercises, currentDay.focus || 'Workout');
+        try {
+          window.dispatchEvent(new CustomEvent('workoutPlan:changed'));
+        } catch {}
+      } catch (err) {
+        console.warn('[Inline Edit Persist] warning:', err);
+      }
+    })();
   };
 
   const { toast } = useToast();
