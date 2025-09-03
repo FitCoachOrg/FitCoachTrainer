@@ -4,6 +4,7 @@ import * as Icons from "@/lib/icons"
 import React, { useEffect, useState } from "react"
 import { useSidebar } from "@/context/sidebar-context"
 import { supabase } from "@/lib/supabase"
+import { useAdminAccess } from "@/hooks/use-admin-access"
 
 interface NavItem {
   name: string
@@ -83,6 +84,40 @@ const Sidebar: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [trainerEmail, setTrainerEmail] = useState<string | null>(null)
   const [trainerName, setTrainerName] = useState<string | null>(null)
+  const { isAdmin } = useAdminAccess()
+
+  // Filter navigation items based on admin access
+  const filteredNavigationItems = navigationItems.map(item => {
+    // If it's Plan Library, filter its children based on admin access
+    if (item.name === 'Plan Library' && item.children) {
+      return {
+        ...item,
+        children: item.children.filter(child => {
+          // Always show Exercise Library and Fitness Plans
+          if (['Exercise Library', 'Fitness Plans'].includes(child.name)) {
+            return true
+          }
+          // Only show Programs if user has admin access
+          if (child.name === 'Programs') {
+            return isAdmin
+          }
+          return true
+        })
+      }
+    }
+    
+    // Always show Dashboard, Clients, Plan Library, and Payments
+    if (['Dashboard', 'Clients', 'Plan Library', 'Payments'].includes(item.name)) {
+      return item
+    }
+    
+    // Only show admin-restricted items if user has admin access
+    if (['Notes & Logs', 'Branding', 'Admin'].includes(item.name)) {
+      return isAdmin ? item : null
+    }
+    
+    return item
+  }).filter(Boolean) // Remove null items
 
   useEffect(() => {
     const fetchTrainerData = async () => {
@@ -168,7 +203,7 @@ const Sidebar: React.FC = () => {
         {/* Nav */}
         <nav className="flex-1 py-6 overflow-y-auto scrollbar-thin">
           <ul className="space-y-1 px-2">
-            {navigationItems.map((item) => (
+            {filteredNavigationItems.map((item) => (
               <NavItem key={item.name} {...item} isExpanded={isExpanded} />
             ))}
           </ul>
