@@ -1,6 +1,60 @@
 import { supabase } from '@/lib/supabase'
 
 /**
+ * Check which clients have profile images available
+ */
+export const getClientsWithImages = async (clientIds: number[]): Promise<number[]> => {
+  try {
+    const clientsWithImages: number[] = []
+    
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 10
+    for (let i = 0; i < clientIds.length; i += batchSize) {
+      const batch = clientIds.slice(i, i + batchSize)
+      
+      // Check if any of the common extensions exist for each client
+      await Promise.all(
+        batch.map(async (clientId) => {
+          const extensions = ['jpg', 'jpeg', 'png', 'webp']
+          
+          for (const ext of extensions) {
+            const filePath = `${clientId}.${ext}`
+            
+            try {
+              // Try to get metadata to see if file exists
+              const { data: metadata, error } = await supabase.storage
+                .from('client-images')
+                .list('', { 
+                  limit: 1,
+                  search: filePath 
+                })
+              
+              if (!error && metadata && metadata.length > 0) {
+                clientsWithImages.push(clientId)
+                break // Found an image for this client, no need to check other extensions
+              }
+            } catch {
+              // Continue to next extension
+              continue
+            }
+          }
+        })
+      )
+      
+      // Small delay between batches
+      if (i + batchSize < clientIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+    
+    return clientsWithImages
+  } catch (error) {
+    console.error('Error checking which clients have images:', error)
+    return []
+  }
+}
+
+/**
  * Get client image URL with proper error handling and fallbacks
  */
 export const getClientImageUrl = async (clientId: number): Promise<string | null> => {

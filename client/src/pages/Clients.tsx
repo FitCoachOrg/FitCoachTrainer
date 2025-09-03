@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { getClientImageUrls } from "@/utils/image-utils";
+import { getClientImageUrls, getClientsWithImages } from "@/utils/image-utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -302,10 +302,33 @@ const Clients: React.FC = () => {
   useEffect(() => {
     async function fetchClientImageUrls() {
       if (!clients.length) return;
-      const clientIds = clients.map(client => client.client_id);
-      const urls = await getClientImageUrls(clientIds);
-      setClientImageUrls(urls);
+      
+      // Only fetch images for clients with positive client IDs (real clients, not pending invites)
+      const realClientIds = clients
+        .filter(client => client.client_id && client.client_id > 0)
+        .map(client => client.client_id);
+      
+      if (realClientIds.length === 0) return;
+      
+      try {
+        // First check which clients actually have images to avoid 400 errors
+        const clientsWithImages = await getClientsWithImages(realClientIds);
+        
+        if (clientsWithImages.length === 0) {
+          setClientImageUrls({});
+          return;
+        }
+        
+        // Only fetch images for clients that actually have them
+        const urls = await getClientImageUrls(clientsWithImages);
+        setClientImageUrls(urls);
+      } catch (error) {
+        console.warn('Failed to fetch some client images:', error);
+        // Set empty object to avoid repeated attempts
+        setClientImageUrls({});
+      }
     }
+    
     fetchClientImageUrls();
   }, [clients]);
 
