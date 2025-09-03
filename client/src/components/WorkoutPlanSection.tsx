@@ -2604,11 +2604,13 @@ const WorkoutPlanSection = ({
     if (isFromSave) {
       // Changes were just saved - clear unsaved changes and refresh approval status
       updateWorkoutPlanState({ hasUnsavedChanges: false });
+      // Ensure Approve button logic can activate consistently after table saves
+      setIsDraftPlan(true);
       
-      // Refresh approval status after a short delay to ensure DB propagation
-      const timeoutId = setTimeout(async () => {
-        await checkPlanApprovalStatus();
-      }, 500);
+      // Use unified post-save refresh to keep behavior consistent across flows
+      (async () => {
+        await handlePostSaveRefresh();
+      })();
     } else {
       // New unsaved changes
       updateWorkoutPlanState({ hasUnsavedChanges: true });
@@ -3103,6 +3105,20 @@ const WorkoutPlanSection = ({
       console.log('🔄 [checkPlanApprovalStatus] Duplicate request detected, returning existing promise');
     }
   });
+  };
+
+  // Unified post-save refresh helper to ensure consistent status and UI updates
+  const handlePostSaveRefresh = async () => {
+    try {
+      // Mark plan as draft so Approve button logic can activate
+      setIsDraftPlan(true);
+      // Force a fresh approval status check (avoid dedupe)
+      setForceRefreshKey(prev => prev + 1);
+      // Refresh approval status to ensure consistency
+      await checkPlanApprovalStatus();
+    } catch (err) {
+      console.warn('[Post-Save Refresh] Warning:', err);
+    }
   };
 
   // Handle individual week approval for monthly view
@@ -4641,7 +4657,14 @@ const WorkoutPlanSection = ({
               planStartDate={planStartDate}
               onGenerationComplete={handleMonthlyGenerationComplete}
               onGenerationError={handleMonthlyGenerationError}
-              onSaveWeek={savePlanToSchedulePreview}
+              onSaveWeek={async (weekDays, clientId, weekStartDate) => {
+                // Delegate to existing save, then ensure unified post-save refresh
+                const result = await savePlanToSchedulePreview(weekDays, clientId, weekStartDate);
+                if (result?.success) {
+                  await handlePostSaveRefresh();
+                }
+                return result;
+              }}
             />
           </div>
         ) : (
