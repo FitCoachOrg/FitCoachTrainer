@@ -38,6 +38,17 @@ function validateExerciseData(exercise: any): boolean {
          exercise.category;
 }
 
+// Interface for compressed exercise data
+interface CompressedExercise {
+  n: string;  // exercise_name
+  p: string;  // primary_muscle
+  s: string;  // secondary_muscle
+  c: string;  // category
+  e: string;  // experience
+  eq: string; // equipment
+  v: string;  // video_link
+}
+
 // Compress exercise data for storage (60% size reduction)
 function compressExerciseData(exercises: any[]): string {
   const compressed = exercises.map(ex => ({
@@ -55,8 +66,8 @@ function compressExerciseData(exercises: any[]): string {
 
 // Decompress exercise data
 function decompressExerciseData(compressed: string): any[] {
-  const data = JSON.parse(compressed);
-  return data.map(ex => ({
+  const data: CompressedExercise[] = JSON.parse(compressed);
+  return data.map((ex: CompressedExercise) => ({
     exercise_name: ex.n,
     primary_muscle: ex.p,
     secondary_muscle: ex.s,
@@ -83,7 +94,7 @@ function generateCoachTipForExercise(
     phase: (exercise["Phase (1-3=build,4=deload)"] || 1) as 1 | 2 | 3 | 4,
     experience: (clientExperience || 'Beginner') as 'Beginner' | 'Intermediate' | 'Advanced',
     injuries: clientInjuries || [],
-    progression: null
+    progression: undefined  // Changed from null to undefined to match CoachTipContext type
   };
   
   // Generate coach tip using the new system
@@ -1215,7 +1226,12 @@ function convertToAIFormatWithWorkoutDays(
       duration: duration.toString(),
       weights: weight,
       equipment: exercise.Equipment || "None", // Ensure equipment is mapped
-      coach_tip: generateCoachTipForExercise(exercise, clientGoal, clientExperience, clientInjuries),
+      coach_tip: generateCoachTipForExercise(
+        exercise, 
+        clientGoal || 'fat_loss',  // Provide default value to prevent undefined
+        clientExperience || 'Beginner',  // Provide default value to prevent undefined
+        clientInjuries || []  // Provide default value to prevent undefined
+      ),
       video_link: exercise.Video || "",
       rest: exercise["Rest (s)"],
       experience: exercise.Experience,
