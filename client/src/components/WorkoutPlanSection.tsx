@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -1445,6 +1445,11 @@ const WorkoutPlanSection = ({
   // Add state to control the calendar popover
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [monthlyData, setMonthlyData] = useState<any[][]>([]);
+  
+  // Memoized callback to prevent infinite loops in WeeklyPlanHeader
+  const handleMonthlyDataChange = useCallback((data: any[][]) => {
+    setMonthlyData(data);
+  }, []);
   
   // Persist viewMode changes to localStorage
   useEffect(() => {
@@ -4362,7 +4367,7 @@ const WorkoutPlanSection = ({
                 onPlanChange={handlePlanChange}
                 clientId={numericClientId}
                 viewMode={viewMode}
-                onMonthlyDataChange={setMonthlyData}
+                onMonthlyDataChange={handleMonthlyDataChange}
                 onApprovalStatusCheck={checkPlanApprovalStatus}
                 onForceRefreshStatus={forceRefreshStatus}
                 weekStatuses={weekStatuses}
