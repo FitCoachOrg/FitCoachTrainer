@@ -292,12 +292,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
 
 
 
-  // Notify parent when monthlyData changes
-  useEffect(() => {
-    if (onMonthlyDataChange && monthlyData.length > 0) {
-      onMonthlyDataChange(monthlyData);
-    }
-  }, [monthlyData, onMonthlyDataChange]);
+
 
   // Function to persist monthly changes to the database
   const persistMonthlyChangeToDatabase = async (targetDate: string, sourceDay: WeekDay) => {
