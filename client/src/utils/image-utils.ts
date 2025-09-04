@@ -65,40 +65,45 @@ export const getClientImageUrl = async (clientId: number): Promise<string | null
     for (const ext of extensions) {
       const filePath = `${clientId}.${ext}`
       
-      // First try to get a signed URL
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('client-images')
-        .createSignedUrl(filePath, 60 * 60 * 24) // 24 hours expiry
-      
-      if (signedData?.signedUrl) {
-        return signedData.signedUrl
-      }
-      
-      // If signed URL fails, try public URL
-      const { data: publicData } = supabase.storage
-        .from('client-images')
-        .getPublicUrl(filePath)
-      
-      if (publicData?.publicUrl) {
-        // Test if the URL is accessible
-        try {
-          const response = await fetch(publicData.publicUrl, { method: 'HEAD' })
-          if (response.ok) {
-            return publicData.publicUrl
-          }
-        } catch (fetchError) {
-          console.warn(`Failed to fetch image ${filePath}:`, fetchError)
-          continue
+      try {
+        // First try to get a signed URL
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from('client-images')
+          .createSignedUrl(filePath, 60 * 60 * 24) // 24 hours expiry
+        
+        if (signedData?.signedUrl) {
+          return signedData.signedUrl
         }
+        
+        // If signed URL fails, try public URL
+        const { data: publicData } = supabase.storage
+          .from('client-images')
+          .getPublicUrl(filePath)
+        
+        if (publicData?.publicUrl) {
+          // Test if the URL is accessible
+          try {
+            const response = await fetch(publicData.publicUrl, { method: 'HEAD' })
+            if (response.ok) {
+              return publicData.publicUrl
+            }
+          } catch (fetchError) {
+            // Silently continue to next extension - don't log warnings for missing files
+            continue
+          }
+        }
+      } catch (storageError) {
+        // Silently continue to next extension - don't log errors for missing files
+        continue
       }
     }
     
-    // If no image found, return null
-    console.warn(`No image found for client ${clientId}`)
+    // If no image found, return null (no console warning for missing images)
     return null
     
   } catch (error) {
-    console.error(`Error getting image for client ${clientId}:`, error)
+    // Only log actual errors, not missing files
+    console.error(`Unexpected error getting image for client ${clientId}:`, error)
     return null
   }
 }

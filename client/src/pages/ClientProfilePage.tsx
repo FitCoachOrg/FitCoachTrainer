@@ -2004,11 +2004,25 @@ export default function ClientDashboard() {
           setError(null);
 
           // Fetch client image URL using the new utility
-          const imageUrl = await getClientImageUrl(data.client_id);
-
-          if (!isMounted) return; // Don't update state if component unmounted
-
-          setClientImageUrl(imageUrl);
+          try {
+            const imageUrl = await getClientImageUrl(data.client_id);
+            
+            if (!isMounted) return; // Don't update state if component unmounted
+            
+            if (imageUrl) {
+              setClientImageUrl(imageUrl);
+            } else {
+              // Generate fallback avatar if no image found
+              const fallbackUrl = getFallbackAvatarUrl(data.first_name || data.last_name || 'Client');
+              setClientImageUrl(fallbackUrl);
+            }
+          } catch (imageError) {
+            // Silently handle image errors - don't break the client profile loading
+            console.warn(`Could not load image for client ${data.client_id}:`, imageError);
+            // Use fallback avatar on error
+            const fallbackUrl = getFallbackAvatarUrl(data.first_name || data.last_name || 'Client');
+            setClientImageUrl(fallbackUrl);
+          }
 
         } else {
           setError("Client not found");
