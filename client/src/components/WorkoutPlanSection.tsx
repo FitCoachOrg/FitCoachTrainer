@@ -3249,7 +3249,7 @@ const WorkoutPlanSection = ({
       weeksWithPlans: monthlyPlan.weeks?.filter((w: any) => w.plan)?.length || 0
     });
 
-    // Convert monthly plan to weekly format for display
+    // Convert monthly plan to weekly format for display, respecting client workout days
     const firstWeek = monthlyPlan.weeks?.[0];
     if (firstWeek && firstWeek.plan && firstWeek.plan.days) {
       console.log('📅 Setting first week for display:', {
@@ -3259,8 +3259,57 @@ const WorkoutPlanSection = ({
         endDate: firstWeek.endDate
       });
 
+      // Build a 7-day mapped week starting from the week's startDate
+      const toDays = (workoutDays: any): string[] => {
+        if (!workoutDays) return ['monday','wednesday','friday'];
+        if (Array.isArray(workoutDays)) return workoutDays.map((d: any) => String(d).toLowerCase());
+        if (typeof workoutDays === 'string') {
+          if (workoutDays.includes('{') && workoutDays.includes('}')) {
+            const match = workoutDays.match(/\{([^}]+)\}/);
+            const days = match ? match[1].split(',').map(s => s.trim().toLowerCase()) : [];
+            const map: Record<string,string> = { mon:'monday', tue:'tuesday', wed:'wednesday', thu:'thursday', fri:'friday', sat:'saturday', sun:'sunday' };
+            return days.map(d => map[d] || d);
+          }
+          return workoutDays.toLowerCase().split(',').map(s => s.trim());
+        }
+        return ['monday','wednesday','friday'];
+      };
+      const mappedFirstWeek: TableWeekDay[] = (() => {
+        const parsedWorkoutDays = toDays(client?.workout_days);
+        const start = new Date(firstWeek.startDate);
+        const workoutDayIndices: number[] = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+          if (parsedWorkoutDays.includes(dayName)) workoutDayIndices.push(i);
+        }
+        const generated = firstWeek.plan.days || [];
+        const totalGenerated = Math.min(7, generated.length);
+        const targetIndices = (workoutDayIndices.length >= totalGenerated && workoutDayIndices.length > 0)
+          ? workoutDayIndices.slice(0, totalGenerated)
+          : Array.from({ length: totalGenerated }, (_, i) => i);
+        const weekArr: TableWeekDay[] = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+          weekArr.push({ date: format(d, 'yyyy-MM-dd'), focus: 'Rest Day', exercises: [] } as TableWeekDay);
+        }
+        for (let k = 0; k < totalGenerated; k++) {
+          const idx = targetIndices[k] ?? k;
+          const d = new Date(start.getTime() + idx * 24 * 60 * 60 * 1000);
+          const src = generated[k] || {};
+          const normalizedExercises = (src.exercises || []).map(normalizeExercise);
+          weekArr[idx] = {
+            date: format(d, 'yyyy-MM-dd'),
+            focus: src.focus || 'Workout',
+            exercises: normalizedExercises,
+            timeBreakdown: src.timeBreakdown || { warmup: 0, exercises: 0, rest: 0, cooldown: 0, total: 0 }
+          } as TableWeekDay;
+        }
+        return weekArr;
+      })();
+
       const newWorkoutPlan = {
-        week: firstWeek.plan.days,
+        week: mappedFirstWeek,
         hasAnyWorkouts: firstWeek.plan.days.some((day: any) => day.exercises && day.exercises.length > 0),
         planStartDate: firstWeek.startDate,
         planEndDate: firstWeek.endDate
@@ -3272,9 +3321,56 @@ const WorkoutPlanSection = ({
       console.warn('⚠️ No valid first week found in monthly plan');
     }
 
-    // Store the full monthly plan for later use
+    // Store the full monthly plan for later use, each week mapped to 7 days
     if (monthlyPlan.weeks) {
-      const monthlyWeeks = monthlyPlan.weeks.map((week: any) => week.plan?.days || []);
+      const monthlyWeeks = monthlyPlan.weeks.map((w: any) => {
+        if (!w?.plan?.days) return [];
+        const start = new Date(w.startDate);
+        const parsedWorkoutDays = ((): string[] => {
+          const wd = client?.workout_days;
+          if (!wd) return ['monday','wednesday','friday'];
+          if (Array.isArray(wd)) return wd.map((d: any) => String(d).toLowerCase());
+          if (typeof wd === 'string') {
+            if (wd.includes('{') && wd.includes('}')) {
+              const match = wd.match(/\{([^}]+)\}/);
+              const days = match ? match[1].split(',').map(s => s.trim().toLowerCase()) : [];
+              const map: Record<string,string> = { mon:'monday', tue:'tuesday', wed:'wednesday', thu:'thursday', fri:'friday', sat:'saturday', sun:'sunday' };
+              return days.map(d => map[d] || d);
+            }
+            return wd.toLowerCase().split(',').map(s => s.trim());
+          }
+          return ['monday','wednesday','friday'];
+        })();
+        const workoutDayIndices: number[] = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayName = d.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+          if (parsedWorkoutDays.includes(dayName)) workoutDayIndices.push(i);
+        }
+        const generated = w.plan.days || [];
+        const totalGenerated = Math.min(7, generated.length);
+        const targetIndices = (workoutDayIndices.length >= totalGenerated && workoutDayIndices.length > 0)
+          ? workoutDayIndices.slice(0, totalGenerated)
+          : Array.from({ length: totalGenerated }, (_, i) => i);
+        const weekArr: TableWeekDay[] = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+          weekArr.push({ date: format(d, 'yyyy-MM-dd'), focus: 'Rest Day', exercises: [] } as TableWeekDay);
+        }
+        for (let k = 0; k < totalGenerated; k++) {
+          const idx = targetIndices[k] ?? k;
+          const d = new Date(start.getTime() + idx * 24 * 60 * 60 * 1000);
+          const src = generated[k] || {};
+          const normalizedExercises = (src.exercises || []).map(normalizeExercise);
+          weekArr[idx] = {
+            date: format(d, 'yyyy-MM-dd'),
+            focus: src.focus || 'Workout',
+            exercises: normalizedExercises,
+            timeBreakdown: src.timeBreakdown || { warmup: 0, exercises: 0, rest: 0, cooldown: 0, total: 0 }
+          } as TableWeekDay;
+        }
+        return weekArr;
+      });
       setMonthlyData(monthlyWeeks);
       console.log('💾 Stored monthly data with', monthlyWeeks.length, 'weeks');
     }
@@ -3439,28 +3535,73 @@ const WorkoutPlanSection = ({
         console.log('🚀 First day exercises:', searchDays[0]?.exercises);
         console.log('🚀 First day time breakdown:', searchDays[0]?.timeBreakdown);
         
-        // Build week array starting from planStartDate, assigning each search day to a date
-        const week = [];
-        for (let i = 0; i < searchDays.length; i++) {
+        // Build a full 7-day week array starting from planStartDate, mapping generated days to client workout days
+        // Reuse the existing parser from search-based library to ensure consistency
+        // Import is not available here; use a local lightweight parser equivalent
+        const toDays = (workoutDays: any): string[] => {
+          if (!workoutDays) return ['monday','wednesday','friday'];
+          if (Array.isArray(workoutDays)) return workoutDays.map((d: any) => String(d).toLowerCase());
+          if (typeof workoutDays === 'string') {
+            if (workoutDays.includes('{') && workoutDays.includes('}')) {
+              const match = workoutDays.match(/\{([^}]+)\}/);
+              const days = match ? match[1].split(',').map(s => s.trim().toLowerCase()) : [];
+              const map: Record<string,string> = { mon:'monday', tue:'tuesday', wed:'wednesday', thu:'thursday', fri:'friday', sat:'saturday', sun:'sunday' };
+              return days.map(d => map[d] || d);
+            }
+            return workoutDays.toLowerCase().split(',').map(s => s.trim());
+          }
+          return ['monday','wednesday','friday'];
+        };
+        const parsedWorkoutDays = toDays(client?.workout_days);
+        const week = [] as TableWeekDay[];
+        const workoutDayIndices: number[] = [];
+        
+        // Precompute 7-day window dates and which are workout days
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+          if (parsedWorkoutDays.includes(dayName)) {
+            workoutDayIndices.push(i);
+          }
+        }
+
+        // Determine target indices where generated days should be placed
+        const totalGenerated = Math.min(7, searchDays?.length || 0);
+        let targetIndices: number[];
+        if (workoutDayIndices.length >= totalGenerated && workoutDayIndices.length > 0) {
+          targetIndices = workoutDayIndices.slice(0, totalGenerated);
+        } else {
+          // Fallback: place consecutively from the start of the week
+          targetIndices = Array.from({ length: totalGenerated }, (_, i) => i);
+        }
+
+        // Initialize week with Rest Days for all 7 dates
+        for (let i = 0; i < 7; i++) {
           const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
           const dateStr = format(currentDate, 'yyyy-MM-dd');
-          
-          const normalizedExercises = (searchDays[i].exercises || []).map(normalizeExercise);
-          console.log(`🚀 Day ${i} exercises before normalization:`, searchDays[i].exercises);
-          console.log(`🚀 Day ${i} exercises after normalization:`, normalizedExercises);
-          
-          week.push({
+          week.push({ date: dateStr, focus: 'Rest Day', exercises: [] } as TableWeekDay);
+        }
+
+        // Place generated days into the chosen indices
+        for (let k = 0; k < totalGenerated; k++) {
+          const idx = targetIndices[k] ?? k;
+          const currentDate = new Date(planStartDate.getTime() + idx * 24 * 60 * 60 * 1000);
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          const generated = searchDays[k] || {};
+          const normalizedExercises = (generated.exercises || []).map(normalizeExercise);
+          week[idx] = {
             date: dateStr,
-            focus: searchDays[i].focus,
+            focus: generated.focus || 'Workout',
             exercises: normalizedExercises,
-            timeBreakdown: searchDays[i].timeBreakdown || {
+            timeBreakdown: generated.timeBreakdown || {
               warmup: 0,
               exercises: 0,
               rest: 0,
               cooldown: 0,
               total: 0
             }
-          });
+          } as TableWeekDay;
+          console.log(`🚀 Placed generated day ${k} at index ${idx} (${dateStr})`);
         }
         
         console.log('🚀 Final week structure:', week);
