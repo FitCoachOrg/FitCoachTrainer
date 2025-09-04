@@ -2003,7 +2003,7 @@ export default function ClientDashboard() {
           setClient(data);
           setError(null);
 
-          // Fetch client image URL using the new utility
+          // Fetch client image URL using the utility
           try {
             const imageUrl = await getClientImageUrl(data.client_id);
             
