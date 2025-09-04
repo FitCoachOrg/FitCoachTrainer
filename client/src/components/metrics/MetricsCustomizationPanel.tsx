@@ -171,34 +171,7 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                     Bar Chart
                   </button>
                 </div>
-                <div className="bg-gradient-to-r from-rose-100 to-pink-100 dark:from-rose-900/30 dark:to-pink-900/30 rounded-xl p-1 flex shadow-lg border border-white/50">
-                  <button
-                    onClick={() => setViewMode("cards")}
-                    className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 ${
-                      viewMode === "cards"
-                        ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg transform scale-105"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-600/70 hover:shadow-md"
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    Cards View
-                  </button>
-                  <button
-                    onClick={() => setViewMode("table")}
-                    className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 ${
-                      viewMode === "table"
-                        ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-lg transform scale-105"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-600/70 hover:shadow-md"
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
-                    Table View
-                  </button>
-                </div>
+
                 <select
                   id="category-select"
                   className="border-2 border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-800 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 transition-all duration-300 shadow-md hover:shadow-lg"
@@ -227,7 +200,7 @@ export const MetricsCustomizationPanel: React.FC<MetricsCustomizationPanelProps>
                   <option value="">+ Add Metric ({selectedKeys.length}/6)</option>
                   {availableMetrics.map((m: any) => (
                     <option key={m.key} value={m.key}>
-                      <m.icon className="inline w-4 h-4 mr-2" />{m.label}
+                      📊 {m.label}
                     </option>
                   ))}
                 </select>
