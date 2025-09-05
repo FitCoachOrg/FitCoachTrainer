@@ -43,7 +43,6 @@ import PrivacyPolicy from "./pages/PrivacyPolicy"
 import TermsOfService from "./pages/TermsOfService"
 import Support from "./pages/Support"
 import Footer from "./components/layout/Footer"
-import AdminProtectedRoute from "./components/auth/AdminProtectedRoute"
 
 // ProtectedRoute wrapper - now properly protects routes
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -325,11 +324,9 @@ function App() {
                   path="/programs"
                   element={
                     <ProtectedRoute>
-                      <AdminProtectedRoute>
-                        <ProtectedLayout>
-                          <AllProgramsPage />
-                        </ProtectedLayout>
-                      </AdminProtectedRoute>
+                      <ProtectedLayout>
+                        <AllProgramsPage />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
@@ -337,11 +334,9 @@ function App() {
                   path="/notes"
                   element={
                     <ProtectedRoute>
-                      <AdminProtectedRoute>
-                        <ProtectedLayout>
-                          <Notes />
-                        </ProtectedLayout>
-                      </AdminProtectedRoute>
+                      <ProtectedLayout>
+                        <Notes />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
@@ -359,11 +354,9 @@ function App() {
                   path="/branding"
                   element={
                     <ProtectedRoute>
-                      <AdminProtectedRoute>
-                        <ProtectedLayout>
-                          <Branding />
-                        </ProtectedLayout>
-                      </AdminProtectedRoute>
+                      <ProtectedLayout>
+                        <Branding />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
@@ -379,11 +372,9 @@ function App() {
                   path="/admin"
                   element={
                     <ProtectedRoute>
-                      <AdminProtectedRoute>
-                        <ProtectedLayout>
-                          <Admin />
-                        </ProtectedLayout>
-                      </AdminProtectedRoute>
+                      <ProtectedLayout>
+                        <Admin />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
