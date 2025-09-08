@@ -568,34 +568,29 @@ const Clients: React.FC = () => {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: deletePassword });
       if (signInError) throw new Error('Password incorrect');
 
-      const { data: trainerRows, error: trainerError } = await supabase
-        .from("trainer")
-        .select("id")
-        .eq("trainer_email", email)
-        .limit(1);
-      if (trainerError) throw trainerError;
-      if (!trainerRows || trainerRows.length === 0) throw new Error("Trainer not found");
-      const trainerId = trainerRows[0].id;
+      // Call Edge Function to delete full client data
+      const token = session?.access_token;
+      const isPending = (clientToDelete.status || '').toLowerCase() === 'pending' || clientToDelete.client_id <= 0;
+      const clientEmail = isPending ? clientToDelete.cl_name : clientEmails[clientToDelete.client_id];
+      const body: any = isPending
+        ? { clientEmail }
+        : { clientId: clientToDelete.client_id };
 
-      let deleteError: any = null;
-      if (clientToDelete.client_id && clientToDelete.client_id > 0) {
-        const { error } = await supabase
-          .from('trainer_client_web')
-          .delete()
-          .match({ trainer_id: trainerId, client_id: clientToDelete.client_id });
-        deleteError = error;
-      } else {
-        const emailGuess = clientToDelete.cl_name;
-        const { error } = await supabase
-          .from('trainer_client_web')
-          .delete()
-          .match({ trainer_id: trainerId, cl_email: emailGuess });
-        deleteError = error;
-      }
-      if (deleteError) throw deleteError;
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete_client_full`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const resJson = await response.json();
+      if (!response.ok) throw new Error(resJson.error || 'Delete failed');
 
       setClients(prev => prev.filter(c => c.client_id !== clientToDelete.client_id));
-      toast({ title: 'Client removed', description: 'The client was removed from your list.' });
+      toast({ title: 'Client deleted', description: 'All client data has been removed.' });
+      // Refresh the page to re-fetch and render the client list cleanly
+      window.location.reload();
     } catch (err: any) {
       toast({ title: 'Delete failed', description: err.message || 'Unable to delete client.', variant: 'destructive' });
     } finally {
