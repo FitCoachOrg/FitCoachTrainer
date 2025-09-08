@@ -3894,6 +3894,8 @@ const WorkoutPlanSection = ({
 
         // Update state immediately
         if (isGlobal) {
+          // Immediately reflect approved state in local UI to hide Approve buttons
+          setPlanApprovalStatus('approved');
           setIsDraftPlan(false);
           updateWorkoutPlanState({
             status: 'approved',
@@ -5045,8 +5047,7 @@ const WorkoutPlanSection = ({
       </div>
 
       {/* Collapsible Plan Management */}
-      {(workoutPlan?.hasAnyWorkouts || availableTemplates.length > 0) && (
-        <div className="mb-6">
+      <div className="mb-6">
           <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
@@ -5140,7 +5141,6 @@ const WorkoutPlanSection = ({
             </div>
           </div>
         </div>
-      )}
 
       {/* Plan Table or Empty State */}
       <div>

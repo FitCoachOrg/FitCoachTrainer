@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { UnifiedApprovalButton } from './UnifiedApprovalButton';
+import { StateMachineApprovalButton } from '@/components/StateMachineApprovalButton';
 // import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import VideoModal from '@/components/VideoModal';
@@ -1010,14 +1010,12 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
             })()}
           </div>
           
-          {/* Unified Week Approval Button */}
-          {unifiedApprovalStatus && onUnifiedApproval && (
-            <UnifiedApprovalButton
+          {/* State machine based week approval button */}
+          {onUnifiedApproval && (
+            <StateMachineApprovalButton
               type="week"
               weekIndex={0}
-              status={unifiedApprovalStatus}
               onApprove={onUnifiedApproval}
-              isApproving={approvingWeek === 0}
             />
           )}
         </div>
@@ -1110,14 +1108,12 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                 
                 {/* Week-level controls */}
                 <div className="flex items-center gap-1">
-                  {/* Unified Week Approval Button */}
-                  {unifiedApprovalStatus && onUnifiedApproval && (
-                    <UnifiedApprovalButton
+                  {/* State machine based week approval button */}
+                  {onUnifiedApproval && (
+                    <StateMachineApprovalButton
                       type="week"
                       weekIndex={weekIndex}
-                      status={unifiedApprovalStatus}
                       onApprove={onUnifiedApproval}
-                      isApproving={approvingWeek === weekIndex}
                     />
                   )}
 
