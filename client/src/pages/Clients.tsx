@@ -13,6 +13,23 @@ import { formatUtcToLocal, getDaysSince, getShortAgo } from "@/lib/utils";
 import { getOrCreateEngagementScore } from "@/lib/client-engagement";
 import { format } from "date-fns";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
@@ -52,6 +69,10 @@ const Clients: React.FC = () => {
 
   const [clientImageUrls, setClientImageUrls] = useState<{ [clientId: number]: string | null }>({});
   const [clientStatuses, setClientStatuses] = useState<{ [clientId: number]: string }>({});
+  const [clientEmails, setClientEmails] = useState<{ [clientId: number]: string | undefined }>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [clientToDelete, setClientToDelete] = useState<{ client_id: number; cl_name: string; status?: string } | null>(null);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -112,14 +133,17 @@ const Clients: React.FC = () => {
         }
         clientIds = relationshipData.map((rel) => rel.client_id).filter(Boolean);
         
-        // Create status mapping
+        // Create status and email mappings
         const statusMap: { [clientId: number]: string } = {};
+        const emailMap: { [clientId: number]: string | undefined } = {};
         relationshipData.forEach((rel) => {
           if (rel.client_id) {
             statusMap[rel.client_id] = rel.status || 'pending';
+            emailMap[rel.client_id] = rel.cl_email || undefined;
           }
         });
         setClientStatuses(statusMap);
+        setClientEmails(emailMap);
         
         // Fetch client rows if we have any concrete client IDs
         let clientData: any[] = [];
@@ -488,6 +512,99 @@ const Clients: React.FC = () => {
     return sortDirection === 'asc' ? comparisonResult : -comparisonResult;
   });
 
+  // Row actions: resend invite (for pending) and delete client (relationship)
+  const handleResendInvite = async (client: { client_id: number; cl_name: string; status?: string }) => {
+    try {
+      if ((client.status || '').toLowerCase() !== 'pending') return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const trainerEmail = session?.user?.email;
+      if (!token || !trainerEmail) throw new Error("Authentication not available");
+
+      const { data: trainerRows, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id, trainer_name")
+        .eq("trainer_email", trainerEmail)
+        .limit(1);
+      if (trainerError) throw trainerError;
+      if (!trainerRows || trainerRows.length === 0) throw new Error("Trainer not found");
+      const trainerId = trainerRows[0].id;
+      const trainerName = trainerRows[0].trainer_name || "Trainer";
+
+      const emailFromMap = clientEmails[client.client_id];
+      const clientEmail = emailFromMap || client.cl_name;
+      const clientName = client.cl_name && client.cl_name.includes('@') ? 'Client' : client.cl_name;
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send_client_invitation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ clientEmail, clientName, trainerName, trainerId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to resend invitation');
+      toast({ title: 'Invitation re-sent', description: `Invite re-sent to ${clientEmail}.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to resend invitation.', variant: 'destructive' });
+    }
+  };
+
+  const openDeleteDialog = (client: { client_id: number; cl_name: string; status?: string }) => {
+    setClientToDelete(client);
+    setDeletePassword("");
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!clientToDelete) return;
+    try {
+      const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr) throw sessErr;
+      const email = session?.user?.email;
+      if (!email) throw new Error('Not authenticated');
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: deletePassword });
+      if (signInError) throw new Error('Password incorrect');
+
+      const { data: trainerRows, error: trainerError } = await supabase
+        .from("trainer")
+        .select("id")
+        .eq("trainer_email", email)
+        .limit(1);
+      if (trainerError) throw trainerError;
+      if (!trainerRows || trainerRows.length === 0) throw new Error("Trainer not found");
+      const trainerId = trainerRows[0].id;
+
+      let deleteError: any = null;
+      if (clientToDelete.client_id && clientToDelete.client_id > 0) {
+        const { error } = await supabase
+          .from('trainer_client_web')
+          .delete()
+          .match({ trainer_id: trainerId, client_id: clientToDelete.client_id });
+        deleteError = error;
+      } else {
+        const emailGuess = clientToDelete.cl_name;
+        const { error } = await supabase
+          .from('trainer_client_web')
+          .delete()
+          .match({ trainer_id: trainerId, cl_email: emailGuess });
+        deleteError = error;
+      }
+      if (deleteError) throw deleteError;
+
+      setClients(prev => prev.filter(c => c.client_id !== clientToDelete.client_id));
+      toast({ title: 'Client removed', description: 'The client was removed from your list.' });
+    } catch (err: any) {
+      toast({ title: 'Delete failed', description: err.message || 'Unable to delete client.', variant: 'destructive' });
+    } finally {
+      setDeleteDialogOpen(false);
+      setClientToDelete(null);
+      setDeletePassword("");
+    }
+  };
+
   const handleViewProfile = (client: { client_id: number; cl_name: string }) => {
     setSelectedClient(client);
     setIsProfileModalOpen(true);
@@ -656,6 +773,9 @@ const Clients: React.FC = () => {
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('status')}>
                       Status {sortColumn === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
+                    <th className="px-6 py-4 text-right font-semibold text-gray-700 dark:text-gray-300 tracking-wide">
+                      Actions
+                    </th>
 
                   </tr>
                 </thead>
@@ -806,6 +926,26 @@ const Clients: React.FC = () => {
                               {client.status === 'active' ? 'Active' : 'Pending'}
                             </span>
                           </td>
+                          <td className="px-6 py-5 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 p-0 opacity-70 group-hover:opacity-100">
+                                  <Icons.MoreVerticalIcon className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {(client.status || '').toLowerCase() === 'pending' && (
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleResendInvite(client as any); }}>
+                                    Resend Invite
+                                  </DropdownMenuItem>
+                                )}
+                                {(client.status || '').toLowerCase() === 'pending' && <DropdownMenuSeparator />}
+                                <DropdownMenuItem className="text-red-600" onClick={(e) => { e.stopPropagation(); openDeleteDialog(client as any); }}>
+                                  Delete Client
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
 
                         </tr>
                       );
@@ -846,6 +986,27 @@ const Clients: React.FC = () => {
               open={isFormModalOpen}
               onClose={() => setIsFormModalOpen(false)}
             />
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete client</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove the client from your list. Please confirm by entering your password.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-600 dark:text-gray-300">Password</label>
+                  <Input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Your password" />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
+                    Confirm Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </SidebarContent>
       </div>
