@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, addWeeks, startOfDay } from 'date-fns';
+import { format, addWeeks, addDays, startOfDay } from 'date-fns';
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, PlusCircle, Save, GripVertical, Dumbbell, HeartPulse, Footprints, PersonStanding, Snowflake, Weight, Zap, BedDouble, Link2, AlertTriangle, Bed, ChevronDown, ChevronUp, Calendar, Clock, Target, Play, Edit3, X, Check, CheckCircle, Clock as ClockIcon } from 'lucide-react';
+import { UnifiedApprovalButton } from './UnifiedApprovalButton';
 import { useToast } from '@/hooks/use-toast';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -24,6 +25,8 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { checkWeeklyWorkoutStatus, checkMonthlyWorkoutStatus, getStatusDisplay } from '@/utils/workoutStatusUtils';
+import { normalizeExercise, getExerciseSummary } from '@/utils/exerciseNormalization';
+import useWorkoutData from '@/hooks/useWorkoutData';
 
 import ExercisePickerModal from './ExercisePickerModal';
 import VideoPlayer from './VideoPlayer';
@@ -31,10 +34,21 @@ import VideoPlayer from './VideoPlayer';
 // Week-level approval status for monthly view (exact replica from WeeklyPlanHeader)
 interface WeekApprovalStatus {
   weekNumber: number;
-  status: 'approved' | 'draft' | 'no_plan' | 'partial_approved';
+  status: 'approved' | 'draft' | 'no_plan';
   startDate: Date;
   endDate: Date;
   canApprove: boolean;
+}
+
+// Unified approval status interface
+interface UnifiedApprovalStatus {
+  global: {
+    canApprove: boolean;
+    status: 'approved' | 'draft' | 'no_plan' | 'partial_approved' | 'pending';
+    hasUnsavedChanges: boolean;
+    message: string;
+  };
+  weeks: WeekApprovalStatus[];
 }
 
 // Define the type for a single exercise item
@@ -88,6 +102,9 @@ interface WorkoutPlanTableProps {
   onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
   onDirtyDatesChange?: (dirtyDates: Set<string>) => void; // Callback for dirty dates changes
   dirtyDates?: Set<string>; // Parent's dirty dates to sync with
+  // Unified approval props
+  unifiedApprovalStatus?: UnifiedApprovalStatus; // Unified approval status
+  onUnifiedApproval?: (scope: 'global' | 'week', weekIndex?: number) => void; // Unified approval handler
 }
 
 // Helper to get a focus icon
@@ -125,7 +142,7 @@ const getYouTubeVideoId = (url: string) => {
 const calculateWeekStatus = async (weekDays: WeekDay[], weekStartDate: Date, clientId: number) => {
   try {
     // Use the same unified status calculation as WeeklyPlanHeader
-    const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const weekEndDate = addDays(weekStartDate, 6);
     const result = await checkWeeklyWorkoutStatus(supabase, clientId, weekStartDate);
     
     // Filter data for this specific week
@@ -227,7 +244,7 @@ function getFullWeek(startDate: Date, week: WeekDay[], viewMode: 'weekly' | 'mon
   const totalDays = viewMode === 'monthly' ? 28 : 7;
   
   for (let i = 0; i < totalDays; i++) {
-    const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+    const date = addDays(startDate, i);
     const dateStr = format(date, 'yyyy-MM-dd');
     const day = week.find((d) => d && d.date === dateStr);
     days.push(day || null);
@@ -244,7 +261,11 @@ function organizeIntoWeeks(days: (WeekDay | null)[], viewMode: 'weekly' | 'month
   // For monthly view, organize into 4 weeks
   const weeks = [];
   for (let i = 0; i < days.length; i += 7) {
-    weeks.push(days.slice(i, i + 7));
+    const week = days.slice(i, i + 7);
+    // Only include weeks that have at least one non-null day
+    if (week.some(day => day !== null)) {
+      weeks.push(week);
+    }
   }
   return weeks;
 }
@@ -419,7 +440,7 @@ const VideoCell = ({
   );
 };
 
-export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly', weekStatuses, onApproveWeek, onDirtyDatesChange, dirtyDates: dirtyDatesProp }: WorkoutPlanTableProps) => {
+export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, clientName, onImportSuccess, isTemplateMode = false, hideDates = false, viewMode = 'weekly', weekStatuses, onApproveWeek, onDirtyDatesChange, dirtyDates: dirtyDatesProp, unifiedApprovalStatus, onUnifiedApproval }: WorkoutPlanTableProps) => {
   
   // State for delete confirmation
   const [deleteDayIdx, setDeleteDayIdx] = useState<number | null>(null);
@@ -439,6 +460,14 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   // Local copy of the week for editing
   const [editableWeek, setEditableWeek] = useState(week);
+  
+  // UNIFIED DATA FETCHING - Use shared data for approval status
+  // TEMPORARILY DISABLED: UNIFIED DATA FETCHING
+  // TODO: Re-enable after debugging the persistent error
+  const workoutData: any = null;
+  const isWorkoutDataLoading = false;
+  const workoutDataError: any = null;
+  const refetchWorkoutData = async () => {};
   
   // Force refresh state removed - no longer needed with explicit save model
 
@@ -496,45 +525,130 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     // Force refresh removed - no longer needed with explicit save model
   }, [week]);
 
-  // Fetch approval status when component mounts or when relevant props change
+  // Fetch approval status when component mounts or when relevant props change - UNIFIED APPROACH
   useEffect(() => {
     if (clientId && planStartDate) {
-      fetchApprovalStatus();
+      console.log('[WorkoutPlanTable] 🔄 Approval status effect triggered - using unified data');
+      
+      // Use unified data if available, otherwise fallback to legacy fetch
+      if (workoutData) {
+        console.log('[WorkoutPlanTable] 🔄 Using unified data for approval status');
+        fetchApprovalStatus();
+      } else if (!isWorkoutDataLoading) {
+        console.log('[WorkoutPlanTable] 🔄 Unified data not available, using legacy fetch');
+        fetchApprovalStatus();
+      }
     }
-  }, [clientId, planStartDate, viewMode]);
+  }, [clientId, planStartDate, viewMode, workoutData, isWorkoutDataLoading]);
 
-  // Function to fetch approval status (exact replica from WeeklyPlanHeader)
+  // Function to fetch approval status using UNIFIED data source
   const fetchApprovalStatus = async () => {
     if (!clientId) return;
     
+    console.log('[WorkoutPlanTable] 🔄 fetchApprovalStatus called - using unified data source');
+    
     try {
-      if (viewMode === 'monthly') {
-        const monthlyResult = await checkMonthlyWorkoutStatus(supabase, clientId, baseStartDate);
-        setMonthlyStatus(monthlyResult);
+      // Use unified data if available
+      if (workoutData) {
+        console.log('[WorkoutPlanTable] 🔄 Using unified workout data for approval status');
         
-        if (monthlyResult.weeklyBreakdown) {
-          const weekStatuses = monthlyResult.weeklyBreakdown.map((weekData, weekIndex) => ({
-            weekNumber: weekIndex,
-            status: weekData.status,
-            startDate: weekData.startDate,
-            endDate: weekData.endDate,
-            canApprove: (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false)
-          }));
-          setLocalWeekStatuses(weekStatuses);
+        if (viewMode === 'monthly') {
+          setMonthlyStatus({
+            status: workoutData.status,
+            source: workoutData.source,
+            previewData: workoutData.previewData,
+            scheduleData: workoutData.scheduleData,
+            weeklyBreakdown: workoutData.weeklyBreakdown
+          });
+          
+          if (workoutData.weeklyBreakdown) {
+            const weekStatuses = workoutData.weeklyBreakdown.map((weekData, weekIndex) => {
+              const canApprove = (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false);
+              
+              // Debug logging for approval button logic
+              console.log(`[WorkoutPlanTable] Week ${weekIndex + 1} approval logic (UNIFIED):`, {
+                status: weekData.status,
+                previewDataCount: weekData.previewData?.length || 0,
+                unapprovedCount: weekData.previewData?.filter(d => d.is_approved === false).length || 0,
+                canApprove,
+                previewData: weekData.previewData?.map(d => ({ date: d.for_date, is_approved: d.is_approved })) || []
+              });
+              
+              return {
+                weekNumber: weekIndex,
+                status: weekData.status === 'partial_approved' ? 'draft' : weekData.status,
+                startDate: weekData.startDate,
+                endDate: weekData.endDate,
+                canApprove
+              };
+            });
+            setLocalWeekStatuses(weekStatuses);
+          }
+        } else {
+          setWeeklyStatus({
+            status: workoutData.status,
+            source: workoutData.source,
+            previewData: workoutData.previewData,
+            scheduleData: workoutData.scheduleData
+          });
+          
+          // Create a single week status for weekly view
+          const weekStatus = {
+            weekNumber: 0,
+            status: workoutData.status === 'partial_approved' ? 'draft' : workoutData.status,
+            startDate: baseStartDate,
+            endDate: addDays(baseStartDate, 6),
+            canApprove: (workoutData.status === 'draft' || workoutData.status === 'partial_approved') && workoutData.previewData?.some(d => d.is_approved === false)
+          };
+          setLocalWeekStatuses([weekStatus]);
         }
-      } else {
-        const weeklyResult = await checkWeeklyWorkoutStatus(supabase, clientId, baseStartDate);
-        setWeeklyStatus(weeklyResult);
         
-        // Create a single week status for weekly view
-        const weekStatus = {
-          weekNumber: 0,
-          status: weeklyResult.status,
-          startDate: baseStartDate,
-          endDate: new Date(baseStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
-          canApprove: (weeklyResult.status === 'draft' || weeklyResult.status === 'partial_approved') && weeklyResult.previewData?.some(d => d.is_approved === false)
-        };
-        setLocalWeekStatuses([weekStatus]);
+        console.log('[WorkoutPlanTable] ✅ Approval status updated from unified source');
+      } else {
+        console.log('[WorkoutPlanTable] 🔄 Unified data not available, using fallback');
+        
+        // Fallback to legacy data fetching
+        if (viewMode === 'monthly') {
+          const monthlyResult = await checkMonthlyWorkoutStatus(supabase, clientId, baseStartDate);
+          setMonthlyStatus(monthlyResult);
+          
+          if (monthlyResult.weeklyBreakdown) {
+            const weekStatuses = monthlyResult.weeklyBreakdown.map((weekData, weekIndex) => {
+              const canApprove = (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false);
+              
+              // Debug logging for approval button logic
+              console.log(`[WorkoutPlanTable] Week ${weekIndex + 1} approval logic (FALLBACK):`, {
+                status: weekData.status,
+                previewDataCount: weekData.previewData?.length || 0,
+                unapprovedCount: weekData.previewData?.filter(d => d.is_approved === false).length || 0,
+                canApprove,
+                previewData: weekData.previewData?.map(d => ({ date: d.for_date, is_approved: d.is_approved })) || []
+              });
+              
+              return {
+                weekNumber: weekIndex,
+                status: weekData.status === 'partial_approved' ? 'draft' : weekData.status,
+                startDate: weekData.startDate,
+                endDate: weekData.endDate,
+                canApprove
+              };
+            });
+            setLocalWeekStatuses(weekStatuses);
+          }
+        } else {
+          const weeklyResult = await checkWeeklyWorkoutStatus(supabase, clientId, baseStartDate);
+          setWeeklyStatus(weeklyResult);
+          
+          // Create a single week status for weekly view
+          const weekStatus = {
+            weekNumber: 0,
+            status: weeklyResult.status === 'partial_approved' ? 'draft' : weeklyResult.status,
+            startDate: baseStartDate,
+            endDate: addDays(baseStartDate, 6),
+            canApprove: (weeklyResult.status === 'draft' || weeklyResult.status === 'partial_approved') && weeklyResult.previewData?.some(d => d.is_approved === false)
+          };
+          setLocalWeekStatuses([weekStatus]);
+        }
       }
     } catch (error) {
       console.error('Error fetching approval status:', error);
@@ -543,30 +657,54 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   // Function to refresh approval status removed - no longer needed with explicit save model
 
-  // --- Normalization function ---
-  function normalizeExercise(ex: any): any {
-    return {
-      ...ex,
-      exercise: ex.exercise || ex.exercise_name || ex.name || '',
-      category: ex.category || '',
-      body_part: ex.body_part || ex.bodyPart || '',
-      sets: ex.sets !== undefined && ex.sets !== null ? String(ex.sets) : '',
-      reps: ex.reps ?? '',
-      duration: ex.duration ?? ex.time ?? '',
-      weight: ex.weight ?? ex.weights ?? '',
-      equipment: ex.equipment ?? '',
-      coach_tip: ex.coach_tip ?? ex.tips ?? '',
-      rest: ex.rest ?? '',
-      video_link: ex.video_link ?? ex.videoLink ?? '',
-      video_thumbnail: ex.video_thumbnail ?? '',
-    };
-  }
-  // ---
 
-  const normalizedWeek = editableWeek.map(day => ({
-    ...day,
-    exercises: (day.exercises || []).map(normalizeExercise),
-  }));
+  const normalizedWeek = editableWeek
+    .filter(day => day != null) // Filter out null/undefined days
+    .map(day => ({
+      ...day,
+      exercises: (day.exercises || []).map(normalizeExercise),
+    }));
+
+  // Debug logging to help identify exercise display issues
+  useEffect(() => {
+    const fullWeekArray = getFullWeek(baseStartDate, editableWeek, viewMode);
+    const organizedWeeks = organizeIntoWeeks(fullWeekArray, viewMode);
+    
+    console.log('[WorkoutPlanTable] 🔍 Data organization debug:', {
+      viewMode,
+      editableWeekLength: editableWeek.length,
+      fullWeekArrayLength: fullWeekArray.length,
+      organizedWeeksCount: organizedWeeks.length,
+      organizedWeeks: organizedWeeks.map((week, idx) => ({
+        weekIndex: idx,
+        weekLength: week.length,
+        nullDays: week.filter(day => day === null).length,
+        hasData: week.some(day => day !== null)
+      })),
+      hasNullDays: fullWeekArray.some(day => day == null),
+      nullDayIndices: fullWeekArray.map((day, idx) => day == null ? idx : null).filter(idx => idx !== null)
+    });
+    
+    if (normalizedWeek.length > 0) {
+      const allExercises = normalizedWeek.flatMap(day => day.exercises || []);
+      const exerciseSummary = getExerciseSummary(allExercises);
+      
+      console.log('[WorkoutPlanTable] 🔍 Exercise data debug:', {
+        totalDays: normalizedWeek.length,
+        daysWithExercises: normalizedWeek.filter(day => day.exercises && day.exercises.length > 0).length,
+        daysWithNoExercises: normalizedWeek.filter(day => !day.exercises || day.exercises.length === 0).length,
+        exerciseSummary,
+        sampleDayWithExercises: normalizedWeek.find(day => day.exercises && day.exercises.length > 0),
+        sampleDayWithoutExercises: normalizedWeek.find(day => !day.exercises || day.exercises.length === 0),
+        allDays: normalizedWeek.map(day => ({
+          date: day.date,
+          focus: day.focus,
+          exerciseCount: day.exercises?.length || 0,
+          hasExercises: !!(day.exercises && day.exercises.length > 0)
+        }))
+      });
+    }
+  }, [normalizedWeek, editableWeek, viewMode, baseStartDate]);
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
     console.log(`[Plan Change] Updating day ${dayIdx}, exercise ${exIdx}, field ${field} to ${value}`);
@@ -795,7 +933,23 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   const renderDay = (day: any, dayIdx: number, weekIdx: number) => {
     // Calculate the global day index across all weeks
     const globalDayIdx = weekIdx * 7 + dayIdx;
-    const currentDate = new Date(baseStartDate.getTime() + globalDayIdx * 24 * 60 * 60 * 1000);
+    
+    // Handle null/undefined day data - this should not happen anymore with the fix above
+    if (!day) {
+      console.error(`[WorkoutPlanTable] ❌ renderDay called with null/undefined day for dayIdx ${dayIdx}, weekIdx ${weekIdx} - this should not happen`);
+      return null;
+    }
+    
+    // Debug logging for exercise display issues
+    console.log(`[WorkoutPlanTable] 🔍 renderDay debug for day ${globalDayIdx}:`, {
+      date: day.date,
+      focus: day.focus,
+      exerciseCount: day.exercises?.length || 0,
+      hasExercises: !!(day.exercises && day.exercises.length > 0),
+      exercises: day.exercises || [],
+      willShowRestDay: !day.exercises || day.exercises.length === 0
+    });
+    const currentDate = addDays(baseStartDate, globalDayIdx);
         const dateStr = format(currentDate, 'yyyy-MM-dd');
         const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
         const dateDisplay = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -1043,50 +1197,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
 
   return (
     <div className="space-y-8">
-      {/* Save Changes Button - Only show when there are unsaved changes */}
-      {hasUnsavedChanges && (
-        <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <span className="h-4 w-4 rounded-full bg-orange-500"></span>
-            </div>
-            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-              You have {unsavedChangesCount} unsaved change{unsavedChangesCount === 1 ? '' : 's'}.
-            </span>
-          </div>
-          <Button
-            onClick={async () => {
-              // Save all changes to the database
-              try {
-                // Save all dirty dates to the database
-                const savePromises = Array.from(dirtyDates).map(async (dateStr) => {
-                  const dayIndex = editableWeek.findIndex(day => day && day.date === dateStr);
-                  if (dayIndex !== -1 && editableWeek[dayIndex]) {
-                    const day = editableWeek[dayIndex];
-                    await persistExercisesForDate(dateStr, day.exercises, day.focus);
-                  }
-                });
-                
-                await Promise.all(savePromises);
-                
-                toast({ title: 'Changes Saved', description: 'Your changes have been saved successfully.' });
-                clearDirtyDates();
-                
-                // Notify parent component that changes have been saved
-                onPlanChange(editableWeek, true);
-              } catch (error) {
-                console.error('Save failed:', error);
-                toast({ title: 'Save Failed', description: 'An error occurred while saving.', variant: 'destructive' });
-              }
-            }}
-            size="sm"
-            className="bg-orange-600 hover:bg-orange-700 text-white"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save Changes
-          </Button>
-        </div>
-      )}
 
       {/* Weekly Status Indicator (exact replica from WeeklyPlanHeader) */}
       {viewMode === 'weekly' && (
@@ -1097,7 +1207,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
               const weekDirty = (() => {
                 const start = baseStartDate;
                 for (let i = 0; i < 7; i++) {
-                  const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                  const d = format(addDays(start, i), 'yyyy-MM-dd');
                   if (dirtyDates.has(d as string)) return true;
                 }
                 return false;
@@ -1149,43 +1259,15 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
             })()}
           </div>
           
-          {/* Weekly Approval Button */}
-          {onApproveWeek && localWeekStatuses && localWeekStatuses[0] && localWeekStatuses[0].canApprove && (() => {
-            // Disable Approve if any day in this week is dirty
-            const weekDirty = (() => {
-              const start = baseStartDate;
-              for (let i = 0; i < 7; i++) {
-                const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-                if (dirtyDates.has(d as string)) return true;
-              }
-              return false;
-            })();
-            return !weekDirty;
-          })() && (
-            <Button
-              onClick={async () => {
-                setApprovingWeek(0);
-                try {
-                  await onApproveWeek(0);
-                } finally {
-                  setApprovingWeek(null);
-                }
-              }}
-              disabled={approvingWeek === 0}
-              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
-            >
-              {approvingWeek === 0 ? (
-                <>
-                  <Check className="h-3 w-3 mr-1 animate-spin" />
-                  Approving...
-                </>
-              ) : (
-                <>
-                  <Check className="h-3 w-3 mr-1" />
-                  Approve Week
-                </>
-              )}
-            </Button>
+          {/* Unified Week Approval Button */}
+          {unifiedApprovalStatus && onUnifiedApproval && (
+            <UnifiedApprovalButton
+              type="week"
+              weekIndex={0}
+              status={unifiedApprovalStatus}
+              onApprove={onUnifiedApproval}
+              isApproving={approvingWeek === 0}
+            />
           )}
         </div>
       )}
@@ -1196,7 +1278,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         <Accordion type="multiple" className="space-y-4">
           {weeks.map((weekDays, weekIdx) => {
             const weekStartDate = weekIdx === 0 ? planStartDate : addWeeks(planStartDate, weekIdx);
-            const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+            const weekEndDate = addDays(weekStartDate, 6);
             const workoutDaysCount = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
             
             return (
@@ -1235,53 +1317,31 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                         />
                       </div>
                       
-                      {/* Weekly Approval Button (disabled if week has dirty dates) */}
-                      {onApproveWeek && localWeekStatuses && localWeekStatuses[weekIdx] && localWeekStatuses[weekIdx].canApprove && (() => {
-                        const start = weekStartDate;
-                        const weekDirty = (() => {
-                          for (let i = 0; i < 7; i++) {
-                            const d = format(new Date(start.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-                            if (dirtyDates.has(d as string)) return true;
-                          }
-                          return false;
-                        })();
-                        return !weekDirty;
-                      })() && (
-                        <Button
-                          onClick={async () => {
-                            setApprovingWeek(weekIdx);
-                            try {
-                              await onApproveWeek(weekIdx);
-                              // Refresh status after approval
-                              await fetchApprovalStatus();
-                            } finally {
-                              setApprovingWeek(null);
-                            }
-                          }}
-                          disabled={approvingWeek === weekIdx}
-                          className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
-                        >
-                        {approvingWeek === weekIdx ? (
-                          <>
-                            <Check className="h-3 w-3 mr-1 animate-spin" />
-                            Approving...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-3 w-3 mr-1" />
-                            Approve
-                          </>
-                        )}
-                      </Button>
-                      )}
                     </div>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-0">
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {weekDays.map((day, dayIdx) => renderDay(day, dayIdx, weekIdx))}
-                </div>
-              </AccordionContent>
+                    {weekDays.map((day, dayIdx) => {
+                      // Only render days that have data - skip null/undefined days
+                      if (!day) return null;
+                      return renderDay(day, dayIdx, weekIdx);
+                    }).filter(Boolean)}
+                  </div>
+                  
+                  {/* Unified Week Approval Button - moved outside AccordionTrigger to avoid nested buttons */}
+                  {unifiedApprovalStatus && onUnifiedApproval && (
+                    <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                      <UnifiedApprovalButton
+                        type="week"
+                        weekIndex={weekIdx}
+                        status={unifiedApprovalStatus}
+                        onApprove={onUnifiedApproval}
+                        isApproving={approvingWeek === weekIdx}
+                      />
+                    </div>
+                  )}
+                </AccordionContent>
             </AccordionItem>
         );
       })}
@@ -1290,7 +1350,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         // Weekly view (unchanged)
         weeks.map((weekDays, weekIdx) => {
           const weekStartDate = weekIdx === 0 ? planStartDate : addWeeks(planStartDate, weekIdx);
-          const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+          const weekEndDate = addDays(weekStartDate, 6);
           
           return (
             <Card key={weekIdx} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -1314,7 +1374,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                     {(() => {
                       const weekDirty = (() => {
                         for (let i = 0; i < 7; i++) {
-                          const d = format(new Date(weekStartDate.getTime() + i * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                          const d = format(addDays(weekStartDate, i), 'yyyy-MM-dd');
                           if (dirtyDates.has(d as string)) return true;
                         }
                         return false;
@@ -1342,34 +1402,15 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
                       );
                     })()}
                     
-                    {/* Weekly Approval Button (exact replica from WeeklyPlanHeader) */}
-                    {onApproveWeek && localWeekStatuses && localWeekStatuses[weekIdx] && localWeekStatuses[weekIdx].canApprove && (
-                      <Button
-                        onClick={async () => {
-                          setApprovingWeek(weekIdx);
-                          try {
-                            await onApproveWeek(weekIdx);
-                            // Refresh status after approval
-                            await fetchApprovalStatus();
-                          } finally {
-                            setApprovingWeek(null);
-                          }
-                        }}
-                        disabled={approvingWeek === weekIdx}
-                        className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
-                      >
-                        {approvingWeek === weekIdx ? (
-                          <>
-                            <Check className="h-3 w-3 mr-1 animate-spin" />
-                            Approving...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-3 w-3 mr-1" />
-                            Approve Week
-                          </>
-                        )}
-                      </Button>
+                    {/* Unified Week Approval Button */}
+                    {unifiedApprovalStatus && onUnifiedApproval && (
+                      <UnifiedApprovalButton
+                        type="week"
+                        weekIndex={weekIdx}
+                        status={unifiedApprovalStatus}
+                        onApprove={onUnifiedApproval}
+                        isApproving={approvingWeek === weekIdx}
+                      />
                     )}
                   </div>
                 </div>
@@ -1378,7 +1419,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
               {/* Days in Week */}
               <CardContent className="p-0">
                 <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {weekDays.map((day, dayIdx) => renderDay(day, dayIdx, weekIdx))}
+                  {weekDays.map((day, dayIdx) => {
+                    // Only render days that have data - skip null/undefined days
+                    if (!day) return null;
+                    return renderDay(day, dayIdx, weekIdx);
+                  }).filter(Boolean)}
                 </div>
               </CardContent>
             </Card>

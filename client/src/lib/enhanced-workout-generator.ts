@@ -239,6 +239,32 @@ export class EnhancedWorkoutGenerator {
   };
 
   /**
+   * Check Supabase client health and retry if needed
+   */
+  private static async checkSupabaseHealth(): Promise<boolean> {
+    try {
+      console.log('🔍 Checking Supabase client health...');
+      
+      // Simple health check query
+      const { data, error } = await supabase
+        .from('client')
+        .select('client_id')
+        .limit(1);
+      
+      if (error) {
+        console.warn('⚠️ Supabase health check failed:', error.message);
+        return false;
+      }
+      
+      console.log('✅ Supabase client is healthy');
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Supabase health check error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Generate a workout plan using enhanced features
    */
   static async generateWorkoutPlan(clientId: number, planStartDate: Date): Promise<{
@@ -263,6 +289,12 @@ export class EnhancedWorkoutGenerator {
       console.log(`⏰ Timeout set to 60 seconds`);
       console.log(`⏱️ Start time: ${new Date().toISOString()}`);
       
+      // Check Supabase health before starting
+      const isHealthy = await this.checkSupabaseHealth();
+      if (!isHealthy) {
+        console.warn('⚠️ Supabase client health check failed, proceeding with caution...');
+      }
+      
       // Race the main generation against the timeout
       const result = await Promise.race([
         this.generateWorkoutPlanInternal(clientId, planStartDate),
@@ -280,23 +312,43 @@ export class EnhancedWorkoutGenerator {
       console.error('❌ Enhanced workout generator error:', error);
       console.error(`⏱️ Generation failed after ${duration}ms (${(duration/1000).toFixed(1)}s)`);
       
-      // Provide more specific error messages
+      // Enhanced error analysis and recovery suggestions
       let errorMessage = 'Unknown error occurred';
+      let recoverySuggestion = 'Please try refreshing the page and generating again.';
+      
       if (error instanceof Error) {
-        if (error.message.includes('timed out')) {
-          errorMessage = 'Generation took too long. The AI service may be experiencing high load. Please try again in a few moments.';
-        } else if (error.message.includes('Failed to fetch client data')) {
-          errorMessage = 'Unable to retrieve client information. Please check your connection and try again.';
+        console.error('🔍 Error Analysis:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        
+        if (error.message.includes('timed out') || error.message.includes('timeout')) {
+          errorMessage = 'Generation timed out. This usually indicates a database connection issue.';
+          recoverySuggestion = 'Please check your internet connection and try again. If the problem persists, try refreshing the page.';
+        } else if (error.message.includes('Failed to fetch client data') || error.message.includes('Client data fetch timed out')) {
+          errorMessage = 'Unable to retrieve client information from the database.';
+          recoverySuggestion = 'Please check your internet connection and try again. The client data may be temporarily unavailable.';
+        } else if (error.message.includes('Failed to fetch exercises') || error.message.includes('Exercises fetch timed out')) {
+          errorMessage = 'Unable to retrieve exercise database.';
+          recoverySuggestion = 'The exercise database may be temporarily unavailable. Please try again in a few moments.';
         } else if (error.message.includes('No exercises found')) {
-          errorMessage = 'Unable to find suitable exercises for your profile. Please try again or contact support.';
+          errorMessage = 'Unable to find suitable exercises for your profile.';
+          recoverySuggestion = 'Please try again or contact support if the issue persists.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network connection issue detected.';
+          recoverySuggestion = 'Please check your internet connection and try again.';
         } else {
           errorMessage = error.message;
+          recoverySuggestion = 'Please try refreshing the page and generating again.';
         }
       }
       
+      console.error('💡 Recovery Suggestion:', recoverySuggestion);
+      
       return {
         success: false,
-        message: errorMessage
+        message: `${errorMessage} ${recoverySuggestion}`
       };
     }
   }
@@ -315,13 +367,27 @@ export class EnhancedWorkoutGenerator {
       console.log('🚀 === ENHANCED WORKOUT GENERATOR INTERNAL START ===');
       console.log(`👤 Client ID: ${clientId}`);
 
-      // 1. Fetch fresh client data (no caching)
+      // 1. Fetch fresh client data (no caching) with timeout protection
       console.log('📊 Step 1: Fetching client data...');
-      const { data: client, error } = await supabase
+      
+      // Create a timeout promise for the client data fetch
+      const clientDataTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Client data fetch timed out after 10 seconds'));
+        }, 10000); // 10 second timeout for client data fetch
+      });
+
+      // Race the client data fetch against timeout
+      const clientDataPromise = supabase
         .from('client')
         .select('*')
         .eq('client_id', clientId)
         .single();
+
+      const { data: client, error } = await Promise.race([
+        clientDataPromise,
+        clientDataTimeoutPromise
+      ]);
 
       if (error || !client) {
         throw new Error(`Failed to fetch client data: ${error?.message || 'Client not found'}`);
@@ -329,9 +395,24 @@ export class EnhancedWorkoutGenerator {
 
       console.log('✅ Client data fetched successfully');
 
-      // 2. Check progression status (only for existing clients)
+      // 2. Check progression status (only for existing clients) with timeout protection
       console.log('📊 Step 2: Checking progression status...');
-      const progressionStatus = await this.checkProgressionStatus(clientId);
+      
+      // Create a timeout promise for the progression status check
+      const progressionTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Progression status check timed out after 8 seconds'));
+        }, 8000); // 8 second timeout for progression status check
+      });
+
+      // Race the progression status check against timeout
+      const progressionPromise = this.checkProgressionStatus(clientId);
+      
+      const progressionStatus = await Promise.race([
+        progressionPromise,
+        progressionTimeoutPromise
+      ]);
+      
       if (progressionStatus.shouldReset && progressionStatus.reason !== "No previous workouts found") {
         return {
           success: false,
@@ -443,10 +524,25 @@ export class EnhancedWorkoutGenerator {
       console.log(`🎯 TARGET MUSCLE GROUPS: ${targetMuscles.join(', ')}`);
       console.log('🎯 === TARGET TRACKING END ===\n');
 
-      // 4. Fetch fresh exercises from database (no caching)
-      const { data: exercises, error: exerciseError } = await supabase
+      // 4. Fetch fresh exercises from database (no caching) with timeout protection
+      console.log('📊 Step 4: Fetching exercises from database...');
+      
+      // Create a timeout promise for the exercises fetch
+      const exercisesTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Exercises fetch timed out after 15 seconds'));
+        }, 15000); // 15 second timeout for exercises fetch
+      });
+
+      // Race the exercises fetch against timeout
+      const exercisesPromise = supabase
         .from('exercises_raw')
         .select('*');
+
+      const { data: exercises, error: exerciseError } = await Promise.race([
+        exercisesPromise,
+        exercisesTimeoutPromise
+      ]);
 
       if (exerciseError) {
         throw new Error(`Failed to fetch exercises: ${exerciseError.message}`);
@@ -454,8 +550,24 @@ export class EnhancedWorkoutGenerator {
 
       console.log(`✅ Fetched ${exercises.length} exercises from database`);
 
-      // 5. Get exercise history for variety
-      const exerciseHistory = await this.getExerciseHistory(clientId.toString(), 4);
+      // 5. Get exercise history for variety with timeout protection
+      console.log('📊 Step 5: Fetching exercise history...');
+      
+      // Create a timeout promise for the exercise history fetch
+      const historyTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Exercise history fetch timed out after 10 seconds'));
+        }, 10000); // 10 second timeout for exercise history fetch
+      });
+
+      // Race the exercise history fetch against timeout
+      const exerciseHistoryPromise = this.getExerciseHistory(clientId.toString(), 4);
+      
+      const exerciseHistory = await Promise.race([
+        exerciseHistoryPromise,
+        historyTimeoutPromise
+      ]);
+      
       console.log(`📊 Found ${exerciseHistory.length} exercises in client history`);
 
       // 6. Filter and score exercises with variety
@@ -510,9 +622,24 @@ export class EnhancedWorkoutGenerator {
       }
       console.log(`📊 === EXERCISE DATA ANALYSIS END ===`);
 
-      // 7. Analyze previous workouts for progressive overload
+      // 7. Analyze previous workouts for progressive overload with timeout protection
+      console.log('📊 Step 7: Analyzing progressive overload...');
+      
+      // Create a timeout promise for the progressive overload analysis
+      const progressionAnalysisTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Progressive overload analysis timed out after 12 seconds'));
+        }, 12000); // 12 second timeout for progressive overload analysis
+      });
+
+      // Race the progressive overload analysis against timeout
       const currentWeek = Math.ceil((Date.now() - new Date('2025-01-01').getTime()) / (7 * 24 * 60 * 60 * 1000));
-      const progressionAnalysis = await ProgressiveOverloadSystem.analyzePreviousWorkouts(clientId, currentWeek);
+      const progressionAnalysisPromise = ProgressiveOverloadSystem.analyzePreviousWorkouts(clientId, currentWeek);
+      
+      const progressionAnalysis = await Promise.race([
+        progressionAnalysisPromise,
+        progressionAnalysisTimeoutPromise
+      ]);
       
       // Handle cases where no previous workout data exists
       if (!progressionAnalysis.success) {

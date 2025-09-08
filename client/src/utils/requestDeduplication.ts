@@ -14,8 +14,9 @@ interface RequestCache {
 
 class RequestDeduplication {
   private static pendingRequests = new Map<string, RequestCache>();
-  private static readonly REQUEST_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  private static readonly REQUEST_TIMEOUT = 45 * 1000; // Increased to 45 seconds for database operations
   private static readonly CLEANUP_INTERVAL = 60 * 1000; // 1 minute
+  private static readonly SAVE_OPERATION_TIMEOUT = 60 * 1000; // 60 seconds for save operations
 
   /**
    * Execute a request with deduplication
@@ -32,13 +33,15 @@ class RequestDeduplication {
       showDuplicateMessage?: boolean;
       duplicateMessage?: string;
       onDuplicate?: () => void;
+      isSaveOperation?: boolean; // Flag for save operations
     } = {}
   ): Promise<T> {
     const {
-      timeout = this.REQUEST_TIMEOUT,
+      timeout = options.isSaveOperation ? this.SAVE_OPERATION_TIMEOUT : this.REQUEST_TIMEOUT,
       showDuplicateMessage = true,
       duplicateMessage = 'Request already in progress. Please wait.',
-      onDuplicate
+      onDuplicate,
+      isSaveOperation = false
     } = options;
 
     // Clean up expired requests

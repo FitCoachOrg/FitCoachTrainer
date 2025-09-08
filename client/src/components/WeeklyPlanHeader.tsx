@@ -1,12 +1,13 @@
 "use client"
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { format, parseISO, addWeeks, startOfWeek, endOfWeek, startOfDay } from 'date-fns';
+import { format, parseISO, addWeeks, addDays, startOfWeek, endOfWeek, startOfDay } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { MoreVertical, Check, X, Calendar, CalendarDays } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { UnifiedApprovalButton } from './UnifiedApprovalButton';
 // import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import VideoModal from '@/components/VideoModal';
@@ -17,6 +18,7 @@ import {
   getStatusDisplay,
   type WorkoutStatusResult
 } from '@/utils/workoutStatusUtils';
+import useWorkoutData from '@/hooks/useWorkoutData';
 
 type WeekDay = {
   date: string;
@@ -31,6 +33,17 @@ interface WeekApprovalStatus {
   startDate: Date;
   endDate: Date;
   canApprove: boolean;
+}
+
+// Unified approval status interface (matching UnifiedApprovalButton)
+interface UnifiedApprovalStatus {
+  global: {
+    canApprove: boolean;
+    status: 'approved' | 'draft' | 'no_plan' | 'partial_approved' | 'pending';
+    hasUnsavedChanges: boolean;
+    message: string;
+  };
+  weeks: WeekApprovalStatus[];
 }
 
 interface WeeklyPlanHeaderProps {
@@ -48,6 +61,10 @@ interface WeeklyPlanHeaderProps {
   onApproveWeek?: (weekIndex: number) => void; // Callback for individual week approval
   dirtyDates?: Set<string>; // New prop for dirty dates
   onDirtyDatesChange?: (dirtyDates: Set<string>) => void; // Callback to notify about dirty dates
+  forceRefreshKey?: number; // New prop to force data refresh when plan is generated
+  // Unified approval props (matching WorkoutPlanTable)
+  unifiedApprovalStatus?: UnifiedApprovalStatus; // Unified approval status
+  onUnifiedApproval?: (scope: 'global' | 'week', weekIndex?: number) => void; // Unified approval handler
 }
 
 type ViewMode = 'weekly' | 'monthly';
@@ -67,7 +84,7 @@ function SortableHeaderBox({ id, children, disabled = false }: { id: string; chi
   );
 }
 
-export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, viewMode, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek, dirtyDates = new Set(), onDirtyDatesChange }: WeeklyPlanHeaderProps) {
+export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPlanChange, onMonthlyChange, clientId, viewMode, onMonthlyDataChange, onApprovalStatusCheck, onForceRefreshStatus, weekStatuses, onApproveWeek, dirtyDates = new Set(), onDirtyDatesChange, forceRefreshKey, unifiedApprovalStatus, onUnifiedApproval }: WeeklyPlanHeaderProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -87,6 +104,15 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [showWeekCopyConfirm, setShowWeekCopyConfirm] = useState(false);
   const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
   const [weeklyStatus, setWeeklyStatus] = useState<WorkoutStatusResult | null>(null);
+  
+  // UNIFIED DATA FETCHING - Use shared data instead of separate fetching
+  // TEMPORARILY DISABLED: UNIFIED DATA FETCHING
+  // TODO: Re-enable after debugging the persistent error
+  const workoutData: any = null;
+  const isWorkoutDataLoading = false;
+  const workoutDataError: any = null;
+  const refetchWorkoutData = async () => {};
+  const invalidateWorkoutData = async () => {};
 
   // Normalize planStartDate to start of local day to avoid timezone drift
   const baseStartDate = useMemo(() => startOfDay(planStartDate), [planStartDate]);
@@ -97,7 +123,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     
     const weekStartDate = weekIndex === 0 ? baseStartDate : addWeeks(baseStartDate, weekIndex);
     for (let i = 0; i < 7; i++) {
-      const dayDate = new Date(weekStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const dayDate = addDays(weekStartDate, i);
       const dateStr = format(dayDate, 'yyyy-MM-dd');
       if (dirtyDates.has(dateStr)) {
         return true;
@@ -171,8 +197,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       const weekDays = [];
       
       for (let j = 0; j < 7; j++) {
-        const dayDate = new Date(weekStartDate.getTime() + j * 24 * 60 * 60 * 1000);
-        const dateStr = dayDate.toISOString().slice(0, 10);
+        const dayDate = addDays(weekStartDate, j);
+        const dateStr = format(dayDate, 'yyyy-MM-dd');
         
         // If this is the first week, use the actual data, otherwise create placeholder data
         if (i === 0) {
@@ -194,73 +220,127 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     return week || [];
   }, [week, viewMode]);
 
-  // Function to fetch multi-week data using unified status logic
+  // Function to fetch multi-week data using UNIFIED data source
   const fetchMultiWeekData = async () => {
     if (!clientId || viewMode !== 'monthly') return;
     
-    setIsLoadingMultiWeek(true);
-    try {
-      // Use the unified monthly status function
-      const monthlyResult: WorkoutStatusResult = await checkMonthlyWorkoutStatus(supabase, clientId, planStartDate);
+    console.log('[WeeklyPlanHeader] 🔄 fetchMultiWeekData called - using unified data source');
+    
+    // Use unified data if available
+    if (workoutData && workoutData.previewData) {
+      console.log('[WeeklyPlanHeader] 🔄 Using unified workout data for multi-week display');
       
       // Set the monthly status for display
-      setMonthlyStatus(monthlyResult);
+      setMonthlyStatus({
+        status: workoutData.status,
+        source: workoutData.source,
+        previewData: workoutData.previewData,
+        scheduleData: workoutData.scheduleData,
+        weeklyBreakdown: workoutData.weeklyBreakdown
+      });
       
-      if (monthlyResult.weeklyBreakdown) {
-        // Convert the weekly breakdown to WeekDay format
-        const weeks = monthlyResult.weeklyBreakdown.map(weekData => {
-          const weekDays = [];
-          for (let j = 0; j < 7; j++) {
-            const dayDate = new Date(weekData.startDate.getTime() + j * 24 * 60 * 60 * 1000);
-            const dateStr = dayDate.toISOString().slice(0, 10);
+      // Convert unified data to weekly breakdown format
+      const weeks = [];
+      for (let weekIndex = 0; weekIndex < 4; weekIndex++) {
+        const weekDays = [];
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+          const dayNumber = weekIndex * 7 + dayIndex;
+          const currentDate = new Date(planStartDate.getTime() + dayNumber * 24 * 60 * 60 * 1000);
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          
+          // Find matching data from unified workout data
+          const dayData = workoutData.previewData.find(workout => 
+            workout.for_date === dateStr
+          );
+          
+          let planDay = {
+            date: dateStr,
+            focus: 'Rest Day',
+            exercises: []
+          };
+          
+          if (dayData && dayData.details_json?.exercises) {
+            planDay.focus = dayData.summary || 'Workout';
+            planDay.exercises = dayData.details_json.exercises;
+          }
+          
+          weekDays.push(planDay);
+        }
+        weeks.push(weekDays);
+      }
+      
+      setMultiWeekData(weeks);
+      onMonthlyDataChange(weeks);
+      console.log('[WeeklyPlanHeader] ✅ Multi-week data updated from unified source:', {
+        weeksCount: weeks.length,
+        totalDays: weeks.flat().length
+      });
+    } else {
+      console.log('[WeeklyPlanHeader] 🔄 Unified data not available, using fallback');
+      setIsLoadingMultiWeek(true);
+      try {
+        // Fallback to legacy monthly status function
+        const monthlyResult: WorkoutStatusResult = await checkMonthlyWorkoutStatus(supabase, clientId, planStartDate);
+        
+        // Set the monthly status for display
+        setMonthlyStatus(monthlyResult);
+        
+        if (monthlyResult.weeklyBreakdown) {
+          // Convert the weekly breakdown to WeekDay format
+          const weeks = monthlyResult.weeklyBreakdown.map(weekData => {
+            const weekDays = [];
+            for (let j = 0; j < 7; j++) {
+              const dayDate = addDays(weekData.startDate, j);
+              const dateStr = format(dayDate, 'yyyy-MM-dd');
+              
+              // Find matching data for this date from preview data (primary source)
+              // UI should ONLY display data from schedule_preview table, never from schedule table
+              let dayData = weekData.previewData?.find(d => d.for_date === dateStr);
+              
+              if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
+                weekDays.push({
+                  date: dateStr,
+                  focus: dayData.summary || 'Workout',
+                  exercises: dayData.details_json.exercises
+                });
+              } else {
+                weekDays.push({
+                  date: dateStr,
+                  focus: 'Rest Day',
+                  exercises: []
+                });
+              }
+            }
+            return weekDays;
+          });
+          
+          setMultiWeekData(weeks);
+        } else {
+          // Fallback to generating placeholder data if no breakdown available
+          const weeks = [];
+          for (let i = 0; i < 4; i++) {
+            const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
+            const weekDays = [];
             
-            // Find matching data for this date from preview data (primary source)
-            // UI should ONLY display data from schedule_preview table, never from schedule table
-            let dayData = weekData.previewData?.find(d => d.for_date === dateStr);
-            
-            if (dayData && dayData.details_json && Array.isArray(dayData.details_json.exercises)) {
-              weekDays.push({
-                date: dateStr,
-                focus: dayData.summary || 'Workout',
-                exercises: dayData.details_json.exercises
-              });
-            } else {
+            for (let j = 0; j < 7; j++) {
+              const dayDate = addDays(weekStartDate, j);
+              const dateStr = format(dayDate, 'yyyy-MM-dd');
+              
               weekDays.push({
                 date: dateStr,
                 focus: 'Rest Day',
                 exercises: []
               });
             }
+            weeks.push(weekDays);
           }
-          return weekDays;
-        });
-        
-        setMultiWeekData(weeks);
-      } else {
-        // Fallback to generating placeholder data if no breakdown available
-        const weeks = [];
-        for (let i = 0; i < 4; i++) {
-          const weekStartDate = i === 0 ? planStartDate : addWeeks(planStartDate, i);
-          const weekDays = [];
-          
-          for (let j = 0; j < 7; j++) {
-            const dayDate = new Date(weekStartDate.getTime() + j * 24 * 60 * 60 * 1000);
-            const dateStr = dayDate.toISOString().slice(0, 10);
-            
-            weekDays.push({
-              date: dateStr,
-              focus: 'Rest Day',
-              exercises: []
-            });
-          }
-          weeks.push(weekDays);
+          setMultiWeekData(weeks);
         }
-        setMultiWeekData(weeks);
+      } catch (error) {
+        console.error('Error fetching multi-week data:', error);
+      } finally {
+        setIsLoadingMultiWeek(false);
       }
-    } catch (error) {
-      console.error('Error fetching multi-week data:', error);
-    } finally {
-      setIsLoadingMultiWeek(false);
     }
   };
 
@@ -276,12 +356,21 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     }
   };
 
-  // Fetch multi-week data when view mode changes to monthly
+  // Fetch multi-week data when view mode changes to monthly - UNIFIED APPROACH
   useEffect(() => {
     if (viewMode === 'monthly' && clientId) {
-      fetchMultiWeekData();
+      console.log('[WeeklyPlanHeader] 🔄 Monthly view effect triggered - using unified data');
+      
+      // Use unified data if available, otherwise fallback to legacy fetch
+      if (workoutData && workoutData.previewData) {
+        console.log('[WeeklyPlanHeader] 🔄 Using unified data for monthly view');
+        fetchMultiWeekData();
+      } else if (!isWorkoutDataLoading) {
+        console.log('[WeeklyPlanHeader] 🔄 Unified data not available, using legacy fetch');
+        fetchMultiWeekData();
+      }
     }
-  }, [viewMode, clientId, planStartDate]);
+  }, [viewMode, clientId, planStartDate, workoutData, isWorkoutDataLoading]);
 
   // Fetch weekly status when view mode changes to weekly
   useEffect(() => {
@@ -289,6 +378,18 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       fetchWeeklyStatus();
     }
   }, [viewMode, clientId, planStartDate]);
+
+  // Force refresh data when forceRefreshKey changes (e.g., after plan generation)
+  useEffect(() => {
+    if (forceRefreshKey && forceRefreshKey > 0 && clientId) {
+      console.log('[WeeklyPlanHeader] Force refresh triggered, key:', forceRefreshKey);
+      if (viewMode === 'monthly') {
+        fetchMultiWeekData();
+      } else {
+        fetchWeeklyStatus();
+      }
+    }
+  }, [forceRefreshKey, clientId, viewMode]);
 
 
 
@@ -396,9 +497,9 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         if (sourceDay.exercises.length === 0) continue; // Skip rest days
         
         // Calculate the target date
-        const sourceDate = new Date(sourceDay.date);
-        const targetDate = new Date(sourceDate.getTime() + daysOffset * 24 * 60 * 60 * 1000);
-        const targetDateStr = targetDate.toISOString().slice(0, 10);
+        const sourceDate = parseISO(sourceDay.date);
+        const targetDate = addDays(sourceDate, daysOffset);
+        const targetDateStr = format(targetDate, 'yyyy-MM-dd');
         
         // Prepare the data to insert/update
         const workoutData = {
@@ -473,8 +574,8 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       const overIndex = parseInt(overId.replace('hdr-', ''), 10);
     const reordered = arrayMove(days, activeIndex, overIndex);
     const updated = reordered.map((day, idx) => {
-      const newDate = new Date(planStartDate.getTime() + idx * 24 * 60 * 60 * 1000);
-      const newDateStr = newDate.toISOString().slice(0, 10);
+      const newDate = addDays(planStartDate, idx);
+      const newDateStr = format(newDate, 'yyyy-MM-dd');
       return { ...day, date: newDateStr };
     });
     onReorder(updated);
@@ -672,7 +773,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         weekIndex === copyTargetWeek 
           ? sourceWeek.map(day => ({
               ...day,
-              date: new Date(new Date(day.date).getTime() + (copyTargetWeek - copySourceWeek) * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+              date: format(addWeeks(parseISO(day.date), copyTargetWeek - copySourceWeek), 'yyyy-MM-dd')
             }))
           : week
       );
@@ -699,7 +800,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         const targetWeekStartDate = copyTargetWeek === 0 ? baseStartDate : addWeeks(baseStartDate, copyTargetWeek);
         const targetWeekDates = [];
         for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(targetWeekStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayDate = addDays(targetWeekStartDate, i);
           targetWeekDates.push(format(dayDate, 'yyyy-MM-dd'));
         }
         // Merge with existing dirty dates instead of replacing
@@ -909,38 +1010,15 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
             })()}
           </div>
           
-          {/* Weekly Approval Button */}
-          {weekStatuses[0]?.canApprove && onApproveWeek && (
-            <button
-              onClick={async () => {
-                setApprovingWeek(0);
-                try {
-                  await onApproveWeek(0);
-                } finally {
-                  setApprovingWeek(null);
-                }
-              }}
-              disabled={approvingWeek === 0 || isWeekDirty(0)}
-                                            /* title={isWeekDirty(0) ? "Save your changes before approving this week" : ""} */
-              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
-            >
-              {approvingWeek === 0 ? (
-                <>
-                  <Check className="h-3 w-3 mr-1 animate-spin" />
-                  Approving...
-                </>
-              ) : isWeekDirty(0) ? (
-                <>
-                  <Check className="h-3 w-3 mr-1" />
-                  Save First
-                </>
-              ) : (
-                <>
-                  <Check className="h-3 w-3 mr-1" />
-                  Approve Week
-                </>
-              )}
-            </button>
+          {/* Unified Week Approval Button */}
+          {unifiedApprovalStatus && onUnifiedApproval && (
+            <UnifiedApprovalButton
+              type="week"
+              weekIndex={0}
+              status={unifiedApprovalStatus}
+              onApprove={onUnifiedApproval}
+              isApproving={approvingWeek === 0}
+            />
           )}
         </div>
       )}
@@ -965,7 +1043,7 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
         monthlyData.map((week, weekIndex) => {
           // Calculate the actual start and end dates for this week
           const weekStartDate = weekIndex === 0 ? planStartDate : addWeeks(planStartDate, weekIndex);
-          const weekEndDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+          const weekEndDate = addDays(weekStartDate, 6);
           
           return (
             <div key={weekIndex} className="space-y-3">
@@ -1032,38 +1110,15 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                 
                 {/* Week-level controls */}
                 <div className="flex items-center gap-1">
-                  {/* Approval Button - only show for weeks that can be approved */}
-                  {weekStatuses && weekStatuses[weekIndex]?.canApprove && onApproveWeek && (
-                    <button
-                      onClick={async () => {
-                        setApprovingWeek(weekIndex);
-                        try {
-                          await onApproveWeek(weekIndex);
-                        } finally {
-                          setApprovingWeek(null);
-                        }
-                      }}
-                      disabled={approvingWeek === weekIndex || isWeekDirty(weekIndex)}
-                      /* title={isWeekDirty(weekIndex) ? "Save your changes before approving this week" : ""} */
-                      className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center justify-center min-w-fit"
-                    >
-                      {approvingWeek === weekIndex ? (
-                        <>
-                          <Check className="h-3 w-3 mr-1 animate-spin" />
-                          Approving...
-                        </>
-                      ) : isWeekDirty(weekIndex) ? (
-                        <>
-                          <Check className="h-3 w-3 mr-1" />
-                          Save First
-                        </>
-                      ) : (
-                        <>
-                          <Check className="h-3 w-3 mr-1" />
-                          Approve
-                        </>
-                      )}
-                    </button>
+                  {/* Unified Week Approval Button */}
+                  {unifiedApprovalStatus && onUnifiedApproval && (
+                    <UnifiedApprovalButton
+                      type="week"
+                      weekIndex={weekIndex}
+                      status={unifiedApprovalStatus}
+                      onApprove={onUnifiedApproval}
+                      isApproving={approvingWeek === weekIndex}
+                    />
                   )}
 
                   {/* Copy/Paste controls */}

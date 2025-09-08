@@ -1,0 +1,215 @@
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    WORKOUT PLAN GENERATION SYSTEM                              │
+│                                        END-TO-END FLOW                                         │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PHASE 1: INITIALIZATION                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLIENT DATA   │    │  PLAN GENERATOR │    │  GENERATED PLAN │    │  DATABASE STORE │
+│                 │    │                 │    │                 │    │                 │
+│ • Fitness Goals │───▶│ • AI Analysis   │───▶│ • 7-day week    │───▶│ • schedule_     │
+│ • Experience    │    │ • Exercise DB   │    │ • Focus areas   │    │   preview       │
+│ • Equipment     │    │ • Progressive   │    │ • Exercises     │    │ • Templates     │
+│ • Workout Days  │    │ • Variety Logic │    │ • Sets/Reps     │    │ • Metadata      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PHASE 2: UI RENDERING                                   │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              WORKOUTPLANSECTION (Main Container)                               │
+├─────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐            │
+│  │ WEEKLY HEADER   │  │  PLAN TABLE     │  │ APPROVAL SYSTEM │  │ REFRESH SYSTEM  │            │
+│  │                 │  │                 │  │                 │  │                 │            │
+│  │ • Status Display│  │ • Drag & Drop   │  │ • Approve Button│  │ • Smart Dedup   │            │
+│  │ • Approval Btns │  │ • Copy/Paste    │  │ • Status Check  │  │ • Error Recovery│            │
+│  │ • Force Refresh │  │ • Edit Controls │  │ • Unified Logic │  │ • Performance   │            │
+│  │ • View Toggle   │  │ • Dirty Tracking│  │ • Error Handle  │  │ • Monitoring    │            │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PHASE 3: USER EDITING                                   │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  USER ACTIONS   │    │ DIRTY TRACKING  │    │ OPTIMISTIC      │    │ LOCAL STORAGE   │
+│                 │    │                 │    │ UPDATES         │    │                 │
+│ • Drag & Drop   │───▶│ • Date Changes  │───▶│ • Immediate UI  │───▶│ • User Prefs    │
+│ • Copy/Paste    │    │ • Visual Cues   │    │ • Rollback Prep │    │ • Dirty Dates   │
+│ • Exercise Edit │    │ • Save Button   │    │ • Confirmation  │    │ • Temp Data     │
+│ • Set/Rep Mods  │    │ • Status Update │    │ • Error Handle  │    │ • Offline Queue │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PHASE 4: SAVE OPERATIONS                                │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  SAVE TRIGGER   │    │ VALIDATION      │    │ DATABASE SAVE   │    │ POST-SAVE       │
+│                 │    │                 │    │                 │    │ REFRESH         │
+│ • User Click    │───▶│ • Client ID     │───▶│ • Transaction   │───▶│ • Status Check  │
+│ • Dirty Check   │    │ • Plan Date     │    │ • Error Handle  │    │ • UI Sync       │
+│ • Modal Display │    │ • Data Validate │    │ • Timeout Prot  │    │ • Force Refresh │
+│ • Loading State │    │ • Pre-save Prep │    │ • Success Check │    │ • Notification  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PHASE 5: APPROVAL WORKFLOW                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ APPROVAL TRIGGER│    │ VALIDATION      │    │ APPROVAL PROC   │    │ FINAL STATUS    │
+│                 │    │                 │    │                 │    │ UPDATE          │
+│ • User Click    │───▶│ • Plan Ready    │───▶│ • preview→schedule│───▶│ • Status Check  │
+│ • Confirmation  │    │ • No Dirty Dates│    │ • Status Update │    │ • Button Update │
+│ • Modal Display │    │ • Client Valid  │    │ • Notification  │    │ • Success Msg   │
+│ • Loading State │    │ • Pre-approval  │    │ • UI State      │    │ • Plan Finalize │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    WEEKLY vs MONTHLY VIEWS                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        WEEKLY VIEW (7 DAYS)                                    │
+├─────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Week 1: [Mon] [Tue] [Wed] [Thu] [Fri] [Sat] [Sun]                                            │
+│                                                                                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐                              │
+│  │ WEEKLY HEADER   │  │  PLAN TABLE     │  │ APPROVAL SYSTEM │                              │
+│  │                 │  │                 │  │                 │                              │
+│  │ • Week Status   │  │ • 7 Day Grid    │  │ • Approve Week  │                              │
+│  │ • Approve Btn   │  │ • Exercise List │  │ • Status Check  │                              │
+│  │ • Copy/Paste    │  │ • Drag & Drop   │  │ • Force Refresh │                              │
+│  │ • Force Refresh │  │ • Edit Controls │  │ • Error Handle  │                              │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘                              │
+│                                                                                               │
+│  Status: [DRAFT] [PENDING] [APPROVED]                                                        │
+│  Actions: [Save Changes] [Approve Plan]                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                       MONTHLY VIEW (4 WEEKS)                                   │
+├─────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Week 1: [Mon] [Tue] [Wed] [Thu] [Fri] [Sat] [Sun]                                            │
+│  Week 2: [Mon] [Tue] [Wed] [Thu] [Fri] [Sat] [Sun]                                            │
+│  Week 3: [Mon] [Tue] [Wed] [Thu] [Fri] [Sat] [Sun]                                            │
+│  Week 4: [Mon] [Tue] [Wed] [Thu] [Fri] [Sat] [Sun]                                            │
+│                                                                                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐                              │
+│  │ MONTHLY HEADER  │  │  PLAN TABLE     │  │ APPROVAL SYSTEM │                              │
+│  │                 │  │                 │  │                 │                              │
+│  │ • 4 Week Status │  │ • 28 Day Grid   │  │ • Approve All   │                              │
+│  │ • Global Approve│  │ • Week Sections │  │ • Approve Week  │                              │
+│  │ • Week Toggle   │  │ • Bulk Actions  │  │ • Mixed Status  │                              │
+│  │ • Force Refresh │  │ • Copy/Paste    │  │ • Error Handle  │                              │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘                              │
+│                                                                                               │
+│  Status: [DRAFT] [PENDING] [APPROVED] [MIXED]                                                │
+│  Actions: [Save Changes] [Approve All] [Approve Week]                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    UNIFIED REFRESH SYSTEM                                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐            │
+│  │ REFRESH MANAGER │  │ OPTIMISTIC      │  │ OFFLINE SUPPORT │  │ ERROR RECOVERY  │            │
+│  │                 │  │ UPDATES         │  │                 │  │                 │            │
+│  │ • Smart Dedup   │  │                 │  │ • Network Detect│  │ • Retry Logic   │            │
+│  │ • Error Recovery│  │ • Immediate UI  │  │ • Operation Queue│  │ • Circuit Breaker│          │
+│  │ • Performance   │  │ • Rollback      │  │ • Auto Sync     │  │ • Backoff       │            │
+│  │ • Monitoring    │  │ • Confirmation  │  │ • Local Storage │  │ • Monitoring    │            │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘            │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        DATA FLOW STATES                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+PLAN GENERATION:    INITIAL → LOADING → GENERATED → VALIDATED → STORED → RENDERED → READY
+EDIT & SAVE:        READY → EDITING → DIRTY → SAVING → SAVED → REFRESHED → CLEAN
+APPROVAL WORKFLOW:  DRAFT → PENDING → APPROVING → APPROVED → FINALIZED
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        STATUS TYPES                                            │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+• DRAFT:     Plan is being edited, has unsaved changes
+• PENDING:   Plan is ready for approval, no dirty dates
+• APPROVED:  Plan has been approved and moved to schedule
+• MIXED:     Monthly view with different statuses per week
+• UNKNOWN:   Status not yet determined, initial state
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        KEY INTEGRATIONS                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+1. WEEKLYPLANHEADER:
+   • Force refresh integration with forceRefreshKey
+   • Status display and approval button management
+   • View mode switching (weekly/monthly)
+   • Copy/paste operations and dirty date tracking
+
+2. WORKOUTPLANTABLE:
+   • Drag & drop reordering with dirty date tracking
+   • Exercise editing and set/rep modifications
+   • Optimistic updates for immediate UI feedback
+   • Real-time validation and error handling
+
+3. SAVE OPERATIONS:
+   • Optimistic updates with rollback capability
+   • Error recovery with retry logic and circuit breakers
+   • Offline support with operation queuing
+   • Performance monitoring and alerting
+
+4. APPROVAL SYSTEM:
+   • Unified approval logic for both weekly and monthly views
+   • Status checking and button state management
+   • Error handling and user feedback
+   • Force refresh integration for status synchronization
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        PERFORMANCE METRICS                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+• Operation Statistics: Total, successful, failed operations
+• Timing Metrics: Average, min, max, P95, P99 durations
+• Rate Metrics: Operations per minute, error rate
+• System Health: Circuit breaker status, offline queue size
+• Alert Thresholds: Slow operations (>5s), high error rate (>10%)
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        ERROR RECOVERY                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+• Network Errors: Retry with exponential backoff
+• Server Errors: Circuit breaker protection
+• Client Errors: No retry, show user-friendly message
+• Timeout Errors: Queue for offline sync
+• Validation Errors: Immediate feedback with correction hints
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        LOCAL STORAGE                                           │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+• User Preferences: View mode, expanded states, last selected date
+• Dirty Date Tracking: Modified dates for save operations
+• Offline Operations: Queued operations for sync when online
+• Performance Data: Metrics and monitoring information
+• Circuit Breaker State: System protection status
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        END OF DIAGRAM                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘

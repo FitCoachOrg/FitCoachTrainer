@@ -50,20 +50,40 @@ export async function checkWorkoutApprovalStatus(
   try {
     console.log(`[checkWorkoutApprovalStatus] Checking status for ${totalDays} days: ${startDateStr} to ${endDateStr}`);
 
-    // Get data from both tables with logging
+    // Get data from both tables with logging and timeout protection
     RequestLogger.logDatabaseQuery('schedule_preview', 'select', 'checkWorkoutApprovalStatus', {
       clientId,
       dateRange: `${startDateStr} to ${endDateStr}`,
       totalDays
     });
     
-    const { data: previewData, error: previewError } = await supabase
+    // Add timeout protection to database queries with proper cancellation
+    const createTimeoutPromise = (timeoutMs: number, operation: string) => {
+      return new Promise((_, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error(`${operation} timeout after ${timeoutMs}ms`));
+        }, timeoutMs);
+        
+        // Store timeout ID for potential cleanup
+        (reject as any).timeoutId = timeoutId;
+      });
+    };
+
+    // SEQUENTIAL QUERIES: Run queries one at a time to prevent database overload
+    console.log(`[checkWorkoutApprovalStatus] Running queries sequentially for ${totalDays} days`);
+
+    const previewQuery = supabase
       .from('schedule_preview')
       .select('id, for_date, summary, details_json, is_approved')
       .eq('client_id', clientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
       .lte('for_date', endDateStr);
+
+    const { data: previewData, error: previewError } = await Promise.race([
+      previewQuery,
+      createTimeoutPromise(8000, 'Preview query') // Reduced to 8 seconds
+    ]) as any;
 
     if (previewError) {
       console.error('Preview check error:', previewError);
@@ -72,6 +92,23 @@ export async function checkWorkoutApprovalStatus(
         dateRange: `${startDateStr} to ${endDateStr}`,
         error: previewError
       });
+      
+      // If it's a timeout error, continue with empty data instead of throwing
+      if (previewError.message.includes('timeout')) {
+        console.warn('Preview query timed out, continuing with empty data');
+        return {
+          status: 'no_plan' as const,
+          source: 'timeout_fallback' as const,
+          previewData: [],
+          scheduleData: [],
+          totalDays,
+          approvedDays: 0,
+          unapprovedDays: 0,
+          weeklyBreakdown: []
+        };
+      }
+      
+      throw previewError;
     }
 
     RequestLogger.logDatabaseQuery('schedule', 'select', 'checkWorkoutApprovalStatus', {
@@ -80,14 +117,19 @@ export async function checkWorkoutApprovalStatus(
       totalDays
     });
 
-    // Get data from schedule table for comparison (but UI still only uses schedule_preview)
-    const { data: scheduleData, error: scheduleError } = await supabase
+    // Get data from schedule table for comparison (but UI still only uses schedule_preview) with timeout protection
+    const scheduleQuery = supabase
       .from('schedule')
       .select('id, for_date, summary, details_json')
       .eq('client_id', clientId)
       .eq('type', 'workout')
       .gte('for_date', startDateStr)
       .lte('for_date', endDateStr);
+
+    const { data: scheduleData, error: scheduleError } = await Promise.race([
+      scheduleQuery,
+      createTimeoutPromise(8000, 'Schedule query') // Use same timeout function
+    ]) as any;
 
     if (scheduleError) {
       console.error('Schedule check error:', scheduleError);
@@ -96,6 +138,14 @@ export async function checkWorkoutApprovalStatus(
         dateRange: `${startDateStr} to ${endDateStr}`,
         error: scheduleError
       });
+      
+      // If it's a timeout error, continue with empty data instead of throwing
+      if (scheduleError.message.includes('timeout')) {
+        console.warn('Schedule query timed out, continuing with empty data');
+        // Continue with empty schedule data
+      } else {
+        throw scheduleError;
+      }
     }
 
     console.log(`[checkWorkoutApprovalStatus] Preview data: ${previewData?.length || 0} entries`);
@@ -228,6 +278,14 @@ export async function checkMonthlyWorkoutStatus(
         } else {
           weekStatus = 'draft';
         }
+        
+        // Debug logging for status calculation
+        console.log(`[checkMonthlyWorkoutStatus] Week ${week + 1} status calculation:`, {
+          totalDaysInWeek,
+          approvedDaysInWeek,
+          weekStatus,
+          previewData: weekPreviewData.map(d => ({ date: d.for_date, is_approved: d.is_approved }))
+        });
       }
       
       console.log(`[checkMonthlyWorkoutStatus] Week ${week + 1}: status=${weekStatus}, previewData=${weekPreviewData.length}, scheduleData=${weekScheduleData.length}`);

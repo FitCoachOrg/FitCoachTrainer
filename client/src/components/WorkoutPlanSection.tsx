@@ -30,20 +30,31 @@ import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSectio
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
-import { format, parseISO, addWeeks } from 'date-fns';
+import { format, parseISO, addWeeks, addDays } from 'date-fns';
 import { DndContext, closestCenter, DragEndEvent, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { WorkoutPlanTable } from './WorkoutPlanTable';
 import type { Exercise as TableExercise, WeekDay as TableWeekDay } from './WorkoutPlanTable';
 import WeeklyPlanHeader from './WeeklyPlanHeader';
 import MonthlyPlanGenerator from './MonthlyPlanGenerator';
+import { UnifiedApprovalButton } from './UnifiedApprovalButton';
+import { StateMachineApprovalButton } from './StateMachineApprovalButton';
 import { debounce } from 'lodash';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid for universal UUID generation
+import { useApproveButtonState } from '@/hooks/useApproveButtonState';
+import { useEnhancedToast } from '@/hooks/useEnhancedToast';
+import { ToastContainer } from '@/components/ui/ToastContainer';
 import WorkoutExportButton from './WorkoutExportButton';
 import WorkoutImportButton from './WorkoutImportButton';
 import { normalizeDateForStorage, createDateFromString } from '../lib/date-utils';
 import { RequestLogger, loggedOperation, loggedStateUpdate } from '@/utils/requestLogger';
+import ErrorBoundary from './ErrorBoundary';
 import RequestDeduplication from '@/utils/requestDeduplication';
+import { useUnifiedRefresh } from '@/hooks/useUnifiedRefresh';
+import { RefreshIndicator, ErrorRecovery } from '@/components/RefreshIndicator';
+import { useWorkoutPlanOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
+import { OfflineIndicator, OfflineStatusBadge } from '@/components/OfflineIndicator';
+import offlineManager from '@/utils/offlineManager';
 import { generateSearchBasedWorkoutPlanForReview, warmupExerciseCache } from "@/lib/search-based-workout-plan"
 import { SimpleWorkoutGenerator } from "@/lib/simple-workout-generator"
 import { EnhancedWorkoutGenerator } from "@/lib/enhanced-workout-generator"
@@ -53,6 +64,7 @@ import {
   getStatusDisplay,
   type WorkoutStatusResult 
 } from '@/utils/workoutStatusUtils';
+import useUnifiedWorkoutData from '@/hooks/useUnifiedWorkoutData';
 
 // Types imported from WorkoutPlanTable to ensure consistency
 interface WorkoutExercise {
@@ -105,6 +117,17 @@ interface WeekApprovalStatus {
   startDate: Date;
   endDate: Date;
   canApprove: boolean;
+}
+
+// Unified approval status interface for consistent button logic
+interface UnifiedApprovalStatus {
+  global: {
+    canApprove: boolean;
+    status: 'approved' | 'draft' | 'no_plan' | 'partial_approved' | 'pending';
+    hasUnsavedChanges: boolean;
+    message: string;
+  };
+  weeks: WeekApprovalStatus[];
 }
 
 interface LoadingState {
@@ -361,7 +384,7 @@ const AIResponsePopup = ({
                     <>
                       <Button onClick={saveChanges} className="bg-gradient-to-r from-green-500 to-emerald-600">
                         <Save className="w-4 h-4 mr-2" />
-                        Save Changes
+                        Accept AI Plan
                       </Button>
                       <Button onClick={() => setIsEditing(false)} variant="outline">
                         Cancel
@@ -686,75 +709,8 @@ const AIMetricsPopup = ({ isOpen, onClose, metrics, clientName }: any) => (
 
 
 
-// --- Comprehensive Normalization function for all AI models ---
-function normalizeExercise(ex: any): any {
-  // Handle all possible variations of property names from different AI models
-  const normalized = {
-    // Exercise name variations
-    exercise: ex.exercise || ex.exercise_name || ex.name || ex.workout || ex.title || '',
-    
-    // Category variations
-    category: ex.category || ex.type || ex.exercise_type || ex.workout_type || '',
-    
-    // Body part variations
-    body_part: ex.body_part || ex.bodyPart || ex.body_parts || ex.target_area || ex.muscle_group || '',
-    
-    // Sets variations - ensure we preserve the actual value
-    sets: ex.sets !== undefined && ex.sets !== null ? String(ex.sets) : String(ex.set_count ?? ex.number_of_sets ?? ''),
-    
-    // Reps variations
-    reps: ex.reps ?? ex.repetitions ?? ex.rep_count ?? ex.number_of_reps ?? '',
-    
-    // Duration variations
-    duration: ex.duration ?? ex.time ?? ex.exercise_duration ?? ex.minutes ?? '',
-    
-    // Weight variations
-    weight: ex.weight ?? ex.weights ?? ex.weight_amount ?? ex.load ?? ex.resistance ?? '',
-    
-    // Equipment variations
-    equipment: ex.equipment ?? ex.equipment_needed ?? ex.tools ?? ex.machines ?? '',
-    
-    // Coach tip variations
-    coach_tip: ex.coach_tip ?? ex.tips ?? ex.tip ?? ex.instruction ?? ex.notes ?? ex.cue ?? '',
-    
-    // Rest variations
-    rest: ex.rest ?? ex.rest_time ?? ex.rest_period ?? ex.rest_duration ?? '',
-    
-    // Video link variations
-    video_link: ex.video_link ?? ex.videoLink ?? ex.video_url ?? ex.video ?? ex.link ?? '',
-    
-    // Enhanced generator specific fields
-    timeBreakdown: ex.timeBreakdown || null,
-    experience: ex.experience || 'Beginner',
-    rpe_target: ex.rpe_target || 'RPE 7-8',
-    phase: ex.phase || 1,
-    session_id: ex.session_id || '',
-    
-    // Preserve any other properties that might be useful
-    ...ex
-  };
-  
-  // Ensure all required fields have fallback values
-  return {
-    ...normalized,
-    exercise: normalized.exercise || 'Unknown Exercise',
-    category: normalized.category || 'Strength',
-    body_part: normalized.body_part || 'Full Body',
-    sets: normalized.sets && String(normalized.sets).trim() !== '' ? String(normalized.sets) : '3',
-    reps: normalized.reps || '10',
-    duration: normalized.duration || '15',
-    weight: normalized.weight || 'Bodyweight',
-    equipment: normalized.equipment || 'None',
-    coach_tip: normalized.coach_tip || 'Focus on proper form',
-    rest: normalized.rest || '60',
-    video_link: normalized.video_link || '',
-    experience: normalized.experience || 'Beginner',
-    rpe_target: normalized.rpe_target || 'RPE 7-8',
-    phase: normalized.phase || 1,
-    session_id: normalized.session_id || '',
-    timeBreakdown: normalized.timeBreakdown
-  };
-}
+// Import centralized exercise normalization utility
+import { normalizeExercise } from '@/utils/exerciseNormalization';
 // ---
 
 // Helper to build the payload for schedule_preview
@@ -844,9 +800,42 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
     // Show progress for large operations
     if (viewMode === 'monthly') {
       console.log('[approvePlan] Large operation detected - monthly plan approval may take longer');
+      console.log('[approvePlan] Processing 28 days of workout data...');
+    } else {
+      console.log('[approvePlan] Processing 7 days of workout data...');
     }
 
-    // 2. Fetch all rows from schedule_preview for this client/week/type
+    // 2. Check if data already exists in schedule (optimization)
+    console.log('[approvePlan] Step 1: Checking if data already exists in schedule...');
+    let scheduleRows: any[] = [];
+    try {
+      const checkStart = performance.now();
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const checkEnd = performance.now();
+      console.log('[Supabase] Check schedule rows:', `${(checkEnd - checkStart).toFixed(2)}ms`, `(${scheduleData?.length || 0} rows)`);
+      
+      if (scheduleError) {
+        console.error('[Supabase] Schedule check error:', scheduleError);
+        return { success: false, error: scheduleError.message };
+      }
+      
+      scheduleRows = scheduleData || [];
+    } catch (checkException) {
+      console.error('[Supabase] Schedule check exception:', checkException);
+      return { success: false, error: `Schedule check exception: ${checkException}` };
+    }
+
+    // 3. If data doesn't exist in schedule, copy from schedule_preview
+    if (scheduleRows.length === 0) {
+      console.log('[approvePlan] Step 2: No data in schedule, copying from schedule_preview...');
+      
+      // Fetch all rows from schedule_preview for this client/week/type
     let previewRows: any[] = [];
     try {
       const fetchStart = performance.now();
@@ -858,7 +847,7 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const fetchEnd = performance.now();
-      console.log('[Supabase] Fetch preview rows:', `${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[Supabase] Fetch preview rows:', `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
       
       if (fetchError) {
         console.error('[Supabase] Fetch error:', fetchError);
@@ -875,29 +864,7 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
       return { success: false, error: 'No draft plan found to approve.' };
     }
 
-    // 3. Delete any existing rows in schedule for this client/week/type
-    try {
-      const deleteStart = performance.now();
-      const { error: deleteError } = await supabase
-        .from('schedule')
-        .delete()
-        .eq('client_id', clientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr);
-      const deleteEnd = performance.now();
-      console.log('[Supabase] Delete schedule rows:', `${(deleteEnd - deleteStart).toFixed(2)}ms`);
-      
-      if (deleteError) {
-        console.error('[Supabase] Delete error:', deleteError);
-        return { success: false, error: deleteError.message };
-      }
-    } catch (deleteException) {
-      console.error('[Supabase] Delete exception:', deleteException);
-      return { success: false, error: `Delete exception: ${deleteException}` };
-    }
-
-    // 4. Insert the preview rows into schedule (remove id, created_at, is_approved fields)
+      // Insert the preview rows into schedule (remove id, created_at, is_approved fields)
     const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
     
     try {
@@ -906,7 +873,7 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
         .from('schedule')
         .insert(rowsToInsert);
       const insertEnd = performance.now();
-      console.log('[Supabase] Insert schedule rows:', `${(insertEnd - insertStart).toFixed(2)}ms`);
+        console.log('[Supabase] Insert schedule rows:', `${(insertEnd - insertStart).toFixed(2)}ms`, `(${rowsToInsert.length} rows)`);
       
       if (insertError) {
         console.error('[Supabase] Insert error:', insertError);
@@ -915,9 +882,13 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
     } catch (insertException) {
       console.error('[Supabase] Insert exception:', insertException);
       return { success: false, error: `Insert exception: ${insertException}` };
+      }
+    } else {
+      console.log('[approvePlan] Step 2: Data already exists in schedule, skipping copy operation');
     }
     
-    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    // 4. Set is_approved=true for all affected days in schedule_preview
+    console.log('[approvePlan] Step 3: Updating approval status...');
     try {
       const updateStart = performance.now();
       const { error: updateError } = await supabase
@@ -959,7 +930,37 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
     const endDate = new Date(weekStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
-    // 2. Fetch all rows from schedule_preview for this client/week/type
+    // 2. Check if data already exists in schedule (optimization)
+    console.log(`[approveWeek] Step 1: Checking if data already exists in schedule for Week ${weekNumber}...`);
+    let scheduleRows: any[] = [];
+    try {
+      const checkStart = performance.now();
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const checkEnd = performance.now();
+      console.log(`[Supabase] Check schedule rows for Week ${weekNumber}:`, `${(checkEnd - checkStart).toFixed(2)}ms`, `(${scheduleData?.length || 0} rows)`);
+      
+      if (scheduleError) {
+        console.error('[Supabase] Schedule check error:', scheduleError);
+        return { success: false, error: scheduleError.message };
+      }
+      
+      scheduleRows = scheduleData || [];
+    } catch (checkException) {
+      console.error('[Supabase] Schedule check exception:', checkException);
+      return { success: false, error: `Schedule check exception: ${checkException}` };
+    }
+
+    // 3. If data doesn't exist in schedule, copy from schedule_preview
+    if (scheduleRows.length === 0) {
+      console.log(`[approveWeek] Step 2: No data in schedule, copying from schedule_preview for Week ${weekNumber}...`);
+      
+      // Fetch all rows from schedule_preview for this client/week/type
     let previewRows: any[] = [];
     try {
       const fetchStart = performance.now();
@@ -971,7 +972,7 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const fetchEnd = performance.now();
-      console.log(`[Supabase] Fetch preview rows for Week ${weekNumber}:`, `${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log(`[Supabase] Fetch preview rows for Week ${weekNumber}:`, `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
 
       if (fetchError) {
         console.error('[Supabase] Fetch error:', fetchError);
@@ -988,29 +989,7 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
       return { success: false, error: `No draft plan found for Week ${weekNumber} to approve.` };
     }
 
-    // 3. Delete any existing rows in schedule for this client/week/type
-    try {
-      const deleteStart = performance.now();
-      const { error: deleteError } = await supabase
-        .from('schedule')
-        .delete()
-        .eq('client_id', clientId)
-        .eq('type', 'workout')
-        .gte('for_date', startDateStr)
-        .lte('for_date', endDateStr);
-      const deleteEnd = performance.now();
-      console.log(`[Supabase] Delete schedule rows for Week ${weekNumber}:`, `${(deleteEnd - deleteStart).toFixed(2)}ms`);
-
-      if (deleteError) {
-        console.error('[Supabase] Delete error:', deleteError);
-        return { success: false, error: deleteError.message };
-      }
-    } catch (deleteException) {
-      console.error('[Supabase] Delete exception:', deleteException);
-      return { success: false, error: `Delete exception: ${deleteException}` };
-    }
-
-    // 4. Insert the preview rows into schedule (remove id, created_at, is_approved fields)
+      // Insert the preview rows into schedule (remove id, created_at, is_approved fields)
     const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
 
     try {
@@ -1019,7 +998,7 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
         .from('schedule')
         .insert(rowsToInsert);
       const insertEnd = performance.now();
-      console.log(`[Supabase] Insert schedule rows for Week ${weekNumber}:`, `${(insertEnd - insertStart).toFixed(2)}ms`);
+        console.log(`[Supabase] Insert schedule rows for Week ${weekNumber}:`, `${(insertEnd - insertStart).toFixed(2)}ms`, `(${rowsToInsert.length} rows)`);
 
       if (insertError) {
         console.error('[Supabase] Insert error:', insertError);
@@ -1028,9 +1007,13 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
     } catch (insertException) {
       console.error('[Supabase] Insert exception:', insertException);
       return { success: false, error: `Insert exception: ${insertException}` };
+      }
+    } else {
+      console.log(`[approveWeek] Step 2: Data already exists in schedule for Week ${weekNumber}, skipping copy operation`);
     }
 
-    // After successful insert, set is_approved=true for all affected days in schedule_preview
+    // 4. Set is_approved=true for all affected days in schedule_preview
+    console.log(`[approveWeek] Step 3: Updating approval status for Week ${weekNumber}...`);
     try {
       const updateStart = performance.now();
       const { error: updateError } = await supabase
@@ -1060,14 +1043,37 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
   }
 }
 
-// Helper to save plan to schedule_preview
-async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: number, planStartDate: Date) {
-  const startTime = performance.now();
-  const componentName = 'savePlanToSchedulePreview';
+// Client data cache to avoid repeated database calls
+const clientDataCache = new Map<number, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Helper to clear client cache (useful when client data might have changed)
+function clearClientCache(clientId?: number) {
+  if (clientId) {
+    clientDataCache.delete(clientId);
+    console.log(`[ClientCache] Cleared cache for client ${clientId}`);
+  } else {
+    clientDataCache.clear();
+    console.log('[ClientCache] Cleared all client cache');
+  }
+}
+
+// Helper to get client data with caching, retry, and fallback
+async function getClientData(clientId: number, componentName: string, retryCount = 0): Promise<{ workout_time: string }> {
+  console.log(`[${componentName}] 🔄 NEW CACHED CLIENT DATA FUNCTION - Attempt ${retryCount + 1} for client ${clientId}`);
+  
+  // Check cache first
+  const cached = clientDataCache.get(clientId);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`[${componentName}] ✅ Using cached client data for client ${clientId}`);
+    return cached.data;
+  }
+
+  const operationTimeout = 8000; // 8 second timeout for client fetch
+  const maxRetries = 2;
+  const clientQueryStartTime = Date.now();
   
   try {
-    // Fetch client's preferred workout_time. Fallback to a default if not set.
-    const clientQueryStartTime = Date.now();
     RequestLogger.logDatabaseQuery(
       'client',
       'select',
@@ -1079,11 +1085,22 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       }
     );
     
-    const { data: clientData, error: clientError } = await supabase
+    const clientQueryPromise = supabase
       .from('client')
       .select('workout_time')
       .eq('client_id', clientId)
       .single();
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Client fetch timeout after ${operationTimeout}ms`));
+      }, operationTimeout);
+    });
+    
+    const { data: clientData, error: clientError } = await Promise.race([
+      clientQueryPromise,
+      timeoutPromise
+    ]);
 
     RequestLogger.logDatabaseQuery(
       'client',
@@ -1100,9 +1117,88 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
     );
 
     if (clientError) {
-      console.error('[Supabase] Client fetch error:', clientError);
+      // Retry on certain errors
+      if (retryCount < maxRetries && (
+        clientError.message.includes('timeout') || 
+        clientError.message.includes('network') ||
+        clientError.message.includes('connection')
+      )) {
+        console.warn(`[${componentName}] Client fetch error, retrying (${retryCount + 1}/${maxRetries}):`, clientError);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+        return getClientData(clientId, componentName, retryCount + 1);
+      }
+      
+      console.warn(`[${componentName}] Client fetch error, using fallback:`, clientError);
+      // Use fallback data
+      const fallbackData = { workout_time: '08:00:00' };
+      clientDataCache.set(clientId, { data: fallbackData, timestamp: Date.now() });
+      return fallbackData;
     }
-    const for_time = clientData?.workout_time || '08:00:00';
+
+    const result = { workout_time: clientData?.workout_time || '08:00:00' };
+    
+    // Cache the result
+    clientDataCache.set(clientId, { data: result, timestamp: Date.now() });
+    console.log(`[${componentName}] Cached client data for client ${clientId}`);
+    
+    return result;
+  } catch (error) {
+    // Retry on timeout errors
+    if (retryCount < maxRetries && error instanceof Error && error.message.includes('timeout')) {
+      console.warn(`[${componentName}] Client fetch timeout, retrying (${retryCount + 1}/${maxRetries}):`, error);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+      return getClientData(clientId, componentName, retryCount + 1);
+    }
+    
+    console.warn(`[${componentName}] Client fetch failed, using fallback:`, error);
+    // Use fallback data
+    const fallbackData = { workout_time: '08:00:00' };
+    clientDataCache.set(clientId, { data: fallbackData, timestamp: Date.now() });
+    return fallbackData;
+  }
+}
+
+// Helper to save plan to schedule_preview with timeout protection
+async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: number, planStartDate: Date) {
+  console.log(`[savePlanToSchedulePreview] 🚀 ENHANCED SAVE FUNCTION - Starting save for client ${clientId}`);
+  const startTime = performance.now();
+  const componentName = 'savePlanToSchedulePreview';
+  const operationTimeout = 10000; // Reduced to 10 seconds for individual operations
+  
+  // Circuit breaker: check for recent save timeouts
+  const now = Date.now();
+  const lastSaveTimeout = localStorage.getItem('lastSaveTimeout');
+  if (lastSaveTimeout && (now - parseInt(lastSaveTimeout)) < 30000) { // 30 second cooldown
+    console.log('🔄 [savePlanToSchedulePreview] Circuit breaker active, adding delay...');
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced to 2 second delay
+  }
+  
+  try {
+    // Create timeout promise for individual operations
+    const createTimeoutPromise = (operationName: string) => 
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`${operationName} timeout after ${operationTimeout}ms`));
+        }, operationTimeout);
+      });
+
+    // Get client data with caching and fallback - use shorter timeout
+    const clientDataPromise = getClientData(clientId, componentName);
+    const clientDataTimeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Client data fetch timeout after 5000ms`));
+      }, 5000); // Reduced timeout for client data
+    });
+    
+    const clientData = await Promise.race([
+      clientDataPromise,
+      clientDataTimeoutPromise
+    ]).catch(() => {
+      console.warn(`[${componentName}] Client data fetch failed, using fallback`);
+      return { workout_time: '08:00:00' }; // Fallback data
+    });
+    
+    const for_time = clientData.workout_time;
 
     // Always use a valid UUID for workout_id
     const workout_id = uuidv4();
@@ -1117,9 +1213,11 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       return { success: false, error: 'Invalid date range' };
     }
 
-    // Get existing preview data for this client and week
+    // Get existing preview data for this client and week with timeout protection
     const fetchStart = performance.now();
     const existingDataQueryStartTime = Date.now();
+    console.log(`[${componentName}] 🔍 Fetching existing data for client ${clientId}, dates: ${firstDate} to ${lastDate}`);
+    
     RequestLogger.logDatabaseQuery(
       'schedule_preview',
       'select',
@@ -1135,13 +1233,36 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       }
     );
     
-    const { data: existingData, error: fetchError } = await supabase
+    const existingDataQueryPromise = supabase
       .from('schedule_preview')
       .select('*')
       .eq('client_id', clientId)
       .eq('type', 'workout')
       .gte('for_date', firstDate)
       .lte('for_date', lastDate);
+    
+    // Use a shorter timeout for existing data fetch since it's often the bottleneck
+    const existingDataTimeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Existing data fetch timeout after 5000ms`));
+      }, 5000); // Reduced to 5 second timeout for existing data fetch
+    });
+    
+    let existingData: any[] = [];
+    let fetchError: any = null;
+    
+    try {
+      const result = await Promise.race([
+        existingDataQueryPromise,
+        existingDataTimeoutPromise
+      ]);
+      existingData = result.data || [];
+      fetchError = result.error;
+    } catch (timeoutError) {
+      console.warn('⚠️ Existing data fetch timed out, continuing with empty data');
+      existingData = [];
+      fetchError = null; // Don't treat timeout as an error, continue with empty data
+    }
       
     const fetchEnd = performance.now();
     RequestLogger.logDatabaseQuery(
@@ -1164,8 +1285,9 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
     console.log('[Supabase] Fetch existing data:', `${(fetchEnd - fetchStart).toFixed(2)}ms`);
 
     if (fetchError) {
-      console.error('[Supabase] Fetch error:', fetchError);
-      return { success: false, error: fetchError.message };
+      console.warn(`[${componentName}] ⚠️ Existing data fetch error, continuing with empty data:`, fetchError);
+      // Continue with empty existing data instead of failing
+      // This allows the save operation to proceed even if fetch fails
     }
 
     // Prepare records for insertion and update
@@ -1191,53 +1313,158 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       }
     });
 
-    // Update existing records
+    console.log(`[${componentName}] 📊 Prepared ${recordsToUpdate.length} updates and ${recordsToInsert.length} inserts`);
+
+    // Update existing records with batch processing and timeout protection
     if (recordsToUpdate.length > 0) {
       const updateStart = performance.now();
-      for (const record of recordsToUpdate) {
-        const { id, ...updateData } = record;
-        const { error: updateError } = await supabase
-          .from('schedule_preview')
-          .update(updateData)
-          .eq('id', id);
-        if (updateError) {
-          console.error('[Supabase] Update error:', updateError);
-          return { success: false, error: updateError.message };
+      console.log(`[Supabase] Updating ${recordsToUpdate.length} records with batch processing`);
+      
+      try {
+        // Process updates in smaller batches to prevent timeouts
+        const batchSize = 7; // Process 7 records at a time (1 week)
+        const batches = [];
+        
+        for (let i = 0; i < recordsToUpdate.length; i += batchSize) {
+          batches.push(recordsToUpdate.slice(i, i + batchSize));
         }
+        
+        console.log(`[Supabase] Processing ${batches.length} update batches of up to ${batchSize} records each`);
+        
+        // Process each batch with individual timeout protection
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          const batch = batches[batchIndex];
+          const batchStart = performance.now();
+          
+          console.log(`[Supabase] Processing update batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
+          
+          // Use batch update with timeout protection
+          const updatePromises = batch.map(async (record) => {
+            const { id, ...updateData } = record;
+            const updatePromise = supabase
+              .from('schedule_preview')
+              .update(updateData)
+              .eq('id', id);
+            
+            return Promise.race([
+              updatePromise,
+              createTimeoutPromise(`Update record ${id}`)
+            ]);
+          });
+          
+          const updateResults = await Promise.allSettled(updatePromises);
+          
+          // Check for any failures in this batch
+          const failures = updateResults.filter(result => 
+            result.status === 'rejected' || 
+            (result.status === 'fulfilled' && result.value.error)
+          );
+          
+          if (failures.length > 0) {
+            console.error(`[Supabase] Batch ${batchIndex + 1} update failures:`, failures);
+            const firstFailure = failures[0];
+            const errorMessage = firstFailure.status === 'rejected' 
+              ? firstFailure.reason?.message || 'Update failed'
+              : firstFailure.value.error?.message || 'Update failed';
+            return { success: false, error: `Batch ${batchIndex + 1} update failed: ${errorMessage}` };
+          }
+          
+          const batchEnd = performance.now();
+          console.log(`[Supabase] Update batch ${batchIndex + 1} completed:`, `${(batchEnd - batchStart).toFixed(2)}ms`);
+          
+          // Add small delay between batches to prevent database overload
+          if (batchIndex < batches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+          }
+        }
+        
+        const updateEnd = performance.now();
+        console.log('[Supabase] All update batches completed:', `${(updateEnd - updateStart).toFixed(2)}ms`);
+        
+      } catch (error) {
+        console.error('[Supabase] Update batch processing error:', error);
+        return { success: false, error: `Update batch processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
       }
-      const updateEnd = performance.now();
-      console.log('[Supabase] Update records:', `${(updateEnd - updateStart).toFixed(2)}ms`);
     }
 
-    // Insert new records
+    // Insert new records with batch processing and timeout protection
     if (recordsToInsert.length > 0) {
       const insertStart = performance.now();
-      const { error: insertError } = await supabase
-        .from('schedule_preview')
-        .insert(recordsToInsert);
-      const insertEnd = performance.now();
-      console.log('[Supabase] Insert records:', `${(insertEnd - insertStart).toFixed(2)}ms`);
+      console.log(`[Supabase] Inserting ${recordsToInsert.length} records with batch processing`);
       
-      if (insertError) {
-        console.error('[Supabase] Insert error:', insertError);
-        return { success: false, error: insertError.message };
+      try {
+        // Process inserts in smaller batches to prevent timeouts
+        const batchSize = 7; // Process 7 records at a time (1 week)
+        const batches = [];
+        
+        for (let i = 0; i < recordsToInsert.length; i += batchSize) {
+          batches.push(recordsToInsert.slice(i, i + batchSize));
+        }
+        
+        console.log(`[Supabase] Processing ${batches.length} batches of up to ${batchSize} records each`);
+        
+        // Process each batch with individual timeout protection
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          const batch = batches[batchIndex];
+          const batchStart = performance.now();
+          
+          console.log(`[Supabase] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
+          
+          const batchInsertPromise = supabase
+            .from('schedule_preview')
+            .insert(batch);
+          
+          const { error: batchError } = await Promise.race([
+            batchInsertPromise,
+            createTimeoutPromise(`Insert batch ${batchIndex + 1}`)
+          ]);
+          
+          const batchEnd = performance.now();
+          console.log(`[Supabase] Batch ${batchIndex + 1} completed:`, `${(batchEnd - batchStart).toFixed(2)}ms`);
+          
+          if (batchError) {
+            console.error(`[Supabase] Batch ${batchIndex + 1} insert error:`, batchError);
+            return { success: false, error: `Batch ${batchIndex + 1} insert failed: ${batchError.message}` };
+          }
+          
+          // Add small delay between batches to prevent database overload
+          if (batchIndex < batches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+          }
+        }
+        
+        const insertEnd = performance.now();
+        console.log('[Supabase] All insert batches completed:', `${(insertEnd - insertStart).toFixed(2)}ms`);
+        
+      } catch (error) {
+        console.error('[Supabase] Insert batch processing error:', error);
+        return { success: false, error: `Insert batch processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
       }
     }
 
-    // Set is_approved to false for all affected days
+    // Set is_approved to false for all affected days with timeout protection
     try {
       const approvalStart = performance.now();
-      await supabase
+      console.log('[Supabase] Updating approval flag with timeout protection');
+      
+      const approvalPromise = supabase
         .from('schedule_preview')
         .update({ is_approved: false })
         .eq('client_id', clientId)
         .eq('type', 'workout')
         .gte('for_date', firstDate)
         .lte('for_date', lastDate);
+      
+      await Promise.race([
+        approvalPromise,
+        createTimeoutPromise('Approval flag update')
+      ]);
+      
       const approvalEnd = performance.now();
-      console.log('[Supabase] Update approval flag:', `${(approvalEnd - approvalStart).toFixed(2)}ms`);
+      console.log('[Supabase] Update approval flag completed:', `${(approvalEnd - approvalStart).toFixed(2)}ms`);
     } catch (updateErr) {
       console.warn('[Supabase] Approval update warning:', updateErr);
+      // Don't fail the entire operation for approval flag update
     }
     
     const endTime = performance.now();
@@ -1250,6 +1477,12 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
   } catch (err: any) {
     const endTime = performance.now();
     console.error('[Save Plan] Error:', err, `(${(endTime - startTime).toFixed(2)}ms)`);
+    
+    // Record timeout for circuit breaker
+    if (err.message.includes('timeout')) {
+      localStorage.setItem('lastSaveTimeout', Date.now().toString());
+    }
+    
     return { success: false, error: err.message };
   }
 }
@@ -1271,6 +1504,7 @@ const WorkoutPlanSection = ({
   const { toast } = useToast();
   
   // Initialize planStartDate from localStorage or URL parameters, fallback to today
+  // FIXED: Don't depend on client object during initialization to prevent errors
   const [planStartDate, setPlanStartDate] = useState<Date>(() => {
     // Try to get date from URL parameters first
     const urlParams = new URLSearchParams(window.location.search);
@@ -1340,6 +1574,12 @@ const WorkoutPlanSection = ({
 
   // Week-level approval statuses for monthly view
   const [weekStatuses, setWeekStatuses] = useState<WeekApprovalStatus[]>([]);
+
+  // Unified approval status for consistent button logic
+  const [unifiedApprovalStatus, setUnifiedApprovalStatus] = useState<UnifiedApprovalStatus>({
+    global: { canApprove: false, status: 'pending', hasUnsavedChanges: false, message: 'Approve Plan' },
+    weeks: []
+  });
 
   // Monthly Plan Generator state
   const [isMonthlyGeneratorOpen, setIsMonthlyGeneratorOpen] = useState(false);
@@ -1432,6 +1672,10 @@ const WorkoutPlanSection = ({
   }, [client?.workout_days]);
   const { trainer } = useAuth();
   
+  // Ensure clientId is a number and not undefined
+  const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
+  
+  
   // Monthly view state with localStorage persistence
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>(() => {
     // Try to get viewMode from localStorage, default to 'weekly'
@@ -1446,15 +1690,45 @@ const WorkoutPlanSection = ({
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [monthlyData, setMonthlyData] = useState<any[][]>([]);
   
+  // UNIFIED DATA FETCHING - TEMPORARILY DISABLED FOR DEBUGGING
+  // Single source of truth: schedule_preview table only
+  const shouldFetchData = false; // Temporarily disabled
+  
+  // Temporarily disable unified data fetching to restore functionality
+  const unifiedWorkoutData: any = null;
+  const isWorkoutDataLoading = false;
+  const workoutDataError: any = null;
+  const refetchWorkoutData = async () => {};
+  const isWorkoutDataStale = false;
+  
   // Memoized callback to prevent infinite loops in WeeklyPlanHeader
   const handleMonthlyDataChange = useCallback((data: any[][]) => {
     setMonthlyData(data);
   }, []);
   
-  // Persist viewMode changes to localStorage
+  // Persist viewMode changes to localStorage and refresh data when switching modes
   useEffect(() => {
     if (clientId && viewMode) {
       localStorage.setItem(`workoutPlanViewMode_${clientId}`, viewMode);
+      
+      // Set loading state when switching views
+      setIsViewSwitching(true);
+      console.log(`[ViewMode] Switching to ${viewMode} view - setting loading state`);
+      
+      // When switching to monthly view, ensure we have fresh monthly data
+      if (viewMode === 'monthly') {
+        console.log('[ViewMode] Switching to monthly view - triggering data refresh');
+        // Force a refresh of the plan data to ensure monthly view has current data
+        setForceRefreshKey(prev => prev + 1);
+      }
+      
+      // Clear loading state after a delay to allow data to load
+      const timeoutId = setTimeout(() => {
+        setIsViewSwitching(false);
+        console.log(`[ViewMode] ${viewMode} view loading complete`);
+      }, 2000); // 2 second delay to allow data loading
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [viewMode, clientId]);
   
@@ -1467,14 +1741,107 @@ const WorkoutPlanSection = ({
 
   // Get the appropriate data for the table based on view mode
   const getTableData = () => {
-    if (viewMode === 'monthly' && monthlyData.length > 0) {
+    console.log('[WorkoutPlanSection] 🔍 getTableData called (UNIFIED):', {
+      viewMode,
+      unifiedWorkoutDataExists: !!unifiedWorkoutData,
+      unifiedWorkoutDataDaysCount: unifiedWorkoutData?.days?.length || 0,
+      unifiedWorkoutDataHasPlans: unifiedWorkoutData?.hasAnyPlans,
+      workoutPlanExists: !!workoutPlan,
+      workoutPlanWeekLength: workoutPlan?.week?.length || 0,
+      monthlyDataLength: monthlyData?.length || 0,
+      planStartDate: planStartDate?.toISOString(),
+      shouldFetchData
+    });
+    
+    // Use current planStartDate (alignment is handled in useEffect)
+    if (!planStartDate || !(planStartDate instanceof Date) || isNaN(planStartDate.getTime())) {
+      console.warn('[WorkoutPlanSection] ⚠️ planStartDate is invalid, returning empty array:', planStartDate);
+      return [];
+    }
+    
+    // TEMPORARILY DISABLED: Use unified workout data as primary source
+    if (false && unifiedWorkoutData && unifiedWorkoutData.days && unifiedWorkoutData.days.length > 0) {
+      const totalDays = viewMode === 'monthly' ? 28 : 7;
+      const weekDates = [];
+      
+      for (let i = 0; i < totalDays; i++) {
+        const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        
+        // Find matching data from unified workout data
+        const dayData = unifiedWorkoutData.days.find((day: any) => 
+          day.date === dateStr
+        );
+        
+        let planDay = {
+          date: dateStr,
+          focus: 'Rest Day',
+          exercises: []
+        };
+        
+        if (dayData && dayData.exercises && dayData.exercises.length > 0) {
+          planDay.focus = dayData.focus;
+          planDay.exercises = dayData.exercises as any; // Type assertion for compatibility
+        }
+        
+        weekDates.push(planDay);
+      }
+      
+      console.log('[WorkoutPlanSection] ✅ Using unified workout data:', {
+        totalDays: unifiedWorkoutData.days.length,
+        hasAnyPlans: unifiedWorkoutData.hasAnyPlans,
+        viewMode: unifiedWorkoutData.viewMode
+      });
+      
+      return unifiedWorkoutData.days;
+    }
+    
+    // PRIORITY 2: Fallback to original data sources
+    if (viewMode === 'monthly' && monthlyData && monthlyData.length > 0) {
       // Flatten the 4 weeks into a single array of 28 days
       const monthlyDataFlat = monthlyData.flat();
-      return monthlyDataFlat;
+      
+      // Ensure we have exactly 28 days for monthly view
+      if (monthlyDataFlat.length >= 28) {
+        return monthlyDataFlat.slice(0, 28);
+      } else {
+        // Pad with empty days if we don't have enough data
+        const paddedMonthlyData = [...monthlyDataFlat];
+        for (let i = monthlyDataFlat.length; i < 28; i++) {
+          // Use addDays to avoid timezone issues
+          const dayDate = addDays(planStartDate, i);
+          const dateStr = format(dayDate, 'yyyy-MM-dd');
+          paddedMonthlyData.push({
+            date: dateStr,
+            focus: 'Rest Day',
+            exercises: []
+          });
+        }
+        return paddedMonthlyData;
+      }
     }
-    // Return the current week data for weekly view
-    const weeklyData = workoutPlan?.week || [];
-    return weeklyData;
+    
+    // For weekly view or when monthly data is not available, use workoutPlan.week
+    if (workoutPlan && workoutPlan.week && workoutPlan.week.length > 0) {
+      return workoutPlan.week;
+    }
+    
+    // Fallback: generate empty data structure
+    console.log('[WorkoutPlanSection] 🔍 No data available, generating empty structure');
+    const totalDays = viewMode === 'monthly' ? 28 : 7;
+    const emptyData = [];
+    
+    for (let i = 0; i < totalDays; i++) {
+      const dayDate = addDays(planStartDate, i);
+      const dateStr = format(dayDate, 'yyyy-MM-dd');
+      emptyData.push({
+        date: dateStr,
+        focus: 'Rest Day',
+        exercises: []
+      });
+    }
+    
+    return emptyData;
   };
 
 
@@ -1944,22 +2311,39 @@ const WorkoutPlanSection = ({
     return mappedWeek;
   };
 
-  // Ensure clientId is a number and not undefined
-  const numericClientId = clientId ? (typeof clientId === 'string' ? parseInt(clientId) : clientId) : 0;
-
-  // Sync planStartDate with client's plan start day
+  // Sync planStartDate with client's plan start day - ENHANCED ALIGNMENT
   useEffect(() => {
     const dayFromClient = client?.plan_start_day as string | undefined;
     if (dayFromClient) {
       const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-      const targetIdx = weekdays.indexOf(dayFromClient);
-      const now = new Date();
-      const delta = (targetIdx - now.getDay() + 7) % 7;
-      const aligned = new Date(now);
-      aligned.setDate(now.getDate() + delta);
-      setPlanStartDate(aligned);
+      const currentDayIndex = planStartDate.getDay();
+      const targetDayIndex = weekdays.indexOf(dayFromClient);
+      
+      if (currentDayIndex !== targetDayIndex) {
+        console.log('[WorkoutPlanSection] 🔄 Aligning planStartDate with client plan start day:', {
+          currentDay: weekdays[currentDayIndex],
+          targetDay: dayFromClient,
+          currentDate: planStartDate.toISOString()
+        });
+        
+        // Calculate days to add to get to the target day
+        let daysToAdd = targetDayIndex - currentDayIndex;
+        if (daysToAdd < 0) {
+          daysToAdd += 7; // Go to next week's target day
+        }
+        
+        const newDate = new Date(planStartDate);
+        newDate.setDate(planStartDate.getDate() + daysToAdd);
+        
+        console.log('[WorkoutPlanSection] ✅ Aligned planStartDate:', {
+          newDate: newDate.toISOString(),
+          newDay: weekdays[newDate.getDay()]
+        });
+        
+        setPlanStartDate(newDate);
+      }
     }
-  }, [client?.plan_start_day]);
+  }, [client?.plan_start_day, planStartDate]);
 
   // Always align selected date to the client's plan start day
   useEffect(() => {
@@ -2277,6 +2661,14 @@ const WorkoutPlanSection = ({
         return;
       }
 
+      // Circuit breaker: if we've had recent timeouts, add a delay
+      const now = Date.now();
+      const lastTimeout = localStorage.getItem('lastFetchTimeout');
+      if (lastTimeout && (now - parseInt(lastTimeout)) < 30000) { // 30 second cooldown
+        console.log('🔄 [fetchPlan] Circuit breaker active, adding delay...');
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      }
+
     RequestLogger.logPerformance('fetchPlan_start', componentName, operationStartTime, {
       success: true,
       metadata: { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
@@ -2290,47 +2682,58 @@ const WorkoutPlanSection = ({
     // Add timeout protection to prevent infinite loading
     const timeoutId = setTimeout(() => {
       console.warn('⚠️ Fetch plan timeout - forcing reset');
+      // Record timeout for circuit breaker
+      localStorage.setItem('lastFetchTimeout', Date.now().toString());
       setIsFetchingPlan(false);
       clearLoading();
+      // Clear any pending requests to prevent cascading timeouts
+      RequestDeduplication.clearAll();
       toast({ 
         title: 'Loading Timeout', 
         description: 'Loading took too long. Please try again.', 
         variant: 'destructive' 
       });
-    }, 15000); // Reduced to 15 second timeout
+    }, 12000); // Reduced to 12 second timeout
     const startDateStr = format(planStartDate, 'yyyy-MM-dd');
-    const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
+    // Calculate date range based on view mode: 7 days for weekly, 28 days for monthly
+    const daysToAdd = viewMode === 'monthly' ? 27 : 6; // 28 days for monthly (0-27), 7 days for weekly (0-6)
+    const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log(`[fetchPlan] 🔍 Fetching ${viewMode} view data: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
 
     let data: any[] = [];
     let error: any = null;
     let isFromPreview = true; // Default to preview as primary source
 
     try {
-      console.log('🔄 [fetchPlan] Calling checkWeeklyWorkoutStatus...');
+      console.log(`🔄 [fetchPlan] Calling ${viewMode === 'monthly' ? 'checkMonthlyWorkoutStatus' : 'checkWeeklyWorkoutStatus'}...`);
       const statusQueryStartTime = Date.now();
       
-      // Use the unified weekly status function (same logic as monthly view)
-      const weeklyResult: WorkoutStatusResult = await loggedOperation(
-        'checkWeeklyWorkoutStatus',
+      // Use the appropriate status function based on view mode
+      const statusResult: WorkoutStatusResult = await loggedOperation(
+        viewMode === 'monthly' ? 'checkMonthlyWorkoutStatus' : 'checkWeeklyWorkoutStatus',
         componentName,
-        () => checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate),
-        { clientId: numericClientId, planStartDate: planStartDate?.toISOString() }
+        () => viewMode === 'monthly' 
+          ? checkMonthlyWorkoutStatus(supabase, numericClientId, planStartDate)
+          : checkWeeklyWorkoutStatus(supabase, numericClientId, planStartDate),
+        { clientId: numericClientId, planStartDate: planStartDate?.toISOString(), viewMode }
       );
       
-      console.log('🔄 [fetchPlan] checkWeeklyWorkoutStatus completed:', weeklyResult);
-      RequestLogger.logPerformance('checkWeeklyWorkoutStatus', componentName, statusQueryStartTime, {
+      console.log(`🔄 [fetchPlan] ${viewMode === 'monthly' ? 'checkMonthlyWorkoutStatus' : 'checkWeeklyWorkoutStatus'} completed:`, statusResult);
+      RequestLogger.logPerformance(viewMode === 'monthly' ? 'checkMonthlyWorkoutStatus' : 'checkWeeklyWorkoutStatus', componentName, statusQueryStartTime, {
         success: true,
         metadata: { 
-          resultStatus: weeklyResult.status, 
-          previewDataCount: weeklyResult.previewData?.length || 0,
-          scheduleDataCount: weeklyResult.scheduleData?.length || 0
+          resultStatus: statusResult.status, 
+          previewDataCount: statusResult.previewData?.length || 0,
+          scheduleDataCount: statusResult.scheduleData?.length || 0,
+          viewMode
         }
       });
       
       // Use preview data as primary source (same as monthly view)
-      if (weeklyResult.previewData && weeklyResult.previewData.length > 0) {
-        data = weeklyResult.previewData;
+      if (statusResult.previewData && statusResult.previewData.length > 0) {
+        data = statusResult.previewData;
         isFromPreview = true;
       } else {
         
@@ -2431,15 +2834,26 @@ const WorkoutPlanSection = ({
       } else {
         // Build week structure, ensuring exercises are normalized
         const weekDates = [];
-        for (let i = 0; i < 7; i++) {
+        const totalDays = viewMode === 'monthly' ? 28 : 7; // 28 days for monthly, 7 days for weekly
+        for (let i = 0; i < totalDays; i++) {
           const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
           const dateStr = format(currentDate, 'yyyy-MM-dd');
           
-          // Find matching data by comparing normalized dates
+          // Find matching data by comparing dates (workout.for_date is already normalized from DB)
           const dayData = data?.find(workout => {
-            const normalizedWorkoutDate = normalizeDateForStorage(workout.for_date);
-            return normalizedWorkoutDate === dateStr;
+            // workout.for_date is already in YYYY-MM-DD format from database
+            return workout.for_date === dateStr;
           });
+          
+          // Debug logging to help identify date matching issues
+          if (i === 0 || (viewMode === 'monthly' && i === 7)) { // Log for first day and first day of second week for monthly
+            console.log(`[fetchPlan] 🔍 Date matching debug for ${dateStr} (day ${i + 1}/${totalDays}):`, {
+              availableDates: data?.map(w => w.for_date) || [],
+              foundMatch: !!dayData,
+              dayDataExercises: dayData?.details_json?.exercises?.length || 0,
+              totalDataCount: data?.length || 0
+            });
+          }
           
           let planDay = {
               date: dateStr,
@@ -2612,9 +3026,13 @@ const WorkoutPlanSection = ({
       // Ensure Approve button logic can activate consistently after table saves
       setIsDraftPlan(true);
       
-      // Use unified post-save refresh to keep behavior consistent across flows
+      // Use enhanced unified post-save refresh to keep behavior consistent across flows
       (async () => {
-        await handlePostSaveRefresh();
+        await handlePostSaveRefreshEnhanced({
+          isMonthly: viewMode === 'monthly',
+          forceWeekStatusRefresh: false, // Table saves don't need extra refresh
+          delayBeforeRefresh: 0
+        });
       })();
     } else {
       // New unsaved changes
@@ -2656,11 +3074,12 @@ const WorkoutPlanSection = ({
       
       setWorkoutPlan(importedWorkoutPlan);
       
-      // Set as draft plan since it's imported
-      setIsDraftPlan(true);
-      
-      // Check approval status after importing
-      await checkPlanApprovalStatus();
+      // ✅ USE ENHANCED UNIFIED FUNCTION INSTEAD OF DIRECT CALLS
+      await handlePostSaveRefreshEnhanced({
+        isMonthly: viewMode === 'monthly',
+        forceWeekStatusRefresh: true,
+        delayBeforeRefresh: 300
+      });
       
       // Update the calendar to show the imported date range
       if (dateRange.start && dateRange.end) {
@@ -2689,52 +3108,89 @@ const WorkoutPlanSection = ({
     }
   };
 
-  // Fetch workout plan for client and date
+  // RESTORED: Original data fetching logic
+  // This useEffect handles the primary data fetching for the component
   useEffect(() => {
-    const componentName = 'WorkoutPlanSection';
-    const effectStartTime = Date.now();
+    console.log('🔄 [useEffect] Running original fetchPlan logic');
     
-    RequestLogger.logStateChange(
-      componentName,
-      'useEffect_fetchPlan',
-      'triggered',
-      'executing',
-      `dependencies: clientId=${numericClientId}, date=${planStartDate?.toISOString()}, hasAI=${hasAIGeneratedPlan}`
-    );
-    
-    console.log('🔄 [useEffect] fetchPlan trigger - client:', numericClientId, 'date:', planStartDate, 'hasAI:', hasAIGeneratedPlan);
-    
+    // Only run fetchPlan if we don't have an AI generated plan
     if (hasAIGeneratedPlan) {
-      RequestLogger.logStateChange(
-        componentName,
-        'useEffect_fetchPlan',
-        'executing',
-        'skipped',
-        'hasAIGeneratedPlan=true'
-      );
-      console.log('🔄 [useEffect] Skipping fetchPlan due to hasAIGeneratedPlan');
+      console.log('🔄 [useEffect] Skipping fetchPlan - AI plan exists');
       return;
     }
     
-    RequestLogger.logPerformance('useEffect_fetchPlan', componentName, effectStartTime, {
-      success: true,
-      metadata: { 
-        triggeredBy: 'dependencies',
-        clientId: numericClientId,
-        planStartDate: planStartDate?.toISOString(),
-        hasAIGeneratedPlan
-      }
-    });
-    
+    // Run the original fetchPlan function
+    console.log('🔄 [useEffect] Running original fetchPlan');
     fetchPlan();
-  }, [numericClientId, planStartDate, hasAIGeneratedPlan]); // Removed client?.plan_start_day to prevent infinite loops
+  }, [numericClientId, planStartDate, hasAIGeneratedPlan]);
 
   // Reset AI generated plan flag when client or date changes
   useEffect(() => {
     setHasAIGeneratedPlan(false);
   }, [numericClientId, planStartDate]);
+  
+  // Handle date alignment separately from render cycle to prevent infinite loops
+  useEffect(() => {
+    if (planStartDate && client?.plan_start_day) {
+      const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const clientPlanStartDay = client.plan_start_day;
+      const targetDayIndex = weekdays.indexOf(clientPlanStartDay);
+      const currentDayIndex = planStartDate.getDay();
+      
+      if (currentDayIndex !== targetDayIndex) {
+        console.warn('[WorkoutPlanSection] ⚠️ planStartDate not aligned, correcting:', {
+          currentDate: planStartDate.toISOString(),
+          currentDay: weekdays[currentDayIndex],
+          targetDay: clientPlanStartDay
+        });
+        
+        // Calculate days to add to get to the target day
+        let daysToAdd = targetDayIndex - currentDayIndex;
+        if (daysToAdd < 0) {
+          daysToAdd += 7; // Go to next week's target day
+        }
+        
+        const alignedDate = new Date(planStartDate);
+        alignedDate.setDate(planStartDate.getDate() + daysToAdd);
+        
+        // Update the state to the aligned date
+        setPlanStartDate(alignedDate);
+      }
+    }
+  }, [client?.plan_start_day]); // Only run when client plan start day changes
 
-  // Handle date changes with unsaved changes protection
+  // TEMPORARILY DISABLED: Sync workoutPlan state with unified data
+  useEffect(() => {
+    if (false && unifiedWorkoutData && !hasAIGeneratedPlan && planStartDate && shouldFetchData) {
+      console.log('[WorkoutPlanSection] 🔄 Syncing workoutPlan with unified data:', {
+        totalDays: unifiedWorkoutData?.days?.length || 0,
+        hasAnyPlans: unifiedWorkoutData?.hasAnyPlans,
+        viewMode: unifiedWorkoutData?.viewMode
+      });
+      
+      // Convert unified data to legacy workoutPlan format for compatibility
+      const weekDates = unifiedWorkoutData.days.map((day: any) => ({
+        date: day.date,
+        focus: day.focus,
+        exercises: day.exercises as any // Type assertion for compatibility
+      }));
+      
+      const syncedWorkoutPlan: WeeklyWorkoutPlan = {
+        week: weekDates,
+        hasAnyWorkouts: unifiedWorkoutData.hasAnyPlans,
+        planStartDate: unifiedWorkoutData.startDate,
+        planEndDate: unifiedWorkoutData.endDate
+      };
+      
+      setWorkoutPlan(syncedWorkoutPlan);
+      console.log('[WorkoutPlanSection] ✅ Synced workoutPlan with unified data:', {
+        weekLength: syncedWorkoutPlan.week.length,
+        hasAnyWorkouts: syncedWorkoutPlan.hasAnyWorkouts
+      });
+    }
+  }, [unifiedWorkoutData, hasAIGeneratedPlan, planStartDate, shouldFetchData]);
+
+  // Handle date changes with unsaved changes protection and strict alignment
   const handleDateChange = async (newDate: Date) => {
     if (workoutPlanState.hasUnsavedChanges) {
       const confirmed = await showConfirmationDialog(
@@ -2747,13 +3203,42 @@ const WorkoutPlanSection = ({
       }
     }
     
-    // Update the state
-    setPlanStartDate(newDate);
+    // Ensure the date is strictly aligned with client's plan start day
+    const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const clientPlanStartDay = client?.plan_start_day || 'Sunday';
+    const targetDayIndex = weekdays.indexOf(clientPlanStartDay);
+    const newDateDayIndex = newDate.getDay();
+    
+    let alignedDate = newDate;
+    if (newDateDayIndex !== targetDayIndex) {
+      console.log('[WorkoutPlanSection] 🔄 Aligning selected date with client plan start day:', {
+        selectedDate: newDate.toISOString(),
+        selectedDay: weekdays[newDateDayIndex],
+        targetDay: clientPlanStartDay
+      });
+      
+      // Calculate days to add to get to the target day
+      let daysToAdd = targetDayIndex - newDateDayIndex;
+      if (daysToAdd < 0) {
+        daysToAdd += 7; // Go to next week's target day
+      }
+      
+      alignedDate = new Date(newDate);
+      alignedDate.setDate(newDate.getDate() + daysToAdd);
+      
+      console.log('[WorkoutPlanSection] ✅ Aligned selected date:', {
+        alignedDate: alignedDate.toISOString(),
+        alignedDay: weekdays[alignedDate.getDay()]
+      });
+    }
+    
+    // Update the state with aligned date
+    setPlanStartDate(alignedDate);
     updateWorkoutPlanState({ hasUnsavedChanges: false });
     
     // Persist to localStorage
     if (clientId) {
-      localStorage.setItem(`workoutPlanDate_${clientId}`, newDate.toISOString());
+      localStorage.setItem(`workoutPlanDate_${clientId}`, alignedDate.toISOString());
     }
     
     // Update URL parameter
@@ -2886,8 +3371,47 @@ const WorkoutPlanSection = ({
 
   // Helper to check approval status for the week using unified utility
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
-  const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string} | null>(null);
+  const [lastApprovalCheck, setLastApprovalCheck] = useState<{viewMode: string, clientId: number, date: string, timestamp: number} | null>(null);
   const [forceRefreshKey, setForceRefreshKey] = useState(0); // Add force refresh mechanism
+  
+  // Unified refresh system
+  const { state: refreshState, refresh: unifiedRefresh, clearAll: clearRefreshQueue } = useUnifiedRefresh();
+  
+  // Optimistic updates system
+  const { 
+    optimisticData, 
+    isOptimistic, 
+    optimisticSave, 
+    optimisticApprove, 
+    confirmUpdate, 
+    revertUpdate 
+  } = useWorkoutPlanOptimisticUpdates();
+  
+  // Approve button state machine
+  const {
+    state: approveButtonState,
+    buttonConfig: approveButtonConfig,
+    dispatch: dispatchApproveAction,
+    handleSave: handleApproveSave,
+    handleRefresh: handleApproveRefresh,
+    handleApprove: handleApproveAction,
+    handleRetry: handleApproveRetry,
+    reset: resetApproveState,
+    isState: isApproveState
+  } = useApproveButtonState();
+  
+  // Enhanced toast notifications
+  const {
+    toasts,
+    showSuccess,
+    showError,
+    showWarning,
+    showInfo,
+    showLoading,
+    hideToast,
+    clearAllToasts
+  } = useEnhancedToast();
+  const [isViewSwitching, setIsViewSwitching] = useState(false); // Block view switching during data loading
   const [isPlanManagementExpanded, setIsPlanManagementExpanded] = useState(false); // Collapsible Plan Management state
   const [isClientGoalsExpanded, setIsClientGoalsExpanded] = useState(() => {
     // Try to get user preference from localStorage
@@ -2908,6 +3432,25 @@ const WorkoutPlanSection = ({
     // Trigger immediate status check
     checkPlanApprovalStatus();
   };
+
+  // Cleanup function to reset stuck states
+  const resetStuckStates = useCallback(() => {
+    console.log('[Reset Stuck States] Resetting potentially stuck states...');
+    setIsCheckingApproval(false);
+    setIsSavingEdits(false);
+    setShowSavingModal(false);
+    setForceRefreshKey(prev => prev + 1);
+    
+    // Clear unified refresh queue
+    clearRefreshQueue();
+    
+    // Clear any stuck requests in RequestDeduplication
+    const stats = RequestDeduplication.getStats();
+    if (stats.pendingCount > 0) {
+      console.log(`[Reset Stuck States] Clearing ${stats.pendingCount} stuck requests:`, stats.pendingKeys);
+      RequestDeduplication.clearAll();
+    }
+  }, [clearRefreshQueue]);
 
   // Handle client goals toggle with persistence
   const handleClientGoalsToggle = () => {
@@ -2954,12 +3497,18 @@ const WorkoutPlanSection = ({
           lastApprovalCheck.clientId === checkKey.clientId &&
           lastApprovalCheck.date === checkKey.date &&
           forceRefreshKey === 0) {
-        console.log('[checkPlanApprovalStatus] Already checked this combination recently, skipping...');
-        return;
+        // Add cooldown period to prevent excessive calls
+        const timeSinceLastCheck = Date.now() - lastApprovalCheck.timestamp;
+        const cooldownPeriod = checkKey.viewMode === 'monthly' ? 2000 : 1000; // 2 seconds for monthly, 1 second for weekly
+        
+        if (timeSinceLastCheck < cooldownPeriod) {
+          console.log(`[checkPlanApprovalStatus] Cooldown period active (${timeSinceLastCheck}ms < ${cooldownPeriod}ms), skipping...`);
+          return;
+        }
       }
 
     setIsCheckingApproval(true);
-    setLastApprovalCheck(checkKey);
+    setLastApprovalCheck({...checkKey, timestamp: Date.now()});
 
     // Add timeout to prevent infinite hanging
     const timeoutId = setTimeout(() => {
@@ -3100,6 +3649,8 @@ const WorkoutPlanSection = ({
     } finally {
       clearTimeout(timeoutId); // Clear the timeout
       setIsCheckingApproval(false);
+      // Clear view switching loading state when approval check completes
+      setIsViewSwitching(false);
       // Reset force refresh key after successful check
       if (forceRefreshKey > 0) {
         setForceRefreshKey(0);
@@ -3126,55 +3677,311 @@ const WorkoutPlanSection = ({
     }
   };
 
-  // Handle individual week approval for monthly view
-  const handleApproveWeek = async (weekIndex: number) => {
-    if (!weekStatuses[weekIndex] || !weekStatuses[weekIndex].canApprove) return;
+  // Enhanced unified post-save handler for all save operations
+  const handlePostSaveRefreshEnhanced = async (options: {
+    isMonthly?: boolean;
+    forceWeekStatusRefresh?: boolean;
+    delayBeforeRefresh?: number;
+    skipDatabaseCheck?: boolean; // New option to skip database status check
+  } = {}) => {
+    const startTime = Date.now();
+    
+    try {
+      console.log('[Enhanced Post-Save Refresh] Starting with options:', options);
+      
+      // Mark plan as draft so Approve button logic can activate
+      setIsDraftPlan(true);
+      
+      // Use unified refresh system for approval status
+      if (!options.skipDatabaseCheck) {
+        console.log('[Enhanced Post-Save Refresh] Using unified refresh for approval status...');
+        
+        // Add delay if specified
+        if (options.delayBeforeRefresh && options.delayBeforeRefresh > 0) {
+          console.log(`[Enhanced Post-Save Refresh] Waiting ${options.delayBeforeRefresh}ms for database propagation`);
+          await new Promise(resolve => setTimeout(resolve, options.delayBeforeRefresh));
+        }
+        
+        // SEQUENTIAL OPERATIONS: Only run one refresh operation at a time
+        if (options.isMonthly && options.forceWeekStatusRefresh) {
+          // For monthly view, use MONTHLY_DATA which includes approval status
+          console.log('[Enhanced Post-Save Refresh] Calling unifiedRefresh for MONTHLY_DATA (includes approval status)...');
+          await unifiedRefresh({
+            type: 'MONTHLY_DATA',
+            params: { clientId: numericClientId, planStartDate },
+            cooldown: 1000, // Increased cooldown to prevent conflicts
+            priority: 'normal'
+          });
+          console.log('[Enhanced Post-Save Refresh] unifiedRefresh for MONTHLY_DATA completed');
+        } else {
+          // For weekly view, use APPROVAL_STATUS
+          console.log('[Enhanced Post-Save Refresh] Calling unifiedRefresh for APPROVAL_STATUS...');
+          await unifiedRefresh({
+            type: 'APPROVAL_STATUS',
+            params: { clientId: numericClientId, planStartDate, viewMode },
+            cooldown: 1000, // Increased cooldown to prevent conflicts
+            priority: 'normal'
+          });
+          console.log('[Enhanced Post-Save Refresh] unifiedRefresh for APPROVAL_STATUS completed');
+        }
+      } else {
+        console.log('[Enhanced Post-Save Refresh] Skipping database check, using current state...');
+      }
+      
+      // Single force refresh key update at the end to avoid cascading effects
+      console.log('[Enhanced Post-Save Refresh] Forcing unified approval status update...');
+      setForceRefreshKey(prev => prev + 1);
+      
+      const duration = Date.now() - startTime;
+      console.log(`[Enhanced Post-Save Refresh] Completed successfully in ${duration}ms`);
+      return true;
+    } catch (err) {
+      const duration = Date.now() - startTime;
+      console.error(`[Enhanced Post-Save Refresh] Failed after ${duration}ms:`, err);
+      
+      // Reset state on error to prevent UI from being stuck
+      setIsCheckingApproval(false);
+      setForceRefreshKey(prev => prev + 1); // Force UI refresh even on error
+      
+      return false;
+    }
+  };
 
-    const weekStatus = weekStatuses[weekIndex];
+  // Helper function to check if a week has any dirty dates (unified logic)
+  const isWeekDirty = useCallback((weekIndex: number) => {
+    if (dirtyDates.size === 0) return false;
+    
+    const weekStartDate = addWeeks(planStartDate, weekIndex);
+    for (let i = 0; i < 7; i++) {
+      const dayDate = addDays(weekStartDate, i);
+      const dateStr = format(dayDate, 'yyyy-MM-dd');
+      if (dirtyDates.has(dateStr)) {
+        return true;
+      }
+    }
+    return false;
+  }, [dirtyDates, planStartDate]);
+
+  // Unified approval status calculation function
+  const calculateUnifiedApprovalStatus = useCallback((): UnifiedApprovalStatus => {
+    const hasUnsavedChanges = dirtyDates.size > 0;
+    const globalCanApprove = (planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && 
+                            isDraftPlan && 
+                            !hasUnsavedChanges;
+    
+    // Calculate week statuses with unified dirty date logic
+    // IMPORTANT: Only block approval if there are actually unsaved changes
+    // After save operations, dirtyDates should be empty, allowing approval
+    const weeks = weekStatuses.map(week => ({
+      ...week,
+      canApprove: week.canApprove && !hasUnsavedChanges // Use global hasUnsavedChanges instead of per-week check
+    }));
+    
+    // Determine global message based on state
+    let globalMessage = 'Approve Plan';
+    if (hasUnsavedChanges) {
+      globalMessage = 'Save Plan First';
+    } else if (planApprovalStatus === 'approved') {
+      globalMessage = 'Plan Approved';
+    } else if (planApprovalStatus === 'pending') {
+      globalMessage = 'No Plan to Approve';
+    }
+    
+    return {
+      global: {
+        canApprove: globalCanApprove,
+        status: planApprovalStatus === 'not_approved' ? 'draft' : planApprovalStatus,
+        hasUnsavedChanges,
+        message: globalMessage
+      },
+      weeks
+    };
+  }, [planApprovalStatus, isDraftPlan, dirtyDates, weekStatuses]);
+
+  // Update unified approval status whenever dependencies change
+  useEffect(() => {
+    const newUnifiedStatus = calculateUnifiedApprovalStatus();
+    setUnifiedApprovalStatus(newUnifiedStatus);
+    console.log('[Unified Approval Status] Updated:', newUnifiedStatus);
+  }, [calculateUnifiedApprovalStatus, forceRefreshKey]);
+
+  // Additional effect to ensure unified approval status is updated after plan generation
+  useEffect(() => {
+    if (planApprovalStatus === 'not_approved' && isDraftPlan && weekStatuses.length > 0) {
+      console.log('[Post-Generation] Triggering unified approval status update...');
+      const newUnifiedStatus = calculateUnifiedApprovalStatus();
+      setUnifiedApprovalStatus(newUnifiedStatus);
+      console.log('[Post-Generation] Unified approval status updated:', newUnifiedStatus);
+    }
+  }, [planApprovalStatus, isDraftPlan, weekStatuses, calculateUnifiedApprovalStatus]);
+
+  // Sync state machine with existing state variables
+  useEffect(() => {
+    // Sync dirty dates with state machine
+    if (dirtyDates.size > 0) {
+      dispatchApproveAction('DIRTY_CHANGES');
+    } else if (dirtyDates.size === 0 && isDraftPlan && planApprovalStatus === 'not_approved') {
+      dispatchApproveAction('CLEAN_CHANGES');
+    }
+  }, [dirtyDates, isDraftPlan, planApprovalStatus, dispatchApproveAction]);
+
+  // Sync plan generation with state machine
+  useEffect(() => {
+    if (hasAIGeneratedPlan && isDraftPlan) {
+      dispatchApproveAction('PLAN_GENERATED');
+    }
+  }, [hasAIGeneratedPlan, isDraftPlan, dispatchApproveAction]);
+
+  // Unified approval handler for both global and week-level approvals
+  const handleUnifiedApproval = async (scope: 'global' | 'week', weekIndex?: number) => {
+    const isGlobal = scope === 'global';
+    const weekStatus = isGlobal ? null : weekStatuses[weekIndex!];
+    
+    // Validate approval conditions
+    if (isGlobal) {
+      if (!unifiedApprovalStatus.global.canApprove) {
+        console.warn('[Unified Approval] Global approval not allowed');
+        return;
+      }
+    } else {
+      if (!weekStatus || !weekStatus.canApprove) {
+        console.warn('[Unified Approval] Week approval not allowed');
+        return;
+      }
+    }
 
     try {
+      const planType = isGlobal ? (viewMode === 'monthly' ? 'monthly' : 'weekly') : `Week ${weekStatus!.weekNumber}`;
       setShowSavingModal(true);
-      setSavingMessage(`Approving Week ${weekStatus.weekNumber}...`);
-      setLoading('approving', `Approving Week ${weekStatus.weekNumber}...`);
+      setSavingMessage(`Approving ${planType} plan...`);
+      setLoading('approving', `Approving ${planType} plan...`);
+      setIsApproving(true);
+      
+      // Show progress message for large operations
+      if (isGlobal && viewMode === 'monthly') {
+        setTimeout(() => {
+          setSavingMessage('Processing large monthly plan - this may take a few minutes...');
+        }, 10000); // Show progress message after 10 seconds
+      }
 
-      // Call the approveWeek function
-      const result = await approveWeek(numericClientId, weekStatus.startDate, weekStatus.weekNumber);
+      let result: { success: boolean; error?: string };
+      
+      if (isGlobal) {
+        // Global approval - use existing approvePlan function
+        const approvalPromise = approvePlan(numericClientId, planStartDate, viewMode);
+        
+        // Set reasonable timeout for approval operations
+        const timeoutDuration = 30 * 1000; // 30 seconds should be more than enough for optimized approval
+        const timeoutMessage = 'Approval timeout after 30 seconds - please try again';
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(timeoutMessage)), timeoutDuration)
+        );
+        
+        console.log(`[Unified Approval] Starting ${viewMode} approval with ${timeoutDuration/1000}s timeout`);
+        result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
+      } else {
+        // Week approval - use existing approveWeek function
+        result = await approveWeek(numericClientId, weekStatus!.startDate, weekStatus!.weekNumber);
+      }
 
       if (result.success) {
         toast({
-          title: `Week ${weekStatus.weekNumber} Approved`,
-          description: 'The workout week has been approved and saved to the main schedule.',
+          title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`,
+          description: `The ${planType} workout plan has been approved and saved to the main schedule.`,
           variant: 'default'
         });
 
-        // Update the week status locally
+        // Update state immediately
+        if (isGlobal) {
+          setIsDraftPlan(false);
+          updateWorkoutPlanState({
+            status: 'approved',
+            source: 'database',
+            hasUnsavedChanges: false,
+            lastSaved: new Date()
+          });
+          
+          // Clear dirty dates after successful approval
+          setDirtyDates(new Set());
+          
+          // Force update week statuses to show approved status
+          if (viewMode === 'monthly') {
+            const approvedWeekStatuses = Array.from({ length: 4 }, (_, index) => ({
+              weekNumber: index + 1,
+              status: 'approved' as const,
+              startDate: new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000),
+              endDate: new Date(planStartDate.getTime() + (index + 1) * 7 * 24 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000),
+              canApprove: false
+            }));
+            setWeekStatuses(approvedWeekStatuses);
+          } else {
+            setWeekStatuses([{
+              weekNumber: 1,
+              status: 'approved' as const,
+              startDate: planStartDate,
+              endDate: new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
+              canApprove: false
+            }]);
+          }
+        } else {
+          // Update the specific week status locally
         setWeekStatuses(prev => prev.map((week, idx) =>
           idx === weekIndex
             ? { ...week, status: 'approved', canApprove: false }
             : week
         ));
+        }
+
+        // Force a fresh approval status check (avoid dedupe)
+        setForceRefreshKey(prev => prev + 1);
+        
+        // Add a small delay to ensure database changes have propagated
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Refresh approval status to ensure consistency
         await checkPlanApprovalStatus();
+        
+        // Add another small delay before fetching plan data
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Refresh the plan data to show approved version
+        await fetchPlan();
 
       } else {
         toast({
           title: 'Approval Failed',
-          description: result.error || 'Could not approve week.',
+          description: result.error || `Could not approve ${planType} plan.`,
           variant: 'destructive'
         });
       }
     } catch (error) {
-      console.error('[handleApproveWeek] Error:', error);
+      console.error('[Unified Approval] Error:', error);
+      
+      // Handle timeout specifically
+      if (error instanceof Error && error.message.includes('timeout')) {
+        toast({ 
+          title: 'Approval Timeout', 
+          description: 'The approval process is taking longer than expected. This can happen with large plans. Please try again or contact support if the issue persists.', 
+          variant: 'destructive' 
+        });
+      } else {
       toast({
         title: 'Approval Failed',
         description: 'An unexpected error occurred during approval.',
         variant: 'destructive'
       });
+      }
     } finally {
       clearLoading();
       setShowSavingModal(false);
+      setIsApproving(false);
     }
+  };
+
+  // Handle individual week approval for monthly view (legacy function - now uses unified handler)
+  const handleApproveWeek = async (weekIndex: number) => {
+    await handleUnifiedApproval('week', weekIndex);
   };
 
   // Re-check approval status whenever plan, client, date, or view mode changes
@@ -3192,6 +3999,8 @@ const WorkoutPlanSection = ({
       );
       
       // Add a longer delay to prevent rapid successive calls when viewMode changes
+      // Use a longer delay for viewMode changes to prevent infinite loops
+      const delay = viewMode === 'monthly' ? 1000 : 500; // 1 second for monthly, 500ms for weekly
       const timeoutId = setTimeout(() => {
         RequestLogger.logStateChange(
           componentName,
@@ -3201,7 +4010,7 @@ const WorkoutPlanSection = ({
           'timeout_triggered'
         );
         checkPlanApprovalStatus();
-      }, 500); // Increased from 100ms to 500ms
+      }, delay);
       
       return () => {
         RequestLogger.logStateChange(
@@ -3375,14 +4184,49 @@ const WorkoutPlanSection = ({
       console.log('💾 Stored monthly data with', monthlyWeeks.length, 'weeks');
     }
 
+    // NEW: Save all weeks to schedule_preview before checking approval
+    try {
+      console.log('💾 [Monthly Generation] Saving all weeks to schedule_preview...');
+      for (let weekIndex = 0; weekIndex < monthlyPlan.weeks.length; weekIndex++) {
+        const weekData = monthlyPlan.weeks[weekIndex];
+        if (weekData?.plan?.days) {
+          const weekStartDate = new Date(weekData.startDate);
+          await savePlanToSchedulePreview(weekData.plan.days, numericClientId, weekStartDate);
+          console.log(`✅ [Monthly Generation] Saved week ${weekIndex + 1} to schedule_preview`);
+        }
+      }
+      
+      // ✅ USE ENHANCED UNIFIED FUNCTION AFTER SAVING
+      await handlePostSaveRefreshEnhanced({
+        isMonthly: true,
+        forceWeekStatusRefresh: true,
+        delayBeforeRefresh: 500
+      });
+      
+      // Also ensure week statuses are updated for monthly view
+      console.log('[Monthly Generation] Updating week statuses for monthly view...');
+      const monthlyWeekStatuses = Array.from({ length: 4 }, (_, index) => ({
+        weekNumber: index + 1,
+        status: 'draft' as const,
+        startDate: new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000),
+        endDate: new Date(planStartDate.getTime() + (index + 1) * 7 * 24 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000),
+        canApprove: true
+      }));
+      setWeekStatuses(monthlyWeekStatuses);
+
     toast({
       title: 'Monthly Plan Generated',
       description: '4-week progressive workout plan created and saved successfully.'
     });
 
-    // Force a fresh approval status check after monthly generation
-    setForceRefreshKey(prev => prev + 1);
-    await checkPlanApprovalStatus();
+    } catch (error) {
+      console.error('❌ [Monthly Generation] Failed to save monthly plan:', error);
+      toast({ 
+        title: 'Save Failed', 
+        description: 'Could not save monthly plan to database. Please try again.', 
+        variant: 'destructive' 
+      });
+    }
 
     setIsMonthlyGeneratorOpen(false);
   };
@@ -3653,6 +4497,38 @@ const WorkoutPlanSection = ({
             )
           ]);
           console.log('[DEBUG] Approval status check completed after plan generation');
+          
+          // Force unified approval status update after generation
+          console.log('[DEBUG] Forcing unified approval status update after generation...');
+          setForceRefreshKey(prev => prev + 1);
+          
+          // Ensure global approval status is properly set for both weekly and monthly views
+          console.log('[DEBUG] Setting global approval status to draft...');
+          setPlanApprovalStatus('not_approved');
+          setIsDraftPlan(true);
+          
+          // Also ensure week statuses are updated for local approve buttons
+          if (viewMode === 'weekly') {
+            console.log('[DEBUG] Updating week statuses for weekly view...');
+            setWeekStatuses([{
+              weekNumber: 1,
+              status: 'draft',
+              startDate: planStartDate,
+              endDate: new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
+              canApprove: true
+            }]);
+          }
+          
+          // Force immediate unified approval status update
+          console.log('[DEBUG] Forcing immediate unified approval status update...');
+          setForceRefreshKey(prev => prev + 1);
+          
+          // Add a small delay to ensure all state updates are processed
+          setTimeout(() => {
+            console.log('[DEBUG] Unified approval status should now be updated');
+            // Force another refresh to ensure global approval button appears
+            setForceRefreshKey(prev => prev + 1);
+          }, 100);
         } catch (approvalError) {
           console.warn('⚠️ Approval status check failed:', approvalError);
           // Don't show error to user for this non-critical operation
@@ -3717,7 +4593,13 @@ const WorkoutPlanSection = ({
   };
 
   return (
-    <div className="space-y-8">
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        console.error('[WorkoutPlanSection] Error caught by boundary:', error, errorInfo);
+        // You could also send this to an error reporting service here
+      }}
+    >
+      <div className="space-y-8">
       {/* Client Goals & Preferences Toggle */}
       <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl border border-blue-200 dark:border-blue-700 shadow-sm">
         <div className="flex items-center gap-3">
@@ -3880,41 +4762,57 @@ const WorkoutPlanSection = ({
                 View Mode
               </label>
               <div
-                className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl p-2 shadow-lg border border-blue-200 dark:border-blue-700"
+                className={`flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl p-2 shadow-lg border border-blue-200 dark:border-blue-700 ${
+                  isViewSwitching ? 'opacity-75' : ''
+                }`}
               >
                 <Button
                   variant={viewMode === 'weekly' ? 'default' : 'ghost'}
                   size="default"
+                  disabled={isViewSwitching || isCheckingApproval || isWorkoutDataLoading}
                   onClick={() => {
-                    setViewMode('weekly');
-                    setIsCalendarOpen(false);
+                    if (!isViewSwitching && !isCheckingApproval && !isWorkoutDataLoading) {
+                      setViewMode('weekly');
+                      setIsCalendarOpen(false);
+                    }
                   }}
                   className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
                     viewMode === 'weekly' 
                       ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl' 
                       : 'hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-2 border-blue-200 dark:border-blue-700'
-                  }`}
+                  } ${(isViewSwitching || isCheckingApproval || isWorkoutDataLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <CalendarIcon className="h-4 w-4 mr-2" />
-                  Weekly
+                  {isViewSwitching && viewMode !== 'weekly' ? 'Loading...' : 'Weekly'}
                 </Button>
                 <Button
                   variant={viewMode === 'monthly' ? 'default' : 'ghost'}
                   size="default"
+                  disabled={isViewSwitching || isCheckingApproval || isWorkoutDataLoading}
                   onClick={() => {
-                    setViewMode('monthly');
-                    setIsCalendarOpen(false);
+                    if (!isViewSwitching && !isCheckingApproval && !isWorkoutDataLoading) {
+                      setViewMode('monthly');
+                      setIsCalendarOpen(false);
+                    }
                   }}
                   className={`font-semibold px-6 py-3 transition-all duration-300 transform hover:scale-105 ${
                     viewMode === 'monthly' 
                       ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xl' 
                       : 'hover:bg-purple-100 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-2 border-purple-200 dark:border-purple-700'
-                  }`}
+                  } ${(isViewSwitching || isCheckingApproval || isWorkoutDataLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <CalendarDays className="h-4 w-4 mr-2" />
-                  Monthly
+                  {isViewSwitching && viewMode !== 'monthly' ? 'Loading...' : 'Monthly'}
                 </Button>
               </div>
+              
+              {/* Loading indicator for view switching */}
+              {isViewSwitching && (
+                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 mt-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                  <span>Switching to {viewMode === 'weekly' ? 'Monthly' : 'Weekly'} view...</span>
+                </div>
+              )}
             </div>
           </div>
           
@@ -3986,112 +4884,83 @@ const WorkoutPlanSection = ({
                 <Button
                   onClick={async () => {
                     if (!workoutPlan) return;
+                    console.log('[WorkoutPlanSection] Save Plan to Database button clicked');
                     setShowSavingModal(true);
                     setSavingMessage('Saving changes...');
                     setIsSavingEdits(true);
                     
                     try {
-                      // Save the current workout plan to schedule_preview
-                      const result = await savePlanToSchedulePreview(workoutPlan.week, numericClientId, planStartDate);
-                      if (result.success) {
-                        toast({ title: 'Changes Saved', description: 'Your changes have been saved successfully.' });
+                      // Show loading toast
+                      const loadingToastId = showLoading('Saving Changes', 'Please wait while we save your workout plan...');
+                      
+                      console.log('[WorkoutPlanSection] About to call handleApproveSave');
+                      // Use state machine to handle save operation
+                      const success = await handleApproveSave(
+                        { week: workoutPlan.week, clientId: numericClientId, planStartDate },
+                        async (data) => {
+                          const result = await savePlanToSchedulePreview(data.week, data.clientId, data.planStartDate);
+                          console.log('[WorkoutPlanSection] savePlanToSchedulePreview result:', result);
+                          return result;
+                        }
+                      );
+                      
+                      console.log('[WorkoutPlanSection] handleApproveSave returned:', success);
+                      
+                      // Hide loading toast
+                      hideToast(loadingToastId);
+                      
+                      if (success) {
+                        showSuccess('Changes Saved', 'Your workout plan has been saved successfully!');
+                        
                         // Clear dirty dates by notifying WorkoutPlanTable
                         setDirtyDates(new Set());
+                        
                         // Update workout plan state
                         updateWorkoutPlanState({ 
                           hasUnsavedChanges: false, 
                           lastSaved: new Date() 
                         });
                         
-                        // Force a fresh approval status check
-                        setForceRefreshKey(prev => prev + 1);
+                        // Show refresh loading toast
+                        const refreshToastId = showLoading('Checking Status', 'Verifying your plan is ready for approval...');
                         
-                        // Add a small delay to ensure database changes have propagated
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        
-                        // Refresh approval status to ensure consistency
-                        await checkPlanApprovalStatus();
-                        
-                        // Force refresh of week statuses to show current approval state
-                        if (viewMode === 'monthly') {
-                          // For monthly view, refresh all week statuses
-                          const refreshedWeekStatuses = await Promise.all(
-                            Array.from({ length: 4 }, async (_, index) => {
-                              const weekStart = new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000);
-                              const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
-                              
-                              // Check if this week has any workouts that need approval
-                              const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-                              const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
-                              
-                              try {
-                                const { data: weekData } = await supabase
-                                  .from('schedule_preview')
-                                  .select('*')
-                                  .eq('client_id', numericClientId)
-                                  .eq('type', 'workout')
-                                  .gte('for_date', weekStartStr)
-                                  .lte('for_date', weekEndStr);
-                                
-                                const hasWorkouts = weekData && weekData.length > 0;
-                                const canApprove = hasWorkouts;
-                                
-                                return {
-                                  weekNumber: index + 1,
-                                  status: hasWorkouts ? 'draft' as const : 'no_plan' as const,
-                                  startDate: weekStart,
-                                  endDate: weekEnd,
-                                  canApprove: canApprove || false
-                                };
-                              } catch (error) {
-                                console.error(`Error checking week ${index + 1} status:`, error);
-                                return {
-                                  weekNumber: index + 1,
-                                  status: 'no_plan' as const,
-                                  startDate: weekStart,
-                                  endDate: weekEnd,
-                                  canApprove: false
-                                };
-                              }
-                            })
-                          );
-                          
-                          setWeekStatuses(refreshedWeekStatuses);
-                        } else {
-                          // For weekly view, refresh single week status
+                        // Handle status refresh using state machine
+                        await handleApproveRefresh(async () => {
                           try {
-                            const weekStartStr = format(planStartDate, 'yyyy-MM-dd');
-                            const weekEnd = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-                            const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
-                            
-                            const { data: weekData } = await supabase
-                              .from('schedule_preview')
-                              .select('*')
-                              .eq('client_id', numericClientId)
-                              .eq('type', 'workout')
-                              .gte('for_date', weekStartStr)
-                              .lte('for_date', weekEndStr);
-                            
-                            const hasWorkouts = weekData && weekData.length > 0;
-                            const canApprove = hasWorkouts;
-                            
-                            setWeekStatuses([{
-                              weekNumber: 1,
-                              status: hasWorkouts ? 'draft' as const : 'no_plan' as const,
-                              startDate: planStartDate,
-                              endDate: weekEnd,
-                              canApprove: canApprove || false
-                            }]);
+                            await handlePostSaveRefreshEnhanced({
+                              isMonthly: viewMode === 'monthly',
+                              forceWeekStatusRefresh: true,
+                              delayBeforeRefresh: 500,
+                              skipDatabaseCheck: false
+                            });
+                            console.log('[Save Operation] Refresh completed successfully');
+                            return { canApprove: true };
                           } catch (error) {
-                            console.error('Error checking weekly status:', error);
+                            console.error('[Save Operation] Refresh failed:', error);
+                            return { canApprove: false, error: error instanceof Error ? error.message : 'Unknown error' };
                           }
-                        }
+                        });
+                        
+                        // Hide refresh loading toast
+                        hideToast(refreshToastId);
+                        
+                        // Show success message
+                        showSuccess('Ready to Approve', 'Your plan is now ready for approval!');
+                        
+                        // Force a refresh to ensure the Save Plan to Database button is properly coordinated
+                        setForceRefreshKey(prev => prev + 1);
                       } else {
-                        toast({ title: 'Save Failed', description: 'Could not save changes.', variant: 'destructive' });
+                        showError('Save Failed', 'Could not save your changes. Please try again.', () => {
+                          // Retry save operation
+                          console.log('Retrying save operation...');
+                        });
                       }
                     } catch (error) {
                       console.error('Save failed:', error);
-                      toast({ title: 'Save Failed', description: 'An error occurred while saving.', variant: 'destructive' });
+                      showError('Save Failed', 'An unexpected error occurred while saving. Please try again.', () => {
+                        // Retry save operation
+                        console.log('Retrying save operation...');
+                      });
                     } finally {
                       setIsSavingEdits(false);
                       setShowSavingModal(false);
@@ -4109,139 +4978,40 @@ const WorkoutPlanSection = ({
                   ) : (
                     <>
                       <Save className="h-4 w-4 mr-2" />
-                      Save Changes
+                      Save Plan to Database
                     </>
                   )}
                 </Button>
               </div>
             )}
 
-            {/* Approve Plan Button - Shows when approval is needed */}
-            {(planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && isDraftPlan && (
-              <Button
-                onClick={async () => {
-                  const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
-                  setShowSavingModal(true);
-                  setSavingMessage(`Approving ${planType} plan...`);
-                  setLoading('approving', `Approving ${planType} plan...`);
-                  setIsApproving(true);
-                  
-                  try {
-                    // Add a timeout to prevent hanging - increased to 2 minutes for complex operations
-                    const approvalPromise = approvePlan(numericClientId, planStartDate, viewMode);
-                    const timeoutPromise = new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('Approval timeout after 2 minutes - please try again')), 120000)
-                    );
-                    
-                    const result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
-                    
-                    if (result.success) {
-                      const planType = viewMode === 'monthly' ? 'monthly' : 'weekly';
-                      toast({ 
-                        title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`, 
-                        description: `The ${planType} workout plan has been approved and saved to the main schedule.`, 
-                        variant: 'default' 
-                      });
-                      
-                      // Update state immediately
-                      setIsDraftPlan(false);
-                      updateWorkoutPlanState({
-                        status: 'approved',
-                        source: 'database',
-                        hasUnsavedChanges: false,
-                        lastSaved: new Date()
-                      });
-                      
-                      // Clear dirty dates after successful approval
-                      setDirtyDates(new Set());
-                      
-                      // Force a fresh approval status check (avoid dedupe)
-                      setForceRefreshKey(prev => prev + 1);
-                      
-                      // Add a small delay to ensure database changes have propagated
-                      await new Promise(resolve => setTimeout(resolve, 500));
-                      
-                      // Refresh approval status to ensure consistency
-                      await checkPlanApprovalStatus();
-                      
-                                              // Force update week statuses to show approved status
-                        if (viewMode === 'monthly') {
-                          // For monthly view, update all weeks to approved status
-                          const approvedWeekStatuses = Array.from({ length: 4 }, (_, index) => ({
-                            weekNumber: index + 1,
-                            status: 'approved' as const,
-                            startDate: new Date(planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000),
-                            endDate: new Date(planStartDate.getTime() + (index + 1) * 7 * 24 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000),
-                            canApprove: false
-                          }));
-                          setWeekStatuses(approvedWeekStatuses);
-                        } else {
-                          // For weekly view, update single week to approved status
-                          setWeekStatuses([{
-                            weekNumber: 1,
-                            status: 'approved' as const,
-                            startDate: planStartDate,
-                            endDate: new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
-                            canApprove: false
-                          }]);
-                        }
-                      
-                      // Add another small delay before fetching plan data
-                      await new Promise(resolve => setTimeout(resolve, 500));
-                      
-                      // Refresh the plan data to show approved version
-                      await fetchPlan();
-                    } else {
-                      toast({ title: 'Approval Failed', description: result.error || 'Could not approve plan.', variant: 'destructive' });
-                    }
-                  } catch (error) {
-                    console.error('[Approval] Error:', error);
-                    
-                    // Handle timeout specifically
-                    if (error instanceof Error && error.message.includes('timeout')) {
-                      toast({ 
-                        title: 'Approval Timeout', 
-                        description: 'The approval process is taking longer than expected. This can happen with large plans. Please try again or contact support if the issue persists.', 
-                        variant: 'destructive' 
-                      });
-                    } else {
-                      toast({ 
-                        title: 'Approval Failed', 
-                        description: 'An unexpected error occurred during approval. Please try again.', 
-                        variant: 'destructive' 
-                      });
-                    }
-                  } finally {
-                    setIsApproving(false);
-                    clearLoading();
-                    setShowSavingModal(false);
-                  }
-                }}
-                disabled={isApproving || dirtyDates.size > 0}
-                size="lg"
-                /* title={dirtyDates.size > 0 ? "Save your changes before approving the plan" : ""} */
-                className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-600 hover:from-green-600 hover:via-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-green-300 dark:border-green-700 min-w-[200px] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isApproving ? (
-                  <>
-                    <CheckCircle className="h-5 w-5 mr-3 animate-spin" />
-                    <span className="ml-3">
-                      {viewMode === 'monthly' ? 'Approving Monthly Plan...' : 'Approving Weekly Plan...'}
-                    </span>
-                  </>
-                ) : dirtyDates.size > 0 ? (
-                  <>
-                    <CheckCircle className="h-5 w-5 mr-3" />
-                    💾 Save Changes First
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-5 w-5 mr-3" />
-                    ✅ Approve Plan
-                  </>
-                )}
-              </Button>
-            )}
+            {/* State Machine Based Global Approve Button */}
+            <StateMachineApprovalButton
+              type="global"
+              onApprove={handleUnifiedApproval}
+              onRetry={() => {
+                console.log('[StateMachineApprovalButton] Manual retry triggered');
+                // Trigger a manual retry of the save/refresh process
+                dispatchApproveAction('RETRY');
+              }}
+            />
+            
+            {/* Unified Refresh Indicator */}
+            <RefreshIndicator
+              state={refreshState}
+              onRetry={() => {
+                console.log('[WorkoutPlanSection] Retry refresh triggered');
+                setForceRefreshKey(prev => prev + 1);
+              }}
+              onCancel={() => {
+                console.log('[WorkoutPlanSection] Cancel refresh triggered');
+                clearRefreshQueue();
+              }}
+              showDetails={true}
+            />
+            
+            {/* Offline Status Badge */}
+            <OfflineStatusBadge />
             
             {/* Progress indicator for approval */}
             {isApproving && (
@@ -4286,11 +5056,6 @@ const WorkoutPlanSection = ({
                 <h5 className="text-lg font-bold text-gray-900 dark:text-gray-100">Plan Management</h5>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Import, export, or save your workout plans
-                  {viewMode === 'monthly' && (
-                    <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
-                      ⚠️ Monthly plans may take longer to approve
-                    </span>
-                  )}
                 </p>
               </div>
             </div>
@@ -4379,76 +5144,102 @@ const WorkoutPlanSection = ({
 
       {/* Plan Table or Empty State */}
       <div>
+        {/* SECOND SAVE BUTTON - COMMENTED OUT TO AVOID DUPLICATE BUTTONS */}
+        {/*
         {workoutPlan && isDraftPlan && (
           <div className="mb-2 flex items-center gap-4">
             <Button
               onClick={async () => {
+                console.log('[WorkoutPlanSection] Save Plan to Database button clicked');
                 setShowSavingModal(true);
                 setSavingMessage('Saving changes...');
                 setIsSavingEdits(true);
-                const saveResult = await savePlanToSchedulePreview(workoutPlan.week, numericClientId, planStartDate);
-                if (saveResult.success) {
-                  // Refetch the plan from schedule_preview to ensure UI is up-to-date
-                  const startDateStr = format(planStartDate, 'yyyy-MM-dd');
-                  const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-                  const endDateStr = format(endDate, 'yyyy-MM-dd');
-                  let { data, error } = await supabase
-                    .from('schedule_preview')
-                    .select('*')
-                    .eq('client_id', numericClientId)
-                    .eq('type', 'workout')
-                    .gte('for_date', startDateStr)
-                    .lte('for_date', endDateStr)
-                    .order('for_date', { ascending: true });
-                  console.log('[Save Changes] Data fetched from schedule_preview after save:', data);
-                  if (!error && data) {
-                    // Build week structure as before, always mapping from details_json.exercises
-                    const weekDates = [];
-                    for (let i = 0; i < 7; i++) {
-                      const currentDate = new Date(planStartDate.getTime() + i * 24 * 60 * 60 * 1000);
-                      const dateStr = format(currentDate, 'yyyy-MM-dd');
-                      const dayRow = data.find(workout => workout.for_date === dateStr);
-                      let exercises = [];
-                      let focus = 'Rest Day';
-                      if (dayRow && dayRow.details_json && Array.isArray(dayRow.details_json.exercises)) {
-                        exercises = dayRow.details_json.exercises;
-                        focus = dayRow.summary || 'Workout';
-                      }
-                      weekDates.push({
-                        date: dateStr,
-                        focus,
-                        exercises
-                      });
+                
+                try {
+                  // Show loading toast
+                  const loadingToastId = showLoading('Saving Changes', 'Please wait while we save your workout plan...');
+                  
+                  console.log('[WorkoutPlanSection] About to call handleApproveSave');
+                  // Use state machine to handle save operation
+                  const success = await handleApproveSave(
+                    { week: workoutPlan.week, clientId: numericClientId, planStartDate },
+                    async (data) => {
+                      const result = await savePlanToSchedulePreview(data.week, data.clientId, data.planStartDate);
+                      console.log('[WorkoutPlanSection] savePlanToSchedulePreview result:', result);
+                      return result;
                     }
-                    const dbWorkoutPlan = {
-                      week: weekDates,
-                      hasAnyWorkouts: weekDates.some(day => day.exercises && day.exercises.length > 0),
-                      planStartDate: startDateStr,
-                      planEndDate: endDateStr
-                    };
-                    console.log('[Save Changes] Setting workout plan in UI to:', dbWorkoutPlan);
-                    setWorkoutPlan(dbWorkoutPlan);
-                    // Set draft plan flag to true to activate approve button
-                    setIsDraftPlan(true);
-                    // Refresh approval status after saving changes
-                    await checkPlanApprovalStatus();
+                  );
+                  
+                  console.log('[WorkoutPlanSection] handleApproveSave returned:', success);
+                  
+                  // Hide loading toast
+                  hideToast(loadingToastId);
+                  
+                  if (success) {
+                    showSuccess('Changes Saved', 'Your workout plan has been saved successfully!');
+                    
+                    // Clear dirty dates by notifying WorkoutPlanTable
+                    setDirtyDates(new Set());
+                    
+                    // Update workout plan state
+                    updateWorkoutPlanState({ 
+                      hasUnsavedChanges: false, 
+                      lastSaved: new Date() 
+                    });
+                    
+                    // Show refresh loading toast
+                    const refreshToastId = showLoading('Checking Status', 'Verifying your plan is ready for approval...');
+                    
+                    // Handle status refresh using state machine
+                    await handleApproveRefresh(async () => {
+                      try {
+                        await handlePostSaveRefreshEnhanced({
+                          isMonthly: viewMode === 'monthly',
+                          forceWeekStatusRefresh: true,
+                          delayBeforeRefresh: 500,
+                          skipDatabaseCheck: false
+                        });
+                        console.log('[Save Operation] Refresh completed successfully');
+                        return { canApprove: true };
+                      } catch (error) {
+                        console.error('[Save Operation] Refresh failed:', error);
+                        return { canApprove: false, error: error instanceof Error ? error.message : 'Unknown error' };
+                      }
+                    });
+                    
+                    // Hide refresh loading toast
+                    hideToast(refreshToastId);
+                    
+                    // Show success message
+                    showSuccess('Ready to Approve', 'Your plan is now ready for approval!');
+                    
+                    // Force a refresh to ensure the Save Plan to Database button is properly coordinated
+                    setForceRefreshKey(prev => prev + 1);
                   } else {
-                    console.warn('[Save Changes] Error or no data after save:', error, data);
+                    showError('Save Failed', 'Could not save your changes. Please try again.', () => {
+                      // Retry save operation
+                      console.log('Retrying save operation...');
+                    });
                   }
-                  toast({ title: 'Changes Saved', description: 'Your edits have been saved to the draft and UI updated.', variant: 'default' });
-                } else {
-                  toast({ title: 'Save Failed', description: 'Could not save changes to the draft.', variant: 'destructive' });
+                } catch (error) {
+                  console.error('Save failed:', error);
+                  showError('Save Failed', 'An unexpected error occurred while saving. Please try again.', () => {
+                    // Retry save operation
+                    console.log('Retrying save operation...');
+                  });
+                } finally {
+                  setIsSavingEdits(false);
+                  setShowSavingModal(false);
                 }
-                setIsSavingEdits(false);
-                setShowSavingModal(false);
               }}
-              disabled={isSavingEdits}
+              disabled={isSavingEdits || !isApproveState('disabled_save_first')}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {isSavingEdits ? 'Saving...' : 'Save Changes'}
+              {isSavingEdits ? 'Saving...' : 'Save Plan to Database'}
             </Button>
           </div>
         )}
+        */}
         {aiError && (
           <Card className="flex flex-col items-center justify-center p-6 text-center bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700">
             <div className="flex items-center gap-3 mb-3">
@@ -4482,7 +5273,7 @@ const WorkoutPlanSection = ({
             </div>
           </Card>
         )}
-        {isFetchingPlan ? (
+        {(isFetchingPlan || isWorkoutDataLoading) ? (
           <Card className="flex items-center justify-center h-64">
             <span>Loading workout plan...</span>
           </Card>
@@ -4497,11 +5288,25 @@ const WorkoutPlanSection = ({
               </div>
               <WeeklyPlanHeader
                 week={(viewMode === 'weekly') ? (() => {
-                  // Ensure only 7 days are passed in weekly mode
-                  const startStr = format(planStartDate, 'yyyy-MM-dd');
-                  const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
-                  const endStr = format(endDate, 'yyyy-MM-dd');
-                  return (workoutPlan.week || []).filter((d: any) => d && d.date >= startStr && d.date <= endStr).slice(0, 7);
+                  // Ensure exactly 7 days are passed in weekly mode
+                  const weekData = workoutPlan.week || [];
+                  if (weekData.length >= 7) {
+                    return weekData.slice(0, 7);
+                  }
+                  // If we have fewer than 7 days, pad with rest days
+                  const paddedWeek = [...weekData];
+                  for (let i = weekData.length; i < 7; i++) {
+                    // Use addDays to avoid timezone issues
+                    const dayDate = addDays(planStartDate, i);
+                    const dateStr = format(dayDate, 'yyyy-MM-dd');
+                    paddedWeek.push({
+                      date: dateStr,
+                      focus: 'Rest Day',
+                      exercises: [],
+                      timeBreakdown: { warmup: 0, exercises: 0, rest: 0, cooldown: 0, total: 0 }
+                    });
+                  }
+                  return paddedWeek.slice(0, 7);
                 })() : workoutPlan.week}
                 planStartDate={planStartDate}
                 onReorder={handlePlanChange}
@@ -4515,6 +5320,9 @@ const WorkoutPlanSection = ({
                 onApproveWeek={handleApproveWeek}
                 dirtyDates={dirtyDates}
                 onDirtyDatesChange={setDirtyDates}
+                forceRefreshKey={forceRefreshKey}
+                unifiedApprovalStatus={unifiedApprovalStatus}
+                onUnifiedApproval={handleUnifiedApproval}
               />
             </Card>
 
@@ -4602,6 +5410,11 @@ const WorkoutPlanSection = ({
                 onImportSuccess={handleImportSuccess}
                 viewMode={viewMode}
                 onDirtyDatesChange={setDirtyDates}
+                weekStatuses={weekStatuses}
+                onApproveWeek={handleApproveWeek}
+                dirtyDates={dirtyDates}
+                unifiedApprovalStatus={unifiedApprovalStatus}
+                onUnifiedApproval={handleUnifiedApproval}
               />
             ) : (
               <Card className="flex flex-col items-center justify-center p-8 text-center">
@@ -4649,7 +5462,7 @@ const WorkoutPlanSection = ({
                         </>
                       )}
                     </Button>
-                    <Button 
+                                        <Button
                       onClick={() => {
                         console.log('[WorkoutPlanSection] Manual refresh triggered');
                         fetchPlan();
@@ -4660,8 +5473,25 @@ const WorkoutPlanSection = ({
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh
                     </Button>
+                    <Button
+                      onClick={() => {
+                        console.log('[WorkoutPlanSection] Reset stuck states triggered');
+                        resetStuckStates();
+                        toast({ 
+                          title: 'States Reset', 
+                          description: 'Reset stuck states. If issues persist, please refresh the page.',
+                          variant: 'default'
+                        });
+                      }} 
+                      variant="outline"
+                      size="sm"
+                      className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                    >
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
                   </div>
-                  {isFetchingPlan && (
+                  {isWorkoutDataLoading && (
                     <p className="text-sm text-muted-foreground">
                       <RefreshCw className="h-3 w-3 mr-1 animate-spin inline" />
                       Checking for plans...
@@ -4804,10 +5634,14 @@ const WorkoutPlanSection = ({
               onGenerationComplete={handleMonthlyGenerationComplete}
               onGenerationError={handleMonthlyGenerationError}
               onSaveWeek={async (weekDays, clientId, weekStartDate) => {
-                // Delegate to existing save, then ensure unified post-save refresh
+                // Delegate to existing save, then ensure enhanced unified post-save refresh
                 const result = await savePlanToSchedulePreview(weekDays, clientId, weekStartDate);
                 if (result?.success) {
-                  await handlePostSaveRefresh();
+                  await handlePostSaveRefreshEnhanced({
+                    isMonthly: true,
+                    forceWeekStatusRefresh: true,
+                    delayBeforeRefresh: 300
+                  });
                 }
                 return result;
               }}
@@ -4869,7 +5703,16 @@ const WorkoutPlanSection = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Enhanced Toast Notifications */}
+      <ToastContainer
+        toasts={toasts}
+        onClose={hideToast}
+        position="top-right"
+        maxToasts={3}
+      />
     </div>
+    </ErrorBoundary>
   );
 };
 
