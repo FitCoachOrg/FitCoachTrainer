@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 import { addDays, format } from "date-fns"
 import { WorkoutPlanTable } from "@/components/WorkoutPlanTable"
 import { useClients } from "@/hooks/use-clients"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 
 type WorkoutTemplateRow = {
   id: string
@@ -211,6 +212,8 @@ const FitnessPlansPage = () => {
   const [week, setWeek] = useState<WeekDay[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState<WorkoutTemplateRow | null>(null)
 
   // Clients for applying a template to a specific week
   const { clients, loading: clientsLoading } = useClients()
@@ -404,6 +407,60 @@ const FitnessPlansPage = () => {
     }
   }
 
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) return
+    
+    try {
+      setIsDeleting(true)
+      const { error } = await supabase
+        .from('workout_plan_templates')
+        .delete()
+        .eq('id', templateToDelete.id)
+      
+      if (error) throw error
+      
+      // Remove from local state
+      const updatedTemplates = templates.filter(t => t.id !== templateToDelete.id)
+      setTemplates(updatedTemplates)
+      
+      // Re-apply filters
+      const tags = tagFilter
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean)
+      const filteredList = updatedTemplates.filter(t => {
+        const nameOk = t.name.toLowerCase().includes(nameFilter.trim().toLowerCase())
+        const tagsOk = tags.length === 0 || (Array.isArray(t.tags) && tags.every(tag => t.tags!.map(x => x.toLowerCase()).includes(tag)))
+        return nameOk && tagsOk
+      })
+      setFiltered(filteredList)
+      
+      // Clear selection if the deleted template was selected
+      if (selectedTemplate?.id === templateToDelete.id) {
+        setSelectedTemplate(null)
+        setEditName('')
+        setEditTags([])
+        setWeek([])
+      }
+      
+      toast({ 
+        title: 'Template Deleted', 
+        description: `"${templateToDelete.name}" has been permanently deleted from your library.` 
+      })
+      
+      setTemplateToDelete(null)
+    } catch (err: any) {
+      console.error('Delete template error:', err)
+      toast({ 
+        title: 'Delete Failed', 
+        description: err.message || 'Failed to delete template. Please try again.', 
+        variant: 'destructive' 
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   // Simple standalone template week editor (date-agnostic)
   const editorDraft = React.useRef<WeekDay[] | null>(null)
 
@@ -539,11 +596,12 @@ const FitnessPlansPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[25%]">Template Name</TableHead>
-                      <TableHead className="w-[25%]">Tags</TableHead>
+                      <TableHead className="w-[20%]">Template Name</TableHead>
+                      <TableHead className="w-[20%]">Tags</TableHead>
                       <TableHead className="w-[10%]">Duration</TableHead>
                       <TableHead className="w-[15%]"># Exercises</TableHead>
-                      <TableHead className="w-[25%]">Focus</TableHead>
+                      <TableHead className="w-[20%]">Focus</TableHead>
+                      <TableHead className="w-[15%]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -568,6 +626,41 @@ const FitnessPlansPage = () => {
                         </TableCell>
                         <TableCell>{getExerciseCount(t.template_json)}</TableCell>
                         <TableCell className="truncate max-w-[360px]">{getFocusSummary(t.template_json)}</TableCell>
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
+                                onClick={(e) => {
+                                  e.stopPropagation() // Prevent row selection when clicking delete
+                                  setTemplateToDelete(t)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the template "{t.name}"? This action cannot be undone and will permanently remove the template from your library.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={handleDeleteTemplate}
+                                  disabled={isDeleting}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  {isDeleting ? 'Deleting...' : 'Delete Template'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
