@@ -26,6 +26,8 @@ import {
   Shield,
   CheckCircle,
   X,
+  Eye,
+  EyeOff,
   Sun,
   Moon
 } from 'lucide-react';
@@ -232,6 +234,19 @@ const TrainerRegistration = () => {
   // Track if account has been created
   const [accountCreated, setAccountCreated] = useState(false);
   const [accountUserId, setAccountUserId] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Password requirement checker: length>=8, uppercase, lowercase, number, special
+  const passwordMeetsRequirements = (pwd: string): boolean => {
+    if (!pwd) return false;
+    const lengthOk = pwd.length >= 8;
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasLower = /[a-z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+    return lengthOk && hasUpper && hasLower && hasNumber && hasSpecial;
+  };
 
   const certificationOptions = [
     'Personal Trainer Certification',
@@ -427,17 +442,39 @@ const TrainerRegistration = () => {
 
   const validateEmail = async (email: string) => {
     if (!email || !email.includes('@')) return;
-    
+
+    // Race guard token to avoid intermittent state from out-of-order responses
+    const currentCheckToken = Date.now().toString();
+    (validateEmail as any)._lastToken = currentCheckToken;
+
     setEmailValidating(true);
     try {
-      // Check if email already exists in trainer table
+      const normalized = email.trim().toLowerCase();
+
+      // 1) Check via RPC whether an Auth user exists (authoritative)
+      let exists = false;
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('email_exists', { p_email: normalized });
+        if ((validateEmail as any)._lastToken !== currentCheckToken) return; // stale
+        if (rpcError) {
+          console.warn('email_exists RPC error, falling back to table checks:', rpcError.message);
+        } else if (rpcData === true) {
+          exists = true;
+        }
+      } catch (e) {
+        // ignore and fall back
+      }
+
+      // 2) Check trainer table (case-insensitive exact match)
       const { data: trainerData, error: trainerError } = await supabase
         .from('trainer')
         .select('trainer_email')
-        .eq('trainer_email', email)
+        .ilike('trainer_email', normalized)
         .single();
 
-      if (trainerError && trainerError.code !== 'PGRST116') { // PGRST116 is "not found"
+      if ((validateEmail as any)._lastToken !== currentCheckToken) return; // stale
+
+      if (trainerError && trainerError.code !== 'PGRST116') {
         console.error('Error checking trainer table:', trainerError);
         toast({
           title: "Error",
@@ -447,24 +484,25 @@ const TrainerRegistration = () => {
         return;
       }
 
-      // Email exists in trainer table
-      if (trainerData) {
+      if (!exists) {
+        exists = !!trainerData;
+      }
+
+      if (exists) {
         setEmailExists(true);
         toast({
           title: "Email Already Exists",
           description: "This email is already registered. Please use a different email or try logging in.",
           variant: "destructive",
         });
-        return;
+      } else {
+        setEmailExists(false);
+        toast({
+          title: "Email Available",
+          description: "This email is available for registration.",
+          variant: "default",
+        });
       }
-
-      // Email is available (not in trainer table)
-      setEmailExists(false);
-      toast({
-        title: "Email Available",
-        description: "This email is available for registration.",
-        variant: "default",
-      });
     } catch (error) {
       console.error('Error validating email:', error);
       toast({
@@ -473,7 +511,9 @@ const TrainerRegistration = () => {
         variant: "destructive",
       });
     } finally {
-      setEmailValidating(false);
+      if ((validateEmail as any)._lastToken === currentCheckToken) {
+        setEmailValidating(false);
+      }
     }
   };
 
@@ -513,6 +553,16 @@ const TrainerRegistration = () => {
         });
         return;
       }
+
+      // Require accepting Terms & Privacy before proceeding from Step 1
+      if (!trainerData.termsAccepted || !trainerData.privacyAccepted) {
+        toast({
+          title: "Accept Terms & Privacy",
+          description: "Please accept the Terms of Service and Privacy Policy to continue.",
+          variant: "destructive",
+        });
+        return;
+      }
       
       if (emailExists) {
         toast({
@@ -523,10 +573,10 @@ const TrainerRegistration = () => {
         return;
       }
       
-      if (trainerData.password.length < 8) {
+      if (!passwordMeetsRequirements(trainerData.password)) {
         toast({
-          title: "Password Too Short",
-          description: "Password must be at least 8 characters long",
+          title: "Password Requirements Not Met",
+          description: "Use 8+ chars with uppercase, lowercase, number, and special character.",
           variant: "destructive",
         });
         return;
@@ -618,7 +668,7 @@ const TrainerRegistration = () => {
       }
     }
     
-    if (currentStep < 6) {
+    if (currentStep < 5) {
       const nextStepNumber = currentStep + 1;
       setCurrentStep(nextStepNumber);
       saveProgress(nextStepNumber, trainerData);
@@ -765,9 +815,14 @@ const TrainerRegistration = () => {
                   type="email"
                   value={trainerData.email}
                   onChange={(e) => {
-                    updateField('email', e.target.value);
+                    const normalized = e.target.value.trim().toLowerCase();
+                    updateField('email', normalized);
                     setEmailExists(false); // Reset validation state
                   }}
+                  autoComplete="off"
+                  name="trainer-email"
+                  data-lpignore="true"
+                  data-1p-ignore
                   className={`flex-1 ${emailExists ? 'border-red-500' : ''}`}
                   placeholder="your.email@example.com"
                   required
@@ -790,29 +845,82 @@ const TrainerRegistration = () => {
             
             <div>
               <Label htmlFor="password" className="text-white font-medium">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={trainerData.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                placeholder="Create a strong password"
-                required
-              />
-              <p className="text-gray-400 text-sm mt-1">
-                Password must be at least 8 characters long
-              </p>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={trainerData.password}
+                  onChange={(e) => updateField('password', e.target.value)}
+                  placeholder="Create a strong password"
+                  autoComplete="new-password"
+                  name="trainer-new-password"
+                  data-lpignore="true"
+                  data-1p-ignore
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {/* Password requirements checklist */}
+              {(() => {
+                const pwd = trainerData.password || '';
+                const checks = {
+                  length: pwd.length >= 8,
+                  upper: /[A-Z]/.test(pwd),
+                  lower: /[a-z]/.test(pwd),
+                  number: /[0-9]/.test(pwd),
+                  special: /[^A-Za-z0-9]/.test(pwd)
+                };
+                const item = (ok: boolean, label: string) => (
+                  <div className="flex items-center gap-2">
+                    <span className={ok ? 'text-green-400' : 'text-gray-400'}>
+                      {ok ? <CheckCircle className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                    </span>
+                    <span className={ok ? 'text-green-400 text-sm' : 'text-gray-400 text-sm'}>{label}</span>
+                  </div>
+                );
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2">
+                    {item(checks.length, 'At least 8 characters')}
+                    {item(checks.upper, 'At least 1 uppercase letter')}
+                    {item(checks.lower, 'At least 1 lowercase letter')}
+                    {item(checks.number, 'At least 1 number')}
+                    {item(checks.special, 'At least 1 special character')}
+                  </div>
+                );
+              })()}
             </div>
             
             <div>
               <Label htmlFor="confirmPassword" className="text-white font-medium">Confirm Password *</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={trainerData.confirmPassword}
-                onChange={(e) => updateField('confirmPassword', e.target.value)}
-                placeholder="Confirm your password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={trainerData.confirmPassword}
+                  onChange={(e) => updateField('confirmPassword', e.target.value)}
+                  placeholder="Confirm your password"
+                  autoComplete="new-password"
+                  name="trainer-confirm-password"
+                  data-lpignore="true"
+                  data-1p-ignore
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-200"
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {trainerData.password && trainerData.confirmPassword && trainerData.password !== trainerData.confirmPassword && (
                 <p className="text-red-400 text-sm mt-1">
                   Passwords do not match
@@ -1319,6 +1427,50 @@ const TrainerRegistration = () => {
               {renderStep()}
             </AnimatePresence>
 
+            {/* Inline Terms & Privacy toggles: show only on Step 1 */}
+            {currentStep === 1 && (
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+                  <div className="flex-1">
+                    <span className="text-white font-medium">
+                      I accept the <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Terms of Service</a> *
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateField('termsAccepted', !trainerData.termsAccepted)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                      trainerData.termsAccepted ? 'bg-green-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                        trainerData.termsAccepted ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg border border-slate-600">
+                  <div className="flex-1">
+                    <span className="text-white font-medium">
+                      I accept the <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Privacy Policy</a> *
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateField('privacyAccepted', !trainerData.privacyAccepted)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                      trainerData.privacyAccepted ? 'bg-green-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                        trainerData.privacyAccepted ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Navigation Buttons */}
             <div className="flex justify-between mt-8">
                              <Button
@@ -1331,12 +1483,11 @@ const TrainerRegistration = () => {
                 Previous
               </Button>
 
-              {currentStep < 6 ? (
+              {currentStep < 5 ? (
                 <Button
                   onClick={nextStep}
                   disabled={
-                    (currentStep === 1 && (!trainerData.firstName || !trainerData.lastName || !trainerData.email || !trainerData.password || !trainerData.confirmPassword)) ||
-                    (currentStep === 6 && (!trainerData.termsAccepted || !trainerData.privacyAccepted))
+                    (currentStep === 1 && (!trainerData.firstName || !trainerData.lastName || !trainerData.email || !trainerData.password || !trainerData.confirmPassword || !passwordMeetsRequirements(trainerData.password) || trainerData.password !== trainerData.confirmPassword || !trainerData.termsAccepted || !trainerData.privacyAccepted))
                   }
                   className="bg-green-600 hover:bg-green-700"
                 >

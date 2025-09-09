@@ -68,3 +68,17 @@ AND column_name IN (
   'is_active', 'terms_accepted', 'privacy_accepted', 'updated_at'
 )
 ORDER BY column_name; 
+
+-- RPC: email_exists - returns true if an Auth user exists for the email (case-insensitive)
+create or replace function public.email_exists(p_email text)
+returns boolean
+language sql
+security definer
+set search_path = auth, public
+as $$
+  select exists(
+    select 1 from auth.users u where lower(u.email) = lower(p_email)
+  );
+$$;
+
+grant execute on function public.email_exists(text) to anon, authenticated;

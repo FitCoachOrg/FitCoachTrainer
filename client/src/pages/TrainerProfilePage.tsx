@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Mail, User, Camera, CheckCircle, AlertCircle, Phone, Globe, Briefcase, Award, Clock, DollarSign, Users } from "lucide-react"
+import { Mail, User, Camera, CheckCircle, AlertCircle, Phone, Globe, Briefcase, Award, Clock, DollarSign, Users, Plus, Minus } from "lucide-react"
 
 export default function TrainerProfilePage() {
   const [trainer, setTrainer] = useState<any>(null)
@@ -33,6 +33,14 @@ export default function TrainerProfilePage() {
   const [editClientPopulations, setEditClientPopulations] = useState<string[]>([])
   const [editServiceOfferings, setEditServiceOfferings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [expandedSections, setExpandedSections] = useState({
+    contact: true,
+    business: true,
+    pricing: true,
+    specialties: true,
+    clientPopulations: true,
+    serviceOfferings: true
+  })
 
   // Helper functions for array fields
   const toggleArrayItem = (array: string[], item: string) => {
@@ -50,6 +58,13 @@ export default function TrainerProfilePage() {
 
   const removeArrayItem = (array: string[], item: string) => {
     return array.filter(i => i !== item);
+  };
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
   };
 
   useEffect(() => {
@@ -336,7 +351,18 @@ export default function TrainerProfilePage() {
               <Separator className="my-6" />
               {/* Contact information */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('contact')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.contact ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.contact && (
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
