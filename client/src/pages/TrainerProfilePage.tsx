@@ -363,6 +363,7 @@ export default function TrainerProfilePage() {
                   </Button>
                 </div>
                 {expandedSections.contact && (
+                <>
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -424,11 +425,25 @@ export default function TrainerProfilePage() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
 
               {/* Business Information */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Business Information</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Business Information</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('business')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.business ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.business && (
+                <>
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
@@ -500,11 +515,25 @@ export default function TrainerProfilePage() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
 
               {/* Pricing Information */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Pricing Information</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Pricing Information</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('pricing')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.pricing ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.pricing && (
+                <>
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
@@ -572,11 +601,25 @@ export default function TrainerProfilePage() {
                     )}
                   </div>
                 </div>
+                </>
+                )}
               </div>
 
               {/* Specialties */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Specialties</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Specialties</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('specialties')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.specialties ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.specialties && (
+                <>
                 {editing ? (
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -631,11 +674,25 @@ export default function TrainerProfilePage() {
                     )}
                   </div>
                 )}
+                </>
+                )}
               </div>
 
               {/* Client Populations */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Client Populations</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Client Populations</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('clientPopulations')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.clientPopulations ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.clientPopulations && (
+                <>
                 {editing ? (
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -690,11 +747,25 @@ export default function TrainerProfilePage() {
                     )}
                   </div>
                 )}
+                </>
+                )}
               </div>
 
               {/* Service Offerings */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Service Offerings</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Service Offerings</h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSection('serviceOfferings')}
+                    className="p-1 h-8 w-8"
+                  >
+                    {expandedSections.serviceOfferings ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {expandedSections.serviceOfferings && (
+                <>
                 {editing ? (
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -748,6 +819,8 @@ export default function TrainerProfilePage() {
                       <p className="text-sm text-gray-500">No service offerings listed</p>
                     )}
                   </div>
+                )}
+                </>
                 )}
               </div>
 
