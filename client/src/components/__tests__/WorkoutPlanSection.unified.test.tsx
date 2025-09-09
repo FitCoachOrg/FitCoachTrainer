@@ -94,7 +94,7 @@ describe('WorkoutPlanSection - Unified Data Fetching', () => {
       expect(mockUseWorkoutData).toHaveBeenCalledWith(
         expect.objectContaining({
           clientId: 123,
-          viewMode: 'weekly' // Default view mode
+          viewMode: 'monthly' // Default view mode
         }),
         expect.any(Object)
       );

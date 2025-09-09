@@ -1678,12 +1678,12 @@ const WorkoutPlanSection = ({
   
   // Monthly view state with localStorage persistence
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>(() => {
-    // Try to get viewMode from localStorage, default to 'weekly'
+    // Try to get viewMode from localStorage, default to 'monthly'
     if (clientId) {
       const savedViewMode = localStorage.getItem(`workoutPlanViewMode_${clientId}`);
-      return (savedViewMode as 'weekly' | 'monthly') || 'weekly';
+      return (savedViewMode as 'weekly' | 'monthly') || 'monthly';
     }
-    return 'weekly';
+    return 'monthly';
   });
   
   // Add state to control the calendar popover
