@@ -220,8 +220,8 @@ const TodoList: React.FC = () => {
   }
 
   return (
-    <Card className="shadow-lg border border-border bg-card rounded-2xl h-full overflow-hidden">
-      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border">
+    <Card className="shadow-lg border border-border bg-card rounded-2xl flex flex-col h-full overflow-hidden">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -243,7 +243,7 @@ const TodoList: React.FC = () => {
         )}
       </CardHeader>
       
-      <CardContent className="space-y-4 p-6">
+      <CardContent className="space-y-4 p-6 flex-1 overflow-hidden flex flex-col">
         {/* Add Todo Form */}
         {isAddingTodo ? (
           <div className="space-y-4 p-4 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-950/20">
@@ -386,8 +386,8 @@ const TodoList: React.FC = () => {
         )}
 
         {/* Enhanced Todo List with Gridlines */}
-        <div className="w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-auto border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
             <table className="w-full border-collapse text-sm table-fixed">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b-2 border-gray-300 dark:border-gray-600">

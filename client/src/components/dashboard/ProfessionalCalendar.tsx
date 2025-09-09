@@ -954,16 +954,16 @@ const ProfessionalCalendar: React.FC = () => {
     const startHour = 6
     const endHour = 22
     const totalMinutes = (endHour - startHour) * 60
-    const containerHeight = 1200 // Increased height for better zoom
-    const timeSlotHeight = 60 // 60px per 30-minute slot
+    const containerHeight = 800 // Reduced height for better containment
+    const timeSlotHeight = 50 // 50px per 30-minute slot for better fit
     
     // Calculate pixels per minute for proportional display
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-full overflow-y-auto relative bg-white dark:bg-gray-900" style={{ minHeight: '1200px' }}>
+      <div className="relative bg-white dark:bg-gray-900" style={{ minHeight: '800px' }}>
               {/* Time grid background - Google Calendar style */}
-      <div className="absolute inset-0 ml-20 z-0" style={{ minHeight: '1200px' }}>
+      <div className="absolute inset-0 ml-20 z-0" style={{ minHeight: '800px' }}>
           {hourSlots.map((time, index) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60
@@ -995,7 +995,7 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
         
               {/* Time labels - Google Calendar style */}
-      <div className="absolute left-0 top-0 w-20 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10" style={{ height: '1200px' }}>
+      <div className="absolute left-0 top-0 w-20 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10" style={{ height: '800px' }}>
           {hourSlots.map((time) => {
             const [hours] = time.split(':').map(Number)
             const minutesFromStart = (hours - startHour) * 60
@@ -1016,7 +1016,7 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
         
               {/* Events positioned absolutely with proportional sizing */}
-      <div className="ml-20 relative z-20" style={{ height: '1200px' }}>
+      <div className="ml-20 relative z-20" style={{ height: '800px' }}>
           {dayEvents.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400 text-sm">
               No events for this day
@@ -1106,22 +1106,22 @@ const ProfessionalCalendar: React.FC = () => {
     const startHour = 6
     const endHour = 22
     const totalMinutes = (endHour - startHour) * 60
-    const containerHeight = 1200 // Same as Daily view for consistent spacing
-    const timeSlotHeight = 60 // Same as Daily view: 60px per 30-minute slot
+    const containerHeight = 800 // Same as Daily view for consistent spacing
+    const timeSlotHeight = 50 // Same as Daily view: 50px per 30-minute slot
     const pixelsPerMinute = containerHeight / totalMinutes
     
     return (
-      <div className="h-full overflow-y-auto bg-white dark:bg-gray-900" style={{ minHeight: '1200px' }}>
-        <div className="grid grid-cols-8 gap-0" style={{ height: '1200px' }}>
+      <div className="bg-white dark:bg-gray-900" style={{ minHeight: '800px' }}>
+        <div className="grid grid-cols-8 gap-0" style={{ height: '800px' }}>
                   {/* Time column - Enhanced with 30-minute ticks */}
-        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10" style={{ height: '1200px' }}>
+        <div className="relative border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 z-10" style={{ height: '800px' }}>
             {/* Time header */}
             <div className="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center">
               <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Time</span>
             </div>
             
             {/* Time labels - Hour only (like Daily view) */}
-            <div className="relative" style={{ height: 'calc(1200px - 48px)' }}>
+            <div className="relative" style={{ height: 'calc(800px - 48px)' }}>
               {hourSlots.map((time) => {
                 const [hours] = time.split(':').map(Number)
                 const minutesFromStart = (hours - startHour) * 60
@@ -1148,7 +1148,7 @@ const ProfessionalCalendar: React.FC = () => {
             const isCurrentDay = isToday(day)
             
             return (
-              <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700" style={{ height: '1200px' }}>
+              <div key={day.toISOString()} className="relative border-r border-gray-200 dark:border-gray-700" style={{ height: '800px' }}>
                               {/* Day header - Google Calendar style */}
               <div className={`h-12 border-b border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center z-10 ${
                 isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'
@@ -1164,7 +1164,7 @@ const ProfessionalCalendar: React.FC = () => {
                 </div>
                 
                 {/* Time grid background - Hour only (like Daily view) */}
-                <div className="relative" style={{ height: 'calc(1200px - 48px)' }}>
+                <div className="relative" style={{ height: 'calc(800px - 48px)' }}>
                   {/* Hour lines */}
                   {hourSlots.map((time) => {
                     const [hours] = time.split(':').map(Number)
@@ -1284,7 +1284,7 @@ const ProfessionalCalendar: React.FC = () => {
     const weeks = eachWeekOfInterval({ start: monthStart, end: monthEnd }, { weekStartsOn: 1 })
     
     return (
-      <div className="h-full space-y-2 bg-white dark:bg-gray-900">
+      <div className="space-y-2 bg-white dark:bg-gray-900">
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
@@ -1311,7 +1311,7 @@ const ProfessionalCalendar: React.FC = () => {
               return (
                 <div
                   key={day.toISOString()}
-                  className={`min-h-[120px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 ${
+                  className={`min-h-[100px] p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 ${
                     isCurrentDay ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : ''
                   } ${!isCurrentMonth ? 'opacity-50' : ''}`}
                 >
@@ -1358,8 +1358,8 @@ const ProfessionalCalendar: React.FC = () => {
   }
 
   return (
-    <Card className="shadow-lg border border-border bg-card rounded-2xl h-full overflow-hidden">
-      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border">
+    <Card className="shadow-lg border border-border bg-card rounded-2xl flex flex-col h-full overflow-hidden">
+      <CardHeader className="pb-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold text-foreground flex items-center gap-2">
             <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -1455,10 +1455,12 @@ const ProfessionalCalendar: React.FC = () => {
         </div>
       </CardHeader>
       
-      <CardContent className="p-6">
-        {view === "daily" && renderDailyView()}
-        {view === "weekly" && renderWeeklyView()}
-        {view === "monthly" && renderMonthlyView()}
+      <CardContent className="p-6 flex-1 overflow-hidden">
+        <div className="h-full overflow-auto">
+          {view === "daily" && renderDailyView()}
+          {view === "weekly" && renderWeeklyView()}
+          {view === "monthly" && renderMonthlyView()}
+        </div>
       </CardContent>
     </Card>
   )

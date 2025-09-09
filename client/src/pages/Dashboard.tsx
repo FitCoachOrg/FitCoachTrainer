@@ -296,15 +296,15 @@ const Dashboard: React.FC = () => {
           <ClientInsightsCards data={insightsData} />
         </div>
         
-        {/* Main Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-12rem)]">
+        {/* Main Dashboard Grid - Improved responsive layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[600px]">
           {/* Professional Calendar - Left Side */}
-          <div className="h-full">
+          <div className="min-h-[600px] flex flex-col">
             <ProfessionalCalendar />
           </div>
           
           {/* To-Do List - Right Side */}
-          <div className="h-full">
+          <div className="min-h-[600px] flex flex-col">
             <TodoList />
           </div>
         </div>

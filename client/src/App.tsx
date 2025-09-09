@@ -38,7 +38,6 @@ import TrainerRegistration from "./pages/TrainerRegistration"
 import TrainerWelcome from "./pages/TrainerWelcome"
 import AuthCallback from "@/components/auth/AuthCallback"
 import DatePickerTestPage from "./pages/DatePickerTestPage"
-import Admin from "./pages/Admin"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import TermsOfService from "./pages/TermsOfService"
 import Support from "./pages/Support"
@@ -365,16 +364,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <TrainerProfilePage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin"
-                  element={
-                    <ProtectedRoute>
-                      <ProtectedLayout>
-                        <Admin />
-                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
