@@ -260,7 +260,7 @@ const AIResponsePopup = ({
                     className="border-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-800 dark:hover:border-blue-700 dark:hover:bg-blue-950/50"
                   >
                     <BarChart3 className="w-4 h-4 mr-2" />
-                    View Metrics
+                    View Client Info
                   </Button>
                 </div>
               </div>
@@ -2082,7 +2082,7 @@ export default function ClientDashboard() {
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "metrics", label: "Metrics", icon: TrendingUp },
+    { id: "metrics", label: "Client Info", icon: TrendingUp },
     { id: "workout", label: "Workout Plans", icon: Dumbbell },
     { id: "nutrition", label: "Nutrition", icon: Utensils },
     { id: "programs", label: "Programs", icon: Trophy },

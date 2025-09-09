@@ -27,7 +27,11 @@ import { FitnessGoalsPlaceholder, AICoachInsightsPlaceholder, TrainerNotesPlaceh
 import { TrainerPopupHost } from "@/components/popups/TrainerPopupHost"
 import { type PopupKey } from "@/components/popups/trainer-popups.config"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ChevronDown, ChevronUp, BarChart3, CheckSquare, Loader2, Filter, Calendar, X, Camera } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface MetricsSectionProps {
   clientId?: number
@@ -120,6 +124,22 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
 
   // Unified popup state
   const [openPopup, setOpenPopup] = useState<PopupKey | null>(null)
+
+  // State for sub-tabs
+  const [activeSubTab, setActiveSubTab] = useState<"client-data" | "completed-exercises" | "progress-picture">("client-data")
+
+  // State for workout info data
+  const [workoutInfoData, setWorkoutInfoData] = useState<any[]>([])
+  const [filteredWorkoutInfoData, setFilteredWorkoutInfoData] = useState<any[]>([])
+  const [loadingWorkoutInfo, setLoadingWorkoutInfo] = useState(false)
+  const [workoutInfoError, setWorkoutInfoError] = useState<string | null>(null)
+
+  // Filter state
+  const [dateFrom, setDateFrom] = useState<string>("")
+  const [dateTo, setDateTo] = useState<string>("")
+  const [intensityFilter, setIntensityFilter] = useState<string[]>([])
+  const [feedbackFilter, setFeedbackFilter] = useState<string[]>([])
+  const [showFilters, setShowFilters] = useState(false)
 
   // State for collapsible client details
   const [showClientDetails, setShowClientDetails] = useState<boolean>(() => {
@@ -1191,13 +1211,179 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
     }
   }
 
+  // Fetch workout info data when component mounts or clientId changes
+  useEffect(() => {
+    if (!clientId || !isActive) {
+      return;
+    }
+    
+    const fetchWorkoutInfo = async () => {
+      setLoadingWorkoutInfo(true);
+      setWorkoutInfoError(null);
+      
+      try {
+        const { data, error } = await supabase
+          .from("workout_info")
+          .select("*")
+          .eq("client_id", clientId)
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('❌ Workout info error:', error);
+          throw error;
+        }
+        
+        setWorkoutInfoData(data || []);
+      } catch (err: any) {
+        setWorkoutInfoError(err.message || "Failed to fetch workout info");
+        setWorkoutInfoData([]);
+      } finally {
+        setLoadingWorkoutInfo(false);
+      }
+    };
+    
+    fetchWorkoutInfo();
+  }, [clientId, isActive]);
+
+  // Filter workout info data based on filter criteria (cumulative filtering)
+  useEffect(() => {
+    let filtered = [...workoutInfoData];
+
+    // Apply filters in sequence - each filter narrows down the previous result
+    
+    // Step 1: Date filter (applied first)
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(workout => new Date(workout.created_at) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999); // Include the entire day
+      filtered = filtered.filter(workout => new Date(workout.created_at) <= toDate);
+    }
+
+    // Step 2: Intensity filter (applied to date-filtered results)
+    if (intensityFilter.length > 0) {
+      filtered = filtered.filter(workout => 
+        workout.intensity && intensityFilter.some(filter => 
+          workout.intensity.toLowerCase().includes(filter.toLowerCase())
+        )
+      );
+    }
+
+    // Step 3: Feedback filter (applied to date + intensity filtered results)
+    if (feedbackFilter.length > 0) {
+      filtered = filtered.filter(workout => 
+        workout.feedback && feedbackFilter.some(filter => 
+          workout.feedback.toLowerCase().includes(filter.toLowerCase())
+        )
+      );
+    }
+
+    setFilteredWorkoutInfoData(filtered);
+  }, [workoutInfoData, dateFrom, dateTo, intensityFilter, feedbackFilter]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setIntensityFilter([]);
+    setFeedbackFilter([]);
+  };
+
+  // Get unique intensity values for dropdown (based on current filtered data)
+  const getUniqueIntensities = () => {
+    // Start with all data, then apply filters except intensity filter
+    let dataForIntensity = [...workoutInfoData];
+    
+    // Apply date filters
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      dataForIntensity = dataForIntensity.filter(workout => new Date(workout.created_at) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      dataForIntensity = dataForIntensity.filter(workout => new Date(workout.created_at) <= toDate);
+    }
+    
+    // Apply feedback filter (if any)
+    if (feedbackFilter.length > 0) {
+      dataForIntensity = dataForIntensity.filter(workout => 
+        workout.feedback && feedbackFilter.some(filter => 
+          workout.feedback.toLowerCase().includes(filter.toLowerCase())
+        )
+      );
+    }
+    
+    const intensities = dataForIntensity
+      .map(workout => workout.intensity)
+      .filter(intensity => intensity && intensity.trim() !== "")
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .sort();
+    return intensities;
+  };
+
+  // Get unique feedback keywords for dropdown (based on current filtered data)
+  const getUniqueFeedbackKeywords = () => {
+    // Start with all data, then apply filters except feedback filter
+    let dataForFeedback = [...workoutInfoData];
+    
+    // Apply date filters
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      dataForFeedback = dataForFeedback.filter(workout => new Date(workout.created_at) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      dataForFeedback = dataForFeedback.filter(workout => new Date(workout.created_at) <= toDate);
+    }
+    
+    // Apply intensity filter (if any)
+    if (intensityFilter.length > 0) {
+      dataForFeedback = dataForFeedback.filter(workout => 
+        workout.intensity && intensityFilter.some(filter => 
+          workout.intensity.toLowerCase().includes(filter.toLowerCase())
+        )
+      );
+    }
+    
+    const feedbacks = dataForFeedback
+      .map(workout => workout.feedback)
+      .filter(feedback => feedback && feedback.trim() !== "")
+      .flatMap(feedback => feedback.toLowerCase().split(/\s+/))
+      .filter(word => word.length > 2) // Filter out short words
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .sort();
+    return feedbacks;
+  };
+
+
   // Clean up on component mount
   useEffect(() => {
     cleanupAndResetMetrics()
   }, [])
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <Tabs value={activeSubTab} onValueChange={(value) => setActiveSubTab(value as "client-data" | "completed-exercises" | "progress-picture")} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsTrigger value="client-data" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Client Data
+          </TabsTrigger>
+          <TabsTrigger value="completed-exercises" className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4" />
+            Completed Exercises
+          </TabsTrigger>
+          <TabsTrigger value="progress-picture" className="flex items-center gap-2">
+            <Camera className="h-4 w-4" />
+            Progress Picture
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="client-data" className="space-y-8">
       {/* Collapsible Client Details Section */}
       <div className="mb-6">
         <Button
@@ -1250,20 +1436,6 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
       {/* Enhanced Metrics Grid */}
       <MetricsGrid selectedKeys={selectedKeys} onDragEnd={handleDragEnd} chartType={chartType} viewMode={viewMode} />
 
-      {/* Workout History and Progress Pictures Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Workout History Card */}
-        <WorkoutHistoryTable
-          activityData={filteredWorkoutData}
-          loadingActivity={loadingActivity}
-          activityError={activityError}
-          workoutCount={workoutCount}
-          timeRange={timeRange}
-        />
-        
-        {/* Progress Pictures Card */}
-        <ProgressPicturesCard clientId={clientId} />
-      </div>
 
       {/* Unified Popup Host */}
       <TrainerPopupHost
@@ -1290,6 +1462,297 @@ export const MetricsSection: React.FC<MetricsSectionProps> = ({
           setLastAIRecommendation
         }}
       />
+        </TabsContent>
+
+        <TabsContent value="completed-exercises" className="space-y-6">
+          <div className="bg-white/95 backdrop-blur-sm border border-gray-200/50 dark:bg-gray-900/95 dark:border-gray-700/50 shadow-xl rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-green-600" />
+                Completed Exercises
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2"
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+              </Button>
+            </div>
+
+            {/* Filter Panel */}
+            {showFilters && (
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 mb-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">Filter Criteria</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Filters are applied cumulatively - each filter narrows down the previous results
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Clear All
+                  </Button>
+                </div>
+                
+                {/* Filter Steps Indicator */}
+                <div className="flex items-center space-x-2 text-xs text-gray-600 dark:text-gray-400 mb-4">
+                  <span className="flex items-center">
+                    <span className="w-6 h-6 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">1</span>
+                    Date Range
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="flex items-center">
+                    <span className="w-6 h-6 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">2</span>
+                    Intensity
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="flex items-center">
+                    <span className="w-6 h-6 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">3</span>
+                    Feedback
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Date From */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <span className="inline-flex items-center">
+                        <span className="w-4 h-4 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">1</span>
+                        Date From
+                      </span>
+                    </label>
+                    <Input
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Date To */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <span className="inline-flex items-center">
+                        <span className="w-4 h-4 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">1</span>
+                        Date To
+                      </span>
+                    </label>
+                    <Input
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Intensity Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <span className="inline-flex items-center">
+                        <span className="w-4 h-4 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">2</span>
+                        Intensity
+                      </span>
+                    </label>
+                    <Select
+                      value={intensityFilter.length > 0 ? intensityFilter[0] : ""}
+                      onValueChange={(value) => {
+                        if (value && !intensityFilter.includes(value)) {
+                          setIntensityFilter(prev => [...prev, value]);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select intensity..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getUniqueIntensities().length > 0 ? (
+                          getUniqueIntensities().map((intensity) => (
+                            <SelectItem key={intensity} value={intensity}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{intensity}</span>
+                                {intensityFilter.includes(intensity) && (
+                                  <span className="text-green-600 ml-2">✓</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-data" disabled>
+                            No intensity data available
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {intensityFilter.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {intensityFilter.map((intensity) => (
+                          <span
+                            key={intensity}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                          >
+                            {intensity}
+                            <button
+                              onClick={() => setIntensityFilter(prev => prev.filter(item => item !== intensity))}
+                              className="ml-1 hover:text-green-600"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Feedback Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <span className="inline-flex items-center">
+                        <span className="w-4 h-4 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded-full flex items-center justify-center text-xs font-medium mr-2">3</span>
+                        Feedback Keywords
+                      </span>
+                    </label>
+                    <Select
+                      value={feedbackFilter.length > 0 ? feedbackFilter[0] : ""}
+                      onValueChange={(value) => {
+                        if (value && !feedbackFilter.includes(value)) {
+                          setFeedbackFilter(prev => [...prev, value]);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select feedback keyword..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getUniqueFeedbackKeywords().length > 0 ? (
+                          getUniqueFeedbackKeywords().map((keyword) => (
+                            <SelectItem key={keyword} value={keyword}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{keyword}</span>
+                                {feedbackFilter.includes(keyword) && (
+                                  <span className="text-purple-600 ml-2">✓</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-data" disabled>
+                            No feedback data available
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {feedbackFilter.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {feedbackFilter.map((keyword) => (
+                          <span
+                            key={keyword}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                          >
+                            {keyword}
+                            <button
+                              onClick={() => setFeedbackFilter(prev => prev.filter(item => item !== keyword))}
+                              className="ml-1 hover:text-purple-600"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Results count */}
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing {filteredWorkoutInfoData.length} of {workoutInfoData.length} exercises
+                </div>
+              </div>
+            )}
+            
+            {loadingWorkoutInfo ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <span className="ml-2 text-gray-600 dark:text-gray-400">Loading workout data...</span>
+              </div>
+            ) : workoutInfoError ? (
+              <div className="text-center py-12">
+                <div className="text-red-500 mb-2">Error loading workout data</div>
+                <p className="text-gray-600 dark:text-gray-400">{workoutInfoError}</p>
+              </div>
+            ) : workoutInfoData.length === 0 ? (
+              <div className="text-center py-12">
+                <CheckSquare className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Completed Exercises Yet</h4>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Completed exercises will appear here once the client starts their workout program.
+                </p>
+              </div>
+            ) : filteredWorkoutInfoData.length === 0 ? (
+              <div className="text-center py-12">
+                <Filter className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Results Found</h4>
+                <p className="text-gray-600 dark:text-gray-400">
+                  No exercises match your current filter criteria. Try adjusting your filters.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Exercise</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Intensity</TableHead>
+                      <TableHead>Sets</TableHead>
+                      <TableHead>Reps</TableHead>
+                      <TableHead>Distance</TableHead>
+                      <TableHead>Weight</TableHead>
+                      <TableHead>Feedback</TableHead>
+                      <TableHead>Rest</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredWorkoutInfoData.map((workout, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          {new Date(workout.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </TableCell>
+                        <TableCell className="font-medium">{workout.exercise_name || 'N/A'}</TableCell>
+                        <TableCell>{workout.duration || 'N/A'}</TableCell>
+                        <TableCell>{workout.intensity || 'N/A'}</TableCell>
+                        <TableCell>{workout.sets || 'N/A'}</TableCell>
+                        <TableCell>{workout.reps || 'N/A'}</TableCell>
+                        <TableCell>{workout.distance || 'N/A'}</TableCell>
+                        <TableCell>{workout.weight || 'N/A'}</TableCell>
+                        <TableCell className="max-w-xs truncate">{workout.feedback || 'N/A'}</TableCell>
+                        <TableCell>{workout.rest || 'N/A'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="progress-picture" className="space-y-6">
+          <ProgressPicturesCard clientId={clientId} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 } 
