@@ -26,26 +26,14 @@ const navigationItems: NavItem[] = [
     icon: <Icons.UsersIcon className="h-5 w-5" />,
   },
   {
-    name: "Plan Library",
-    href: "/plans",
-    icon: <Icons.ClipboardIcon className="h-5 w-5" />,
-    children: [
-      {
-        name: "Exercise Library",
-        href: "/exercise-lib",
-        icon: <Icons.DumbbellIcon className="h-4 w-4" />,
-      },
-      {
-        name: "Fitness Plans",
-        href: "/fitness-plans",
-        icon: <Icons.DumbbellIcon className="h-4 w-4" />,
-      },
-      {
-        name: "Programs",
-        href: "/programs",
-        icon: <Icons.CalendarIcon className="h-4 w-4" />,
-      },
-    ],
+    name: "Exercise Library",
+    href: "/exercise-lib",
+    icon: <Icons.ScrollIcon className="h-5 w-5" />,
+  },
+  {
+    name: "Fitness Plans",
+    href: "/fitness-plans",
+    icon: <Icons.CalendarIcon className="h-5 w-5" />,
   },
   {
     name: "Branding",
