@@ -5438,6 +5438,18 @@ const WorkoutPlanSection = ({
             </div>
           </div>
           
+          {/* Status Field - Shows unsaved changes status */}
+          {dirtyDates.size > 0 && (
+            <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
+              <div className="flex-shrink-0">
+                <span className="h-4 w-4 rounded-full bg-orange-500"></span>
+              </div>
+              <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                You have {dirtyDates.size} unsaved change{dirtyDates.size === 1 ? '' : 's'}. Save your changes before approving the plan.
+              </span>
+            </div>
+          )}
+          
           <div className="flex items-center gap-4">
             {/* Primary Search-based generation button */}
             <Button
@@ -5462,18 +5474,9 @@ const WorkoutPlanSection = ({
               )}
             </Button>
             
-            {/* Unsaved Changes Warning and Save Button */}
+            {/* Save Button - Shows when there are unsaved changes */}
             {dirtyDates.size > 0 && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0">
-                    <span className="h-4 w-4 rounded-full bg-orange-500"></span>
-                  </div>
-                  <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                    You have {dirtyDates.size} unsaved change{dirtyDates.size === 1 ? '' : 's'}. Save your changes before approving the plan.
-                  </span>
-                </div>
-                <Button
+              <Button
                   onClick={async () => {
                     if (!workoutPlan) return;
                     console.log('[WorkoutPlanSection] Save Plan to Database button clicked');
@@ -5618,7 +5621,6 @@ const WorkoutPlanSection = ({
                     </>
                   )}
                 </Button>
-              </div>
             )}
 
             {/* State Machine Based Global Approve Button */}
@@ -5912,7 +5914,8 @@ const WorkoutPlanSection = ({
                 }
               }}
               disabled={isSavingEdits || !isApproveState('disabled_save_first')}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              size="lg"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all duration-300 min-w-[220px]"
             >
               {isSavingEdits ? 'Saving...' : 'Save Plan to Database'}
             </Button>
