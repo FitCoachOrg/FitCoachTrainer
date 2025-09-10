@@ -210,7 +210,6 @@ const AIResponsePopup = ({
           if (parsedData.workout_plan && Array.isArray(parsedData.workout_plan)) {
             // Clean and validate the workout plan data
             const cleanedWorkoutPlan = parsedData.workout_plan.map((workout: any) => {
-              console.log('🧹 Cleaning workout in popup:', workout)
               
               // Helper function to extract numbers from strings
               const extractNumber = (value: any, defaultValue: number = 0): number => {
@@ -225,7 +224,6 @@ const AIResponsePopup = ({
               // Clean reps field - common issue where duration ends up in reps
               let cleanReps = workout.reps;
               if (typeof cleanReps === 'string' && (cleanReps.includes('minute') || cleanReps.includes('min'))) {
-                console.warn('⚠️ Found duration in reps field, fixing:', cleanReps);
                 // Extract number and set as default reps
                 const repsNumber = extractNumber(cleanReps, 10);
                 cleanReps = repsNumber.toString();
@@ -251,12 +249,10 @@ const AIResponsePopup = ({
               };
             });
             
-            console.log('✅ Cleaned workout plan for popup:', cleanedWorkoutPlan);
             setAiWorkoutPlan(cleanedWorkoutPlan)
           }
         }
       } catch (error) {
-        console.error("Error parsing workout plan:", error)
       }
     }
   }, [aiResponse])
@@ -276,7 +272,6 @@ const AIResponsePopup = ({
       
       // If reps contains "minute" or time references, it's probably wrong
       if (processedValue.includes('minute') || processedValue.includes('min')) {
-        console.warn('⚠️ Reps field contains duration value, cleaning:', processedValue);
         // Extract number and assume it was meant to be reps
         const match = processedValue.match(/(\d+)/);
         processedValue = match ? match[1] : '10';
@@ -303,7 +298,6 @@ const AIResponsePopup = ({
       icon: "💪",
       progression_notes: "Increase intensity when RPE ≤ 8",
     }
-    console.log('➕ Adding new workout with correct types:', newWorkout)
     setAiWorkoutPlan([...aiWorkoutPlan, newWorkout])
   }
 
@@ -314,7 +308,6 @@ const AIResponsePopup = ({
 
   const saveChanges = () => {
     setIsEditing(false)
-    console.log("Saved workout plan:", aiWorkoutPlan)
   }
 
   if (!isOpen || !aiResponse) return null
@@ -800,7 +793,6 @@ async function approvePlanWithUpsert(clientId: number, planStartDate: Date, view
     const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
     
-    console.log(`[approvePlanWithUpsert] Approving ${viewMode} plan: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
     
     // 2. Fetch all rows from schedule_preview for this client/week/type
     let previewRows: any[] = [];
@@ -814,16 +806,13 @@ async function approvePlanWithUpsert(clientId: number, planStartDate: Date, view
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const fetchEnd = performance.now();
-      console.log('[Supabase] Fetch preview rows:', `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
       
       if (fetchError) {
-        console.error('[Supabase] Fetch error:', fetchError);
         return { success: false, error: fetchError.message };
       }
       
       previewRows = data || [];
     } catch (fetchException) {
-      console.error('[Supabase] Fetch exception:', fetchException);
       return { success: false, error: `Fetch exception: ${fetchException}` };
     }
     
@@ -844,26 +833,15 @@ async function approvePlanWithUpsert(clientId: number, planStartDate: Date, view
           ignoreDuplicates: false 
         });
       const upsertEnd = performance.now();
-      console.log('[Supabase] Upsert schedule rows:', `${(upsertEnd - upsertStart).toFixed(2)}ms`, `(${rowsToUpsert.length} rows)`);
       
       if (upsertError) {
-        console.error('[Supabase] Upsert error:', upsertError);
-        console.error('[Supabase] Upsert error details:', {
-          message: upsertError.message,
-          details: upsertError.details,
-          hint: upsertError.hint,
-          code: upsertError.code
-        });
-        console.error('[Supabase] Sample row being upserted:', rowsToUpsert[0]);
         return { success: false, error: upsertError.message };
       }
     } catch (upsertException) {
-      console.error('[Supabase] Upsert exception:', upsertException);
       return { success: false, error: `Upsert exception: ${upsertException}` };
     }
     
     // 5. Set is_approved=true for all affected days in schedule_preview
-    console.log('[approvePlanWithUpsert] Step 3: Updating approval status...');
     try {
       const updateStart = performance.now();
       const { error: updateError } = await supabase
@@ -874,21 +852,18 @@ async function approvePlanWithUpsert(clientId: number, planStartDate: Date, view
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const updateEnd = performance.now();
-      console.log('[Supabase] Update approval flag:', `${(updateEnd - updateStart).toFixed(2)}ms`);
       
       if (updateError) {
-        console.warn('[Supabase] Update warning:', updateError);
+        // Update error - continue with operation
       }
     } catch (updateErr) {
-      console.warn('[Supabase] Update exception:', updateErr);
+      // Update exception - continue with operation
     }
     
     const endTime = performance.now();
-    console.log('[Approval] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
     return { success: true };
   } catch (err: any) {
     const endTime = performance.now();
-    console.error('[Approval] Error:', err, `(${(endTime - startTime).toFixed(2)}ms)`);
     return { success: false, error: err.message };
   }
 }
@@ -904,18 +879,13 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
     const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
     const endDateStr = format(endDate, 'yyyy-MM-dd');
     
-    console.log(`[approvePlan] Approving ${viewMode} plan: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
     
     // Show progress for large operations
     if (viewMode === 'monthly') {
-      console.log('[approvePlan] Large operation detected - monthly plan approval may take longer');
-      console.log('[approvePlan] Processing 28 days of workout data...');
-    } else {
-      console.log('[approvePlan] Processing 7 days of workout data...');
+      // Large operation - monthly plan approval
     }
 
     // 2. Check if data already exists in schedule (optimization)
-    console.log('[approvePlan] Step 1: Checking if data already exists in schedule...');
     let scheduleRows: any[] = [];
     try {
       const checkStart = performance.now();
@@ -927,7 +897,6 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const checkEnd = performance.now();
-      console.log('[Supabase] Check schedule rows:', `${(checkEnd - checkStart).toFixed(2)}ms`, `(${scheduleData?.length || 0} rows)`);
       
       if (scheduleError) {
         console.error('[Supabase] Schedule check error:', scheduleError);
@@ -956,16 +925,13 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const fetchEnd = performance.now();
-        console.log('[Supabase] Fetch preview rows:', `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
       
       if (fetchError) {
-        console.error('[Supabase] Fetch error:', fetchError);
         return { success: false, error: fetchError.message };
       }
       
       previewRows = data || [];
     } catch (fetchException) {
-      console.error('[Supabase] Fetch exception:', fetchException);
       return { success: false, error: `Fetch exception: ${fetchException}` };
     }
     
@@ -1008,21 +974,18 @@ async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'wee
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const updateEnd = performance.now();
-      console.log('[Supabase] Update approval flag:', `${(updateEnd - updateStart).toFixed(2)}ms`);
       
       if (updateError) {
-        console.warn('[Supabase] Update warning:', updateError);
+        // Update error - continue with operation
       }
     } catch (updateErr) {
-      console.warn('[Supabase] Update exception:', updateErr);
+      // Update exception - continue with operation
     }
     
     const endTime = performance.now();
-    console.log('[Approval] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
     return { success: true };
   } catch (err: any) {
     const endTime = performance.now();
-    console.error('[Approval] Error:', err, `(${(endTime - startTime).toFixed(2)}ms)`);
     return { success: false, error: err.message };
   }
 }
@@ -1040,7 +1003,6 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
     const endDateStr = format(endDate, 'yyyy-MM-dd');
 
     // 2. Check if data already exists in schedule (optimization)
-    console.log(`[approveWeek] Step 1: Checking if data already exists in schedule for Week ${weekNumber}...`);
     let scheduleRows: any[] = [];
     try {
       const checkStart = performance.now();
@@ -1067,10 +1029,8 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
 
     // 3. If data doesn't exist in schedule, copy from schedule_preview
     if (scheduleRows.length === 0) {
-      console.log(`[approveWeek] Step 2: No data in schedule, copying from schedule_preview for Week ${weekNumber}...`);
-      
       // Fetch all rows from schedule_preview for this client/week/type
-    let previewRows: any[] = [];
+      let previewRows: any[] = [];
     try {
       const fetchStart = performance.now();
       const { data, error: fetchError } = await supabase
@@ -1084,13 +1044,11 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
         console.log(`[Supabase] Fetch preview rows for Week ${weekNumber}:`, `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
 
       if (fetchError) {
-        console.error('[Supabase] Fetch error:', fetchError);
         return { success: false, error: fetchError.message };
       }
 
       previewRows = data || [];
     } catch (fetchException) {
-      console.error('[Supabase] Fetch exception:', fetchException);
       return { success: false, error: `Fetch exception: ${fetchException}` };
     }
 
@@ -1110,29 +1068,18 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
           ignoreDuplicates: false 
         });
       const upsertEnd = performance.now();
-        console.log(`[Supabase] Upsert schedule rows for Week ${weekNumber}:`, `${(upsertEnd - upsertStart).toFixed(2)}ms`, `(${rowsToUpsert.length} rows)`);
 
       if (upsertError) {
-        console.error('[Supabase] Upsert error:', upsertError);
-        console.error('[Supabase] Upsert error details:', {
-          message: upsertError.message,
-          details: upsertError.details,
-          hint: upsertError.hint,
-          code: upsertError.code
-        });
-        console.error('[Supabase] Sample row being upserted:', rowsToUpsert[0]);
         return { success: false, error: upsertError.message };
       }
     } catch (upsertException) {
-      console.error('[Supabase] Upsert exception:', upsertException);
       return { success: false, error: `Upsert exception: ${upsertException}` };
-      }
+    }
     } else {
-      console.log(`[approveWeek] Step 2: Data already exists in schedule for Week ${weekNumber}, skipping copy operation`);
+      // Data already exists in schedule, skipping copy operation
     }
 
     // 4. Set is_approved=true for all affected days in schedule_preview
-    console.log(`[approveWeek] Step 3: Updating approval status for Week ${weekNumber}...`);
     try {
       const updateStart = performance.now();
       const { error: updateError } = await supabase
@@ -1143,21 +1090,18 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
         .gte('for_date', startDateStr)
         .lte('for_date', endDateStr);
       const updateEnd = performance.now();
-      console.log(`[Supabase] Update approval flag for Week ${weekNumber}:`, `${(updateEnd - updateStart).toFixed(2)}ms`);
 
       if (updateError) {
-        console.warn('[Supabase] Update warning:', updateError);
+        // Update error - continue with operation
       }
     } catch (updateErr) {
-      console.warn('[Supabase] Update exception:', updateErr);
+      // Update exception - continue with operation
     }
 
     const endTime = performance.now();
-    console.log(`[Approval] Week ${weekNumber} approval total time:`, `${(endTime - startTime).toFixed(2)}ms`);
     return { success: true };
   } catch (err: any) {
     const endTime = performance.now();
-    console.error(`[Approval] Week approval error:`, err, `(${(endTime - startTime).toFixed(2)}ms)`);
     return { success: false, error: err.message };
   }
 }
@@ -1170,10 +1114,8 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 function clearClientCache(clientId?: number) {
   if (clientId) {
     clientDataCache.delete(clientId);
-    console.log(`[ClientCache] Cleared cache for client ${clientId}`);
   } else {
     clientDataCache.clear();
-    console.log('[ClientCache] Cleared all client cache');
   }
 }
 
@@ -1905,17 +1847,6 @@ const WorkoutPlanSection = ({
 
   // Get the appropriate data for the table based on view mode
   const getTableData = () => {
-    console.log('[WorkoutPlanSection] 🔍 getTableData called (UNIFIED):', {
-      viewMode,
-      unifiedWorkoutDataExists: !!unifiedWorkoutData,
-      unifiedWorkoutDataDaysCount: unifiedWorkoutData?.days?.length || 0,
-      unifiedWorkoutDataHasPlans: unifiedWorkoutData?.hasAnyPlans,
-      workoutPlanExists: !!workoutPlan,
-      workoutPlanWeekLength: workoutPlan?.week?.length || 0,
-      monthlyDataLength: monthlyData?.length || 0,
-      planStartDate: planStartDate?.toISOString(),
-      shouldFetchData
-    });
     
     // Use current planStartDate (alignment is handled in useEffect)
     if (!planStartDate || !(planStartDate instanceof Date) || isNaN(planStartDate.getTime())) {

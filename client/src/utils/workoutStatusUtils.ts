@@ -48,8 +48,6 @@ export async function checkWorkoutApprovalStatus(
   const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 
   try {
-    console.log(`[checkWorkoutApprovalStatus] Checking status for ${totalDays} days: ${startDateStr} to ${endDateStr}`);
-
     // Get data from both tables with logging and timeout protection
     RequestLogger.logDatabaseQuery('schedule_preview', 'select', 'checkWorkoutApprovalStatus', {
       clientId,
@@ -70,7 +68,6 @@ export async function checkWorkoutApprovalStatus(
     };
 
     // SEQUENTIAL QUERIES: Run queries one at a time to prevent database overload
-    console.log(`[checkWorkoutApprovalStatus] Running queries sequentially for ${totalDays} days`);
 
     const previewQuery = supabase
       .from('schedule_preview')
@@ -95,7 +92,6 @@ export async function checkWorkoutApprovalStatus(
       
       // If it's a timeout error, continue with empty data instead of throwing
       if (previewError.message.includes('timeout')) {
-        console.warn('Preview query timed out, continuing with empty data');
         return {
           status: 'no_plan' as const,
           source: 'timeout_fallback' as const,
@@ -141,15 +137,12 @@ export async function checkWorkoutApprovalStatus(
       
       // If it's a timeout error, continue with empty data instead of throwing
       if (scheduleError.message.includes('timeout')) {
-        console.warn('Schedule query timed out, continuing with empty data');
         // Continue with empty schedule data
       } else {
         throw scheduleError;
       }
     }
 
-    console.log(`[checkWorkoutApprovalStatus] Preview data: ${previewData?.length || 0} entries`);
-    console.log(`[checkWorkoutApprovalStatus] Schedule data: ${scheduleData?.length || 0} entries`);
 
     // ----------------------------------------------------
     // NEW SIMPLIFIED STATUS LOGIC  (2025-09-xx)
@@ -213,13 +206,11 @@ export async function checkWeeklyWorkoutStatus(
   planStartDate: Date
 ): Promise<WorkoutStatusResult> {
   const startTime = Date.now();
-  console.log(`[checkWeeklyWorkoutStatus] Starting weekly status check for client ${clientId}, start date: ${planStartDate.toISOString()}`);
   
   const endDate = new Date(planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000);
   const result = await checkWorkoutApprovalStatus(supabase, clientId, planStartDate, endDate);
   
   const duration = Date.now() - startTime;
-  console.log(`[checkWeeklyWorkoutStatus] Completed in ${duration}ms: status=${result.status}, previewData=${result.previewData.length}, scheduleData=${result.scheduleData.length}`);
   
   RequestLogger.logPerformance('weekly_workout_status_check', 'checkWeeklyWorkoutStatus', startTime, {
     clientId,
@@ -241,16 +232,12 @@ export async function checkMonthlyWorkoutStatus(
   planStartDate: Date
 ): Promise<WorkoutStatusResult> {
   const startTime = Date.now();
-  console.log(`[checkMonthlyWorkoutStatus] Starting monthly status check for client ${clientId}, start date: ${planStartDate.toISOString()}`);
   
   const endDate = new Date(planStartDate.getTime() + 27 * 24 * 60 * 60 * 1000);
   const result = await checkWorkoutApprovalStatus(supabase, clientId, planStartDate, endDate);
 
-  console.log(`[checkMonthlyWorkoutStatus] Base result received: status=${result.status}, previewData=${result.previewData.length}, scheduleData=${result.scheduleData.length}`);
-
   // Add weekly breakdown for monthly views
   if (result.previewData.length > 0 || result.scheduleData.length > 0) {
-    console.log(`[checkMonthlyWorkoutStatus] Processing weekly breakdown...`);
     const weeklyBreakdown: WeeklyStatus[] = [];
     
     for (let week = 0; week < 4; week++) {
@@ -279,16 +266,8 @@ export async function checkMonthlyWorkoutStatus(
           weekStatus = 'draft';
         }
         
-        // Debug logging for status calculation
-        console.log(`[checkMonthlyWorkoutStatus] Week ${week + 1} status calculation:`, {
-          totalDaysInWeek,
-          approvedDaysInWeek,
-          weekStatus,
-          previewData: weekPreviewData.map(d => ({ date: d.for_date, is_approved: d.is_approved }))
-        });
       }
       
-      console.log(`[checkMonthlyWorkoutStatus] Week ${week + 1}: status=${weekStatus}, previewData=${weekPreviewData.length}, scheduleData=${weekScheduleData.length}`);
       
       weeklyBreakdown.push({
         week: week + 1,
@@ -316,7 +295,6 @@ export async function checkMonthlyWorkoutStatus(
       overallStatus = 'partial_approved';
     }
     
-    console.log(`[checkMonthlyWorkoutStatus] Final status: ${overallStatus} (approved: ${approvedWeeks}, draft: ${draftWeeks}, noPlan: ${noPlanWeeks})`);
     
     const duration = Date.now() - startTime;
     RequestLogger.logPerformance('monthly_workout_status_check', 'checkMonthlyWorkoutStatus', startTime, {
@@ -333,7 +311,6 @@ export async function checkMonthlyWorkoutStatus(
     };
   }
   
-  console.log(`[checkMonthlyWorkoutStatus] No data found, returning base result`);
   const duration = Date.now() - startTime;
   RequestLogger.logPerformance('monthly_workout_status_check', 'checkMonthlyWorkoutStatus', startTime, {
     clientId,

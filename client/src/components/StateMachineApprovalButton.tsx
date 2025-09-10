@@ -50,19 +50,8 @@ export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProp
   
   // Don't render if button shouldn't be shown
   if (!buttonConfig.show) {
-    console.log('[StateMachineApprovalButton] Not rendering - buttonConfig.show is false', {
-      state: approveButtonState,
-      buttonConfig
-    });
     return null;
   }
-  
-  console.log('[StateMachineApprovalButton] Rendering button', {
-    state: approveButtonState,
-    buttonConfig,
-    type,
-    weekIndex
-  });
   
   const handleClick = async () => {
     if (isState('error_stuck')) {

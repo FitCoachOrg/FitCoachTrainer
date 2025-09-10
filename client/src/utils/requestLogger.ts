@@ -73,10 +73,6 @@ class RequestLoggerClass {
   constructor() {
     // Enable logging in development and when explicitly requested
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('enableRequestLogging') === 'true';
-    
-    if (this.isEnabled) {
-      console.log('🔍 RequestLogger initialized - tracking all requests and state changes');
-    }
   }
 
   /**
@@ -147,16 +143,18 @@ class RequestLoggerClass {
     this.dbLogs.push(log);
     this.dbLogs = this.trimLogs(this.dbLogs);
 
-    // Log to console with appropriate level
-    const logLevel = options.success === false ? 'error' : duration && duration > 5000 ? 'warn' : 'log';
-    const durationText = duration ? ` (${duration}ms)` : '';
-    const errorText = options.error ? ` - ERROR: ${options.error}` : '';
-    const countText = options.resultCount !== undefined ? ` - ${options.resultCount} results` : '';
-    
-    console[logLevel](
-      `🗄️ [DB ${operation.toUpperCase()}] ${table}${durationText}${countText}${errorText}`,
-      { component, filters: options.filters, id }
-    );
+    // Log to console with appropriate level (only for errors and warnings)
+    if (options.success === false || (duration && duration > 5000)) {
+      const logLevel = options.success === false ? 'error' : 'warn';
+      const durationText = duration ? ` (${duration}ms)` : '';
+      const errorText = options.error ? ` - ERROR: ${options.error}` : '';
+      const countText = options.resultCount !== undefined ? ` - ${options.resultCount} results` : '';
+      
+      console[logLevel](
+        `🗄️ [DB ${operation.toUpperCase()}] ${table}${durationText}${countText}${errorText}`,
+        { component, filters: options.filters, id }
+      );
+    }
 
     return id;
   }
@@ -188,7 +186,7 @@ class RequestLoggerClass {
     this.stateLogs.push(log);
     this.stateLogs = this.trimLogs(this.stateLogs);
 
-    // Only log significant state changes to avoid spam
+    // Only log significant state changes to avoid spam (but don't log to console)
     const isSignificant = 
       stateName.includes('loading') || 
       stateName.includes('error') || 
@@ -196,12 +194,7 @@ class RequestLoggerClass {
       stateName.includes('generating') ||
       JSON.stringify(oldValue) !== JSON.stringify(newValue);
 
-    if (isSignificant) {
-      console.log(
-        `🔄 [STATE] ${component}.${stateName}: ${JSON.stringify(oldValue)} → ${JSON.stringify(newValue)}`,
-        { trigger, id }
-      );
-    }
+    // State changes are logged internally but not to console to reduce noise
 
     return id;
   }
@@ -239,14 +232,16 @@ class RequestLoggerClass {
     this.performanceLogs.push(log);
     this.performanceLogs = this.trimLogs(this.performanceLogs);
 
-    // Log with appropriate level based on duration
-    const logLevel = duration > 10000 ? 'error' : duration > 5000 ? 'warn' : 'log';
-    const errorText = options.error ? ` - ERROR: ${options.error}` : '';
-    
-    console[logLevel](
-      `⏱️ [PERF] ${operation} (${duration}ms)${errorText}`,
-      { component, metadata: options.metadata, id }
-    );
+    // Log with appropriate level based on duration (only for slow operations and errors)
+    if (duration > 5000 || options.error) {
+      const logLevel = duration > 10000 ? 'error' : 'warn';
+      const errorText = options.error ? ` - ERROR: ${options.error}` : '';
+      
+      console[logLevel](
+        `⏱️ [PERF] ${operation} (${duration}ms)${errorText}`,
+        { component, metadata: options.metadata, id }
+      );
+    }
 
     return id;
   }
@@ -397,7 +392,6 @@ class RequestLoggerClass {
     this.stateLogs = [];
     this.performanceLogs = [];
     this.errorLogs = [];
-    console.log('🗑️ RequestLogger logs cleared');
   }
 
   /**
@@ -406,7 +400,6 @@ class RequestLoggerClass {
   setEnabled(enabled: boolean) {
     this.isEnabled = enabled;
     localStorage.setItem('enableRequestLogging', enabled.toString());
-    console.log(`🔍 RequestLogger ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -425,8 +418,6 @@ class RequestLoggerClass {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    console.log('📁 Request logs exported');
   }
 }
 
