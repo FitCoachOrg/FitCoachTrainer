@@ -319,14 +319,27 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
     setIsLoadingData(true);
     try {
       console.log('[WeekExerciseModal] Fetching data for date range:', { startDate, endDate, clientId });
+      // Normalize inputs to local-calendar dates without any week alignment.
+      // We intentionally keep filtering in LOCAL timezone context.
+      // Convert the input strings to Date at local midnight and back to yyyy-MM-dd.
+      const toLocalYmd = (d: string) => {
+        const local = new Date(`${d}T00:00:00`);
+        const y = local.getFullYear();
+        const m = String(local.getMonth() + 1).padStart(2, '0');
+        const day = String(local.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      const startLocal = toLocalYmd(startDate);
+      const endLocal = toLocalYmd(endDate);
       
       const { data, error } = await supabase
         .from('schedule_preview')
         .select('*')
         .eq('client_id', clientId)
         .eq('type', 'workout')
-        .gte('for_date', startDate)
-        .lte('for_date', endDate)
+        .gte('for_date', startLocal)
+        .lte('for_date', endLocal)
         .order('for_date', { ascending: true });
 
       if (error) {
@@ -813,13 +826,14 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
     onClose();
   };
 
-  // Get day name and date
-  const getDayInfo = (dayIndex: number) => {
-    const dayDate = addDays(planStartDate, dayIndex);
+  // Get day name and date based on the day's for_date from data (local TZ, no alignment)
+  const getDayInfo = (dateStr: string) => {
+    // Ensure local-midnight interpretation to avoid UTC off-by-one issues
+    const local = new Date(`${dateStr}T00:00:00`);
     return {
-      name: format(dayDate, 'EEEE'),
-      date: format(dayDate, 'MMM d'),
-      fullDate: format(dayDate, 'yyyy-MM-dd')
+      name: format(local, 'EEEE'),
+      date: format(local, 'MMM d'),
+      fullDate: format(local, 'yyyy-MM-dd')
     };
   };
 
@@ -838,52 +852,97 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <Card className="w-full max-w-[80vw] max-h-[90vh] overflow-hidden">
           <CardHeader className="space-y-4 pb-4">
-            {/* Date Filter Section */}
-            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="start-date" className="text-sm font-medium whitespace-nowrap">
-                  From:
-                </Label>
-                <Input
-                  id="start-date"
-                  type="date"
-                  value={dateFilterStart}
-                  onChange={(e) => setDateFilterStart(e.target.value)}
-                  className="w-40"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="end-date" className="text-sm font-medium whitespace-nowrap">
-                  To:
-                </Label>
-                <Input
-                  id="end-date"
-                  type="date"
-                  value={dateFilterEnd}
-                  onChange={(e) => setDateFilterEnd(e.target.value)}
-                  className="w-40"
-                />
-              </div>
-              <Button
-                onClick={handleDateFilterChange}
-                disabled={!dateFilterStart || !dateFilterEnd || isLoadingData}
-                size="sm"
-                className="flex items-center gap-1"
-              >
-                {isLoadingData ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Loading...
-                  </>
-                ) : (
-                  'Load Data'
-                )}
-              </Button>
-              {weekData.length > 0 && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing {weekData.length} days
+            {/* Date Filter + Actions Row */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              {/* Left: Date Filters */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="start-date" className="text-sm font-medium whitespace-nowrap">
+                    From:
+                  </Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={dateFilterStart}
+                    onChange={(e) => setDateFilterStart(e.target.value)}
+                    className="w-40"
+                  />
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="end-date" className="text-sm font-medium whitespace-nowrap">
+                    To:
+                  </Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={dateFilterEnd}
+                    onChange={(e) => setDateFilterEnd(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                <Button
+                  onClick={handleDateFilterChange}
+                  disabled={!dateFilterStart || !dateFilterEnd || isLoadingData}
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  {isLoadingData ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Loading...
+                    </>
+                  ) : (
+                    'Load Data'
+                  )}
+                </Button>
+                {weekData.length > 0 && (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Showing {weekData.length} days
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Action Buttons */}
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleUndo}
+                  disabled={!canUndo || isSaving}
+                  className="flex items-center gap-1"
+                  title={canUndo ? `Undo: ${getLastOperationDescription()}` : 'No changes to undo'}
+                >
+                  <Undo className="h-4 w-4" />
+                  Undo
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={cancelEdit}
+                  disabled={isSaving}
+                  className="flex items-center gap-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={(e) => {
+                    console.log('[WeekExerciseModal] Top Save button clicked!', {
+                      isSaving,
+                      hasUnsavedChanges,
+                      weekDataLength: weekData.length
+                    });
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSave();
+                  }}
+                  disabled={isSaving}
+                  className="flex items-center gap-1"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
             </div>
 
             {/* Title and Stats */}
@@ -907,45 +966,6 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                 </p>
               </div>
               <div className="flex items-center gap-2">
-              {/* Top Action Buttons */}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleUndo}
-                disabled={!canUndo || isSaving}
-                className="flex items-center gap-1"
-                title={canUndo ? `Undo: ${getLastOperationDescription()}` : 'No changes to undo'}
-              >
-                <Undo className="h-4 w-4" />
-                Undo
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={cancelEdit}
-                disabled={isSaving}
-                className="flex items-center gap-1"
-              >
-                Cancel
-              </Button>
-              <Button 
-                size="sm"
-                onClick={(e) => {
-                  console.log('[WeekExerciseModal] Top Save button clicked!', {
-                    isSaving,
-                    hasUnsavedChanges,
-                    weekDataLength: weekData.length
-                  });
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                disabled={isSaving}
-                className="flex items-center gap-1"
-              >
-                <Save className="h-4 w-4" />
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
               <Button variant="ghost" size="sm" onClick={handleClose}>
                 <X className="h-4 w-4" />
               </Button>
@@ -988,7 +1008,7 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                 </thead>
                 <tbody>
                   {weekData.map((day, dayIndex) => {
-                    const dayInfo = getDayInfo(dayIndex);
+                    const dayInfo = getDayInfo(day.date);
                     const dayRowColor = getDayRowColor(dayIndex);
                     
                     if (day.exercises.length === 0) {

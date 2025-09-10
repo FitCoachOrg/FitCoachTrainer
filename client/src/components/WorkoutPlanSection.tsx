@@ -1279,7 +1279,7 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
   console.log(`[savePlanToSchedulePreview] 🚀 ENHANCED SAVE FUNCTION - Starting save for client ${clientId}`);
   const startTime = performance.now();
   const componentName = 'savePlanToSchedulePreview';
-  const operationTimeout = 10000; // Reduced to 10 seconds for individual operations
+  const operationTimeout = 20000; // Increased to 20 seconds for individual operations to reduce transient timeouts
   
   // Circuit breaker: check for recent save timeouts
   const now = Date.now();
@@ -1290,12 +1290,12 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
   }
   
   try {
-    // Create timeout promise for individual operations
-    const createTimeoutPromise = (operationName: string) => 
+    // Create timeout promise for individual operations (supports override per attempt)
+    const createTimeoutPromise = (operationName: string, timeoutMs: number = operationTimeout) => 
       new Promise<never>((_, reject) => {
         setTimeout(() => {
-          reject(new Error(`${operationName} timeout after ${operationTimeout}ms`));
-        }, operationTimeout);
+          reject(new Error(`${operationName} timeout after ${timeoutMs}ms`));
+        }, timeoutMs);
       });
 
     // Get client data with caching and fallback - use shorter timeout
@@ -1438,7 +1438,7 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       
       try {
         // Process updates in smaller batches to prevent timeouts
-        const batchSize = 7; // Process 7 records at a time (1 week)
+        const batchSize = 4; // Smaller batches to reduce chance of timeouts
         const batches = [];
         
         for (let i = 0; i < recordsToUpdate.length; i += batchSize) {
@@ -1454,18 +1454,34 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
           
           console.log(`[Supabase] Processing update batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
           
-          // Use batch update with timeout protection
+          // Use batch update with timeout protection and per-record retries
           const updatePromises = batch.map(async (record) => {
             const { id, ...updateData } = record;
-            const updatePromise = supabase
-              .from('schedule_preview')
-              .update(updateData)
-              .eq('id', id);
-            
-            return Promise.race([
-              updatePromise,
-              createTimeoutPromise(`Update record ${id}`)
-            ]);
+            let attempt = 0;
+            let lastError: any = null;
+            while (attempt < 2) { // up to 2 attempts
+              try {
+                const updatePromise = supabase
+                  .from('schedule_preview')
+                  .update(updateData)
+                  .eq('id', id);
+                const timeoutMs = attempt === 0 ? operationTimeout : operationTimeout * 1.5;
+                const result: any = await Promise.race([
+                  updatePromise,
+                  createTimeoutPromise(`Update record ${id}`, timeoutMs)
+                ]);
+                if (!result?.error) {
+                  return result;
+                }
+                lastError = result.error;
+              } catch (e) {
+                lastError = e;
+              }
+              attempt++;
+              // brief backoff
+              await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+            }
+            throw lastError || new Error(`Update record ${id} failed`);
           });
           
           const updateResults = await Promise.allSettled(updatePromises);
@@ -1510,7 +1526,7 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       
       try {
         // Process inserts in smaller batches to prevent timeouts
-        const batchSize = 7; // Process 7 records at a time (1 week)
+        const batchSize = 4; // Smaller batches to reduce chance of timeouts
         const batches = [];
         
         for (let i = 0; i < recordsToInsert.length; i += batchSize) {
@@ -1526,21 +1542,59 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
           
           console.log(`[Supabase] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
           
-          const batchInsertPromise = supabase
-            .from('schedule_preview')
-            .insert(batch);
-          
-          const { error: batchError } = await Promise.race([
-            batchInsertPromise,
-            createTimeoutPromise(`Insert batch ${batchIndex + 1}`)
-          ]);
-          
+          // Insert batch with retries; on final attempt, fallback to single-row inserts
+          let attempt = 0;
+          let batchSucceeded = false;
+          let lastError: any = null;
+          while (attempt < 3 && !batchSucceeded) {
+            try {
+              if (attempt < 2) {
+                const batchInsertPromise = supabase
+                  .from('schedule_preview')
+                  .insert(batch);
+                const timeoutMs = attempt === 0 ? operationTimeout : operationTimeout * 1.5;
+                const result: any = await Promise.race([
+                  batchInsertPromise,
+                  createTimeoutPromise(`Insert batch ${batchIndex + 1}`, timeoutMs)
+                ]);
+                if (!result?.error) {
+                  batchSucceeded = true;
+                  break;
+                }
+                lastError = result.error;
+              } else {
+                // Final attempt: single-row fallback
+                for (let i = 0; i < batch.length; i++) {
+                  const row = batch[i];
+                  const singleInsert = supabase.from('schedule_preview').insert(row);
+                  const singleResult: any = await Promise.race([
+                    singleInsert,
+                    createTimeoutPromise(`Insert single row in batch ${batchIndex + 1}`, operationTimeout)
+                  ]);
+                  if (singleResult?.error) {
+                    lastError = singleResult.error;
+                    throw lastError;
+                  }
+                  // small delay to avoid overload
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                batchSucceeded = true;
+                break;
+              }
+            } catch (e) {
+              lastError = e;
+            }
+            attempt++;
+            // brief backoff between attempts
+            await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+          }
+
           const batchEnd = performance.now();
           console.log(`[Supabase] Batch ${batchIndex + 1} completed:`, `${(batchEnd - batchStart).toFixed(2)}ms`);
-          
-          if (batchError) {
-            console.error(`[Supabase] Batch ${batchIndex + 1} insert error:`, batchError);
-            return { success: false, error: `Batch ${batchIndex + 1} insert failed: ${batchError.message}` };
+
+          if (!batchSucceeded) {
+            console.error(`[Supabase] Batch ${batchIndex + 1} insert error:`, lastError);
+            return { success: false, error: `Batch ${batchIndex + 1} insert failed: ${lastError instanceof Error ? lastError.message : 'Unknown error'}` };
           }
           
           // Add small delay between batches to prevent database overload
@@ -5343,6 +5397,7 @@ const WorkoutPlanSection = ({
             <StateMachineApprovalButton
               type="global"
               onApprove={handleUnifiedApproval}
+              showInlineStatus={false}
               onRetry={() => {
                 console.log('[StateMachineApprovalButton] Manual retry triggered');
                 // Trigger a manual retry of the save/refresh process
@@ -5652,16 +5707,18 @@ const WorkoutPlanSection = ({
                     {viewMode === 'monthly' ? '28-Day' : '7-Day'} Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + (viewMode === 'monthly' ? 27 : 6) * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
                   </h3>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={() => setWeekModalOpen(true)}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md"
                   >
                     <Edit className="h-4 w-4" />
-                    Edit Week
+                    Edit/View Plan
                   </Button>
                 </div>
               </div>
+
+              {/* Status row removed per request */}
               <WeeklyPlanHeader
                 week={(viewMode === 'weekly') ? (() => {
                   // Ensure exactly 7 days are passed in weekly mode

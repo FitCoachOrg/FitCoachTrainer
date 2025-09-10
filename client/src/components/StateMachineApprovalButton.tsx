@@ -23,6 +23,8 @@ interface StateMachineApprovalButtonProps {
   className?: string;
   // Allow passing state machine instance from parent
   stateMachineInstance?: ReturnType<typeof useApproveButtonState>;
+  // Control whether to render inline status under the button
+  showInlineStatus?: boolean;
 }
 
 export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProps> = ({
@@ -31,7 +33,8 @@ export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProp
   onApprove,
   onRetry,
   className = '',
-  stateMachineInstance
+  stateMachineInstance,
+  showInlineStatus = true
 }) => {
   const isGlobal = type === 'global';
   
@@ -164,28 +167,26 @@ export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProp
         {getButtonContent()}
       </Button>
       
-      {/* Enhanced user feedback */}
-      <div className="mt-3 space-y-2">
-        {/* Status indicator */}
-        <StatusIndicator
-          status={getStatusType(approveButtonState)}
-          message={getUserFeedbackMessage(approveButtonState)}
-          size="sm"
-          showIcon={true}
-        />
-        
-        {/* Progress bar for loading states */}
-        {(isState('saving') || isState('refreshing')) && (
-          <ProgressBar
-            progress={getProgressValue(approveButtonState)}
+      {showInlineStatus && (
+        <div className="mt-3 space-y-2">
+          <StatusIndicator
+            status={getStatusType(approveButtonState)}
+            message={getUserFeedbackMessage(approveButtonState)}
             size="sm"
-            variant="primary"
-            animated={true}
-            showPercentage={false}
-            label={getProgressLabel(approveButtonState)}
+            showIcon={true}
           />
-        )}
-      </div>
+          {(isState('saving') || isState('refreshing')) && (
+            <ProgressBar
+              progress={getProgressValue(approveButtonState)}
+              size="sm"
+              variant="primary"
+              animated={true}
+              showPercentage={false}
+              label={getProgressLabel(approveButtonState)}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

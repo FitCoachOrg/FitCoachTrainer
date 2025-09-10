@@ -178,7 +178,6 @@ const calculateWeekStatus = async (weekDays: WeekDay[], weekStartDate: Date, cli
       return { status: 'approved', approvedDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length, totalDays: weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length };
     }
   } catch (error) {
-    console.error('Error calculating week status:', error);
     // Fallback to old logic - removed is_approved check since it doesn't exist on WeekDay
     const approvedDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
     const totalDays = weekDays.filter(day => day && day.exercises && day.exercises.length > 0).length;
@@ -528,14 +527,10 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   // Fetch approval status when component mounts or when relevant props change - UNIFIED APPROACH
   useEffect(() => {
     if (clientId && planStartDate) {
-      console.log('[WorkoutPlanTable] 🔄 Approval status effect triggered - using unified data');
-      
       // Use unified data if available, otherwise fallback to legacy fetch
       if (workoutData) {
-        console.log('[WorkoutPlanTable] 🔄 Using unified data for approval status');
         fetchApprovalStatus();
       } else if (!isWorkoutDataLoading) {
-        console.log('[WorkoutPlanTable] 🔄 Unified data not available, using legacy fetch');
         fetchApprovalStatus();
       }
     }
@@ -545,13 +540,9 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
   const fetchApprovalStatus = async () => {
     if (!clientId) return;
     
-    console.log('[WorkoutPlanTable] 🔄 fetchApprovalStatus called - using unified data source');
-    
     try {
       // Use unified data if available
       if (workoutData) {
-        console.log('[WorkoutPlanTable] 🔄 Using unified workout data for approval status');
-        
         if (viewMode === 'monthly') {
           setMonthlyStatus({
             status: workoutData.status,
@@ -560,20 +551,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
             scheduleData: workoutData.scheduleData,
             weeklyBreakdown: workoutData.weeklyBreakdown
           });
-          
+
           if (workoutData.weeklyBreakdown) {
             const weekStatuses = workoutData.weeklyBreakdown.map((weekData, weekIndex) => {
               const canApprove = (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false);
-              
-              // Debug logging for approval button logic
-              console.log(`[WorkoutPlanTable] Week ${weekIndex + 1} approval logic (UNIFIED):`, {
-                status: weekData.status,
-                previewDataCount: weekData.previewData?.length || 0,
-                unapprovedCount: weekData.previewData?.filter(d => d.is_approved === false).length || 0,
-                canApprove,
-                previewData: weekData.previewData?.map(d => ({ date: d.for_date, is_approved: d.is_approved })) || []
-              });
-              
+
               return {
                 weekNumber: weekIndex,
                 status: weekData.status === 'partial_approved' ? 'draft' : weekData.status,
@@ -591,7 +573,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
             previewData: workoutData.previewData,
             scheduleData: workoutData.scheduleData
           });
-          
+
           // Create a single week status for weekly view
           const weekStatus = {
             weekNumber: 0,
@@ -602,29 +584,16 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
           };
           setLocalWeekStatuses([weekStatus]);
         }
-        
-        console.log('[WorkoutPlanTable] ✅ Approval status updated from unified source');
       } else {
-        console.log('[WorkoutPlanTable] 🔄 Unified data not available, using fallback');
-        
         // Fallback to legacy data fetching
         if (viewMode === 'monthly') {
           const monthlyResult = await checkMonthlyWorkoutStatus(supabase, clientId, baseStartDate);
           setMonthlyStatus(monthlyResult);
-          
+
           if (monthlyResult.weeklyBreakdown) {
             const weekStatuses = monthlyResult.weeklyBreakdown.map((weekData, weekIndex) => {
               const canApprove = (weekData.status === 'draft' || weekData.status === 'partial_approved') && weekData.previewData?.some(d => d.is_approved === false);
-              
-              // Debug logging for approval button logic
-              console.log(`[WorkoutPlanTable] Week ${weekIndex + 1} approval logic (FALLBACK):`, {
-                status: weekData.status,
-                previewDataCount: weekData.previewData?.length || 0,
-                unapprovedCount: weekData.previewData?.filter(d => d.is_approved === false).length || 0,
-                canApprove,
-                previewData: weekData.previewData?.map(d => ({ date: d.for_date, is_approved: d.is_approved })) || []
-              });
-              
+
               return {
                 weekNumber: weekIndex,
                 status: weekData.status === 'partial_approved' ? 'draft' : weekData.status,
@@ -638,7 +607,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         } else {
           const weeklyResult = await checkWeeklyWorkoutStatus(supabase, clientId, baseStartDate);
           setWeeklyStatus(weeklyResult);
-          
+
           // Create a single week status for weekly view
           const weekStatus = {
             weekNumber: 0,
@@ -651,7 +620,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         }
       }
     } catch (error) {
-      console.error('Error fetching approval status:', error);
+      // Error handling without logging
     }
   };
 
@@ -665,55 +634,15 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
       exercises: (day.exercises || []).map(normalizeExercise),
     }));
 
-  // Debug logging to help identify exercise display issues
   useEffect(() => {
-    const fullWeekArray = getFullWeek(baseStartDate, editableWeek, viewMode);
-    const organizedWeeks = organizeIntoWeeks(fullWeekArray, viewMode);
-    
-    console.log('[WorkoutPlanTable] 🔍 Data organization debug:', {
-      viewMode,
-      editableWeekLength: editableWeek.length,
-      fullWeekArrayLength: fullWeekArray.length,
-      organizedWeeksCount: organizedWeeks.length,
-      organizedWeeks: organizedWeeks.map((week, idx) => ({
-        weekIndex: idx,
-        weekLength: week.length,
-        nullDays: week.filter(day => day === null).length,
-        hasData: week.some(day => day !== null)
-      })),
-      hasNullDays: fullWeekArray.some(day => day == null),
-      nullDayIndices: fullWeekArray.map((day, idx) => day == null ? idx : null).filter(idx => idx !== null)
-    });
-    
-    if (normalizedWeek.length > 0) {
-      const allExercises = normalizedWeek.flatMap(day => day.exercises || []);
-      const exerciseSummary = getExerciseSummary(allExercises);
-      
-      console.log('[WorkoutPlanTable] 🔍 Exercise data debug:', {
-        totalDays: normalizedWeek.length,
-        daysWithExercises: normalizedWeek.filter(day => day.exercises && day.exercises.length > 0).length,
-        daysWithNoExercises: normalizedWeek.filter(day => !day.exercises || day.exercises.length === 0).length,
-        exerciseSummary,
-        sampleDayWithExercises: normalizedWeek.find(day => day.exercises && day.exercises.length > 0),
-        sampleDayWithoutExercises: normalizedWeek.find(day => !day.exercises || day.exercises.length === 0),
-        allDays: normalizedWeek.map(day => ({
-          date: day.date,
-          focus: day.focus,
-          exerciseCount: day.exercises?.length || 0,
-          hasExercises: !!(day.exercises && day.exercises.length > 0)
-        }))
-      });
-    }
+    // Data organization and validation without logging
   }, [normalizedWeek, editableWeek, viewMode, baseStartDate]);
 
   const handlePlanChange = (dayIdx: number, exIdx: number, field: string, value: any) => {
-    console.log(`[Plan Change] Updating day ${dayIdx}, exercise ${exIdx}, field ${field} to ${value}`);
-    
     // Map the global day index to an actual date, then update by date
     const fullWeekArray = getFullWeek(baseStartDate, editableWeek, viewMode);
     const targetDay = fullWeekArray[dayIdx];
     if (!targetDay) {
-      console.error(`[Plan Change] No target day found for index: ${dayIdx}`);
       return; // safety
     }
 
@@ -763,7 +692,6 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     const targetDay = fullWeekArray[globalDayIdx];
     
     if (!targetDay || !targetDay.date) {
-      console.error('[Delete Day] No target day found for index:', globalDayIdx);
       toast({ title: 'Delete Failed', description: 'Could not find the day to delete.', variant: 'destructive' });
       return;
     }
@@ -787,13 +715,11 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
       onPlanChange(updatedWeek);
       
       toast({ title: 'Day Deleted', description: 'The day has been removed from the plan.' });
-      console.log('[Delete Day] Successfully deleted row and updated UI.');
-      
+
       // Close the delete confirmation dialog
       setDeleteDayIdx(null);
       
     } catch (err) {
-      console.error('[Delete Day] Unexpected error:', err);
       toast({ title: 'Delete Failed', description: 'An unexpected error occurred.', variant: 'destructive' });
     }
   };
@@ -840,7 +766,7 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
         if (insErr) throw insErr;
       }
     } catch (err) {
-      console.error('[Persist Exercises] Failed:', err);
+      // Error handling without logging
     }
   };
 
@@ -899,14 +825,12 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     const targetDay = fullWeekArray[dayIdx];
     
     if (!targetDay) {
-      console.error('[Delete Exercise] No target day found for index:', dayIdx);
       return;
     }
     
     // Find the day in editableWeek by date
     const dayInEditableWeek = editableWeek.find(d => d && d.date === targetDay.date);
     if (!dayInEditableWeek) {
-      console.error('[Delete Exercise] Day not found in editableWeek for date:', targetDay.date);
       return;
     }
     
@@ -936,19 +860,8 @@ export const WorkoutPlanTable = ({ week, clientId, onPlanChange, planStartDate, 
     
     // Handle null/undefined day data - this should not happen anymore with the fix above
     if (!day) {
-      console.error(`[WorkoutPlanTable] ❌ renderDay called with null/undefined day for dayIdx ${dayIdx}, weekIdx ${weekIdx} - this should not happen`);
       return null;
     }
-    
-    // Debug logging for exercise display issues
-    console.log(`[WorkoutPlanTable] 🔍 renderDay debug for day ${globalDayIdx}:`, {
-      date: day.date,
-      focus: day.focus,
-      exerciseCount: day.exercises?.length || 0,
-      hasExercises: !!(day.exercises && day.exercises.length > 0),
-      exercises: day.exercises || [],
-      willShowRestDay: !day.exercises || day.exercises.length === 0
-    });
     const currentDate = addDays(baseStartDate, globalDayIdx);
         const dateStr = format(currentDate, 'yyyy-MM-dd');
         const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
