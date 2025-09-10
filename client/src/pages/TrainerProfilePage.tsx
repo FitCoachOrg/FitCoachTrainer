@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState, useRef } from "react"
+import { useNavigate } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ interface LLMConfig {
 }
 
 export default function TrainerProfilePage() {
+  const navigate = useNavigate()
   const [trainer, setTrainer] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,12 +53,12 @@ export default function TrainerProfilePage() {
   const [editServiceOfferings, setEditServiceOfferings] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [expandedSections, setExpandedSections] = useState({
-    contact: true,
-    business: true,
-    pricing: true,
-    specialties: true,
-    clientPopulations: true,
-    serviceOfferings: true,
+    contact: false,
+    business: false,
+    pricing: false,
+    specialties: false,
+    clientPopulations: false,
+    serviceOfferings: false,
     admin: false
   })
 
@@ -1199,7 +1201,11 @@ export default function TrainerProfilePage() {
                     <Button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg" onClick={() => setEditing(true)}>
                       Edit Profile
                     </Button>
-                    <Button variant="outline" className="flex-1 border-gray-300 hover:bg-gray-50">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 border-gray-300 hover:bg-gray-50"
+                      onClick={() => navigate('/dashboard')}
+                    >
                       View Schedule
                     </Button>
                   </>

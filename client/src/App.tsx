@@ -363,7 +363,9 @@ function App() {
                   path="/trainer-profile"
                   element={
                     <ProtectedRoute>
-                      <TrainerProfilePage />
+                      <ProtectedLayout>
+                        <TrainerProfilePage />
+                      </ProtectedLayout>
                     </ProtectedRoute>
                   }
                 />
