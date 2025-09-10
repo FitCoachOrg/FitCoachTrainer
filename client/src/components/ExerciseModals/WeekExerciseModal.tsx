@@ -13,44 +13,71 @@ import VideoModal from '@/components/VideoModal';
 import ExercisePickerModal from '@/components/ExercisePickerModal';
 import AddExerciseModal from '@/components/AddExerciseModal';
 
-// Inline Editable Cell Component (from WorkoutPlanTable)
+// Enhanced Inline Editable Cell Component with auto-save and clean UX
 const EditableCell = ({ 
   value, 
   onSave, 
   type = 'text',
   placeholder = '',
-  className = ''
+  className = '',
+  showTooltip = false,
+  maxLength = 50,
+  showButtons = false // New prop to control button visibility
 }: {
   value: string | number | undefined | null;
   onSave: (newValue: string) => void;
   type?: 'text' | 'number';
   placeholder?: string;
   className?: string;
+  showTooltip?: boolean;
+  maxLength?: number;
+  showButtons?: boolean; // For wide columns that can accommodate buttons
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value?.toString() || '');
+  const [showFullText, setShowFullText] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    onSave(editValue);
+  const handleSave = async () => {
+    if (editValue !== value?.toString()) {
+      setIsSaving(true);
+      try {
+        await onSave(editValue);
+        // Show brief success feedback
+        setTimeout(() => setIsSaving(false), 500);
+      } catch (error) {
+        setIsSaving(false);
+        // Revert on error
+        setEditValue(value?.toString() || '');
+      }
+    }
     setIsEditing(false);
+    setShowFullText(false);
   };
 
   const handleCancel = () => {
     setEditValue(value?.toString() || '');
     setIsEditing(false);
+    setShowFullText(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
+      e.preventDefault();
       handleCancel();
     }
   };
 
+  const displayValue = value?.toString() || '';
+  const isLongText = displayValue.length > maxLength;
+  const truncatedValue = isLongText ? displayValue.substring(0, maxLength) + '...' : displayValue;
+
   if (isEditing) {
     return (
-      <div className="flex items-center gap-1">
+      <div className={`flex items-center gap-1 w-full ${showButtons ? '' : 'justify-center'}`}>
         <Input
           type={type}
           value={editValue}
@@ -58,26 +85,68 @@ const EditableCell = ({
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
           autoFocus
-          className={`h-8 text-sm ${className}`}
+          className={`h-8 text-sm ${showButtons ? 'flex-1 min-w-0' : 'w-full'} ${className} ${isSaving ? 'bg-green-50 border-green-300' : ''}`}
           placeholder={placeholder}
+          disabled={isSaving}
         />
-        <Button size="sm" variant="ghost" onClick={handleSave} className="h-6 w-6 p-0">
-          <Check className="h-3 w-3 text-green-600" />
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0">
-          <X className="h-3 w-3 text-red-600" />
-        </Button>
+        {showButtons && (
+          <>
+            <Button size="sm" variant="ghost" onClick={handleSave} className="h-6 w-6 p-0 flex-shrink-0" disabled={isSaving}>
+              <Check className="h-3 w-3 text-green-600" />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleCancel} className="h-6 w-6 p-0 flex-shrink-0" disabled={isSaving}>
+              <X className="h-3 w-3 text-red-600" />
+            </Button>
+          </>
+        )}
+        {isSaving && (
+          <div className="h-4 w-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+        )}
       </div>
     );
   }
 
   return (
     <div 
-      className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 ${className}`}
+      className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 rounded px-2 py-1 flex items-center gap-1 group relative ${className}`}
       onClick={() => setIsEditing(true)}
     >
-      <span className="truncate">{value?.toString() || placeholder}</span>
-      <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <span className="truncate flex-1 min-w-0">
+        {showFullText ? displayValue : truncatedValue}
+      </span>
+      {isLongText && !showFullText && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowFullText(true);
+          }}
+          className="text-xs text-blue-600 hover:text-blue-800 flex-shrink-0 ml-1"
+          title="Show full text"
+        >
+          more
+        </button>
+      )}
+      {isLongText && showFullText && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowFullText(false);
+          }}
+          className="text-xs text-blue-600 hover:text-blue-800 flex-shrink-0 ml-1"
+          title="Show less"
+        >
+          less
+        </button>
+      )}
+      <Edit3 className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+      
+      {/* Tooltip for long text */}
+      {showTooltip && isLongText && !showFullText && (
+        <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 max-w-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          {displayValue}
+          <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+        </div>
+      )}
     </div>
   );
 };
@@ -767,7 +836,7 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
     <>
       {/* Modal Overlay */}
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <Card className="w-full max-w-7xl max-h-[90vh] overflow-hidden">
+        <Card className="w-full max-w-[80vw] max-h-[90vh] overflow-hidden">
           <CardHeader className="space-y-4 pb-4">
             {/* Date Filter Section */}
             <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -903,18 +972,18 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
               <>
                 {/* Weekly Exercises Table */}
                 <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 table-fixed">
+              <table className="w-full border-collapse border border-gray-200 dark:border-gray-700">
                 <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-800">
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-20">Day</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-1/5">Exercise</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-20">Duration (min)</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-16">Sets</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-16">Reps</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-20">Weight (lbs)</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-1/6">Equipment</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-24">Video</th>
-                    <th className="border border-gray-200 dark:border-gray-700 px-3 py-2 text-left text-sm font-medium w-16">Actions</th>
+                  <tr className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-24 min-w-24">Day</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-[35%] min-w-[200px]">Exercise</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-20 min-w-20">Duration (min)</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-18 min-w-18">Sets</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-18 min-w-18">Reps</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-20 min-w-20">Weight (lbs)</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-[15%] min-w-[120px]">Equipment</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-12 min-w-12">Video</th>
+                    <th className="border border-gray-200 dark:border-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 w-20 min-w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -926,14 +995,14 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                       // Show empty day row
                       return (
                         <tr key={dayIndex} className={`${dayRowColor} hover:bg-opacity-80`}>
-                          <td className="border border-gray-200 dark:border-gray-700 px-3 py-4 text-center font-medium" rowSpan={1}>
+                          <td className="border border-gray-200 dark:border-gray-700 px-4 py-4 text-center font-medium" rowSpan={1}>
                             <div className="flex flex-col items-center">
                               <span className="text-sm font-semibold">{dayInfo.name}</span>
                               <span className="text-xs text-gray-600 dark:text-gray-400">{dayInfo.date}</span>
                               <span className="text-xs text-gray-500 dark:text-gray-500">{day.focus}</span>
                             </div>
                           </td>
-                          <td className="border border-gray-200 dark:border-gray-700 px-3 py-4 text-center text-gray-500" colSpan={7}>
+                          <td className="border border-gray-200 dark:border-gray-700 px-4 py-4 text-center text-gray-500" colSpan={7}>
                             <div className="flex flex-col items-center gap-2">
                               <span className="text-sm">No exercises</span>
                               <div className="flex gap-1">
@@ -969,7 +1038,7 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                       <tr key={`${dayIndex}-${exerciseIndex}`} className={`${dayRowColor} hover:bg-opacity-80`}>
                         {/* Day Column - only show for first exercise of each day */}
                         {exerciseIndex === 0 && (
-                          <td className="border border-gray-200 dark:border-gray-700 px-3 py-4 text-center font-medium" rowSpan={day.exercises.length}>
+                          <td className="border border-gray-200 dark:border-gray-700 px-4 py-4 text-center font-medium" rowSpan={day.exercises.length}>
                             <div className="flex flex-col items-center">
                               <span className="text-sm font-semibold">{dayInfo.name}</span>
                               <span className="text-xs text-gray-600 dark:text-gray-400">{dayInfo.date}</span>
@@ -979,96 +1048,108 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                         )}
 
                         {/* Exercise Name */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.exercise}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'exercise', value)}
                             placeholder="Exercise name"
                             className="w-full min-w-0"
+                            showTooltip={true}
+                            maxLength={40}
+                            showButtons={true}
                           />
                         </td>
 
                         {/* Duration */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.duration}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'duration', value)}
                             placeholder="Duration"
                             className="w-full min-w-0"
+                            showButtons={false}
                           />
                         </td>
 
                         {/* Sets */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.sets}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'sets', parseInt(value) || 0)}
                             type="number"
                             placeholder="0"
                             className="w-full min-w-0"
+                            showButtons={false}
                           />
                         </td>
 
                         {/* Reps */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.reps}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'reps', parseInt(value) || 0)}
                             type="number"
                             placeholder="0"
                             className="w-full min-w-0"
+                            showButtons={false}
                           />
                         </td>
 
                         {/* Weight */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.weight}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'weight', parseFloat(value) || 0)}
                             type="number"
                             placeholder="0"
                             className="w-full min-w-0"
+                            showButtons={false}
                           />
                         </td>
 
                         {/* Equipment */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <EditableCell
                             value={exercise.equipment}
                             onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'equipment', value)}
                             placeholder="Equipment"
                             className="w-full min-w-0"
+                            showTooltip={true}
+                            maxLength={25}
+                            showButtons={true}
                           />
                         </td>
 
                         {/* Video */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-2 py-3">
                           {exercise.video_link || exercise.video_thumbnail ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-center">
                               <VideoThumbnail
                                 videoUrl={exercise.video_link || exercise.video_thumbnail || ''}
                                 exerciseName={exercise.exercise}
                                 onClick={() => openVideoModal(exercise.video_link || exercise.video_thumbnail || '', exercise.exercise)}
                               />
-                              <EditableCell
-                                value={exercise.video_link}
-                                onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'video_link', value)}
-                                placeholder="Video Link"
-                                className="w-full text-xs opacity-0 hover:opacity-100 transition-opacity min-w-0"
-                              />
                             </div>
                           ) : (
-                            <EditableCell
-                              value={exercise.video_link}
-                              onSave={(value) => updateExercise(dayIndex, exerciseIndex, 'video_link', value)}
-                              placeholder="Video Link"
-                              className="w-full text-xs min-w-0"
-                            />
+                            <div className="flex items-center justify-center">
+                              <button
+                                onClick={() => {
+                                  const newVideoLink = prompt('Enter video URL:');
+                                  if (newVideoLink && newVideoLink.trim()) {
+                                    updateExercise(dayIndex, exerciseIndex, 'video_link', newVideoLink.trim());
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-gray-600 text-xs p-1 rounded hover:bg-gray-100"
+                                title="Add video link"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
                           )}
                         </td>
 
                         {/* Actions */}
-                        <td className="border border-gray-200 dark:border-gray-700 px-3 py-2">
+                        <td className="border border-gray-200 dark:border-gray-700 px-4 py-3">
                           <div className="flex items-center gap-1">
                             <Button
                               size="sm"

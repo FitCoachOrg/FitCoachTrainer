@@ -785,7 +785,112 @@ function buildSchedulePreviewRows(planWeek: TableWeekDay[], clientId: number, fo
   });
 }
 
-// Add approvePlan implementation to copy from schedule_preview to schedule
+
+// Perform the actual approval with UPSERT operation
+async function approvePlanWithUpsert(clientId: number, planStartDate: Date, viewMode: 'weekly' | 'monthly' = 'weekly') {
+  const startTime = performance.now();
+  
+  try {
+    // 1. Get the date range based on view mode
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const daysToAdd = viewMode === 'monthly' ? 27 : 6; // 28 days for monthly (0-27), 7 days for weekly (0-6)
+    const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    console.log(`[approvePlanWithUpsert] Approving ${viewMode} plan: ${startDateStr} to ${endDateStr} (${daysToAdd + 1} days)`);
+    
+    // 2. Fetch all rows from schedule_preview for this client/week/type
+    let previewRows: any[] = [];
+    try {
+      const fetchStart = performance.now();
+      const { data, error: fetchError } = await supabase
+        .from('schedule_preview')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const fetchEnd = performance.now();
+      console.log('[Supabase] Fetch preview rows:', `${(fetchEnd - fetchStart).toFixed(2)}ms`, `(${data?.length || 0} rows)`);
+      
+      if (fetchError) {
+        console.error('[Supabase] Fetch error:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+      
+      previewRows = data || [];
+    } catch (fetchException) {
+      console.error('[Supabase] Fetch exception:', fetchException);
+      return { success: false, error: `Fetch exception: ${fetchException}` };
+    }
+    
+    if (previewRows.length === 0) {
+      return { success: false, error: 'No draft plan found to approve.' };
+    }
+
+    // 3. Prepare rows for UPSERT (remove id, created_at, is_approved fields)
+    const rowsToUpsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
+    
+    // 4. Perform UPSERT operation
+    try {
+      const upsertStart = performance.now();
+      const { error: upsertError } = await supabase
+        .from('schedule')
+        .upsert(rowsToUpsert, { 
+          onConflict: 'client_id,for_date,type,task',
+          ignoreDuplicates: false 
+        });
+      const upsertEnd = performance.now();
+      console.log('[Supabase] Upsert schedule rows:', `${(upsertEnd - upsertStart).toFixed(2)}ms`, `(${rowsToUpsert.length} rows)`);
+      
+      if (upsertError) {
+        console.error('[Supabase] Upsert error:', upsertError);
+        console.error('[Supabase] Upsert error details:', {
+          message: upsertError.message,
+          details: upsertError.details,
+          hint: upsertError.hint,
+          code: upsertError.code
+        });
+        console.error('[Supabase] Sample row being upserted:', rowsToUpsert[0]);
+        return { success: false, error: upsertError.message };
+      }
+    } catch (upsertException) {
+      console.error('[Supabase] Upsert exception:', upsertException);
+      return { success: false, error: `Upsert exception: ${upsertException}` };
+    }
+    
+    // 5. Set is_approved=true for all affected days in schedule_preview
+    console.log('[approvePlanWithUpsert] Step 3: Updating approval status...');
+    try {
+      const updateStart = performance.now();
+      const { error: updateError } = await supabase
+        .from('schedule_preview')
+        .update({ is_approved: true })
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      const updateEnd = performance.now();
+      console.log('[Supabase] Update approval flag:', `${(updateEnd - updateStart).toFixed(2)}ms`);
+      
+      if (updateError) {
+        console.warn('[Supabase] Update warning:', updateError);
+      }
+    } catch (updateErr) {
+      console.warn('[Supabase] Update exception:', updateErr);
+    }
+    
+    const endTime = performance.now();
+    console.log('[Approval] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
+    return { success: true };
+  } catch (err: any) {
+    const endTime = performance.now();
+    console.error('[Approval] Error:', err, `(${(endTime - startTime).toFixed(2)}ms)`);
+    return { success: false, error: err.message };
+  }
+}
+
+// Legacy approvePlan function (kept for backward compatibility)
 async function approvePlan(clientId: number, planStartDate: Date, viewMode: 'weekly' | 'monthly' = 'weekly') {
   const startTime = performance.now();
   
@@ -990,24 +1095,34 @@ async function approveWeek(clientId: number, weekStartDate: Date, weekNumber: nu
       return { success: false, error: `No draft plan found for Week ${weekNumber} to approve.` };
     }
 
-      // Insert the preview rows into schedule (remove id, created_at, is_approved fields)
-    const rowsToInsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
+      // Upsert the preview rows into schedule (remove id, created_at, is_approved fields)
+    const rowsToUpsert = previewRows.map(({ id, created_at, is_approved, ...rest }: any) => rest);
 
     try {
-      const insertStart = performance.now();
-      const { error: insertError } = await supabase
+      const upsertStart = performance.now();
+      const { error: upsertError } = await supabase
         .from('schedule')
-        .insert(rowsToInsert);
-      const insertEnd = performance.now();
-        console.log(`[Supabase] Insert schedule rows for Week ${weekNumber}:`, `${(insertEnd - insertStart).toFixed(2)}ms`, `(${rowsToInsert.length} rows)`);
+        .upsert(rowsToUpsert, { 
+          onConflict: 'client_id,for_date,type,task',
+          ignoreDuplicates: false 
+        });
+      const upsertEnd = performance.now();
+        console.log(`[Supabase] Upsert schedule rows for Week ${weekNumber}:`, `${(upsertEnd - upsertStart).toFixed(2)}ms`, `(${rowsToUpsert.length} rows)`);
 
-      if (insertError) {
-        console.error('[Supabase] Insert error:', insertError);
-        return { success: false, error: insertError.message };
+      if (upsertError) {
+        console.error('[Supabase] Upsert error:', upsertError);
+        console.error('[Supabase] Upsert error details:', {
+          message: upsertError.message,
+          details: upsertError.details,
+          hint: upsertError.hint,
+          code: upsertError.code
+        });
+        console.error('[Supabase] Sample row being upserted:', rowsToUpsert[0]);
+        return { success: false, error: upsertError.message };
       }
-    } catch (insertException) {
-      console.error('[Supabase] Insert exception:', insertException);
-      return { success: false, error: `Insert exception: ${insertException}` };
+    } catch (upsertException) {
+      console.error('[Supabase] Upsert exception:', upsertException);
+      return { success: false, error: `Upsert exception: ${upsertException}` };
       }
     } else {
       console.log(`[approveWeek] Step 2: Data already exists in schedule for Week ${weekNumber}, skipping copy operation`);
@@ -1598,6 +1713,16 @@ const WorkoutPlanSection = ({
   const [isTemplatePreviewOpen, setIsTemplatePreviewOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
+  // Approval confirmation dialog state
+  const [showApprovalConfirmation, setShowApprovalConfirmation] = useState(false);
+  const [pendingApprovalData, setPendingApprovalData] = useState<{
+    clientId: number;
+    planStartDate: Date;
+    viewMode: 'weekly' | 'monthly';
+    weekIndex?: number;
+    existingDataCount: number;
+  } | null>(null);
+
   // Saving modal state
   const [showSavingModal, setShowSavingModal] = useState(false);
   const [savingMessage, setSavingMessage] = useState('');
@@ -1852,6 +1977,52 @@ const WorkoutPlanSection = ({
 
   const clearLoading = () => {
     setLoadingState({ type: null, message: '' });
+  };
+
+  // Check for existing data and show confirmation dialog if needed
+  const checkAndApprovePlan = async (clientId: number, planStartDate: Date, viewMode: 'weekly' | 'monthly' = 'weekly', weekIndex?: number) => {
+    const startDateStr = format(planStartDate, 'yyyy-MM-dd');
+    const daysToAdd = viewMode === 'monthly' ? 27 : 6;
+    const endDate = new Date(planStartDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const endDateStr = format(endDate, 'yyyy-MM-dd');
+    
+    try {
+      // Check if data already exists in schedule
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('schedule')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', startDateStr)
+        .lte('for_date', endDateStr);
+      
+      if (scheduleError) {
+        console.error('[checkAndApprovePlan] Schedule check error:', scheduleError);
+        return { success: false, error: scheduleError.message };
+      }
+      
+      const existingDataCount = scheduleData?.length || 0;
+      
+      // If data exists, show confirmation dialog
+      if (existingDataCount > 0) {
+        setPendingApprovalData({
+          clientId,
+          planStartDate,
+          viewMode,
+          weekIndex,
+          existingDataCount
+        });
+        setShowApprovalConfirmation(true);
+        return { success: true, requiresConfirmation: true };
+      }
+      
+      // No existing data, proceed with approval
+      return await approvePlanWithUpsert(clientId, planStartDate, viewMode);
+      
+    } catch (error) {
+      console.error('[checkAndApprovePlan] Error:', error);
+      return { success: false, error: `Error checking existing data: ${error}` };
+    }
   };
 
   // Helper function to check if the selected date is in the past
@@ -3959,11 +4130,11 @@ const WorkoutPlanSection = ({
         }, 10000); // Show progress message after 10 seconds
       }
 
-      let result: { success: boolean; error?: string };
+      let result: { success: boolean; error?: string; requiresConfirmation?: boolean };
       
       if (isGlobal) {
-        // Global approval - use existing approvePlan function
-        const approvalPromise = approvePlan(numericClientId, planStartDate, viewMode);
+        // Global approval - use new checkAndApprovePlan function
+        const approvalPromise = checkAndApprovePlan(numericClientId, planStartDate, viewMode);
         
         // Set reasonable timeout for approval operations
         const timeoutDuration = 30 * 1000; // 30 seconds should be more than enough for optimized approval
@@ -3974,10 +4145,26 @@ const WorkoutPlanSection = ({
         );
         
         console.log(`[Unified Approval] Starting ${viewMode} approval with ${timeoutDuration/1000}s timeout`);
-        result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string };
+        result = await Promise.race([approvalPromise, timeoutPromise]) as { success: boolean; error?: string; requiresConfirmation?: boolean };
+        
+        // If confirmation is required, don't proceed with the rest of the function
+        if (result.requiresConfirmation) {
+          setShowSavingModal(false);
+          clearLoading();
+          setIsApproving(false);
+          return;
+        }
       } else {
-        // Week approval - use existing approveWeek function
-        result = await approveWeek(numericClientId, weekStatus!.startDate, weekStatus!.weekNumber);
+        // Week approval - use new checkAndApprovePlan function
+        result = await checkAndApprovePlan(numericClientId, weekStatus!.startDate, 'weekly', weekIndex);
+        
+        // If confirmation is required, don't proceed with the rest of the function
+        if (result.requiresConfirmation) {
+          setShowSavingModal(false);
+          clearLoading();
+          setIsApproving(false);
+          return;
+        }
       }
 
       if (result.success) {
@@ -4088,6 +4275,67 @@ const WorkoutPlanSection = ({
   // Handle individual week approval for monthly view (legacy function - now uses unified handler)
   const handleApproveWeek = async (weekIndex: number) => {
     await handleUnifiedApproval('week', weekIndex);
+  };
+
+  // Handle confirmation dialog actions
+  const handleConfirmApproval = async () => {
+    if (!pendingApprovalData) return;
+    
+    setShowApprovalConfirmation(false);
+    setShowSavingModal(true);
+    setSavingMessage('Approving plan...');
+    setLoading('approving', 'Approving plan...');
+    setIsApproving(true);
+    
+    try {
+      const result = await approvePlanWithUpsert(
+        pendingApprovalData.clientId,
+        pendingApprovalData.planStartDate,
+        pendingApprovalData.viewMode
+      );
+      
+      if (result.success) {
+        const planType = pendingApprovalData.viewMode === 'monthly' ? 'monthly' : 'weekly';
+        toast({
+          title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`,
+          description: `The ${planType} workout plan has been approved and saved to the main schedule.`,
+          variant: 'default'
+        });
+        
+        // Refresh the UI
+        await handlePostSaveRefreshEnhanced({
+          isMonthly: pendingApprovalData.viewMode === 'monthly',
+          forceWeekStatusRefresh: true,
+          delayBeforeRefresh: 500,
+          skipDatabaseCheck: false
+        });
+      } else {
+        toast({
+          title: 'Approval Failed',
+          description: result.error || 'An error occurred during approval.',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('[handleConfirmApproval] Error:', error);
+      toast({
+        title: 'Approval Failed',
+        description: 'An unexpected error occurred during approval.',
+        variant: 'destructive'
+      });
+    } finally {
+      clearLoading();
+      setShowSavingModal(false);
+      setIsApproving(false);
+      setPendingApprovalData(null);
+    }
+  };
+
+  const handleCancelApproval = () => {
+    setShowApprovalConfirmation(false);
+    setPendingApprovalData(null);
+    clearLoading();
+    setIsApproving(false);
   };
 
   // Re-check approval status whenever plan, client, date, or view mode changes
@@ -5828,6 +6076,52 @@ const WorkoutPlanSection = ({
                 This usually takes 1-2 seconds
               </span>
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval Confirmation Dialog */}
+      <Dialog open={showApprovalConfirmation} onOpenChange={setShowApprovalConfirmation}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Overwrite Existing Plan?
+            </DialogTitle>
+            <DialogDescription>
+              {pendingApprovalData && (
+                <>
+                  There are already <strong>{pendingApprovalData.existingDataCount}</strong> workout entries in the schedule for this period.
+                  <br /><br />
+                  Approving this plan will <strong>overwrite</strong> the existing workout data with the new plan from the preview.
+                  <br /><br />
+                  <strong>This action cannot be undone.</strong>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelApproval}
+              disabled={isApproving}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConfirmApproval}
+              disabled={isApproving}
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Approving...
+                </>
+              ) : (
+                'Overwrite & Approve'
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
