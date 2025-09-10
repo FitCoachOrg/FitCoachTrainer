@@ -117,32 +117,32 @@ export function ClientInsightsCards({ data }: ClientInsightsCardsProps) {
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-green-600 mb-2 flex items-center gap-2">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-green-600 mb-3 flex items-center gap-2 text-sm">
                       <Trophy className="h-4 w-4" />
                       Top Performers
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.momentum.topPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-green-600">+{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-green-600 text-xs whitespace-nowrap">+{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-2">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-sm">
                       <AlertTriangle className="h-4 w-4" />
                       Needs Support
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.momentum.bottomPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-red-600 text-xs whitespace-nowrap">{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
@@ -213,32 +213,32 @@ export function ClientInsightsCards({ data }: ClientInsightsCardsProps) {
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-green-600 mb-2 flex items-center gap-2">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-green-600 mb-3 flex items-center gap-2 text-sm">
                       <Trophy className="h-4 w-4" />
                       High Performers
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.adherence.topPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-green-600">{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-green-600 text-xs whitespace-nowrap">{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-2">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-sm">
                       <AlertTriangle className="h-4 w-4" />
                       At Risk
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.adherence.bottomPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-red-600 text-xs whitespace-nowrap">{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
@@ -309,32 +309,32 @@ export function ClientInsightsCards({ data }: ClientInsightsCardsProps) {
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-green-600 mb-2 flex items-center gap-2">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-green-600 mb-3 flex items-center gap-2 text-sm">
                       <Trophy className="h-4 w-4" />
                       Highly Engaged
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.engagement.topPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-green-600">{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-green-600 text-xs whitespace-nowrap">{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-2">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-red-600 mb-3 flex items-center gap-2 text-sm">
                       <AlertTriangle className="h-4 w-4" />
                       Low Engagement
                     </h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
                       {(insights?.engagement.bottomPerformers ?? []).map(client => (
-                        <div key={client.client_id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{client.client_name}</span>
-                          <Badge variant="outline" className="text-red-600">{client.value.toFixed(1)}%</Badge>
+                        <div key={client.client_id} className="flex items-center justify-between text-xs">
+                          <span className="truncate pr-2">{client.client_name}</span>
+                          <Badge variant="outline" className="text-red-600 text-xs whitespace-nowrap">{client.value.toFixed(1)}%</Badge>
                         </div>
                       ))}
                     </div>
