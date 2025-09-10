@@ -716,7 +716,10 @@ import { normalizeExercise } from '@/utils/exerciseNormalization';
 
 // Helper to build the payload for schedule_preview
 function buildSchedulePreviewRows(planWeek: TableWeekDay[], clientId: number, for_time: string, workout_id: string) {
-  return planWeek.map((day) => {
+  // Filter out days without exercises - only create records for days with actual workouts
+  return planWeek
+    .filter((day) => day.exercises && day.exercises.length > 0)
+    .map((day) => {
     // Format focus field properly - simple concatenation approach
     let formattedFocus = 'Rest Day';
     
@@ -1277,6 +1280,18 @@ async function getClientData(clientId: number, componentName: string, retryCount
 // Helper to save plan to schedule_preview with timeout protection
 async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: number, planStartDate: Date) {
   console.log(`[savePlanToSchedulePreview] 🚀 ENHANCED SAVE FUNCTION - Starting save for client ${clientId}`);
+  console.log(`[savePlanToSchedulePreview] 🔍 DEBUG: Input parameters:`, {
+    planWeekLength: planWeek?.length || 0,
+    clientId,
+    planStartDate,
+    planWeekData: planWeek?.map((day: any) => ({
+      date: day.date,
+      focus: day.focus,
+      exercisesCount: day.exercises?.length || 0,
+      hasExercises: !!(day.exercises && day.exercises.length > 0)
+    })) || []
+  });
+  
   const startTime = performance.now();
   const componentName = 'savePlanToSchedulePreview';
   const operationTimeout = 20000; // Increased to 20 seconds for individual operations to reduce transient timeouts
@@ -1320,7 +1335,28 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
     const workout_id = uuidv4();
 
     // Build the payload using the helper
+    console.log(`[${componentName}] 🔍 DEBUG: Building schedule preview rows with:`, {
+      planWeekLength: planWeek?.length || 0,
+      clientId,
+      for_time,
+      workout_id
+    });
+    
     const rows = buildSchedulePreviewRows(planWeek, clientId, for_time, workout_id);
+    
+    console.log(`[${componentName}] 🔍 DEBUG: Built rows:`, {
+      rowsLength: rows?.length || 0,
+      rowsData: rows?.map((row: any) => ({
+        client_id: row.client_id,
+        type: row.type,
+        task: row.task,
+        for_date: row.for_date,
+        for_time: row.for_time,
+        summary: row.summary,
+        hasDetailsJson: !!row.details_json,
+        exercisesCount: row.details_json?.exercises?.length || 0
+      })) || []
+    });
 
     // Get the date range for this week
     const firstDate = planWeek[0]?.date;
@@ -1329,7 +1365,7 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       return { success: false, error: 'Invalid date range' };
     }
 
-    // Get existing preview data for this client and week with timeout protection
+    // Get existing preview data for this client and week with improved error handling
     const fetchStart = performance.now();
     const existingDataQueryStartTime = Date.now();
     console.log(`[${componentName}] 🔍 Fetching existing data for client ${clientId}, dates: ${firstDate} to ${lastDate}`);
@@ -1349,35 +1385,35 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
       }
     );
     
-    const existingDataQueryPromise = supabase
-      .from('schedule_preview')
-      .select('*')
-      .eq('client_id', clientId)
-      .eq('type', 'workout')
-      .gte('for_date', firstDate)
-      .lte('for_date', lastDate);
-    
-    // Use a shorter timeout for existing data fetch since it's often the bottleneck
-    const existingDataTimeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Existing data fetch timeout after 5000ms`));
-      }, 5000); // Reduced to 5 second timeout for existing data fetch
-    });
-    
     let existingData: any[] = [];
     let fetchError: any = null;
     
     try {
-      const result = await Promise.race([
-        existingDataQueryPromise,
-        existingDataTimeoutPromise
-      ]);
-      existingData = result.data || [];
-      fetchError = result.error;
-    } catch (timeoutError) {
-      console.warn('⚠️ Existing data fetch timed out, continuing with empty data');
-      existingData = [];
-      fetchError = null; // Don't treat timeout as an error, continue with empty data
+      // Use a more targeted query with better performance
+      const { data, error } = await supabase
+        .from('schedule_preview')
+        .select('id, client_id, for_date, type, task, summary, coach_tip, details_json, for_time, icon, is_approved')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', firstDate)
+        .lte('for_date', lastDate)
+        .order('for_date', { ascending: true });
+      
+      if (error) {
+        console.error(`[${componentName}] ❌ Database query error:`, error);
+        fetchError = error;
+        // Don't continue if we can't fetch existing data - this indicates a serious issue
+        return { success: false, error: `Failed to fetch existing data: ${error.message}` };
+      }
+      
+      existingData = data || [];
+      console.log(`[${componentName}] ✅ Fetched ${existingData.length} existing records`);
+      
+    } catch (dbError) {
+      console.error(`[${componentName}] ❌ Database connection error:`, dbError);
+      fetchError = dbError;
+      // Don't continue if we can't connect to the database
+      return { success: false, error: `Database connection failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}` };
     }
       
     const fetchEnd = performance.now();
@@ -1431,193 +1467,107 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
 
     console.log(`[${componentName}] 📊 Prepared ${recordsToUpdate.length} updates and ${recordsToInsert.length} inserts`);
 
-    // Update existing records with batch processing and timeout protection
+    // Update existing records with simplified approach
     if (recordsToUpdate.length > 0) {
       const updateStart = performance.now();
-      console.log(`[Supabase] Updating ${recordsToUpdate.length} records with batch processing`);
+      console.log(`[Supabase] Updating ${recordsToUpdate.length} records`);
       
       try {
-        // Process updates in smaller batches to prevent timeouts
-        const batchSize = 4; // Smaller batches to reduce chance of timeouts
-        const batches = [];
+        // Process updates one by one for better error handling and reliability
+        let updateSuccessCount = 0;
+        let updateErrors: string[] = [];
         
-        for (let i = 0; i < recordsToUpdate.length; i += batchSize) {
-          batches.push(recordsToUpdate.slice(i, i + batchSize));
-        }
-        
-        console.log(`[Supabase] Processing ${batches.length} update batches of up to ${batchSize} records each`);
-        
-        // Process each batch with individual timeout protection
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-          const batch = batches[batchIndex];
-          const batchStart = performance.now();
+        for (let i = 0; i < recordsToUpdate.length; i++) {
+          const record = recordsToUpdate[i];
+          const { id, ...updateData } = record;
           
-          console.log(`[Supabase] Processing update batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
-          
-          // Use batch update with timeout protection and per-record retries
-          const updatePromises = batch.map(async (record) => {
-            const { id, ...updateData } = record;
-            let attempt = 0;
-            let lastError: any = null;
-            while (attempt < 2) { // up to 2 attempts
-              try {
-                const updatePromise = supabase
-                  .from('schedule_preview')
-                  .update(updateData)
-                  .eq('id', id);
-                const timeoutMs = attempt === 0 ? operationTimeout : operationTimeout * 1.5;
-                const result: any = await Promise.race([
-                  updatePromise,
-                  createTimeoutPromise(`Update record ${id}`, timeoutMs)
-                ]);
-                if (!result?.error) {
-                  return result;
-                }
-                lastError = result.error;
-              } catch (e) {
-                lastError = e;
-              }
-              attempt++;
-              // brief backoff
-              await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+          try {
+            const { error: updateError } = await supabase
+              .from('schedule_preview')
+              .update(updateData)
+              .eq('id', id);
+            
+            if (updateError) {
+              console.error(`[Supabase] ❌ Update error for record ${id}:`, updateError);
+              updateErrors.push(`Record ${id}: ${updateError.message}`);
+            } else {
+              updateSuccessCount++;
             }
-            throw lastError || new Error(`Update record ${id} failed`);
-          });
-          
-          const updateResults = await Promise.allSettled(updatePromises);
-          
-          // Check for any failures in this batch
-          const failures = updateResults.filter(result => 
-            result.status === 'rejected' || 
-            (result.status === 'fulfilled' && result.value.error)
-          );
-          
-          if (failures.length > 0) {
-            console.error(`[Supabase] Batch ${batchIndex + 1} update failures:`, failures);
-            const firstFailure = failures[0];
-            const errorMessage = firstFailure.status === 'rejected' 
-              ? firstFailure.reason?.message || 'Update failed'
-              : firstFailure.value.error?.message || 'Update failed';
-            return { success: false, error: `Batch ${batchIndex + 1} update failed: ${errorMessage}` };
+          } catch (updateException) {
+            console.error(`[Supabase] ❌ Update exception for record ${id}:`, updateException);
+            updateErrors.push(`Record ${id}: ${updateException instanceof Error ? updateException.message : 'Unknown error'}`);
           }
           
-          const batchEnd = performance.now();
-          console.log(`[Supabase] Update batch ${batchIndex + 1} completed:`, `${(batchEnd - batchStart).toFixed(2)}ms`);
-          
-          // Add small delay between batches to prevent database overload
-          if (batchIndex < batches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+          // Small delay between updates to prevent database overload
+          if (i < recordsToUpdate.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
         
         const updateEnd = performance.now();
-        console.log('[Supabase] All update batches completed:', `${(updateEnd - updateStart).toFixed(2)}ms`);
+        console.log(`[Supabase] Update completed:`, `${(updateEnd - updateStart).toFixed(2)}ms`, `(${updateSuccessCount}/${recordsToUpdate.length} successful)`);
+        
+        // If any updates failed, return error with details
+        if (updateErrors.length > 0) {
+          console.error(`[Supabase] ❌ Update failures:`, updateErrors);
+          return { success: false, error: `Update failed for ${updateErrors.length} records: ${updateErrors.join(', ')}` };
+        }
         
       } catch (error) {
-        console.error('[Supabase] Update batch processing error:', error);
-        return { success: false, error: `Update batch processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
+        console.error('[Supabase] Update processing error:', error);
+        return { success: false, error: `Update processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
       }
     }
 
-    // Insert new records with batch processing and timeout protection
+    // Insert new records with simplified, more reliable approach
     if (recordsToInsert.length > 0) {
       const insertStart = performance.now();
-      console.log(`[Supabase] Inserting ${recordsToInsert.length} records with batch processing`);
+      console.log(`[Supabase] Inserting ${recordsToInsert.length} records`);
       
       try {
-        // Process inserts in smaller batches to prevent timeouts
-        const batchSize = 4; // Smaller batches to reduce chance of timeouts
-        const batches = [];
+        // Use a single insert operation for better reliability
+        const { data: insertData, error: insertError } = await supabase
+          .from('schedule_preview')
+          .insert(recordsToInsert)
+          .select('id'); // Return the inserted IDs for verification
         
-        for (let i = 0; i < recordsToInsert.length; i += batchSize) {
-          batches.push(recordsToInsert.slice(i, i + batchSize));
+        if (insertError) {
+          console.error(`[Supabase] ❌ Insert error:`, insertError);
+          console.error(`[Supabase] Insert error details:`, {
+            message: insertError.message,
+            details: insertError.details,
+            hint: insertError.hint,
+            code: insertError.code
+          });
+          console.error(`[Supabase] Sample record being inserted:`, recordsToInsert[0]);
+          return { success: false, error: `Insert failed: ${insertError.message}` };
         }
         
-        console.log(`[Supabase] Processing ${batches.length} batches of up to ${batchSize} records each`);
-        
-        // Process each batch with individual timeout protection
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-          const batch = batches[batchIndex];
-          const batchStart = performance.now();
-          
-          console.log(`[Supabase] Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} records)`);
-          
-          // Insert batch with retries; on final attempt, fallback to single-row inserts
-          let attempt = 0;
-          let batchSucceeded = false;
-          let lastError: any = null;
-          while (attempt < 3 && !batchSucceeded) {
-            try {
-              if (attempt < 2) {
-                const batchInsertPromise = supabase
-                  .from('schedule_preview')
-                  .insert(batch);
-                const timeoutMs = attempt === 0 ? operationTimeout : operationTimeout * 1.5;
-                const result: any = await Promise.race([
-                  batchInsertPromise,
-                  createTimeoutPromise(`Insert batch ${batchIndex + 1}`, timeoutMs)
-                ]);
-                if (!result?.error) {
-                  batchSucceeded = true;
-                  break;
-                }
-                lastError = result.error;
-              } else {
-                // Final attempt: single-row fallback
-                for (let i = 0; i < batch.length; i++) {
-                  const row = batch[i];
-                  const singleInsert = supabase.from('schedule_preview').insert(row);
-                  const singleResult: any = await Promise.race([
-                    singleInsert,
-                    createTimeoutPromise(`Insert single row in batch ${batchIndex + 1}`, operationTimeout)
-                  ]);
-                  if (singleResult?.error) {
-                    lastError = singleResult.error;
-                    throw lastError;
-                  }
-                  // small delay to avoid overload
-                  await new Promise(resolve => setTimeout(resolve, 50));
-                }
-                batchSucceeded = true;
-                break;
-              }
-            } catch (e) {
-              lastError = e;
-            }
-            attempt++;
-            // brief backoff between attempts
-            await new Promise(resolve => setTimeout(resolve, 200 * attempt));
-          }
-
-          const batchEnd = performance.now();
-          console.log(`[Supabase] Batch ${batchIndex + 1} completed:`, `${(batchEnd - batchStart).toFixed(2)}ms`);
-
-          if (!batchSucceeded) {
-            console.error(`[Supabase] Batch ${batchIndex + 1} insert error:`, lastError);
-            return { success: false, error: `Batch ${batchIndex + 1} insert failed: ${lastError instanceof Error ? lastError.message : 'Unknown error'}` };
-          }
-          
-          // Add small delay between batches to prevent database overload
-          if (batchIndex < batches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-          }
+        // Verify the insert was successful
+        if (!insertData || insertData.length !== recordsToInsert.length) {
+          console.error(`[Supabase] ❌ Insert verification failed:`, {
+            expected: recordsToInsert.length,
+            actual: insertData?.length || 0,
+            insertData
+          });
+          return { success: false, error: `Insert verification failed: expected ${recordsToInsert.length} records, got ${insertData?.length || 0}` };
         }
         
         const insertEnd = performance.now();
-        console.log('[Supabase] All insert batches completed:', `${(insertEnd - insertStart).toFixed(2)}ms`);
+        console.log(`[Supabase] ✅ Insert completed successfully:`, `${(insertEnd - insertStart).toFixed(2)}ms`, `(${insertData.length} records)`);
         
       } catch (error) {
-        console.error('[Supabase] Insert batch processing error:', error);
-        return { success: false, error: `Insert batch processing failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
+        console.error('[Supabase] Insert exception:', error);
+        return { success: false, error: `Insert exception: ${error instanceof Error ? error.message : 'Unknown error'}` };
       }
     }
 
-    // Set is_approved to false for all affected days with timeout protection
+    // Set is_approved to false for all affected days
     try {
       const approvalStart = performance.now();
-      console.log('[Supabase] Updating approval flag with timeout protection');
+      console.log('[Supabase] Updating approval flag');
       
-      const approvalPromise = supabase
+      const { error: approvalError } = await supabase
         .from('schedule_preview')
         .update({ is_approved: false })
         .eq('client_id', clientId)
@@ -1625,23 +1575,54 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
         .gte('for_date', firstDate)
         .lte('for_date', lastDate);
       
-      await Promise.race([
-        approvalPromise,
-        createTimeoutPromise('Approval flag update')
-      ]);
-      
-      const approvalEnd = performance.now();
-      console.log('[Supabase] Update approval flag completed:', `${(approvalEnd - approvalStart).toFixed(2)}ms`);
+      if (approvalError) {
+        console.warn('[Supabase] ⚠️ Approval flag update warning:', approvalError);
+        // Don't fail the entire operation for approval flag update, but log it
+      } else {
+        const approvalEnd = performance.now();
+        console.log('[Supabase] ✅ Approval flag updated:', `${(approvalEnd - approvalStart).toFixed(2)}ms`);
+      }
     } catch (updateErr) {
-      console.warn('[Supabase] Approval update warning:', updateErr);
+      console.warn('[Supabase] ⚠️ Approval update exception:', updateErr);
       // Don't fail the entire operation for approval flag update
     }
     
-    const endTime = performance.now();
-    console.log('[Save Plan] Total time:', `${(endTime - startTime).toFixed(2)}ms`);
+    // Final verification: Check that our data was actually saved
+    try {
+      const verifyStart = performance.now();
+      console.log('[Supabase] 🔍 Verifying save operation...');
+      
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('schedule_preview')
+        .select('id, for_date, type')
+        .eq('client_id', clientId)
+        .eq('type', 'workout')
+        .gte('for_date', firstDate)
+        .lte('for_date', lastDate);
+      
+      if (verifyError) {
+        console.warn('[Supabase] ⚠️ Verification query failed:', verifyError);
+      } else {
+        const verifyEnd = performance.now();
+        console.log(`[Supabase] ✅ Verification completed:`, `${(verifyEnd - verifyStart).toFixed(2)}ms`, `(${verifyData?.length || 0} records found)`);
+        
+        if (!verifyData || verifyData.length === 0) {
+          console.error('[Supabase] ❌ Verification failed: No records found after save operation');
+          return { success: false, error: 'Save verification failed: No records found in database' };
+        }
+        
+        // Log the saved dates for debugging
+        const savedDates = verifyData.map(record => record.for_date).sort();
+        console.log(`[Supabase] ✅ Saved dates:`, savedDates);
+      }
+    } catch (verifyException) {
+      console.warn('[Supabase] ⚠️ Verification exception:', verifyException);
+      // Don't fail the operation for verification issues
+    }
     
-            // Note: Status refresh and approve button activation will be handled by the calling component
-        // This function only handles saving to the database
+    const endTime = performance.now();
+    console.log('[Save Plan] ✅ Total time:', `${(endTime - startTime).toFixed(2)}ms`);
+    console.log(`[Save Plan] ✅ Successfully saved ${recordsToInsert.length} inserts and ${recordsToUpdate.length} updates`);
     
     return { success: true };
   } catch (err: any) {
@@ -2088,6 +2069,35 @@ const WorkoutPlanSection = ({
 
   const updateWorkoutPlanState = (updates: Partial<WorkoutPlanState>) => {
     setWorkoutPlanState(prev => ({ ...prev, ...updates }));
+  };
+
+  // Force refresh workout plan data from database
+  const forceRefreshWorkoutPlan = async () => {
+    console.log('[WorkoutPlanSection] 🔄 Force refreshing workout plan data...');
+    
+    try {
+      // Clear current workout plan state to force fresh fetch
+      setWorkoutPlan(null);
+      
+      // Force fetch fresh data from database
+      await fetchPlan();
+      
+      console.log('[WorkoutPlanSection] ✅ Workout plan data refreshed');
+      
+      // Show success message
+      toast({
+        title: 'Data Refreshed',
+        description: 'Workout plan data has been updated from database',
+        variant: 'default'
+      });
+    } catch (error) {
+      console.error('[WorkoutPlanSection] ❌ Error refreshing workout plan:', error);
+      toast({
+        title: 'Refresh Failed',
+        description: 'Failed to refresh workout plan data',
+        variant: 'destructive'
+      });
+    }
   };
 
   const showConfirmationDialog = (title: string, message: string): Promise<boolean> => {
@@ -5479,10 +5489,35 @@ const WorkoutPlanSection = ({
                       const loadingToastId = showLoading('Saving Changes', 'Please wait while we save your workout plan...');
                       
                       console.log('[WorkoutPlanSection] About to call handleApproveSave');
+                      console.log('[WorkoutPlanSection] 🔍 DEBUG: workoutPlan.week data:', {
+                        hasWorkoutPlan: !!workoutPlan,
+                        hasWeek: !!(workoutPlan?.week),
+                        weekLength: workoutPlan?.week?.length || 0,
+                        weekData: workoutPlan?.week?.map((day: any) => ({
+                          date: day.date,
+                          focus: day.focus,
+                          exercisesCount: day.exercises?.length || 0,
+                          hasExercises: !!(day.exercises && day.exercises.length > 0)
+                        })) || [],
+                        clientId: numericClientId,
+                        planStartDate: planStartDate
+                      });
+                      
                       // Use state machine to handle save operation
                       const success = await handleApproveSave(
                         { week: workoutPlan.week, clientId: numericClientId, planStartDate },
                         async (data) => {
+                          console.log('[WorkoutPlanSection] 🔍 DEBUG: Data passed to savePlanToSchedulePreview:', {
+                            weekLength: data.week?.length || 0,
+                            clientId: data.clientId,
+                            planStartDate: data.planStartDate,
+                            weekData: data.week?.map((day: any) => ({
+                              date: day.date,
+                              focus: day.focus,
+                              exercisesCount: day.exercises?.length || 0
+                            })) || []
+                          });
+                          
                           const result = await savePlanToSchedulePreview(data.week, data.clientId, data.planStartDate);
                           console.log('[WorkoutPlanSection] savePlanToSchedulePreview result:', result);
                           return result;
@@ -5752,6 +5787,18 @@ const WorkoutPlanSection = ({
                 >
                   <Download className="h-4 w-4 mr-2" /> 
                   Import Plan Template
+                </Button>
+
+                {/* Refresh Data Button */}
+                <Button 
+                  variant="outline" 
+                  size="default"
+                  className="bg-gradient-to-r from-orange-500 via-amber-600 to-yellow-600 hover:from-orange-600 hover:via-amber-700 hover:to-yellow-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-200 font-bold px-6 py-2 transform hover:scale-105"
+                  onClick={forceRefreshWorkoutPlan}
+                  disabled={isFetchingPlan}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" /> 
+                  {isFetchingPlan ? 'Refreshing...' : 'Refresh Data'}
                 </Button>
               </div>
             </div>

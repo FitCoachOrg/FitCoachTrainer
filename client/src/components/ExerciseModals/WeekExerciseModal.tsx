@@ -1063,6 +1063,29 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                               <span className="text-sm font-semibold">{dayInfo.name}</span>
                               <span className="text-xs text-gray-600 dark:text-gray-400">{dayInfo.date}</span>
                               <span className="text-xs text-gray-500 dark:text-gray-500">{day.focus}</span>
+                              <div className="flex gap-1 mt-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedDayForExercise(dayIndex);
+                                    setExercisePickerOpen(true);
+                                  }}
+                                  className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                                  title="Pick from Library"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => addExercise(dayIndex)}
+                                  className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                                  title="Add Custom"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
                             </div>
                           </td>
                         )}
@@ -1178,27 +1201,6 @@ export default function WeekExerciseModal({ isOpen, onClose, week, planStartDate
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setSelectedDayForExercise(dayIndex);
-                                setExercisePickerOpen(true);
-                              }}
-                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
-                              title="Pick from Library"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => addExercise(dayIndex)}
-                              className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
-                              title="Add Empty Exercise"
-                            >
-                              <Plus className="h-3 w-3" />
                             </Button>
                           </div>
                         </td>
