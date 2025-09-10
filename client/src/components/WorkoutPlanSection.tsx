@@ -3778,10 +3778,10 @@ const WorkoutPlanSection = ({
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
 
-    // PROTECTION: Don't override 'approved' status if it was just set (within last 2 seconds)
+    // PROTECTION: Don't override 'approved' status if it was just set
     // This prevents the useEffect from overriding our immediate status updates after approval
-    if (planApprovalStatus === 'approved' && forceRefreshKey > 0) {
-      console.log('[checkPlanApprovalStatus] Skipping check - status is already approved and was recently updated');
+    if (planApprovalStatus === 'approved') {
+      console.log('[checkPlanApprovalStatus] Skipping check - status is already approved, preserving optimistic update');
       return;
     }
 
@@ -4363,6 +4363,10 @@ const WorkoutPlanSection = ({
             // Refresh the plan data to show approved version (but don't override status)
             await fetchPlan();
             
+            // SKIP DATABASE STATUS CHECK: Don't call handlePostSaveRefreshEnhanced after approval
+            // as it would override our optimistic 'approved' status
+            console.log('[handleUnifiedApproval] Skipping database status check to preserve approved status');
+            
             console.log('[handleUnifiedApproval] Background refresh completed successfully');
           } catch (refreshError) {
             console.warn('[handleUnifiedApproval] Background refresh failed:', refreshError);
@@ -4490,12 +4494,14 @@ const WorkoutPlanSection = ({
         setTimeout(async () => {
           try {
             console.log('[handleConfirmApproval] Starting background refresh for data consistency');
-            await handlePostSaveRefreshEnhanced({
-              isMonthly: pendingApprovalData.viewMode === 'monthly',
-              forceWeekStatusRefresh: true,
-              delayBeforeRefresh: 100,
-              skipDatabaseCheck: false
-            });
+            
+            // Refresh the plan data to show approved version (but don't override status)
+            await fetchPlan();
+            
+            // SKIP DATABASE STATUS CHECK: Don't call handlePostSaveRefreshEnhanced after approval
+            // as it would override our optimistic 'approved' status
+            console.log('[handleConfirmApproval] Skipping database status check to preserve approved status');
+            
             console.log('[handleConfirmApproval] Background refresh completed successfully');
           } catch (refreshError) {
             console.warn('[handleConfirmApproval] Background refresh failed:', refreshError);
