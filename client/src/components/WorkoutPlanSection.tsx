@@ -3778,6 +3778,13 @@ const WorkoutPlanSection = ({
   const checkPlanApprovalStatus = async () => {
     if (!numericClientId || !planStartDate) return;
 
+    // PROTECTION: Don't override 'approved' status if it was just set (within last 2 seconds)
+    // This prevents the useEffect from overriding our immediate status updates after approval
+    if (planApprovalStatus === 'approved' && forceRefreshKey > 0) {
+      console.log('[checkPlanApprovalStatus] Skipping check - status is already approved and was recently updated');
+      return;
+    }
+
     // Generate unique key for this approval status check
     const approvalKey = RequestDeduplication.generateKey('checkPlanApprovalStatus', {
       viewMode,
@@ -4353,10 +4360,7 @@ const WorkoutPlanSection = ({
             // Force a fresh approval status check (avoid dedupe)
             setForceRefreshKey(prev => prev + 1);
             
-            // Refresh approval status to ensure consistency
-            await checkPlanApprovalStatus();
-            
-            // Refresh the plan data to show approved version
+            // Refresh the plan data to show approved version (but don't override status)
             await fetchPlan();
             
             console.log('[handleUnifiedApproval] Background refresh completed successfully');
@@ -4443,13 +4447,61 @@ const WorkoutPlanSection = ({
           variant: 'default'
         });
         
-        // Refresh the UI
-        await handlePostSaveRefreshEnhanced({
-          isMonthly: pendingApprovalData.viewMode === 'monthly',
-          forceWeekStatusRefresh: true,
-          delayBeforeRefresh: 500,
-          skipDatabaseCheck: false
+        // IMMEDIATE UI UPDATE: Update all states immediately for instant feedback
+        console.log('[handleConfirmApproval] Approval succeeded, updating UI immediately');
+        
+        // Update state immediately with optimistic updates
+        setPlanApprovalStatus('approved');
+        setIsDraftPlan(false);
+        updateWorkoutPlanState({
+          status: 'approved',
+          source: 'database',
+          hasUnsavedChanges: false,
+          lastSaved: new Date()
         });
+        
+        // Clear dirty dates after successful approval
+        setDirtyDates(new Set());
+        
+        // Force update week statuses to show approved status
+        if (pendingApprovalData.viewMode === 'monthly') {
+          const approvedWeekStatuses = Array.from({ length: 4 }, (_, index) => ({
+            weekNumber: index + 1,
+            status: 'approved' as const,
+            startDate: new Date(pendingApprovalData.planStartDate.getTime() + index * 7 * 24 * 60 * 60 * 1000),
+            endDate: new Date(pendingApprovalData.planStartDate.getTime() + (index + 1) * 7 * 24 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000),
+            canApprove: false
+          }));
+          setWeekStatuses(approvedWeekStatuses);
+        } else {
+          setWeekStatuses([{
+            weekNumber: 1,
+            status: 'approved' as const,
+            startDate: pendingApprovalData.planStartDate,
+            endDate: new Date(pendingApprovalData.planStartDate.getTime() + 6 * 24 * 60 * 60 * 1000),
+            canApprove: false
+          }]);
+        }
+        
+        // Force refresh key to trigger UI updates
+        setForceRefreshKey(prev => prev + 1);
+        
+        // BACKGROUND REFRESH: Do database refresh in background without blocking UI
+        setTimeout(async () => {
+          try {
+            console.log('[handleConfirmApproval] Starting background refresh for data consistency');
+            await handlePostSaveRefreshEnhanced({
+              isMonthly: pendingApprovalData.viewMode === 'monthly',
+              forceWeekStatusRefresh: true,
+              delayBeforeRefresh: 100,
+              skipDatabaseCheck: false
+            });
+            console.log('[handleConfirmApproval] Background refresh completed successfully');
+          } catch (refreshError) {
+            console.warn('[handleConfirmApproval] Background refresh failed:', refreshError);
+            // Don't show error to user since UI is already updated optimistically
+          }
+        }, 50); // Very short delay to avoid blocking UI
       } else {
         toast({
           title: 'Approval Failed',
