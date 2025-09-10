@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import ClientProfileModal from "@/components/clients/ClientProfileModal";
 import * as Icons from "@/lib/icons";
 import { useToast } from "@/hooks/use-toast";
-import { SidebarProvider, SidebarContent } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useNavigate } from "react-router-dom";
 import { formatUtcToLocal, getDaysSince, getShortAgo } from "@/lib/utils";
 import { getOrCreateEngagementScore } from "@/lib/client-engagement";
@@ -33,6 +33,8 @@ import {
 
 const STATUS_FILTERS = [
   { label: "All Clients", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "Active", value: "active" },
 ];
 
 const Clients: React.FC = () => {
@@ -390,7 +392,8 @@ const Clients: React.FC = () => {
     // Status filter
     const matchesStatus = 
       statusFilter === "all" ||
-      (statusFilter === "inactive" && daysSinceActivity !== null && daysSinceActivity > 7);
+      (statusFilter === "pending" && client.status === "pending") ||
+      (statusFilter === "active" && client.status === "active");
 
     // Activity filter
     const matchesActivity = 
@@ -647,45 +650,8 @@ const Clients: React.FC = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-gradient-to-br from-[#f8f9fb] via-[#f0f4f9] to-[#e8f2ff] dark:from-black dark:via-slate-900 dark:to-slate-800">
-        {/* Enhanced Sidebar Filters */}
-        <aside className="w-64 bg-white/90 backdrop-blur-sm border-r border-gray-200/70 flex flex-col py-6 px-4 dark:bg-black/90 dark:border-gray-800/70 dark:text-white shadow-lg">
-          <h2 className="text-lg font-bold mb-6 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent">
-            <Icons.UsersIcon className="h-5 w-5 text-blue-500" /> Clients
-          </h2>
-          <nav className="flex-1">
-            <ul className="space-y-2">
-              {STATUS_FILTERS.map((filter) => (
-                <li key={filter.value}>
-                  <button
-                    className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      statusFilter === filter.value
-                        ? "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-l-4 border-blue-500 shadow-md dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-400 dark:border-blue-400"
-                        : "text-gray-700 hover:bg-gray-100/70 hover:shadow-sm dark:text-gray-300 dark:hover:bg-gray-800/50"
-                    }`}
-                    onClick={() => setStatusFilter(filter.value)}
-                  >
-                    <span>{filter.label}</span>
-                    <span
-                      className={`text-xs font-semibold rounded-full px-2.5 py-1 ml-2 ${
-                        statusFilter === filter.value
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                      }`}
-                    >
-                      {filter.value === "all"
-                        ? clients.length || 0
-                        : filter.value === "inactive"
-                          ? clients.length || 0
-                          : 0}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
-        <SidebarContent>
+      <div className="min-h-screen bg-gradient-to-br from-[#f8f9fb] via-[#f0f4f9] to-[#e8f2ff] dark:from-black dark:via-slate-900 dark:to-slate-800">
+        <div className="w-full">
           <div className="max-w-8xl mx-auto w-full pt-8 px-6">
             {/* Enhanced Header and Filters */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
@@ -704,6 +670,16 @@ const Clients: React.FC = () => {
                     <option value="recent">Recent (≤3 days)</option>
                     <option value="moderate">Moderate (4-7 days)</option>
                     <option value="inactive">Inactive (&gt;7 days)</option>
+                  </select>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white/80 backdrop-blur-sm shadow-sm hover:border-blue-300 hover:shadow-md transition-all duration-200 dark:bg-black/80 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20"
+                    title="Client Status"
+                  >
+                    <option value="all">Status: All</option>
+                    <option value="pending">Pending</option>
+                    <option value="active">Active</option>
                   </select>
                   <button 
                     onClick={() => {
@@ -1003,7 +979,7 @@ const Clients: React.FC = () => {
               </AlertDialogContent>
             </AlertDialog>
           </div>
-        </SidebarContent>
+        </div>
       </div>
     </SidebarProvider>
   );
