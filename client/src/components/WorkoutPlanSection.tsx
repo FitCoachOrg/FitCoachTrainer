@@ -28,6 +28,7 @@ import { TrainerNotesSection } from "@/components/overview/TrainerNotesSection"
 import { NutritionalPreferencesSection } from "@/components/overview/NutritionalPreferencesSection"
 import { TrainingPreferencesSection } from "./overview/TrainingPreferencesSection"
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import WeekExerciseModal from '@/components/ExerciseModals/WeekExerciseModal';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format, parseISO, addWeeks, addDays } from 'date-fns';
@@ -1562,6 +1563,9 @@ const WorkoutPlanSection = ({
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
   
+  // WeeklyExerciseModal state
+  const [weekModalOpen, setWeekModalOpen] = useState(false);
+  
   // Legacy state variables for compatibility (will be replaced by enhanced state)
   const [isFetchingPlan, setIsFetchingPlan] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -3001,6 +3005,15 @@ const WorkoutPlanSection = ({
   }, []);
 
   const handlePlanChange = (updatedWeek: TableWeekDay[], isFromSave: boolean = false) => {
+    console.log('[handlePlanChange] Called with:', {
+      isFromSave,
+      updatedWeekLength: updatedWeek.length,
+      viewMode,
+      currentDirtyDatesSize: dirtyDates.size,
+      currentIsDraftPlan: isDraftPlan,
+      currentPlanApprovalStatus: planApprovalStatus
+    });
+    
     // Update the state immediately for a responsive UI
     setWorkoutPlan(currentPlan => {
       if (!currentPlan) return null;
@@ -3021,20 +3034,37 @@ const WorkoutPlanSection = ({
     }
     
     if (isFromSave) {
+      console.log('[handlePlanChange] Processing save operation - setting isDraftPlan=true and hasUnsavedChanges=false');
+      console.log('[handlePlanChange] Current state before save:', {
+        isDraftPlan,
+        planApprovalStatus,
+        dirtyDatesSize: dirtyDates.size,
+        hasUnsavedChanges: workoutPlanState.hasUnsavedChanges
+      });
+      
       // Changes were just saved - clear unsaved changes and refresh approval status
       updateWorkoutPlanState({ hasUnsavedChanges: false });
       // Ensure Approve button logic can activate consistently after table saves
       setIsDraftPlan(true);
       
+      console.log('[handlePlanChange] State after save operation:', {
+        isDraftPlan: true,
+        hasUnsavedChanges: false,
+        dirtyDatesSize: dirtyDates.size
+      });
+      
       // Use enhanced unified post-save refresh to keep behavior consistent across flows
       (async () => {
+        console.log('[handlePlanChange] Starting post-save refresh...');
         await handlePostSaveRefreshEnhanced({
           isMonthly: viewMode === 'monthly',
           forceWeekStatusRefresh: false, // Table saves don't need extra refresh
           delayBeforeRefresh: 0
         });
+        console.log('[handlePlanChange] Post-save refresh completed');
       })();
     } else {
+      console.log('[handlePlanChange] Processing unsaved changes - setting hasUnsavedChanges=true');
       // New unsaved changes
       updateWorkoutPlanState({ hasUnsavedChanges: true });
       
@@ -3397,7 +3427,9 @@ const WorkoutPlanSection = ({
     handleApprove: handleApproveAction,
     handleRetry: handleApproveRetry,
     reset: resetApproveState,
-    isState: isApproveState
+    isState: isApproveState,
+    canTransition: canTransitionAction,
+    getRetryInfo: getApproveRetryInfo
   } = useApproveButtonState();
   
   // Enhanced toast notifications
@@ -3765,9 +3797,24 @@ const WorkoutPlanSection = ({
   // Unified approval status calculation function
   const calculateUnifiedApprovalStatus = useCallback((): UnifiedApprovalStatus => {
     const hasUnsavedChanges = dirtyDates.size > 0;
+    
+    console.log('[calculateUnifiedApprovalStatus] Current state:', {
+      planApprovalStatus,
+      isDraftPlan,
+      hasUnsavedChanges,
+      dirtyDatesSize: dirtyDates.size
+    });
+    
     const globalCanApprove = (planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved') && 
                             isDraftPlan && 
                             !hasUnsavedChanges;
+    
+    console.log('[calculateUnifiedApprovalStatus] Global approval calculation:', {
+      planApprovalStatusCheck: planApprovalStatus === 'not_approved' || planApprovalStatus === 'partial_approved',
+      isDraftPlan,
+      hasUnsavedChanges,
+      globalCanApprove
+    });
     
     // Calculate week statuses with unified dirty date logic
     // IMPORTANT: Only block approval if there are actually unsaved changes
@@ -3817,11 +3864,43 @@ const WorkoutPlanSection = ({
 
   // Sync state machine with existing state variables
   useEffect(() => {
+    console.log('[State Machine Sync] Current state:', {
+      dirtyDatesSize: dirtyDates.size,
+      isDraftPlan,
+      planApprovalStatus,
+      approveButtonState
+    });
+    
     // Sync dirty dates with state machine
     if (dirtyDates.size > 0) {
+      console.log('[State Machine Sync] Dispatching DIRTY_CHANGES');
       dispatchApproveAction('DIRTY_CHANGES');
-    } else if (dirtyDates.size === 0 && isDraftPlan && planApprovalStatus === 'not_approved') {
-      dispatchApproveAction('CLEAN_CHANGES');
+    } else if (dirtyDates.size === 0 && isDraftPlan) {
+      // Only dispatch CLEAN_CHANGES if not already in saving/refreshing state to prevent invalid transitions
+      if (approveButtonState !== 'saving' && approveButtonState !== 'refreshing') {
+        // Trigger CLEAN_CHANGES if we have a draft plan with no dirty dates
+        // This should work regardless of planApprovalStatus to ensure Approve Plan button activates
+        console.log('[State Machine Sync] Dispatching CLEAN_CHANGES (draft plan with no dirty dates)', {
+          planApprovalStatus,
+          isDraftPlan,
+          dirtyDatesSize: dirtyDates.size,
+          currentState: approveButtonState
+        });
+        const dispatchResult = dispatchApproveAction('CLEAN_CHANGES');
+        console.log('[State Machine Sync] CLEAN_CHANGES dispatch result:', dispatchResult, {
+          action: 'CLEAN_CHANGES',
+          success: dispatchResult,
+          newState: approveButtonState
+        });
+      } else {
+        console.log('[State Machine Sync] Skipping CLEAN_CHANGES dispatch as state is already saving/refreshing:', approveButtonState);
+      }
+    } else {
+      console.log('[State Machine Sync] No action needed:', {
+        dirtyDatesSize: dirtyDates.size,
+        isDraftPlan,
+        condition: dirtyDates.size === 0 && isDraftPlan
+      });
     }
   }, [dirtyDates, isDraftPlan, planApprovalStatus, dispatchApproveAction]);
 
@@ -3837,15 +3916,31 @@ const WorkoutPlanSection = ({
     const isGlobal = scope === 'global';
     const weekStatus = isGlobal ? null : weekStatuses[weekIndex!];
     
+    console.log('[handleUnifiedApproval] Called with:', {
+      scope,
+      weekIndex,
+      isGlobal,
+      unifiedApprovalStatus,
+      weekStatus
+    });
+    
     // Validate approval conditions
     if (isGlobal) {
       if (!unifiedApprovalStatus.global.canApprove) {
-        console.warn('[Unified Approval] Global approval not allowed');
+        console.warn('[Unified Approval] Global approval not allowed', {
+          canApprove: unifiedApprovalStatus.global.canApprove,
+          status: unifiedApprovalStatus.global.status,
+          hasUnsavedChanges: unifiedApprovalStatus.global.hasUnsavedChanges,
+          message: unifiedApprovalStatus.global.message
+        });
         return;
       }
     } else {
       if (!weekStatus || !weekStatus.canApprove) {
-        console.warn('[Unified Approval] Week approval not allowed');
+        console.warn('[Unified Approval] Week approval not allowed', {
+          weekStatus,
+          canApprove: weekStatus?.canApprove
+        });
         return;
       }
     }
@@ -3950,12 +4045,18 @@ const WorkoutPlanSection = ({
         // Refresh the plan data to show approved version
         await fetchPlan();
 
+        // Return success result for state machine
+        return { success: true };
+
       } else {
         toast({
           title: 'Approval Failed',
           description: result.error || `Could not approve ${planType} plan.`,
           variant: 'destructive'
         });
+        
+        // Return failure result for state machine
+        return { success: false, error: result.error || `Could not approve ${planType} plan.` };
       }
     } catch (error) {
       console.error('[Unified Approval] Error:', error);
@@ -3974,6 +4075,9 @@ const WorkoutPlanSection = ({
         variant: 'destructive'
       });
       }
+      
+      // Return failure result for state machine
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred during approval.' };
     } finally {
       clearLoading();
       setShowSavingModal(false);
@@ -4996,6 +5100,19 @@ const WorkoutPlanSection = ({
                 // Trigger a manual retry of the save/refresh process
                 dispatchApproveAction('RETRY');
               }}
+              stateMachineInstance={{
+                state: approveButtonState,
+                buttonConfig: approveButtonConfig,
+                dispatch: dispatchApproveAction,
+                handleSave: handleApproveSave,
+                handleRefresh: handleApproveRefresh,
+                handleApprove: handleApproveAction,
+                handleRetry: handleApproveRetry,
+                reset: resetApproveState,
+                isState: isApproveState,
+                canTransition: canTransitionAction,
+                getRetryInfo: getApproveRetryInfo
+              }}
             />
             
             {/* Unified Refresh Indicator */}
@@ -5282,9 +5399,20 @@ const WorkoutPlanSection = ({
             {/* 7-Day Overview Header */}
             <Card className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold">
-                  {viewMode === 'monthly' ? '28-Day' : '7-Day'} Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + (viewMode === 'monthly' ? 27 : 6) * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
-                </h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-semibold">
+                    {viewMode === 'monthly' ? '28-Day' : '7-Day'} Workout Plan: {format(planStartDate, "MMM d")} - {format(new Date(planStartDate.getTime() + (viewMode === 'monthly' ? 27 : 6) * 24 * 60 * 60 * 1000), "MMM d, yyyy")}
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWeekModalOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Week
+                  </Button>
+                </div>
               </div>
               <WeeklyPlanHeader
                 week={(viewMode === 'weekly') ? (() => {
@@ -5710,6 +5838,47 @@ const WorkoutPlanSection = ({
         onClose={hideToast}
         position="top-right"
         maxToasts={3}
+      />
+
+      {/* WeeklyExerciseModal */}
+      <WeekExerciseModal
+        isOpen={weekModalOpen}
+        onClose={() => setWeekModalOpen(false)}
+        week={workoutPlan?.week || []}
+        planStartDate={planStartDate}
+        clientId={numericClientId}
+        onSave={(updatedWeek) => {
+          console.log('[WorkoutPlanSection] WeeklyExerciseModal save callback called with:', updatedWeek);
+          // Convert WeekDay[] to TableWeekDay[] for compatibility
+          const tableWeekData = updatedWeek.map(day => ({
+            ...day,
+            exercises: day.exercises.map(ex => ({
+              ...ex,
+              time: ex.duration || 0, // Map duration to time for compatibility
+              date: day.date // Add date field for compatibility
+            }))
+          })) as TableWeekDay[];
+          
+          // Update the workout plan with the saved week data
+          setWorkoutPlan(prev => prev ? { ...prev, week: tableWeekData } : null);
+          
+          // Clear dirty dates since data is now saved to database (same as WeeklyPlanHeader.handleWeekSave)
+          const weekDates = updatedWeek.map(day => day.date);
+          const newDirtyDates = new Set([...Array.from(dirtyDates)]);
+          // Remove the week dates from dirty dates since they're now saved
+          weekDates.forEach(date => newDirtyDates.delete(date));
+          console.log('[WorkoutPlanSection] Clearing dirty dates for week dates:', weekDates);
+          setDirtyDates(newDirtyDates);
+          
+          // Ensure isDraftPlan is set to true for approval button activation
+          console.log('[WorkoutPlanSection] Setting isDraftPlan=true for approval button activation');
+          setIsDraftPlan(true);
+          
+          // Close the modal
+          setWeekModalOpen(false);
+          // Trigger the same logic as WeeklyPlanHeader.handleWeekSave
+          handlePlanChange(tableWeekData, true);
+        }}
       />
     </div>
     </ErrorBoundary>

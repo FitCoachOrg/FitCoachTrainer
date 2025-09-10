@@ -40,7 +40,7 @@ export const APPROVE_BUTTON_STATE_MACHINE: Record<ApproveButtonState, Partial<Re
     PLAN_GENERATED: 'enabled_approve',
     PLAN_IMPORTED: 'enabled_approve',
     DIRTY_CHANGES: 'disabled_save_first',
-    CLEAN_CHANGES: 'hidden'
+    CLEAN_CHANGES: 'enabled_approve'  // Fixed: CLEAN_CHANGES should enable the button
   },
   
   disabled_save_first: {
@@ -57,6 +57,7 @@ export const APPROVE_BUTTON_STATE_MACHINE: Record<ApproveButtonState, Partial<Re
     SAVE_ERROR: 'error_stuck',
     APPROVE_SUCCESS: 'hidden',
     APPROVE_ERROR: 'error_stuck',
+    CLEAN_CHANGES: 'enabled_approve',  // Allow transition from saving to enabled_approve
     RETRY: 'saving'
   },
   
@@ -221,7 +222,12 @@ export class ApproveButtonStateMachine {
     const oldState = this.state;
     this.state = newState;
     
-    console.log(`[ApproveButtonStateMachine] State transition: ${oldState} --${action}--> ${newState}`);
+    console.log(`[ApproveButtonStateMachine] ✅ State transition: ${oldState} --${action}--> ${newState}`, {
+      oldState,
+      action,
+      newState,
+      buttonConfig: this.getButtonConfig()
+    });
     
     // Notify all listeners
     this.listeners.forEach(listener => listener(newState, oldState, action));
@@ -231,12 +237,16 @@ export class ApproveButtonStateMachine {
   
   // Dispatch an action
   dispatch(action: ApproveButtonAction): boolean {
+    console.log(`[ApproveButtonStateMachine] 🎯 Dispatching action: ${action} from state: ${this.state}`);
+    
     const nextState = getNextState(this.state, action);
     
     if (!nextState) {
-      console.warn(`[ApproveButtonStateMachine] No valid transition for action: ${action} from state: ${this.state}`);
+      console.warn(`[ApproveButtonStateMachine] ❌ No valid transition for action: ${action} from state: ${this.state}`);
       return false;
     }
+    
+    console.log(`[ApproveButtonStateMachine] 🔄 Attempting transition: ${this.state} --${action}--> ${nextState}`);
     
     return this.transition(nextState, action);
   }
@@ -376,7 +386,7 @@ export class ApproveButtonStateMachine {
   }
 }
 
-// Create global instance (singleton pattern)
+// Create global instance (singleton pattern) - but allow multiple instances
 let _approveButtonStateMachine: ApproveButtonStateMachine | null = null;
 
 export const approveButtonStateMachine = (() => {
@@ -385,6 +395,11 @@ export const approveButtonStateMachine = (() => {
   }
   return _approveButtonStateMachine;
 })();
+
+// Factory function to create new instances
+export const createApproveButtonStateMachine = (): ApproveButtonStateMachine => {
+  return new ApproveButtonStateMachine();
+};
 
 // Export for use in components
 export default approveButtonStateMachine;

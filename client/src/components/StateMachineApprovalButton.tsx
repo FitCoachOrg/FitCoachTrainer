@@ -21,6 +21,8 @@ interface StateMachineApprovalButtonProps {
   onApprove: (scope: 'global' | 'week', weekIndex?: number) => void;
   onRetry?: () => void;
   className?: string;
+  // Allow passing state machine instance from parent
+  stateMachineInstance?: ReturnType<typeof useApproveButtonState>;
 }
 
 export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProps> = ({
@@ -28,21 +30,36 @@ export const StateMachineApprovalButton: React.FC<StateMachineApprovalButtonProp
   weekIndex,
   onApprove,
   onRetry,
-  className = ''
+  className = '',
+  stateMachineInstance
 }) => {
   const isGlobal = type === 'global';
+  
+  // Use passed state machine instance or create new one
+  const defaultStateMachine = useApproveButtonState();
   const {
     state: approveButtonState,
     buttonConfig,
     handleApprove,
     handleRetry,
     isState
-  } = useApproveButtonState();
+  } = stateMachineInstance || defaultStateMachine;
   
   // Don't render if button shouldn't be shown
   if (!buttonConfig.show) {
+    console.log('[StateMachineApprovalButton] Not rendering - buttonConfig.show is false', {
+      state: approveButtonState,
+      buttonConfig
+    });
     return null;
   }
+  
+  console.log('[StateMachineApprovalButton] Rendering button', {
+    state: approveButtonState,
+    buttonConfig,
+    type,
+    weekIndex
+  });
   
   const handleClick = async () => {
     if (isState('error_stuck')) {

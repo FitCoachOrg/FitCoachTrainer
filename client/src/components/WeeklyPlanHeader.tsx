@@ -12,6 +12,7 @@ import { StateMachineApprovalButton } from '@/components/StateMachineApprovalBut
 import { supabase } from '@/lib/supabase';
 import VideoModal from '@/components/VideoModal';
 import VideoThumbnail from '@/components/VideoThumbnail';
+import { DayExerciseModal } from '@/components/ExerciseModals';
 import {
   checkMonthlyWorkoutStatus,
   checkWeeklyWorkoutStatus,
@@ -105,6 +106,10 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
   const [monthlyStatus, setMonthlyStatus] = useState<WorkoutStatusResult | null>(null);
   const [weeklyStatus, setWeeklyStatus] = useState<WorkoutStatusResult | null>(null);
   
+  // Exercise modal state
+  const [dayModalOpen, setDayModalOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<WeekDay | null>(null);
+  
   // UNIFIED DATA FETCHING - Use shared data instead of separate fetching
   // TEMPORARILY DISABLED: UNIFIED DATA FETCHING
   // TODO: Re-enable after debugging the persistent error
@@ -163,6 +168,65 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
     setSelectedVideoUrl('');
     setSelectedExerciseName('');
   };
+
+  // Exercise modal handlers
+  const openDayModal = (day: WeekDay) => {
+    setSelectedDay(day);
+    setDayModalOpen(true);
+  };
+
+  const closeDayModal = () => {
+    setDayModalOpen(false);
+    setSelectedDay(null);
+  };
+
+
+
+  const handleDaySave = (updatedExercises: any[]) => {
+    if (!selectedDay) return;
+    
+    const updatedDay = { ...selectedDay, exercises: updatedExercises };
+    
+    if (viewMode === 'weekly') {
+      // Update the current week
+      const updatedWeek = days.map(day => 
+        day.date === selectedDay.date ? updatedDay : day
+      );
+      onPlanChange(updatedWeek, false);
+      
+      // Mark the date as dirty
+      if (onDirtyDatesChange) {
+        const newDirtyDates = new Set([...Array.from(dirtyDates), selectedDay.date]);
+        onDirtyDatesChange(newDirtyDates);
+      }
+    } else {
+      // Update monthly data
+      const updatedMonthlyData = monthlyData.map(week => 
+        week.map(day => day.date === selectedDay.date ? updatedDay : day)
+      );
+      
+      setLocalMonthlyData(updatedMonthlyData);
+      const updatedCurrentWeek = updatedMonthlyData[0];
+      onPlanChange(updatedCurrentWeek, false);
+      
+      if (onMonthlyChange) {
+        onMonthlyChange(updatedMonthlyData);
+      }
+      
+      if (onMonthlyDataChange) {
+        onMonthlyDataChange(updatedMonthlyData);
+      }
+      
+      // Mark the date as dirty
+      if (onDirtyDatesChange) {
+        const newDirtyDates = new Set([...Array.from(dirtyDates), selectedDay.date]);
+        onDirtyDatesChange(newDirtyDates);
+      }
+    }
+    
+    closeDayModal();
+  };
+
 
   const debouncedApprovalCheck = useCallback(() => {
     const now = Date.now();
@@ -901,7 +965,12 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
                       <div
                         className={`relative p-2 rounded text-center ${boxClasses} cursor-pointer`}
                         onClick={() => {
-                          if (copySourceDate != null) selectTarget(day.date);
+                          if (copySourceDate != null) {
+                            selectTarget(day.date);
+                          } else {
+                            // Open day exercise modal
+                            openDayModal(day);
+                          }
                         }}
                       >
                         {/* 3-dots menu (popover) */}
@@ -1045,13 +1114,15 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
           
           return (
             <div key={weekIndex} className="space-y-3">
-              <div className={`flex items-center justify-between px-2 py-1 rounded-lg border ${
-                copySourceWeek === weekIndex
-                  ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-600'
-                  : copyTargetWeek === weekIndex
-                  ? 'bg-green-100 border-green-300 dark:bg-green-900/40 dark:border-green-600'
-                  : 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
-              }`}>
+              <div 
+                className={`flex items-center justify-between px-2 py-1 rounded-lg border ${
+                  copySourceWeek === weekIndex
+                    ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-600'
+                    : copyTargetWeek === weekIndex
+                    ? 'bg-green-100 border-green-300 dark:bg-green-900/40 dark:border-green-600'
+                    : 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-700'
+                }`}
+              >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
                     copySourceWeek === weekIndex
@@ -1262,6 +1333,17 @@ export default function WeeklyPlanHeader({ week, planStartDate, onReorder, onPla
       videoUrl={selectedVideoUrl}
       exerciseName={selectedExerciseName}
     />
+
+    {/* Day Exercise Modal */}
+    {selectedDay && (
+      <DayExerciseModal
+        isOpen={dayModalOpen}
+        onClose={closeDayModal}
+        day={selectedDay}
+        onSave={handleDaySave}
+      />
+    )}
+
     </div>
   );
 }

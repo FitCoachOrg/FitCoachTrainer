@@ -7,10 +7,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  approveButtonStateMachine, 
   ApproveButtonState, 
   ApproveButtonAction, 
-  ButtonConfig 
+  ButtonConfig,
+  canTransition,
+  createApproveButtonStateMachine,
+  ApproveButtonStateMachine
 } from '@/utils/approveButtonStateMachine';
 
 export interface UseApproveButtonStateReturn {
@@ -35,49 +37,51 @@ export interface UseApproveButtonStateReturn {
 }
 
 export const useApproveButtonState = (): UseApproveButtonStateReturn => {
-  const [state, setState] = useState<ApproveButtonState>(approveButtonStateMachine.getState());
-  const [buttonConfig, setButtonConfig] = useState<ButtonConfig>(approveButtonStateMachine.getButtonConfig());
+  // Create a unique state machine instance for this hook
+  const [stateMachine] = useState<ApproveButtonStateMachine>(() => createApproveButtonStateMachine());
+  const [state, setState] = useState<ApproveButtonState>(stateMachine.getState());
+  const [buttonConfig, setButtonConfig] = useState<ButtonConfig>(stateMachine.getButtonConfig());
   
   // Subscribe to state changes
   useEffect(() => {
-    const unsubscribe = approveButtonStateMachine.subscribe((newState, oldState, action) => {
+    const unsubscribe = stateMachine.subscribe((newState, oldState, action) => {
       console.log(`[useApproveButtonState] State changed: ${oldState} → ${newState} (action: ${action})`);
       setState(newState);
-      setButtonConfig(approveButtonStateMachine.getButtonConfig());
+      setButtonConfig(stateMachine.getButtonConfig());
     });
     
     return unsubscribe;
-  }, []);
+  }, [stateMachine]);
   
   // Dispatch action
   const dispatch = useCallback((action: ApproveButtonAction): boolean => {
-    return approveButtonStateMachine.dispatch(action);
-  }, []);
+    return stateMachine.dispatch(action);
+  }, [stateMachine]);
   
   // Handle save operation
   const handleSave = useCallback(async (planData: any, saveFunction: (data: any) => Promise<any>): Promise<boolean> => {
-    return await approveButtonStateMachine.handleSave(planData, saveFunction);
-  }, []);
+    return await stateMachine.handleSave(planData, saveFunction);
+  }, [stateMachine]);
   
   // Handle refresh operation
   const handleRefresh = useCallback(async (refreshFunction: () => Promise<any>): Promise<boolean> => {
-    return await approveButtonStateMachine.handleRefresh(refreshFunction);
-  }, []);
+    return await stateMachine.handleRefresh(refreshFunction);
+  }, [stateMachine]);
   
   // Handle approve operation
   const handleApprove = useCallback(async (approveFunction: () => Promise<any>): Promise<boolean> => {
-    return await approveButtonStateMachine.handleApprove(approveFunction);
-  }, []);
+    return await stateMachine.handleApprove(approveFunction);
+  }, [stateMachine]);
   
   // Handle retry operation
   const handleRetry = useCallback(async (retryFunction: () => Promise<any>): Promise<boolean> => {
-    return await approveButtonStateMachine.handleRetry(retryFunction);
-  }, []);
+    return await stateMachine.handleRetry(retryFunction);
+  }, [stateMachine]);
   
   // Reset state machine
   const reset = useCallback(() => {
-    approveButtonStateMachine.reset();
-  }, []);
+    stateMachine.reset();
+  }, [stateMachine]);
   
   // Check if current state matches given state
   const isState = useCallback((targetState: ApproveButtonState): boolean => {
@@ -85,14 +89,14 @@ export const useApproveButtonState = (): UseApproveButtonStateReturn => {
   }, [state]);
   
   // Check if action can be dispatched
-  const canTransition = useCallback((action: ApproveButtonAction): boolean => {
-    return approveButtonStateMachine.dispatch(action);
-  }, []);
+  const canTransitionAction = useCallback((action: ApproveButtonAction): boolean => {
+    return canTransition(state, action);
+  }, [state]);
   
   // Get retry information
   const getRetryInfo = useCallback(() => {
-    return approveButtonStateMachine.getRetryInfo();
-  }, []);
+    return stateMachine.getRetryInfo();
+  }, [stateMachine]);
   
   return {
     state,
@@ -104,7 +108,7 @@ export const useApproveButtonState = (): UseApproveButtonStateReturn => {
     handleRetry,
     reset,
     isState,
-    canTransition,
+    canTransition: canTransitionAction,
     getRetryInfo
   };
 };
