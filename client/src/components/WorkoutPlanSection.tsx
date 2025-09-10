@@ -709,10 +709,32 @@ import { normalizeExercise } from '@/utils/exerciseNormalization';
 
 // Helper to build the payload for schedule_preview
 function buildSchedulePreviewRows(planWeek: TableWeekDay[], clientId: number, for_time: string, workout_id: string) {
-  // Filter out days without exercises - only create records for days with actual workouts
-  return planWeek
-    .filter((day) => day.exercises && day.exercises.length > 0)
-    .map((day) => {
+  // Validate input parameters
+  if (!planWeek || !Array.isArray(planWeek)) {
+    console.error('[buildSchedulePreviewRows] ❌ Invalid planWeek data:', planWeek);
+    return [];
+  }
+  
+  if (!clientId || !for_time || !workout_id) {
+    console.error('[buildSchedulePreviewRows] ❌ Missing required parameters:', {
+      clientId, for_time, workout_id
+    });
+    return [];
+  }
+  
+  console.log('[buildSchedulePreviewRows] 🔍 Input data:', {
+    planWeekLength: planWeek?.length || 0,
+    planWeekData: planWeek?.map(day => ({
+      date: day.date,
+      focus: day.focus,
+      exercisesCount: day.exercises?.length || 0,
+      hasExercises: !!(day.exercises && day.exercises.length > 0)
+    }))
+  });
+  
+  // ✅ FIXED: Process ALL days, not just those with exercises
+  // This ensures rest days and days with empty exercises are also saved
+  const processedRows = planWeek.map((day) => {
     // Format focus field properly - simple concatenation approach
     let formattedFocus = 'Rest Day';
     
@@ -779,6 +801,17 @@ function buildSchedulePreviewRows(planWeek: TableWeekDay[], clientId: number, fo
       is_approved: false
     };
   });
+  
+  console.log('[buildSchedulePreviewRows] 📊 Output data:', {
+    processedRowsLength: processedRows.length,
+    processedRowsData: processedRows.map(row => ({
+      date: row.for_date,
+      summary: row.summary,
+      exercisesCount: row.details_json?.exercises?.length || 0
+    }))
+  });
+  
+  return processedRows;
 }
 
 
@@ -1119,104 +1152,144 @@ function clearClientCache(clientId?: number) {
   }
 }
 
-// Helper to get client data with caching, retry, and fallback
+// Request deduplication map to prevent concurrent requests
+const pendingClientRequests = new Map<string, Promise<{ workout_time: string }>>();
+
+// Helper to get client data with enhanced caching, retry, and fallback
 async function getClientData(clientId: number, componentName: string, retryCount = 0): Promise<{ workout_time: string }> {
-  console.log(`[${componentName}] 🔄 NEW CACHED CLIENT DATA FUNCTION - Attempt ${retryCount + 1} for client ${clientId}`);
+  console.log(`[${componentName}] 🔄 ENHANCED CLIENT DATA FUNCTION - Attempt ${retryCount + 1} for client ${clientId}`);
   
-  // Check cache first
+  // Check cache first with longer duration
   const cached = clientDataCache.get(clientId);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     console.log(`[${componentName}] ✅ Using cached client data for client ${clientId}`);
     return cached.data;
   }
 
-  const operationTimeout = 8000; // 8 second timeout for client fetch
-  const maxRetries = 2;
+  // Request deduplication - prevent concurrent requests for same client
+  const requestKey = `client_data_${clientId}`;
+  if (pendingClientRequests.has(requestKey)) {
+    console.log(`[${componentName}] ⏳ Request already pending for client ${clientId}, waiting...`);
+    return pendingClientRequests.get(requestKey)!;
+  }
+
+  const operationTimeout = 5000; // Reduced from 8000ms to 5000ms for faster fallback
+  const maxRetries = 3; // Increased from 2 to 3
   const clientQueryStartTime = Date.now();
   
-  try {
-    RequestLogger.logDatabaseQuery(
-      'client',
-      'select',
-      componentName,
-      {
-        clientId,
-        filters: { client_id: clientId, select: 'workout_time' },
-        startTime: clientQueryStartTime
-      }
-    );
-    
-    const clientQueryPromise = supabase
-      .from('client')
-      .select('workout_time')
-      .eq('client_id', clientId)
-      .single();
-    
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Client fetch timeout after ${operationTimeout}ms`));
-      }, operationTimeout);
-    });
-    
-    const { data: clientData, error: clientError } = await Promise.race([
-      clientQueryPromise,
-      timeoutPromise
-    ]);
+  // Create the request promise
+  const requestPromise = (async () => {
+    try {
+      RequestLogger.logDatabaseQuery(
+        'client',
+        'select',
+        componentName,
+        {
+          clientId,
+          filters: { client_id: clientId, select: 'workout_time' },
+          startTime: clientQueryStartTime
+        }
+      );
+      
+      const clientQueryPromise = supabase
+        .from('client')
+        .select('workout_time')
+        .eq('client_id', clientId)
+        .single();
+      
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Client fetch timeout after ${operationTimeout}ms`));
+        }, operationTimeout);
+      });
+      
+      const { data: clientData, error: clientError } = await Promise.race([
+        clientQueryPromise,
+        timeoutPromise
+      ]);
 
-    RequestLogger.logDatabaseQuery(
-      'client',
-      'select',
-      componentName,
-      {
-        clientId,
-        filters: { client_id: clientId, select: 'workout_time' },
-        startTime: clientQueryStartTime,
-        success: !clientError,
-        error: clientError?.message,
-        resultCount: clientData ? 1 : 0
-      }
-    );
+      RequestLogger.logDatabaseQuery(
+        'client',
+        'select',
+        componentName,
+        {
+          clientId,
+          filters: { client_id: clientId, select: 'workout_time' },
+          startTime: clientQueryStartTime,
+          success: !clientError,
+          error: clientError?.message,
+          resultCount: clientData ? 1 : 0
+        }
+      );
 
-    if (clientError) {
-      // Retry on certain errors
-      if (retryCount < maxRetries && (
-        clientError.message.includes('timeout') || 
-        clientError.message.includes('network') ||
-        clientError.message.includes('connection')
+      if (clientError) {
+        // Enhanced error handling with more error types
+        if (retryCount < maxRetries && (
+          clientError.message.includes('timeout') || 
+          clientError.message.includes('network') ||
+          clientError.message.includes('connection') ||
+          clientError.message.includes('fetch') ||
+          clientError.message.includes('aborted')
+        )) {
+          console.warn(`[${componentName}] Client fetch error, retrying (${retryCount + 1}/${maxRetries}):`, clientError);
+          
+          // Exponential backoff with jitter
+          const baseDelay = 1000 * Math.pow(2, retryCount);
+          const jitter = Math.random() * 1000;
+          const delay = baseDelay + jitter;
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return getClientData(clientId, componentName, retryCount + 1);
+        }
+        
+        console.warn(`[${componentName}] Client fetch error, using fallback:`, clientError);
+        // Use fallback data
+        const fallbackData = { workout_time: '08:00:00' };
+        clientDataCache.set(clientId, { data: fallbackData, timestamp: Date.now() });
+        return fallbackData;
+      }
+
+      const result = { workout_time: clientData?.workout_time || '08:00:00' };
+      
+      // Cache the result
+      clientDataCache.set(clientId, { data: result, timestamp: Date.now() });
+      console.log(`[${componentName}] ✅ Cached client data for client ${clientId}`);
+      
+      return result;
+    } catch (error) {
+      // Enhanced timeout handling with more error types
+      if (retryCount < maxRetries && error instanceof Error && (
+        error.message.includes('timeout') ||
+        error.message.includes('network') ||
+        error.message.includes('fetch') ||
+        error.message.includes('aborted')
       )) {
-        console.warn(`[${componentName}] Client fetch error, retrying (${retryCount + 1}/${maxRetries}):`, clientError);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+        console.warn(`[${componentName}] Client fetch timeout, retrying (${retryCount + 1}/${maxRetries}):`, error);
+        
+        // Exponential backoff with jitter
+        const baseDelay = 1000 * Math.pow(2, retryCount);
+        const jitter = Math.random() * 1000;
+        const delay = baseDelay + jitter;
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
         return getClientData(clientId, componentName, retryCount + 1);
       }
       
-      console.warn(`[${componentName}] Client fetch error, using fallback:`, clientError);
+      console.warn(`[${componentName}] Client fetch failed, using fallback:`, error);
       // Use fallback data
       const fallbackData = { workout_time: '08:00:00' };
       clientDataCache.set(clientId, { data: fallbackData, timestamp: Date.now() });
       return fallbackData;
+    } finally {
+      // Clean up pending request
+      pendingClientRequests.delete(requestKey);
     }
+  })();
 
-    const result = { workout_time: clientData?.workout_time || '08:00:00' };
-    
-    // Cache the result
-    clientDataCache.set(clientId, { data: result, timestamp: Date.now() });
-    console.log(`[${componentName}] Cached client data for client ${clientId}`);
-    
-    return result;
-  } catch (error) {
-    // Retry on timeout errors
-    if (retryCount < maxRetries && error instanceof Error && error.message.includes('timeout')) {
-      console.warn(`[${componentName}] Client fetch timeout, retrying (${retryCount + 1}/${maxRetries}):`, error);
-      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
-      return getClientData(clientId, componentName, retryCount + 1);
-    }
-    
-    console.warn(`[${componentName}] Client fetch failed, using fallback:`, error);
-    // Use fallback data
-    const fallbackData = { workout_time: '08:00:00' };
-    clientDataCache.set(clientId, { data: fallbackData, timestamp: Date.now() });
-    return fallbackData;
-  }
+  // Store the promise for deduplication
+  pendingClientRequests.set(requestKey, requestPromise);
+  
+  return requestPromise;
 }
 
 // Helper to save plan to schedule_preview with timeout protection
@@ -1255,21 +1328,14 @@ async function savePlanToSchedulePreview(planWeek: TableWeekDay[], clientId: num
         }, timeoutMs);
       });
 
-    // Get client data with caching and fallback - use shorter timeout
-    const clientDataPromise = getClientData(clientId, componentName);
-    const clientDataTimeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Client data fetch timeout after 5000ms`));
-      }, 5000); // Reduced timeout for client data
-    });
-    
-    const clientData = await Promise.race([
-      clientDataPromise,
-      clientDataTimeoutPromise
-    ]).catch(() => {
-      console.warn(`[${componentName}] Client data fetch failed, using fallback`);
-      return { workout_time: '08:00:00' }; // Fallback data
-    });
+    // Get client data with enhanced error handling
+    let clientData;
+    try {
+      clientData = await getClientData(clientId, componentName);
+    } catch (error) {
+      console.warn(`[${componentName}] Client data fetch failed, using fallback:`, error);
+      clientData = { workout_time: '08:00:00' }; // Fallback data
+    }
     
     const for_time = clientData.workout_time;
 
