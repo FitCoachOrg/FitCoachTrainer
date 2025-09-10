@@ -3259,7 +3259,7 @@ const WorkoutPlanSection = ({
     }
     
     if (isFromSave) {
-      console.log('[handlePlanChange] Processing save operation - setting isDraftPlan=true and hasUnsavedChanges=false');
+      console.log('[handlePlanChange] Processing save operation - applying immediate state updates');
       console.log('[handlePlanChange] Current state before save:', {
         isDraftPlan,
         planApprovalStatus,
@@ -3267,27 +3267,48 @@ const WorkoutPlanSection = ({
         hasUnsavedChanges: workoutPlanState.hasUnsavedChanges
       });
       
-      // Changes were just saved - clear unsaved changes and refresh approval status
-      updateWorkoutPlanState({ hasUnsavedChanges: false });
+      // IMMEDIATE STATE UPDATES: Apply the same pattern as other save operations
+      console.log('[handlePlanChange] Applying immediate state updates for instant approval button display');
+      
+      // Clear unsaved changes and mark as draft plan
+      updateWorkoutPlanState({ 
+        hasUnsavedChanges: false,
+        lastSaved: new Date(),
+        status: 'draft',
+        source: 'generated'
+      });
+      
       // Ensure Approve button logic can activate consistently after table saves
       setIsDraftPlan(true);
+      
+      // Update plan approval status to show approve buttons
+      setPlanApprovalStatus('not_approved');
+      
+      // Force refresh key to trigger UI updates
+      setForceRefreshKey(prev => prev + 1);
       
       console.log('[handlePlanChange] State after save operation:', {
         isDraftPlan: true,
         hasUnsavedChanges: false,
-        dirtyDatesSize: dirtyDates.size
+        dirtyDatesSize: dirtyDates.size,
+        planApprovalStatus: 'not_approved'
       });
       
-      // Use enhanced unified post-save refresh to keep behavior consistent across flows
-      (async () => {
-        console.log('[handlePlanChange] Starting post-save refresh...');
-        await handlePostSaveRefreshEnhanced({
-          isMonthly: viewMode === 'monthly',
-          forceWeekStatusRefresh: false, // Table saves don't need extra refresh
-          delayBeforeRefresh: 0
-        });
-        console.log('[handlePlanChange] Post-save refresh completed');
-      })();
+      // BACKGROUND REFRESH: Do database validation in background (same pattern as other saves)
+      setTimeout(async () => {
+        try {
+          console.log('[handlePlanChange] Starting background refresh for data consistency');
+          await handlePostSaveRefreshEnhanced({
+            isMonthly: viewMode === 'monthly',
+            forceWeekStatusRefresh: false, // Table saves don't need extra refresh
+            delayBeforeRefresh: 100
+          });
+          console.log('[handlePlanChange] Background refresh completed successfully');
+        } catch (refreshError) {
+          console.warn('[handlePlanChange] Background refresh failed:', refreshError);
+          // Don't show error to user since UI is already updated optimistically
+        }
+      }, 50); // Very short delay to avoid blocking UI
     } else {
       console.log('[handlePlanChange] Processing unsaved changes - setting hasUnsavedChanges=true');
       // New unsaved changes
@@ -3329,12 +3350,44 @@ const WorkoutPlanSection = ({
       
       setWorkoutPlan(importedWorkoutPlan);
       
-      // ✅ USE ENHANCED UNIFIED FUNCTION INSTEAD OF DIRECT CALLS
-      await handlePostSaveRefreshEnhanced({
-        isMonthly: viewMode === 'monthly',
-        forceWeekStatusRefresh: true,
-        delayBeforeRefresh: 300
+      // IMMEDIATE STATE UPDATES: Apply the same pattern as other save operations
+      console.log('[Import] Applying immediate state updates for instant approval button display');
+      
+      // Clear dirty dates since data is now saved to database
+      setDirtyDates(new Set());
+      
+      // Mark as draft plan to enable approve buttons immediately
+      setIsDraftPlan(true);
+      
+      // Update plan approval status to show approve buttons
+      setPlanApprovalStatus('not_approved');
+      
+      // Force refresh key to trigger UI updates
+      setForceRefreshKey(prev => prev + 1);
+      
+      // Update workout plan state
+      updateWorkoutPlanState({
+        hasUnsavedChanges: false,
+        lastSaved: new Date(),
+        status: 'draft',
+        source: 'generated'
       });
+      
+      // BACKGROUND REFRESH: Do database validation in background (same pattern as other saves)
+      setTimeout(async () => {
+        try {
+          console.log('[Import] Starting background refresh for data consistency');
+          await handlePostSaveRefreshEnhanced({
+            isMonthly: viewMode === 'monthly',
+            forceWeekStatusRefresh: true,
+            delayBeforeRefresh: 100
+          });
+          console.log('[Import] Background refresh completed successfully');
+        } catch (refreshError) {
+          console.warn('[Import] Background refresh failed:', refreshError);
+          // Don't show error to user since UI is already updated optimistically
+        }
+      }, 50); // Very short delay to avoid blocking UI
       
       // Update the calendar to show the imported date range
       if (dateRange.start && dateRange.end) {
@@ -4638,11 +4691,27 @@ const WorkoutPlanSection = ({
         }
       }
       
-      // ✅ USE ENHANCED UNIFIED FUNCTION AFTER SAVING
-      await handlePostSaveRefreshEnhanced({
-        isMonthly: true,
-        forceWeekStatusRefresh: true,
-        delayBeforeRefresh: 500
+      // IMMEDIATE STATE UPDATES: Apply the same pattern as other save operations
+      console.log('[Monthly Generation] Applying immediate state updates for instant approval button display');
+      
+      // Clear dirty dates since data is now saved to database
+      setDirtyDates(new Set());
+      
+      // Mark as draft plan to enable approve buttons immediately
+      setIsDraftPlan(true);
+      
+      // Update plan approval status to show approve buttons
+      setPlanApprovalStatus('not_approved');
+      
+      // Force refresh key to trigger UI updates
+      setForceRefreshKey(prev => prev + 1);
+      
+      // Update workout plan state
+      updateWorkoutPlanState({
+        hasUnsavedChanges: false,
+        lastSaved: new Date(),
+        status: 'draft',
+        source: 'generated'
       });
       
       // Also ensure week statuses are updated for monthly view
@@ -4655,6 +4724,22 @@ const WorkoutPlanSection = ({
         canApprove: true
       }));
       setWeekStatuses(monthlyWeekStatuses);
+      
+      // BACKGROUND REFRESH: Do database validation in background (same pattern as other saves)
+      setTimeout(async () => {
+        try {
+          console.log('[Monthly Generation] Starting background refresh for data consistency');
+          await handlePostSaveRefreshEnhanced({
+            isMonthly: true,
+            forceWeekStatusRefresh: true,
+            delayBeforeRefresh: 100
+          });
+          console.log('[Monthly Generation] Background refresh completed successfully');
+        } catch (refreshError) {
+          console.warn('[Monthly Generation] Background refresh failed:', refreshError);
+          // Don't show error to user since UI is already updated optimistically
+        }
+      }, 50); // Very short delay to avoid blocking UI
 
     toast({
       title: 'Monthly Plan Generated',
@@ -6139,14 +6224,47 @@ const WorkoutPlanSection = ({
               onGenerationComplete={handleMonthlyGenerationComplete}
               onGenerationError={handleMonthlyGenerationError}
               onSaveWeek={async (weekDays, clientId, weekStartDate) => {
-                // Delegate to existing save, then ensure enhanced unified post-save refresh
+                // Delegate to existing save, then apply immediate state updates
                 const result = await savePlanToSchedulePreview(weekDays, clientId, weekStartDate);
                 if (result?.success) {
-                  await handlePostSaveRefreshEnhanced({
-                    isMonthly: true,
-                    forceWeekStatusRefresh: true,
-                    delayBeforeRefresh: 300
+                  // IMMEDIATE STATE UPDATES: Apply the same pattern as other save operations
+                  console.log('[Monthly Generator Save Week] Applying immediate state updates for instant approval button display');
+                  
+                  // Clear dirty dates since data is now saved to database
+                  setDirtyDates(new Set());
+                  
+                  // Mark as draft plan to enable approve buttons immediately
+                  setIsDraftPlan(true);
+                  
+                  // Update plan approval status to show approve buttons
+                  setPlanApprovalStatus('not_approved');
+                  
+                  // Force refresh key to trigger UI updates
+                  setForceRefreshKey(prev => prev + 1);
+                  
+                  // Update workout plan state
+                  updateWorkoutPlanState({
+                    hasUnsavedChanges: false,
+                    lastSaved: new Date(),
+                    status: 'draft',
+                    source: 'generated'
                   });
+                  
+                  // BACKGROUND REFRESH: Do database validation in background (same pattern as other saves)
+                  setTimeout(async () => {
+                    try {
+                      console.log('[Monthly Generator Save Week] Starting background refresh for data consistency');
+                      await handlePostSaveRefreshEnhanced({
+                        isMonthly: true,
+                        forceWeekStatusRefresh: true,
+                        delayBeforeRefresh: 100
+                      });
+                      console.log('[Monthly Generator Save Week] Background refresh completed successfully');
+                    } catch (refreshError) {
+                      console.warn('[Monthly Generator Save Week] Background refresh failed:', refreshError);
+                      // Don't show error to user since UI is already updated optimistically
+                    }
+                  }, 50); // Very short delay to avoid blocking UI
                 }
                 return result;
               }}
@@ -6285,7 +6403,10 @@ const WorkoutPlanSection = ({
           // Update the workout plan with the saved week data
           setWorkoutPlan(prev => prev ? { ...prev, week: tableWeekData } : null);
           
-          // Clear dirty dates since data is now saved to database (same as WeeklyPlanHeader.handleWeekSave)
+          // IMMEDIATE STATE UPDATES: Apply the same pattern as other save operations
+          console.log('[WorkoutPlanSection] WeeklyExerciseModal: Applying immediate state updates for instant approval button display');
+          
+          // Clear dirty dates since data is now saved to database
           const weekDates = updatedWeek.map(day => day.date);
           const newDirtyDates = new Set([...Array.from(dirtyDates)]);
           // Remove the week dates from dirty dates since they're now saved
@@ -6293,14 +6414,42 @@ const WorkoutPlanSection = ({
           console.log('[WorkoutPlanSection] Clearing dirty dates for week dates:', weekDates);
           setDirtyDates(newDirtyDates);
           
-          // Ensure isDraftPlan is set to true for approval button activation
-          console.log('[WorkoutPlanSection] Setting isDraftPlan=true for approval button activation');
+          // Mark as draft plan to enable approve buttons immediately
           setIsDraftPlan(true);
+          
+          // Update plan approval status to show approve buttons
+          setPlanApprovalStatus('not_approved');
+          
+          // Force refresh key to trigger UI updates
+          setForceRefreshKey(prev => prev + 1);
+          
+          // Update workout plan state
+          updateWorkoutPlanState({
+            hasUnsavedChanges: false,
+            lastSaved: new Date(),
+            status: 'draft',
+            source: 'generated'
+          });
           
           // Close the modal
           setWeekModalOpen(false);
-          // Trigger the same logic as WeeklyPlanHeader.handleWeekSave
-          handlePlanChange(tableWeekData, true);
+          
+          // BACKGROUND REFRESH: Do database validation in background (same pattern as other saves)
+          setTimeout(async () => {
+            try {
+              console.log('[WorkoutPlanSection] WeeklyExerciseModal: Starting background refresh for data consistency');
+              await handlePostSaveRefreshEnhanced({
+                isMonthly: viewMode === 'monthly',
+                forceWeekStatusRefresh: true,
+                delayBeforeRefresh: 100,
+                skipDatabaseCheck: false
+              });
+              console.log('[WorkoutPlanSection] WeeklyExerciseModal: Background refresh completed successfully');
+            } catch (refreshError) {
+              console.warn('[WorkoutPlanSection] WeeklyExerciseModal: Background refresh failed:', refreshError);
+              // Don't show error to user since UI is already updated optimistically
+            }
+          }, 50); // Very short delay to avoid blocking UI
         }}
       />
     </div>
