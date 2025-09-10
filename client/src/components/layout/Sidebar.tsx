@@ -48,11 +48,6 @@ const navigationItems: NavItem[] = [
     ],
   },
   {
-    name: "Notes & Logs",
-    href: "/notes",
-    icon: <Icons.ScrollIcon className="h-5 w-5" />,
-  },
-  {
     name: "Branding",
     href: "/branding",
     icon: <Icons.PaintbrushIcon className="h-5 w-5" />,
