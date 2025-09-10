@@ -4170,6 +4170,24 @@ const WorkoutPlanSection = ({
       }
     }
 
+    // IMMEDIATE STATE UPDATE: Update UI immediately before starting approval process
+    console.log('[handleUnifiedApproval] Updating UI state immediately to show approval in progress');
+    setIsApproving(true);
+    setShowSavingModal(true);
+    setSavingMessage('Approving plan...');
+    setLoading('approving', 'Approving plan...');
+
+    // Also update button states immediately to prevent double clicks
+    if (isGlobal) {
+      setPlanApprovalStatus('not_approved'); // Keep as not_approved to maintain button state
+    } else {
+      setWeekStatuses(prev => prev.map((week, idx) =>
+        idx === weekIndex
+          ? { ...week, status: 'draft', canApprove: false } // Use 'draft' instead of 'pending'
+          : week
+      ));
+    }
+
     try {
       const planType = isGlobal ? (viewMode === 'monthly' ? 'monthly' : 'weekly') : `Week ${weekStatus!.weekNumber}`;
       setShowSavingModal(true);
@@ -4222,13 +4240,16 @@ const WorkoutPlanSection = ({
       }
 
       if (result.success) {
+        // IMMEDIATE UI UPDATE: Update all states immediately for instant feedback
+        console.log('[handleUnifiedApproval] Approval succeeded, updating UI immediately');
+        
         toast({
           title: `${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan Approved`,
           description: `The ${planType} workout plan has been approved and saved to the main schedule.`,
           variant: 'default'
         });
 
-        // Update state immediately
+        // Update state immediately with optimistic updates
         if (isGlobal) {
           // Immediately reflect approved state in local UI to hide Approve buttons
           setPlanApprovalStatus('approved');
@@ -4264,27 +4285,33 @@ const WorkoutPlanSection = ({
           }
         } else {
           // Update the specific week status locally
-        setWeekStatuses(prev => prev.map((week, idx) =>
-          idx === weekIndex
-            ? { ...week, status: 'approved', canApprove: false }
-            : week
-        ));
+          setWeekStatuses(prev => prev.map((week, idx) =>
+            idx === weekIndex
+              ? { ...week, status: 'approved', canApprove: false }
+              : week
+          ));
         }
 
-        // Force a fresh approval status check (avoid dedupe)
-        setForceRefreshKey(prev => prev + 1);
-        
-        // Add a small delay to ensure database changes have propagated
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Refresh approval status to ensure consistency
-        await checkPlanApprovalStatus();
-        
-        // Add another small delay before fetching plan data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Refresh the plan data to show approved version
-        await fetchPlan();
+        // BACKGROUND REFRESH: Do database refresh in background without blocking UI
+        setTimeout(async () => {
+          try {
+            console.log('[handleUnifiedApproval] Starting background refresh for data consistency');
+            
+            // Force a fresh approval status check (avoid dedupe)
+            setForceRefreshKey(prev => prev + 1);
+            
+            // Refresh approval status to ensure consistency
+            await checkPlanApprovalStatus();
+            
+            // Refresh the plan data to show approved version
+            await fetchPlan();
+            
+            console.log('[handleUnifiedApproval] Background refresh completed successfully');
+          } catch (refreshError) {
+            console.warn('[handleUnifiedApproval] Background refresh failed:', refreshError);
+            // Don't show error to user since UI is already updated optimistically
+          }
+        }, 100); // Very short delay to avoid blocking UI
 
         // Return success result for state machine
         return { success: true };
@@ -4320,9 +4347,16 @@ const WorkoutPlanSection = ({
       // Return failure result for state machine
       return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred during approval.' };
     } finally {
+      // CLEANUP: Reset approval states immediately
+      console.log('[handleUnifiedApproval] Cleaning up approval states');
       clearLoading();
       setShowSavingModal(false);
       setIsApproving(false);
+      
+      // Reset loading states to ensure UI is responsive
+      setTimeout(() => {
+        setSavingMessage('');
+      }, 500); // Small delay to let users see the completion message
     }
   };
 
@@ -5332,19 +5366,38 @@ const WorkoutPlanSection = ({
                         // Show refresh loading toast
                         const refreshToastId = showLoading('Checking Status', 'Verifying your plan is ready for approval...');
                         
-                        // Handle status refresh using state machine
-                        await handleApproveRefresh(async () => {
+                        // IMMEDIATE STATE UPDATES: Show approve buttons immediately after save
+                        console.log('[Save Operation] Updating states immediately for instant approval button display');
+                        
+                        // Clear dirty dates immediately
+                        setDirtyDates(new Set());
+                        
+                        // Mark as draft plan to enable approve buttons
+                        setIsDraftPlan(true);
+                        
+                        // Update plan approval status to show approve buttons
+                        setPlanApprovalStatus('not_approved');
+                        
+                        // Force refresh key to trigger UI updates
+                        setForceRefreshKey(prev => prev + 1);
+
+                        // Handle status refresh using state machine (background)
+                        handleApproveRefresh(async () => {
                           try {
-                            await handlePostSaveRefreshEnhanced({
-                              isMonthly: viewMode === 'monthly',
-                              forceWeekStatusRefresh: true,
-                              delayBeforeRefresh: 500,
-                              skipDatabaseCheck: false
-                            });
-                            console.log('[Save Operation] Refresh completed successfully');
-                            return { canApprove: true };
+                            // Run refresh in background without blocking UI
+                            setTimeout(async () => {
+                              await handlePostSaveRefreshEnhanced({
+                                isMonthly: viewMode === 'monthly',
+                                forceWeekStatusRefresh: true,
+                                delayBeforeRefresh: 100,
+                                skipDatabaseCheck: false
+                              });
+                            }, 50);
+                            
+                            console.log('[Save Operation] Immediate state update completed, background refresh scheduled');
+                            return { canApprove: true }; // Return success immediately
                           } catch (error) {
-                            console.error('[Save Operation] Refresh failed:', error);
+                            console.error('[Save Operation] State update failed:', error);
                             return { canApprove: false, error: error instanceof Error ? error.message : 'Unknown error' };
                           }
                         });
@@ -5610,19 +5663,38 @@ const WorkoutPlanSection = ({
                     // Show refresh loading toast
                     const refreshToastId = showLoading('Checking Status', 'Verifying your plan is ready for approval...');
                     
-                    // Handle status refresh using state machine
-                    await handleApproveRefresh(async () => {
+                    // IMMEDIATE STATE UPDATES: Show approve buttons immediately after save
+                    console.log('[Save Operation] Updating states immediately for instant approval button display');
+                    
+                    // Clear dirty dates immediately
+                    setDirtyDates(new Set());
+                    
+                    // Mark as draft plan to enable approve buttons
+                    setIsDraftPlan(true);
+                    
+                    // Update plan approval status to show approve buttons
+                    setPlanApprovalStatus('not_approved');
+                    
+                    // Force refresh key to trigger UI updates
+                    setForceRefreshKey(prev => prev + 1);
+
+                    // Handle status refresh using state machine (background)
+                    handleApproveRefresh(async () => {
                       try {
-                        await handlePostSaveRefreshEnhanced({
-                          isMonthly: viewMode === 'monthly',
-                          forceWeekStatusRefresh: true,
-                          delayBeforeRefresh: 500,
-                          skipDatabaseCheck: false
-                        });
-                        console.log('[Save Operation] Refresh completed successfully');
-                        return { canApprove: true };
+                        // Run refresh in background without blocking UI
+                        setTimeout(async () => {
+                          await handlePostSaveRefreshEnhanced({
+                            isMonthly: viewMode === 'monthly',
+                            forceWeekStatusRefresh: true,
+                            delayBeforeRefresh: 100,
+                            skipDatabaseCheck: false
+                          });
+                        }, 50);
+                        
+                        console.log('[Save Operation] Immediate state update completed, background refresh scheduled');
+                        return { canApprove: true }; // Return success immediately
                       } catch (error) {
-                        console.error('[Save Operation] Refresh failed:', error);
+                        console.error('[Save Operation] State update failed:', error);
                         return { canApprove: false, error: error instanceof Error ? error.message : 'Unknown error' };
                       }
                     });
