@@ -315,6 +315,14 @@ const FAQ: React.FC = () => {
       tags: ['integration', 'wearables', 'fitness-trackers', 'health-data']
     },
     {
+      id: 'smart-watch-connection',
+      question: 'Do you connect with Smart Watches?',
+      answer: 'Yes! We integrate with Apple Health and other smart watch platforms to automatically sync your fitness data. This includes: Heart rate monitoring, Step counting and activity tracking, Workout detection and logging, Sleep pattern analysis, and Calorie burn estimation. Your smart watch data seamlessly integrates with your workout plans and progress tracking, giving you and your trainer a complete picture of your fitness journey.',
+      category: 'mobile-apps',
+      icon: <Settings className="h-5 w-5" />,
+      tags: ['smart-watches', 'Apple-Health', 'integration', 'fitness-data']
+    },
+    {
       id: 'app-notifications',
       question: 'What types of notifications do clients receive through the mobile app?',
       answer: 'Clients receive helpful notifications for: Workout reminders and scheduled sessions, Meal plan reminders and nutrition tips, Progress check-ins from their trainer, Goal milestone celebrations, App updates and new features, and Motivational messages. Clients can customize notification preferences in the app settings to control what and when they receive notifications.',
@@ -469,6 +477,14 @@ const FAQ: React.FC = () => {
       category: 'technical',
       icon: <Settings className="h-5 w-5" />,
       tags: ['integrations', 'API', 'third-party']
+    },
+    {
+      id: 'spreadsheet-integration',
+      question: 'Can I connect my existing Google Sheets and/or Excel spreadsheet?',
+      answer: 'Yes! We support integration with Google Sheets and Excel spreadsheets through import/export functionality. You can: Import client data from CSV and Excel files, Export workout plans and progress reports to CSV/Excel/JSON formats, Sync data between your existing spreadsheets and the platform, Maintain your current data management workflows, and Use our API for automated data synchronization. This makes it easy to migrate from existing systems or maintain parallel data management processes.',
+      category: 'technical',
+      icon: <Settings className="h-5 w-5" />,
+      tags: ['Google-Sheets', 'Excel', 'CSV', 'import', 'export', 'JSON', 'integration']
     },
     {
       id: 'backup-recovery',
