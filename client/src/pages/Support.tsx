@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Mail, 
@@ -9,18 +9,66 @@ import {
   Shield, 
   Zap, 
   Heart,
-  Phone,
   MessageSquare,
   HelpCircle,
   BookOpen,
   Video,
   FileText,
-  ArrowRight,
   Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
+// Floating dots component similar to homepage
+const FloatingDots = () => {
+  const [dots, setDots] = useState<Array<{ id: number; x: number; y: number; size: number; delay: number }>>([]);
+
+  useEffect(() => {
+    const generateDots = () => {
+      const newDots = [];
+      for (let i = 0; i < 80; i++) {
+        newDots.push({
+          id: i,
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          size: Math.random() * 4 + 1,
+          delay: Math.random() * 10,
+        });
+      }
+      setDots(newDots);
+    };
+    generateDots();
+  }, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {dots.map((dot) => (
+        <motion.div
+          key={dot.id}
+          className="absolute bg-white rounded-full opacity-20"
+          style={{
+            left: `${dot.x}%`,
+            top: `${dot.y}%`,
+            width: `${dot.size}px`,
+            height: `${dot.size}px`,
+          }}
+          animate={{
+            y: [0, -50, 0],
+            x: [0, Math.random() * 30 - 15, 0],
+            opacity: [0.2, 0.9, 0.2],
+          }}
+          transition={{
+            duration: 4 + Math.random() * 2,
+            repeat: Infinity,
+            delay: dot.delay,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+};
 
 const Support: React.FC = () => {
   const supportFeatures = [
@@ -65,35 +113,6 @@ const Support: React.FC = () => {
     }
   ];
 
-  const contactMethods = [
-    {
-      icon: <Mail className="h-8 w-8" />,
-      title: "Email Support",
-      description: "Get detailed responses to complex questions",
-      action: "support@coachez.ai",
-      href: "mailto:support@coachez.ai",
-      badge: "Recommended",
-      color: "bg-blue-500"
-    },
-    {
-      icon: <MessageSquare className="h-8 w-8" />,
-      title: "Live Chat",
-      description: "Real-time assistance for urgent matters",
-      action: "Start Chat",
-      href: "#",
-      badge: "Fast",
-      color: "bg-green-500"
-    },
-    {
-      icon: <Phone className="h-8 w-8" />,
-      title: "Phone Support",
-      description: "Speak directly with our support team",
-      action: "Call Us",
-      href: "tel:+1-800-COACHEZ",
-      badge: "Personal",
-      color: "bg-purple-500"
-    }
-  ];
 
   const supportCommitments = [
     {
@@ -114,27 +133,35 @@ const Support: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-black">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white">
+      <section className="relative overflow-hidden bg-black text-white">
+        {/* Floating dots animation */}
+        <FloatingDots />
+        
+        {/* Green gradient light effects */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full bg-gradient-to-r from-green-500/20 to-green-600/10 blur-[100px]" />
+          <div className="absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-r from-green-400/10 to-green-300/5 blur-[80px]" />
+        </div>
         <div className="absolute inset-0 bg-black/20"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
             className="text-center"
           >
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">
-              We're Here to Help
+            <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white">
+              We're Here to <span className="text-green-500">Help</span>
             </h1>
-            <p className="text-xl md:text-2xl mb-8 text-blue-100 max-w-3xl mx-auto">
+            <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-3xl mx-auto">
               Your success is our mission. Get the support you need to grow your fitness business and help your clients achieve their goals.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                className="bg-white text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg"
+                className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 text-lg"
                 onClick={() => window.location.href = 'mailto:support@coachez.ai'}
               >
                 <Mail className="mr-2 h-5 w-5" />
@@ -143,7 +170,8 @@ const Support: React.FC = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-blue-600 px-8 py-3 text-lg"
+                className="border-white text-white hover:bg-white hover:text-green-700 px-8 py-3 text-lg"
+                onClick={() => window.location.href = '/faq'}
               >
                 <HelpCircle className="mr-2 h-5 w-5" />
                 View FAQ
@@ -154,7 +182,7 @@ const Support: React.FC = () => {
       </section>
 
       {/* Support Features */}
-      <section className="py-20">
+      <section className="py-20 bg-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -162,10 +190,10 @@ const Support: React.FC = () => {
             transition={{ duration: 0.8 }}
             className="text-center mb-16"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Why Choose Our Support?
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Why Choose Our <span className="text-green-500">Support</span>?
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
               We're committed to providing world-class support that helps you succeed
             </p>
           </motion.div>
@@ -178,17 +206,17 @@ const Support: React.FC = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
               >
-                <Card className="h-full text-center hover:shadow-lg transition-shadow duration-300">
+                <Card className="h-full text-center hover:shadow-lg transition-shadow duration-300 bg-gray-900 border-gray-700">
                   <CardContent className="pt-6">
-                    <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg mb-4">
-                      <div className="text-blue-600 dark:text-blue-400">
+                    <div className="inline-flex items-center justify-center w-12 h-12 bg-green-900 rounded-lg mb-4">
+                      <div className="text-green-400">
                         {feature.icon}
                       </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    <h3 className="text-lg font-semibold text-white mb-2">
                       {feature.title}
                     </h3>
-                    <p className="text-gray-600 dark:text-gray-300">
+                    <p className="text-gray-300">
                       {feature.description}
                     </p>
                   </CardContent>
@@ -199,62 +227,6 @@ const Support: React.FC = () => {
         </div>
       </section>
 
-      {/* Contact Methods */}
-      <section className="py-20 bg-white dark:bg-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Get in Touch
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Choose the best way to reach our support team
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {contactMethods.map((method, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-              >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                  <CardHeader className="text-center">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full mb-4">
-                      <div className="text-gray-600 dark:text-gray-300">
-                        {method.icon}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <CardTitle className="text-xl">{method.title}</CardTitle>
-                      <Badge className={method.color}>{method.badge}</Badge>
-                    </div>
-                    <CardDescription className="text-base">
-                      {method.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <Button 
-                      className="w-full" 
-                      variant={index === 0 ? "default" : "outline"}
-                      onClick={() => window.location.href = method.href}
-                    >
-                      {method.action}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Support Commitment */}
       <section className="py-20">
@@ -349,23 +321,30 @@ const Support: React.FC = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <section className="py-20 bg-black text-white relative">
+        {/* Additional floating dots for CTA section */}
+        <FloatingDots />
+        
+        {/* Green gradient light effects for CTA */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-gradient-to-r from-green-500/15 to-green-600/8 blur-[80px]" />
+        </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Ready to Get Started?
+            <h2 className="text-3xl md:text-4xl font-bold mb-6 text-white">
+              Ready to Get <span className="text-green-500">Started</span>?
             </h2>
-            <p className="text-xl mb-8 text-blue-100">
+            <p className="text-xl mb-8 text-gray-300">
               Our support team is ready to help you succeed. Don't hesitate to reach out!
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 size="lg" 
-                className="bg-white text-blue-600 hover:bg-blue-50 px-8 py-3 text-lg"
+                className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 text-lg"
                 onClick={() => window.location.href = 'mailto:support@coachez.ai'}
               >
                 <Mail className="mr-2 h-5 w-5" />
@@ -374,10 +353,11 @@ const Support: React.FC = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-blue-600 px-8 py-3 text-lg"
+                className="border-white text-white hover:bg-white hover:text-green-700 px-8 py-3 text-lg"
+                onClick={() => window.location.href = '/faq'}
               >
                 <MessageSquare className="mr-2 h-5 w-5" />
-                Start Live Chat
+                View FAQ
               </Button>
             </div>
           </motion.div>
