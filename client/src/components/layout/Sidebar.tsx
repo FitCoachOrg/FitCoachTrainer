@@ -4,6 +4,16 @@ import * as Icons from "@/lib/icons"
 import React, { useEffect, useState } from "react"
 import { useSidebar } from "@/context/sidebar-context"
 import { supabase } from "@/lib/supabase"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface NavItem {
   name: string
@@ -61,6 +71,7 @@ const Sidebar: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [trainerEmail, setTrainerEmail] = useState<string | null>(null)
   const [trainerName, setTrainerName] = useState<string | null>(null)
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = useState(false)
 
   useEffect(() => {
     const fetchTrainerData = async () => {
@@ -93,7 +104,13 @@ const Sidebar: React.FC = () => {
     navigate("/dashboard")
   }
 
-  const handleLogout = async () => {
+  // Show logout confirmation dialog
+  const handleLogoutClick = () => {
+    setShowLogoutConfirmation(true)
+  }
+
+  // Handle confirmed logout
+  const handleConfirmLogout = async () => {
     try {
       // Sign out from Supabase
       const { error } = await supabase.auth.signOut()
@@ -101,12 +118,22 @@ const Sidebar: React.FC = () => {
       
       console.log('Logout successful')
       
+      // Close confirmation dialog
+      setShowLogoutConfirmation(false)
+      
       // Redirect to login page
       navigate("/login")
     } catch (error) {
       console.error("Error logging out:", error)
+      // Close confirmation dialog even if there's an error
+      setShowLogoutConfirmation(false)
       navigate("/login")
     }
+  }
+
+  // Handle logout cancellation
+  const handleCancelLogout = () => {
+    setShowLogoutConfirmation(false)
   }
 
   return (
@@ -159,12 +186,35 @@ const Sidebar: React.FC = () => {
                 key={item.name} 
                 {...item} 
                 isExpanded={isExpanded} 
-                onClick={item.name === "Log out" ? handleLogout : undefined}
+                onClick={item.name === "Log out" ? handleLogoutClick : undefined}
               />
             ))}
           </ul>
         </nav>
       </div>
+
+      {/* Logout Confirmation Dialog */}
+      <AlertDialog open={showLogoutConfirmation} onOpenChange={setShowLogoutConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You will need to sign in again to access your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelLogout}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
