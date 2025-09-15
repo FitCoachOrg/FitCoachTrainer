@@ -8,7 +8,7 @@ import * as Icons from "@/lib/icons";
 import { motion } from "framer-motion";
 import { supabase, getOAuthRedirectUrl } from "@/lib/supabase";
 import GoogleSignIn from "@/components/auth/GoogleSignIn";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const FloatingDots = () => {
@@ -338,6 +338,20 @@ const LoginPage = () => {
 
                 </form>
                 
+                {/* Features Link */}
+                <div className="mt-6">
+                  <div className="text-center">
+                    <Button 
+                      onClick={() => navigate('/features')}
+                      variant="outline"
+                      className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                    >
+                      <Star className="h-4 w-4 mr-2" />
+                      View Features
+                    </Button>
+                  </div>
+                </div>
+
                 {/* Trainer Signup Option */}
                 <div className="mt-6">
                   <Separator className="bg-slate-600" />

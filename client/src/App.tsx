@@ -42,6 +42,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy"
 import TermsOfService from "./pages/TermsOfService"
 import Support from "./pages/Support"
 import FAQ from "./pages/FAQ"
+import Features from "./pages/Features"
 import Footer from "./components/layout/Footer"
 
 // ProtectedRoute wrapper - now properly protects routes
@@ -228,6 +229,15 @@ function App() {
                   element={
                     <PublicLayout>
                       <FAQ />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/features"
+                  element={
+                    <PublicLayout>
+                      <Features />
                     </PublicLayout>
                   }
                 />
