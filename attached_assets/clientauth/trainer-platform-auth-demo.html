@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitCoach Client Authentication - Trainer Platform Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        
+        .section h2 {
+            color: #34495e;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        input[type="text"], input[type="password"], input[type="email"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        button.danger {
+            background-color: #e74c3c;
+        }
+        
+        button.danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .config-section {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .config-section h2 {
+            color: #856404;
+            border-bottom-color: #ffc107;
+        }
+        
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏋️ FitCoach Client Authentication</h1>
+        <p style="text-align: center; color: #7f8c8d; margin-bottom: 30px;">
+            Trainer Platform Integration Demo
+        </p>
+        
+        <div class="warning">
+            <strong>⚠️ Configuration Required:</strong> Before using this demo, you must update the Supabase configuration in the JavaScript file with your actual credentials.
+        </div>
+        
+        <!-- Configuration Section -->
+        <div class="section config-section">
+            <h2>🔧 Configuration</h2>
+            <p>Update these values in the JavaScript file:</p>
+            <div class="code-block">
+// In client-auth-verifier.js, update these values:
+const CONFIG = {
+  SUPABASE_URL: 'https://your-project.supabase.co/rest/v1',
+  SUPABASE_API_KEY: 'your-actual-api-key-here'
+};
+            </div>
+        </div>
+        
+        <!-- Authentication Section -->
+        <div class="section">
+            <h2>🔐 Client Authentication</h2>
+            <p>Verify client credentials using email/username and password.</p>
+            
+            <div class="form-group">
+                <label for="authEmail">Email or Username:</label>
+                <input type="text" id="authEmail" placeholder="client@example.com or username">
+            </div>
+            
+            <div class="form-group">
+                <label for="authPassword">Password:</label>
+                <input type="password" id="authPassword" placeholder="Enter password">
+            </div>
+            
+            <button onclick="authenticateClient()">Authenticate Client</button>
+            <div id="authResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Account Deletion Verification Section -->
+        <div class="section">
+            <h2>✅ Account Deletion Verification</h2>
+            <p>Verify client credentials specifically for account deletion purposes.</p>
+            
+            <div class="form-group">
+                <label for="verifyEmail">Email or Username:</label>
+                <input type="text" id="verifyEmail" placeholder="client@example.com or username">
+            </div>
+            
+            <div class="form-group">
+                <label for="verifyPassword">Password:</label>
+                <input type="password" id="verifyPassword" placeholder="Enter password">
+            </div>
+            
+            <button onclick="verifyForDeletion()">Verify for Deletion</button>
+            <div id="verifyResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Account Deletion Section -->
+        <div class="section">
+            <h2>🗑️ Delete Client Account</h2>
+            <p><strong>Warning:</strong> This will permanently delete the client's account and all associated data.</p>
+            
+            <div class="form-group">
+                <label for="deleteEmail">Email or Username:</label>
+                <input type="text" id="deleteEmail" placeholder="client@example.com or username">
+            </div>
+            
+            <div class="form-group">
+                <label for="deletePassword">Password:</label>
+                <input type="password" id="deletePassword" placeholder="Enter password">
+            </div>
+            
+            <button class="danger" onclick="deleteClientAccount()">Delete Account</button>
+            <div id="deleteResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <!-- Client Info Section -->
+        <div class="section">
+            <h2>👤 Get Client Information</h2>
+            <p>Retrieve client information by client ID.</p>
+            
+            <div class="form-group">
+                <label for="clientId">Client ID:</label>
+                <input type="text" id="clientId" placeholder="Enter client ID">
+            </div>
+            
+            <button onclick="getClientInfo()">Get Client Info</button>
+            <div id="clientInfoResult" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Include the authentication module -->
+    <script src="client-auth-verifier.js"></script>
+    
+    <script>
+        // Initialize the authenticator
+        let authVerifier;
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                authVerifier = new ClientAuthVerifier({
+                    SUPABASE_URL: 'https://zyozeuihjptarceuipwu.supabase.co/rest/v1',
+                    SUPABASE_API_KEY: 'YOUR_SUPABASE_API_KEY_HERE', // Replace with actual key
+                    ENABLE_LOGGING: true,
+                    LOG_LEVEL: 'info'
+                });
+                console.log('ClientAuthVerifier initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize ClientAuthVerifier:', error);
+                showResult('authResult', 'Failed to initialize authentication module: ' + error.message, 'error');
+            }
+        });
+        
+        // Helper function to show results
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+        
+        // Authentication function
+        async function authenticateClient() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            
+            if (!email || !password) {
+                showResult('authResult', 'Please enter both email/username and password', 'error');
+                return;
+            }
+            
+            try {
+                showResult('authResult', 'Authenticating...', 'info');
+                
+                const result = await authVerifier.authenticateClient(email, password, 'demo-ip');
+                
+                if (result.success) {
+                    showResult('authResult', 
+                        `✅ Authentication Successful!\n\n` +
+                        `Client ID: ${result.client.client_id}\n` +
+                        `Username: ${result.client.username}\n` +
+                        `Email: ${result.client.email}\n` +
+                        `Name: ${result.client.name}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('authResult', 
+                        `❌ Authentication Failed\n\nError: ${result.error}\n` +
+                        (result.lockedOut ? 'IP is locked out due to too many failed attempts.' : ''), 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('authResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Verification for deletion function
+        async function verifyForDeletion() {
+            const email = document.getElementById('verifyEmail').value;
+            const password = document.getElementById('verifyPassword').value;
+            
+            if (!email || !password) {
+                showResult('verifyResult', 'Please enter both email/username and password', 'error');
+                return;
+            }
+            
+            try {
+                showResult('verifyResult', 'Verifying credentials...', 'info');
+                
+                const result = await authVerifier.verifyForAccountDeletion(email, password, 'demo-ip');
+                
+                if (result.success) {
+                    showResult('verifyResult', 
+                        `✅ Verification Successful!\n\n` +
+                        `Client ID: ${result.client.client_id}\n` +
+                        `Username: ${result.client.username}\n` +
+                        `Email: ${result.client.email}\n` +
+                        `Name: ${result.client.name}\n` +
+                        `Account Created: ${result.client.created_at}\n` +
+                        `Verified: ${result.verified}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('verifyResult', 
+                        `❌ Verification Failed\n\nError: ${result.error}\n` +
+                        (result.lockedOut ? 'IP is locked out due to too many failed attempts.' : ''), 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('verifyResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Delete account function
+        async function deleteClientAccount() {
+            const email = document.getElementById('deleteEmail').value;
+            const password = document.getElementById('deletePassword').value;
+            
+            if (!email || !password) {
+                showResult('deleteResult', 'Please enter both email/username and password', 'error');
+                return;
+            }
+            
+            // Double confirmation for safety
+            if (!confirm('Are you sure you want to permanently delete this client account? This action cannot be undone.')) {
+                return;
+            }
+            
+            if (!confirm('This will delete ALL client data including workouts, meals, progress, and chat history. Are you absolutely sure?')) {
+                return;
+            }
+            
+            try {
+                showResult('deleteResult', 'Deleting account... This may take a moment.', 'info');
+                
+                const result = await authVerifier.deleteClientAccount(email, password, 'demo-ip');
+                
+                if (result.success) {
+                    showResult('deleteResult', 
+                        `✅ Account Deleted Successfully!\n\n` +
+                        `Client ID: ${result.client_id}\n` +
+                        `Message: ${result.message}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('deleteResult', 
+                        `❌ Account Deletion Failed\n\nError: ${result.error}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('deleteResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Get client info function
+        async function getClientInfo() {
+            const clientId = document.getElementById('clientId').value;
+            
+            if (!clientId) {
+                showResult('clientInfoResult', 'Please enter a client ID', 'error');
+                return;
+            }
+            
+            try {
+                showResult('clientInfoResult', 'Retrieving client information...', 'info');
+                
+                const result = await authVerifier.getClientInfo(clientId);
+                
+                if (result.success) {
+                    showResult('clientInfoResult', 
+                        `✅ Client Information Retrieved!\n\n` +
+                        `Client ID: ${result.client.client_id}\n` +
+                        `Username: ${result.client.cl_username}\n` +
+                        `Email: ${result.client.cl_email}\n` +
+                        `Name: ${result.client.cl_name}\n` +
+                        `Created: ${result.client.created_at}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('clientInfoResult', 
+                        `❌ Failed to Retrieve Client Info\n\nError: ${result.error}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('clientInfoResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -43,6 +43,7 @@ import TermsOfService from "./pages/TermsOfService"
 import Support from "./pages/Support"
 import FAQ from "./pages/FAQ"
 import Features from "./pages/Features"
+import DeleteAccount from "./pages/DeleteAccount"
 import Footer from "./components/layout/Footer"
 
 // ProtectedRoute wrapper - now properly protects routes
@@ -238,6 +239,15 @@ function App() {
                   element={
                     <PublicLayout>
                       <Features />
+                    </PublicLayout>
+                  }
+                />
+
+                <Route
+                  path="/delete-account"
+                  element={
+                    <PublicLayout>
+                      <DeleteAccount />
                     </PublicLayout>
                   }
                 />

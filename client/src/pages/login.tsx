@@ -352,6 +352,18 @@ const LoginPage = () => {
                   </div>
                 </div>
 
+                {/* Delete Account Link */}
+                <div className="mt-4">
+                  <div className="text-center">
+                    <button
+                      onClick={() => navigate('/delete-account')}
+                      className="text-sm text-red-400 hover:text-red-300 underline"
+                    >
+                      Delete My Client Account
+                    </button>
+                  </div>
+                </div>
+
                 {/* Trainer Signup Option */}
                 <div className="mt-6">
                   <Separator className="bg-slate-600" />
