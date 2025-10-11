@@ -96,6 +96,27 @@ select {
   transition: all 0.2s ease-in-out;
 }
 
+/* Hide scrollbar while keeping functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area insets for iOS devices with notch */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch manipulation for better mobile performance */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Line clamp utilities for text truncation */
 .line-clamp-1 {
   overflow: hidden;
@@ -438,4 +459,48 @@ select {
 
 .flip-card-back {
   transform: rotateY(180deg);
+}
+
+/* Mobile-friendly modal/dialog responsiveness */
+@media (max-width: 768px) {
+  /* Make all dialogs and modals mobile-friendly */
+  [role="dialog"],
+  [role="alertdialog"] {
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    margin: 1rem !important;
+  }
+
+  /* Reduce padding in modal content on mobile */
+  [role="dialog"] > div,
+  [role="alertdialog"] > div {
+    padding: 1rem !important;
+  }
+
+  /* Touch-friendly button sizing in modals */
+  [role="dialog"] button,
+  [role="alertdialog"] button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Stack button groups vertically on mobile */
+  [role="dialog"] .flex.gap-2,
+  [role="dialog"] .flex.gap-3,
+  [role="dialog"] .flex.gap-4 {
+    flex-direction: column;
+  }
+}
+
+/* Ensure cards are mobile-responsive globally */
+@media (max-width: 640px) {
+  .card-header,
+  [class*="CardHeader"] {
+    padding: 1rem !important;
+  }
+
+  .card-content,
+  [class*="CardContent"] {
+    padding: 1rem !important;
+  }
 }

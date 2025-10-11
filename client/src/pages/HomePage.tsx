@@ -209,7 +209,7 @@ function HomeSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-white text-5xl font-bold z-10 relative"
+          className="text-white text-3xl sm:text-4xl md:text-5xl font-bold z-10 relative px-4"
         >
           Build Better Habits,
           <br />
@@ -220,25 +220,25 @@ function HomeSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
-          className="text-white mt-4 max-w-xl z-10 relative text-lg"
+          className="text-white mt-4 max-w-xl z-10 relative text-base sm:text-lg px-4"
         >
           Track, analyze, and improve your daily habits with our intuitive
           platform designed to help you achieve your goals.
         </motion.p>
 
         <motion.div
-          className="flex gap-4 mt-8 z-10 relative flex-wrap justify-center"
+          className="flex flex-col sm:flex-row gap-4 mt-8 z-10 relative justify-center px-4 w-full sm:w-auto max-w-md sm:max-w-none mx-auto"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.6 }}
         >
-          <Link to="/trainer-signup">
-            <Button className="bg-green-700 hover:bg-green-800 text-white cursor-pointer px-6 py-3">
+          <Link to="/trainer-signup" className="w-full sm:w-auto">
+            <Button className="bg-green-700 hover:bg-green-800 text-white cursor-pointer px-6 py-3 w-full sm:w-auto">
               Get Started
             </Button>
           </Link>
           <Button 
-            className="bg-white text-green-700 hover:bg-gray-100 cursor-pointer px-6 py-3 flex items-center gap-2"
+            className="bg-white text-green-700 hover:bg-gray-100 cursor-pointer px-6 py-3 flex items-center gap-2 justify-center w-full sm:w-auto"
             onClick={() => {
               if (featuresRef.current) {
                 featuresRef.current.scrollIntoView({ 
@@ -263,27 +263,27 @@ function HomeSection() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-16"
+            className="text-center mb-12 md:mb-16 px-4"
           >
             <motion.div
               initial={{ scale: 0 }}
               whileInView={{ scale: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-              className="inline-flex items-center gap-2 bg-green-900/30 rounded-full px-4 py-2 mb-6"
+              className="inline-flex items-center gap-2 bg-green-900/30 rounded-full px-3 py-1.5 md:px-4 md:py-2 mb-4 md:mb-6"
             >
-              <Sparkles className="h-5 w-5 text-green-400" />
-              <span className="text-green-400 font-medium">Professional Trainer Platform</span>
+              <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-green-400" />
+              <span className="text-green-400 font-medium text-sm md:text-base">Professional Trainer Platform</span>
             </motion.div>
             
-            <h2 className="text-3xl md:text-6xl font-bold mb-6 text-white">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 text-white">
               Features That <span className="text-green-500">Scale Your Business</span>
             </h2>
-            <p className="text-xl md:text-2xl mb-8 text-gray-300 max-w-4xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl lg:text-2xl mb-6 md:mb-8 text-gray-300 max-w-4xl mx-auto">
               Stop juggling spreadsheets and generic tools. Get a platform built specifically for fitness professionals who want to grow globally.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-12 md:mb-16 px-4">
             {coreFeatures.map((feature, index) => (
               <FeatureHighlight
                 key={index}
@@ -302,14 +302,14 @@ function HomeSection() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="text-center"
           >
-            <div className="bg-gradient-to-r from-green-900 to-green-800 rounded-2xl p-8 border border-green-500 mb-8">
-              <h3 className="text-2xl font-bold text-white mb-4">
+            <div className="bg-gradient-to-r from-green-900 to-green-800 rounded-2xl p-6 md:p-8 border border-green-500 mb-8 mx-4">
+              <h3 className="text-xl md:text-2xl font-bold text-white mb-3 md:mb-4">
                 Why CoachEZ.ai Wins
               </h3>
-              <p className="text-gray-200 text-lg mb-6">
+              <p className="text-gray-200 text-base md:text-lg mb-4 md:mb-6">
                 Built for trainers who want to scale beyond local clients
               </p>
-              <div className="grid md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {[
                   { icon: <Activity className="h-8 w-8" />, title: "360° Health Coverage", desc: "Track sleep, stress, hydration" },
                   { icon: <Brain className="h-8 w-8" />, title: "AI-Native Automation", desc: "40% less admin workload" },
@@ -339,23 +339,23 @@ function HomeSection() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/features">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center px-4">
+              <Link to="/features" className="w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 text-lg"
+                  className="bg-green-700 hover:bg-green-800 text-white px-8 py-3 text-base md:text-lg w-full sm:w-auto"
                 >
-                  <Star className="mr-2 h-5 w-5" />
+                  <Star className="mr-2 h-4 w-4 md:h-5 md:w-5" />
                   View All Features
                 </Button>
               </Link>
-              <Link to="/trainer-signup">
+              <Link to="/trainer-signup" className="w-full sm:w-auto">
                 <Button 
                   size="lg" 
                   variant="outline" 
-                  className="border-white text-white hover:bg-white hover:text-green-700 px-8 py-3 text-lg"
+                  className="border-white text-white hover:bg-white hover:text-green-700 px-8 py-3 text-base md:text-lg w-full sm:w-auto"
                 >
-                  <Play className="mr-2 h-5 w-5" />
+                  <Play className="mr-2 h-4 w-4 md:h-5 md:w-5" />
                   Start Free Trial
                 </Button>
               </Link>

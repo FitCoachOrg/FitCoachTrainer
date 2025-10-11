@@ -191,17 +191,17 @@ const LoginPage = () => {
   return (
     <div className="fixed inset-0 bg-black">
       <FloatingDots />
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-slate-800/50 backdrop-blur-sm border-green-400 shadow-2xl">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center text-white">
+      <div className="min-h-screen flex items-center justify-center p-3 sm:p-4">
+        <Card className="w-full max-w-[95%] sm:max-w-md bg-slate-800/50 backdrop-blur-sm border-green-400 shadow-2xl">
+          <CardHeader className="space-y-1 p-4 sm:p-6">
+            <CardTitle className="text-xl sm:text-2xl font-bold text-center text-white">
               Welcome to Coach<span className="text-green-500">EZ</span>
             </CardTitle>
-            <p className="text-center text-slate-400">
+            <p className="text-center text-slate-400 text-sm sm:text-base">
               Sign in to your trainer dashboard
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             {/* Commented out magic link success message for future use
             {emailSent ? (
               <div className="p-3 rounded-md bg-green-900/20 border border-green-400/20">
@@ -268,7 +268,7 @@ const LoginPage = () => {
                   )}
                   <Button
                     type="submit"
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 min-h-[44px]"
                     disabled={isLoading}
                   >
                     {isLoading ? "Signing In..." : "Sign In"}
@@ -277,6 +277,7 @@ const LoginPage = () => {
                   {/* For existing trainers who need to reset password */}
                   <Button
                     type="button"
+                    className="w-full mt-2 bg-blue-600 hover:bg-blue-700 min-h-[44px]"
                     onClick={async () => {
                       if (!formData.email) {
                         setError('Please enter your email address first');
@@ -328,7 +329,6 @@ const LoginPage = () => {
                         setError('Error sending password reset: ' + err.message);
                       }
                     }}
-                    className="w-full mt-2 bg-blue-600 hover:bg-blue-700"
                   >
                     Reset Password
                   </Button>
@@ -344,7 +344,7 @@ const LoginPage = () => {
                     <Button 
                       onClick={() => navigate('/features')}
                       variant="outline"
-                      className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white"
+                      className="w-full border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white min-h-[44px]"
                     >
                       <Star className="h-4 w-4 mr-2" />
                       View Features
@@ -373,7 +373,7 @@ const LoginPage = () => {
                     </p>
                     <Button 
                       onClick={() => navigate('/trainer-signup')}
-                      className="w-full bg-green-600 hover:bg-green-700"
+                      className="w-full bg-green-600 hover:bg-green-700 min-h-[44px]"
                     >
                       <UserPlus className="h-4 w-4 mr-2" />
                       SignUp

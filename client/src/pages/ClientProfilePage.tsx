@@ -2141,12 +2141,12 @@ export default function ClientDashboard() {
       <div className="client-profile-content flex-1 flex flex-col min-w-0 overflow-hidden">
               {/* Enhanced Header */}
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-lg flex-shrink-0">
-      <div className="w-full px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-4">
+      <div className="w-full px-3 sm:px-4 md:px-6 py-3 md:py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+            <div className="flex items-center gap-3 md:gap-6">
+              <div className="flex items-center gap-3 md:gap-4">
                 <div className="relative cursor-pointer group" onClick={() => setShowProfileCard(!showProfileCard)}>
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl group-hover:shadow-2xl transition-all duration-300 group-hover:scale-105">
+                  <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5 shadow-xl group-hover:shadow-2xl transition-all duration-300 group-hover:scale-105">
                     {clientImageUrl ? (
                       <img
                         src={clientImageUrl}
@@ -2166,10 +2166,10 @@ export default function ClientDashboard() {
                   <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full shadow-lg"></div>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
                     {client.cl_name}
                   </h1>
-                  <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-2 md:gap-3 mt-1">
                     {/* Removed Premium badge as per request */}
                     {/* Removed Member since text as per request */}
                   </div>
@@ -2178,7 +2178,7 @@ export default function ClientDashboard() {
             </div>
 
             {/* Tab Switcher */}
-            <div className="flex space-x-2 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm p-1 rounded-xl">
+            <div className="flex space-x-1 md:space-x-2 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm p-1 rounded-xl overflow-x-auto scrollbar-hide">
               {tabs.map((tab) => {
                 const Icon = tab.icon
                 return (
@@ -2197,14 +2197,14 @@ export default function ClientDashboard() {
                         setActiveTab(tab.id);
                       }
                     }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                       activeTab === tab.id
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
                         : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-gray-700/60"
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden lg:inline">{tab.label}</span>
+                    <Icon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">{tab.label}</span>
                   </button>
                 )
               })}
@@ -2310,7 +2310,7 @@ export default function ClientDashboard() {
       </div>
 
       {/* Enhanced Content Area */}
-      <div className={`client-profile-tab-content flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-4 py-4'}`}>
+      <div className={`client-profile-tab-content flex-1 overflow-hidden ${activeTab === 'overview' ? '' : 'px-3 sm:px-4 py-3 sm:py-4'}`}>
 
         {/* Overview tab content */}
         {activeTab === 'overview' && (

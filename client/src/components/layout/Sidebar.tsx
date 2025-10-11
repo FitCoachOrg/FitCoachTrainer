@@ -140,6 +140,7 @@ const Sidebar: React.FC = () => {
     <div
       className={cn(
         "fixed inset-y-0 left-0 bg-white dark:bg-black shadow-lg z-30 transition-all duration-300 ease-in-out",
+        "hidden md:block", // Hide on mobile, show on tablets and above
         isExpanded ? "w-64" : "w-16"
       )}
       onMouseEnter={() => setIsExpanded(true)}

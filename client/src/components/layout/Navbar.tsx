@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Menu, X, User, LogIn } from 'lucide-react';
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
 
   // Handle scroll effect
   useEffect(() => {
@@ -37,11 +38,11 @@ function Navbar() {
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled 
           ? 'bg-black/80 backdrop-blur-lg border-b border-white/10' 
-          : 'bg-transparent border border-white rounded-xl mt-4 mx-2 backdrop-blur-lg'
+          : 'bg-black/70 backdrop-blur-lg md:bg-transparent md:border md:border-white md:rounded-xl md:mt-4 md:mx-2'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Logo */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -49,7 +50,7 @@ function Navbar() {
             transition={{ delay: 0.2, duration: 0.6 }}
             className="flex-shrink-0"
           >
-            <Link to="/" className="text-white text-2xl font-bold">
+            <Link to="/" className="text-white text-xl sm:text-2xl font-bold">
               Coach<span className="text-green-500">EZ</span>
             </Link>
           </motion.div>
@@ -126,7 +127,8 @@ function Navbar() {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-white hover:text-green-400 p-2 transition-colors duration-200"
+              className="text-white hover:text-green-400 p-2 transition-colors duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Toggle menu"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -138,14 +140,14 @@ function Navbar() {
           initial={false}
           animate={isOpen ? { opacity: 1, height: 'auto' } : { opacity: 0, height: 0 }}
           transition={{ duration: 0.3 }}
-          className="md:hidden overflow-hidden bg-black/90 backdrop-blur-lg rounded-lg mt-2"
+          className="md:hidden overflow-hidden bg-black/95 backdrop-blur-lg rounded-lg mb-2"
         >
-          <div className="px-2 pt-2 pb-3 space-y-1">
+          <div className="px-3 pt-2 pb-3 space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className="text-white hover:text-green-400 hover:bg-white/10 block px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md"
+                className="text-white hover:text-green-400 hover:bg-white/10 block px-3 py-3 text-base font-medium transition-colors duration-200 rounded-md min-h-[44px] flex items-center"
                 onClick={() => setIsOpen(false)}
               >
                 {item.name}
@@ -154,15 +156,15 @@ function Navbar() {
             {/* Trainer Profile Link for Mobile */}
             <Link
               to="/trainer-profile"
-              className="text-white hover:text-green-400 hover:bg-white/10 block px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md"
+              className="text-white hover:text-green-400 hover:bg-white/10 block px-3 py-3 text-base font-medium transition-colors duration-200 rounded-md min-h-[44px] flex items-center"
               onClick={() => setIsOpen(false)}
             >
               Profile
             </Link>
-            <div className="border-t border-white/20 pt-4 space-y-2">
+            <div className="border-t border-white/20 pt-3 space-y-2">
               <Link
                 to="/login"
-                className="text-white hover:text-green-400 hover:bg-white/10  px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2"
+                className="text-white hover:text-green-400 hover:bg-white/10 px-3 py-3 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2 min-h-[44px]"
                 onClick={() => setIsOpen(false)}
               >
                 <LogIn className="h-4 w-4" />
@@ -171,7 +173,7 @@ function Navbar() {
               {!location.pathname.includes('/trainer-signup') && (
                 <Link
                   to="/trainer-signup"
-                  className="bg-green-600 hover:bg-green-700 text-white  px-3 py-2 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2"
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-3 text-base font-medium transition-colors duration-200 rounded-md flex items-center gap-2 min-h-[44px]"
                   onClick={() => setIsOpen(false)}
                 >
                   <User className="h-4 w-4" />

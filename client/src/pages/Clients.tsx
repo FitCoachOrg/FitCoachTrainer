@@ -652,14 +652,14 @@ const Clients: React.FC = () => {
     <SidebarProvider>
       <div className="min-h-screen bg-gradient-to-br from-[#f8f9fb] via-[#f0f4f9] to-[#e8f2ff] dark:from-black dark:via-slate-900 dark:to-slate-800">
         <div className="w-full">
-          <div className="max-w-8xl mx-auto w-full pt-8 px-6">
+          <div className="max-w-8xl mx-auto w-full pt-4 md:pt-8 px-3 sm:px-4 md:px-6">
             {/* Enhanced Header and Filters */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-              <div className="flex items-center gap-4 flex-wrap">
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-400">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 mb-6 md:mb-8">
+              <div className="flex items-center gap-3 md:gap-4 flex-wrap">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-gray-100 dark:to-gray-400">
                   All Clients ({filteredClients.length || 0})
                 </h1>
-                <div className="flex gap-3 flex-wrap">
+                <div className="flex gap-2 md:gap-3 flex-wrap">
                   <select
                     value={activityFilter}
                     onChange={(e) => setActivityFilter(e.target.value)}
@@ -693,8 +693,8 @@ const Clients: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <div className="relative w-full md:w-72">
+              <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
+                <div className="relative flex-1 md:flex-none md:w-72">
                   <Icons.SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="Search client..."
@@ -705,22 +705,23 @@ const Clients: React.FC = () => {
                 </div>
                 <Button
                   onClick={handleAddNew}
-                  className="ml-2 bg-gradient-to-r from-blue-600 to-indigo-500 hover:from-blue-700 hover:to-indigo-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 px-6 h-11"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-500 hover:from-blue-700 hover:to-indigo-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 px-4 md:px-6 h-11 min-h-[44px] whitespace-nowrap"
                 >
-                  <Icons.PlusIcon className="h-4 w-4 mr-2" /> Add Client
+                  <Icons.PlusIcon className="h-4 w-4 md:mr-2" /> <span className="hidden md:inline">Add Client</span>
                 </Button>
               </div>
             </div>
 
             {/* Enhanced Table */}
             <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100/50 dark:bg-slate-900/90 dark:border-gray-800/50 overflow-hidden">
-              <table className="min-w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200/60 dark:border-gray-700/60 bg-gradient-to-r from-gray-50/80 to-blue-50/30 dark:from-slate-800/80 dark:to-slate-700/30">
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('cl_name')}>
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer text-xs sm:text-sm" onClick={() => handleSort('cl_name')}>
                       Name {sortColumn === 'cl_name' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
-                    <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('last_active_ago')}>
+                    <th className="px-3 sm:px-6 py-3 sm:py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer text-xs sm:text-sm" onClick={() => handleSort('last_active_ago')}>
                       Last Active (ago) {sortColumn === 'last_active_ago' && (sortDirection === 'asc' ? '▲' : '▼')}
                     </th>
                     <th className="px-6 py-4 text-left font-semibold text-gray-700 dark:text-gray-300 tracking-wide cursor-pointer" onClick={() => handleSort('engagement_1d')} title="Engagement for yesterday (UTC). Calculated as (completed tasks / total tasks) * 100 for that day.">
@@ -945,6 +946,7 @@ const Clients: React.FC = () => {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Client Profile Modal */}

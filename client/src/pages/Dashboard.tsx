@@ -289,22 +289,22 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="px-4 md:px-6 lg:px-8 py-6 w-full">
+      <div className="px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-6 w-full">
         {/* Client Insights Cards - Top Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Client Performance Overview</h2>
+        <div className="mb-6 md:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 md:mb-6">Client Performance Overview</h2>
           <ClientInsightsCards data={insightsData} />
         </div>
         
         {/* Main Dashboard Grid - Improved responsive layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[600px]">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 min-h-[400px] sm:min-h-[500px] md:min-h-[600px]">
           {/* Professional Calendar - Left Side */}
-          <div className="min-h-[600px] flex flex-col">
+          <div className="min-h-[400px] sm:min-h-[500px] md:min-h-[600px] flex flex-col">
             <ProfessionalCalendar />
           </div>
           
           {/* To-Do List - Right Side */}
-          <div className="min-h-[600px] flex flex-col">
+          <div className="min-h-[400px] sm:min-h-[500px] md:min-h-[600px] flex flex-col">
             <TodoList />
           </div>
         </div>

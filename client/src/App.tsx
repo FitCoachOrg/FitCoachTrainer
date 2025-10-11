@@ -24,10 +24,12 @@ import Branding from "@/pages/Branding"
 import Login from "@/pages/login"
 import Sidebar from "@/components/layout/Sidebar"
 import TopBar from "@/components/layout/TopBar"
+import BottomNav from "@/components/layout/BottomNav"
 import ClientProfilePage from "./pages/ClientProfilePage"
 import HomePage from "./pages/HomePage"
 import Navbar from "./components/layout/Navbar"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/hooks/use-mobile"
 import ExerciseLibrary from "./pages/ExerciseLibrary"
 import FitnessCalendar from "./pages/Calendar-excercise"
 import SignupPage from "./pages/Signup"
@@ -118,16 +120,28 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Layout for protected routes (with sidebar and topbar)
 const ProtectedLayout = ({ children }: { children: React.ReactNode }) => {
   const { isExpanded } = useSidebar()
+  const isMobile = useIsMobile()
 
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-black text-gray-800 dark:text-gray-200">
-      <Sidebar />
+      {/* Desktop Sidebar - hidden on mobile */}
+      {!isMobile && <Sidebar />}
+      
       <div className="flex-1">
         <TopBar />
-        <main className={cn("p-6 transition-all duration-300 ease-in-out", isExpanded ? "ml-64" : "ml-16")}>
+        <main className={cn(
+          "p-4 md:p-6 transition-all duration-300 ease-in-out",
+          // Only apply sidebar margin on desktop
+          !isMobile && (isExpanded ? "ml-64" : "ml-16"),
+          // Add bottom padding on mobile for BottomNav clearance (includes safe area)
+          isMobile && "pb-24"
+        )}>
           {children}
         </main>
       </div>
+      
+      {/* Mobile Bottom Navigation - shown only on mobile */}
+      {isMobile && <BottomNav />}
     </div>
   )
 }
@@ -137,7 +151,8 @@ const PublicLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1">{children}</main>
+      {/* Add padding-top to account for fixed navbar (14 on mobile, 20 on desktop for decorative margin) */}
+      <main className="flex-1 pt-14 sm:pt-16 md:pt-20">{children}</main>
       <Footer />
     </div>
   )
